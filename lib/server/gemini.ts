@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
+const DEFAULT_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
+
+/** 기본은 구글 주소. Cloudflare AI Gateway 같은 중계 주소를 쓰려면 GEMINI_BASE_URL(.../models까지)로 바꾼다. */
+function endpoint(): string {
+  return (process.env.GEMINI_BASE_URL?.trim() || DEFAULT_ENDPOINT).replace(/\/+$/, "");
+}
 const DEFAULT_MODEL = "gemini-3.8-flash";
 
 export type GeminiErrorCode = "NO_KEY" | "UPSTREAM" | "TIMEOUT" | "BAD_OUTPUT";
@@ -56,7 +61,7 @@ async function callGemini(
 ): Promise<{ ok: true; data: GeminiResponse } | { ok: false; status: number; message: string }> {
   let res: Response;
   try {
-    res = await fetch(`${ENDPOINT}/${model}:generateContent`, {
+    res = await fetch(`${endpoint()}/${model}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify(body),
@@ -139,6 +144,14 @@ export async function generateJson<T extends z.ZodType>({
         throw new GeminiError(
           "UPSTREAM",
           "API 키가 올바르지 않거나 권한이 없습니다. 서버에 등록한 GEMINI_API_KEY 값에 따옴표, 공백, 'GEMINI_API_KEY=' 글자가 섞이지 않았는지 확인해 주세요.",
+          502,
+        );
+      }
+      // 서버가 실행되는 지역이 Gemini 지원 지역이 아닌 경우 (Cloudflare Worker의 실행 위치가 원인일 수 있다)
+      if (/location is not supported/i.test(result.message)) {
+        throw new GeminiError(
+          "UPSTREAM",
+          "AI 서비스(Gemini)가 서버가 실행되는 지역에서 지원되지 않습니다. 서버의 실행 지역 설정(placement)을 확인해 주세요.",
           502,
         );
       }

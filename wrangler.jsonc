@@ -6,6 +6,13 @@
     "nodejs_compat"
   ],
   "main": "vinext/server/fetch-handler",
+  // Gemini API는 서버(요청을 보내는 곳)의 위치가 지원 지역이어야 한다.
+  // Worker가 사용자 근처(예: 홍콩·싱가포르) 데이터센터에서 실행되면
+  // "User location is not supported" 오류가 나므로, 미국 지역 근처에서 실행되도록 고정한다.
+  // (정적 화면 파일은 그대로 사용자 근처에서 제공된다)
+  "placement": {
+    "region": "aws:us-east-1"
+  },
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",
