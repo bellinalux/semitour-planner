@@ -62,6 +62,8 @@ export const DEFAULT_INPUT: TripInput = {
   cardFeeRate: 3,
 
   competitors: [],
+
+  options: [],
 };
 
 export function createCompetitor(): Competitor {

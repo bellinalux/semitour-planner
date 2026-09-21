@@ -115,6 +115,9 @@ export interface TripInput {
   cardFeeRate: number;
 
   competitors: Competitor[];
+
+  /** 기본 견적 밖의 선택 옵션 */
+  options: TourOption[];
 }
 
 export type RequestStatus = "idle" | "loading" | "error" | "success";
@@ -342,3 +345,25 @@ export interface TourCandidate {
 
 /** 일정에 넣을 위치: am(오전), pm:A / pm:B(오후 코스), day(하루 종일 일정) */
 export type TourSlot = "am" | "pm:A" | "pm:B" | "day";
+
+/** 기본 견적 밖에서 고객이 고르는 선택 옵션 (선택관광) */
+export interface TourOption {
+  id: string;
+  name: string;
+  description: string;
+  category?: TourCategory;
+  /** 소요 시간(분). 모르면 0 */
+  durationMinutes: number;
+  /** 이 옵션을 진행하는 날 (DAY n). 0이면 날짜 미지정 */
+  dayNo: number;
+  /** 1인당 우리 원가 */
+  costPerPerson: number;
+  /** 고객에게 받는 1인 옵션 요금 */
+  pricePerPerson: number;
+  /** 이 인원 이상 신청해야 진행된다 */
+  minParticipants: number;
+  /** 전체 인원 중 신청할 것으로 예상하는 비율 (%) */
+  participationRate: number;
+  link?: string;
+  note: string;
+}

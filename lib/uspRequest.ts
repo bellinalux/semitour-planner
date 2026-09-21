@@ -52,7 +52,8 @@ export function buildUspRequest(
       cities: meta?.cities ?? [],
       hotelGrade: meta?.hotelGrade || (input.selectedHotel ? `${input.selectedHotel.name} (${input.selectedHotel.grade})` : ""),
       noShopping: meta?.noShopping ?? false,
-      noOption: meta?.noOption ?? false,
+      // 선택 옵션이 있으면 노옵션이라고 주장할 수 없다
+      noOption: (meta?.noOption ?? false) && input.options.length === 0,
       highlights: meta?.highlights ?? [],
     },
   };

@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useTourSearch } from "@/hooks/useTourSearch";
 import { TOUR_CATEGORIES } from "@/lib/itemTypes";
 import { slotOptions, tourToItem } from "@/lib/tourItem";
-import type { CourseMeta, DayPlan, ItineraryItem, TourCategory, TourSlot, TripInput } from "@/types";
+import type { CourseMeta, DayPlan, ItineraryItem, TourCandidate, TourCategory, TourSlot, TripInput } from "@/types";
 import { TourCard } from "./TourCard";
 
 interface Props {
@@ -17,6 +17,7 @@ interface Props {
   meta: CourseMeta | null;
   days: DayPlan[];
   onAddTour: (dayNo: number, slot: TourSlot, item: ItineraryItem) => void;
+  onAddOption: (tour: TourCandidate, dayNo: number) => void;
 }
 
 /** 검색할 도시 목록. 여러 도시를 도는 코스면 도시를 고를 수 있게 한다. */
@@ -25,11 +26,12 @@ function searchCities(input: TripInput, meta: CourseMeta | null): string[] {
   return [input.destination.trim()].filter(Boolean);
 }
 
-export function TourCatalogPanel({ input, meta, days, onAddTour }: Props) {
+export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: Props) {
   const cities = searchCities(input, meta);
   const [categories, setCategories] = useState<TourCategory[]>(["city", "night"]);
   const [cityIndex, setCityIndex] = useState(0);
   const [added, setAdded] = useState<Record<string, string[]>>({});
+  const [optionAdded, setOptionAdded] = useState<Record<string, number>>({});
   const { state, result, run } = useTourSearch();
   const city = cities[Math.min(cityIndex, cities.length - 1)] ?? "";
 
@@ -38,6 +40,7 @@ export function TourCatalogPanel({ input, meta, days, onAddTour }: Props) {
 
   const search = () => {
     setAdded({});
+    setOptionAdded({});
     return run({ destination: city, categories, currency: input.currency });
   };
 
@@ -48,6 +51,13 @@ export function TourCatalogPanel({ input, meta, days, onAddTour }: Props) {
     onAddTour(dayNo, slot, tourToItem(tour));
     const where = `DAY ${dayNo} ${slotOptions(day).find((s) => s.slot === slot)?.label ?? ""}`.trim();
     setAdded((prev) => ({ ...prev, [tourName]: [...(prev[tourName] ?? []), where] }));
+  };
+
+  const addOption = (tourName: string, dayNo: number) => {
+    const tour = result?.tours.find((t) => t.name === tourName);
+    if (!tour) return;
+    onAddOption(tour, dayNo);
+    setOptionAdded((prev) => ({ ...prev, [tourName]: (prev[tourName] ?? 0) + 1 }));
   };
 
   return (
@@ -119,7 +129,7 @@ export function TourCatalogPanel({ input, meta, days, onAddTour }: Props) {
             )}
             <p className="flex items-start gap-1.5 rounded-md bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-500">
               <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-              일정에 넣으면 1인 요금(검색 범위의 중간값)이 견적의 입장·체험료에 반영됩니다. 오후 코스는 고객이 선택한 코스만 원가에 포함됩니다.
+              &quot;일정에 넣기&quot;는 1인 요금(검색 범위의 중간값)을 기본 견적의 입장·체험료에 넣고, &quot;선택 옵션으로 추가&quot;는 기본 요금 밖에서 고객이 고르는 옵션으로 등록합니다. 오후 코스는 고객이 선택한 코스만 원가에 포함됩니다.
             </p>
             <ul className="space-y-2">
               {result.tours.map((tour) => (
@@ -129,7 +139,9 @@ export function TourCatalogPanel({ input, meta, days, onAddTour }: Props) {
                   currency={input.currency}
                   days={days}
                   addedTo={added[tour.name] ?? []}
+                  optionCount={optionAdded[tour.name] ?? 0}
                   onAdd={(dayNo, slot) => add(tour.name, dayNo, slot)}
+                  onAddOption={(dayNo) => addOption(tour.name, dayNo)}
                 />
               ))}
             </ul>

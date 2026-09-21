@@ -3,6 +3,7 @@ import { formatMoney } from "@/lib/currency";
 import { formatDuration } from "@/lib/format";
 import { ITEM_TYPE_META } from "@/lib/itemTypes";
 import { pickPmOption, type PmChoice } from "@/lib/itinerary";
+import { simulateOptions } from "@/lib/options";
 import type {
   CompetitorIncludes,
   CourseMeta,
@@ -43,6 +44,11 @@ function includedLabels(includes: CompetitorIncludes, included: boolean): string
 
 function hotelLine(hotel: NonNullable<TripInput["selectedHotel"]>): string {
   return `${hotel.name} (${hotel.grade}, ${hotel.area})`;
+}
+
+/** 선택 옵션이 있으면 노옵션 표기는 쓸 수 없다 */
+function claimsNoOption(input: TripInput, meta: CourseMeta | null): boolean {
+  return !!meta?.noOption && input.options.length === 0;
 }
 
 function titleOf(input: TripInput): string {
@@ -150,6 +156,20 @@ export function buildInternalText(data: ExportData): string {
     `목표 마진 ${input.targetMarginRate}% 달성 최소 인원: ${quote.targetMarginTravelers === null ? "달성 불가" : `${quote.targetMarginTravelers}명`}`,
   ];
 
+  if (input.options.length > 0) {
+    const sim = simulateOptions(input.options, quote.travelers, input.cardFeeRate);
+    lines.push("", LINE, "■ 선택 옵션 (기본 견적·판매가에 포함되지 않음)");
+    sim.rows.forEach(({ option, participants, runs, profit }) => {
+      lines.push(
+        `- ${option.name}${option.dayNo > 0 ? ` (DAY ${option.dayNo})` : ""}: 원가 ${money(option.costPerPerson)} / 요금 ${money(option.pricePerPerson)} · 최소 ${option.minParticipants}명 · 예상 참여율 ${option.participationRate}% (${participants}명) → ${runs ? `이익 ${money(profit)}` : "최소 인원 미달, 진행 안 됨"}`,
+      );
+    });
+    lines.push(
+      `옵션 합계: 매출 ${money(sim.revenue)} · 원가 ${money(sim.cost)} · 카드 수수료 ${money(sim.cardFee)} · 이익 ${money(sim.profit)} (${sim.marginRate.toFixed(1)}%)`,
+      `기본 상품 이익 ${money(s.profit)} + 옵션 이익 ${money(sim.profit)} = ${money(s.profit + sim.profit)}`,
+    );
+  }
+
   if (input.competitors.length > 0) {
     const comparisons = compareWithCompetitors(input.competitors, s.pricePerPerson);
     lines.push("", LINE, "■ 경쟁사 비교");
@@ -190,7 +210,7 @@ export function buildCustomerText(data: ExportData): string {
   const included = includedLabels(quote.ourIncludes, true);
   const isSemi = data.days.some((d) => d.kind === "semi");
   const excluded = [...includedLabels(quote.ourIncludes, false), ...(isSemi ? ["저녁 식사(자유식)"] : []), "개인 경비"];
-  const labels = [meta?.noShopping ? "노쇼핑" : "", meta?.noOption ? "노옵션" : ""].filter(Boolean);
+  const labels = [meta?.noShopping ? "노쇼핑" : "", claimsNoOption(input, meta) ? "노옵션" : ""].filter(Boolean);
 
   return [
     `${labels.length > 0 ? `[${labels.join("·")}] ` : ""}[${titleOf(input)}]`,
@@ -201,6 +221,17 @@ export function buildCustomerText(data: ExportData): string {
     "",
     ...dayBlocks(data, detail, { altNote: false, showOvernight: false }),
     LINE,
+    ...(input.options.length > 0
+      ? [
+          "■ 선택 옵션 안내 (기본 요금에 포함되어 있지 않으며, 참여는 자유입니다)",
+          ...input.options.map(
+            (o) =>
+              `- ${o.name}${o.dayNo > 0 ? ` (DAY ${o.dayNo}${o.durationMinutes > 0 ? ` · 약 ${formatDuration(o.durationMinutes)}` : ""})` : o.durationMinutes > 0 ? ` (약 ${formatDuration(o.durationMinutes)})` : ""}: 1인 ${money(o.pricePerPerson)} · 최소 ${o.minParticipants}명 이상 신청 시 진행`,
+          ),
+          "※ 옵션에 참여하지 않으시는 경우 자유시간 또는 대체 일정으로 진행됩니다. 옵션은 현지 사정에 따라 변경·취소될 수 있습니다.",
+          LINE,
+        ]
+      : []),
     ...(input.selectedHotel && quote.lodgingUnits > 0
       ? [`■ 숙소: ${hotelLine(input.selectedHotel)}`]
       : meta?.hotelGrade

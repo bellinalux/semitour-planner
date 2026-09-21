@@ -6,6 +6,8 @@ import type {
   ItineraryItem,
   PmFreeOption,
   QuoteResult,
+  TourCandidate,
+  TourOption,
   TourSlot,
   TripInput,
   UspItem,
@@ -14,6 +16,7 @@ import { ExportBar } from "./ExportBar";
 import { ItineraryPanel } from "./ItineraryPanel";
 import type { ItemPatch } from "./itinerary/TimelineItem";
 import { QuotePanel } from "./QuotePanel";
+import { OptionsPanel } from "./options/OptionsPanel";
 import { TourCatalogPanel } from "./tours/TourCatalogPanel";
 import { UspPanel } from "./UspPanel";
 
@@ -38,6 +41,11 @@ interface ItemActions {
   onAddTour: (dayNo: number, slot: TourSlot, item: ItineraryItem) => void;
 }
 
+interface OptionActions {
+  onAddOption: (tour: TourCandidate, dayNo: number) => void;
+  onChangeOptions: (options: TourOption[]) => void;
+}
+
 interface Props {
   itinerary: AsyncState;
   days: DayPlan[];
@@ -48,6 +56,7 @@ interface Props {
   generatedCurrency: CurrencyCode | null;
   onSelectPm: (day: number, id: PmFreeOption["id"]) => void;
   itemActions: ItemActions;
+  optionActions: OptionActions;
   onRetryItinerary: () => void;
   usp: UspView;
   exporter: ExportView;
@@ -63,6 +72,7 @@ export function Dashboard({
   generatedCurrency,
   onSelectPm,
   itemActions,
+  optionActions,
   onRetryItinerary,
   usp,
   exporter,
@@ -82,7 +92,16 @@ export function Dashboard({
         {...panelActions}
       />
       {itinerary.status === "success" && days.length > 0 && (
-        <TourCatalogPanel input={input} meta={meta} days={days} onAddTour={onAddTour} />
+        <TourCatalogPanel input={input} meta={meta} days={days} onAddTour={onAddTour} onAddOption={optionActions.onAddOption} />
+      )}
+      {itinerary.status === "success" && days.length > 0 && (
+        <OptionsPanel
+          input={input}
+          days={days}
+          meta={meta}
+          baseProfit={quote?.ok ? quote.scenario.profit : null}
+          onChange={optionActions.onChangeOptions}
+        />
       )}
       <QuotePanel state={itinerary} quote={quote} input={input} days={days} generatedCurrency={generatedCurrency} />
       <UspPanel {...usp} />

@@ -10,6 +10,7 @@ import { usePlannerInput } from "@/hooks/usePlannerInput";
 import { useUsp } from "@/hooks/useUsp";
 import { calculateQuote } from "@/lib/cost";
 import { buildCustomerText, buildInternalText } from "@/lib/exportText";
+import { tourToOption } from "@/lib/options";
 import { buildUspRequest } from "@/lib/uspRequest";
 import type { TripInput } from "@/types";
 
@@ -106,6 +107,10 @@ export function PlannerApp() {
               onDeleteItem: itinerary.deleteItem,
               onAddItem: itinerary.addItem,
               onAddTour: itinerary.addTour,
+            }}
+            optionActions={{
+              onAddOption: (tour, dayNo) => update({ options: [...input.options, tourToOption(tour, dayNo, input)] }),
+              onChangeOptions: (options) => update({ options }),
             }}
             onRetryItinerary={handleGenerate}
             usp={{

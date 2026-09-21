@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, CalendarPlus, Check, Clock, ExternalLink, Info, Ticket } from "lucide-react";
+import { BadgeCheck, CalendarPlus, Check, Clock, ExternalLink, Info, ListPlus, Ticket } from "lucide-react";
 import { useState } from "react";
 import { formatMoney } from "@/lib/currency";
 import { formatDuration } from "@/lib/format";
@@ -14,13 +14,16 @@ interface Props {
   days: DayPlan[];
   /** 지금 이 투어를 넣은 위치들 (같은 투어를 여러 날에 넣을 수 있다) */
   addedTo: string[];
+  /** 선택 옵션으로 추가한 횟수 */
+  optionCount: number;
   onAdd: (dayNo: number, slot: TourSlot) => void;
+  onAddOption: (dayNo: number) => void;
 }
 
 const selectClass =
   "rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30";
 
-export function TourCard({ tour, currency, days, addedTo, onAdd }: Props) {
+export function TourCard({ tour, currency, days, addedTo, optionCount, onAdd, onAddOption }: Props) {
   const category = TOUR_CATEGORY_MAP[tour.category];
   const [dayNo, setDayNo] = useState<number>(days.find((d) => d.kind === "semi")?.day ?? days[0]?.day ?? 1);
   const day = days.find((d) => d.day === dayNo) ?? days[0];
@@ -120,6 +123,16 @@ export function TourCard({ tour, currency, days, addedTo, onAdd }: Props) {
           <CalendarPlus className="h-3.5 w-3.5" aria-hidden />
           일정에 넣기
         </button>
+        <button
+          type="button"
+          onClick={() => day && onAddOption(day.day)}
+          disabled={!day}
+          title="기본 요금에 넣지 않고, 고객이 고르는 선택 옵션으로 등록합니다"
+          className="inline-flex items-center gap-1 rounded-md border border-indigo-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <ListPlus className="h-3.5 w-3.5" aria-hidden />
+          선택 옵션으로 추가
+        </button>
         <a
           href={tour.searchUrl}
           target="_blank"
@@ -131,6 +144,12 @@ export function TourCard({ tour, currency, days, addedTo, onAdd }: Props) {
         </a>
       </div>
 
+      {optionCount > 0 && (
+        <p role="status" className="mt-2 flex items-start gap-1 text-[11px] font-medium text-indigo-700">
+          <Check className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>선택 옵션에 추가했습니다{optionCount > 1 ? ` (${optionCount}회)` : ""}. 아래 &quot;선택 옵션&quot;에서 요금과 최소 인원을 조정하세요.</span>
+        </p>
+      )}
       {addedTo.length > 0 && (
         <p role="status" className="mt-2 flex items-start gap-1 text-[11px] font-medium text-emerald-700">
           <Check className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
