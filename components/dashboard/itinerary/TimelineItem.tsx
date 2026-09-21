@@ -1,4 +1,4 @@
-import { AlertCircle, Bus, Clock, Eye, Ticket, Trash2, Utensils } from "lucide-react";
+import { AlertCircle, Bus, Clock, ExternalLink, Eye, Ticket, Trash2, Utensils } from "lucide-react";
 import { MoneyInput } from "@/components/ui/MoneyInput";
 import { currencySymbol } from "@/lib/currency";
 import { formatDuration } from "@/lib/format";
@@ -120,6 +120,20 @@ export function TimelineItem({ item, order, isLast, currency, tone, editing, onC
               <Clock className="h-3 w-3" aria-hidden />
               {item.timeNote ? item.timeNote : `${formatDuration(item.stayMinutes)} 체류`}
             </span>
+          )}
+          {item.fromCatalog && (
+            <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">투어 카탈로그</span>
+          )}
+          {item.link && (
+            <a
+              href={item.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:underline"
+            >
+              예약처 검색
+              <ExternalLink className="h-3 w-3" aria-hidden />
+            </a>
           )}
           {item.admission === "view_only" && !editing && (
             <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">

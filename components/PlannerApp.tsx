@@ -105,6 +105,7 @@ export function PlannerApp() {
               onChangeItem: itinerary.updateItem,
               onDeleteItem: itinerary.deleteItem,
               onAddItem: itinerary.addItem,
+              onAddTour: itinerary.addTour,
             }}
             onRetryItinerary={handleGenerate}
             usp={{

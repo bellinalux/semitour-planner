@@ -3,8 +3,10 @@ import type {
   CourseMeta,
   CurrencyCode,
   DayPlan,
+  ItineraryItem,
   PmFreeOption,
   QuoteResult,
+  TourSlot,
   TripInput,
   UspItem,
 } from "@/types";
@@ -12,6 +14,7 @@ import { ExportBar } from "./ExportBar";
 import { ItineraryPanel } from "./ItineraryPanel";
 import type { ItemPatch } from "./itinerary/TimelineItem";
 import { QuotePanel } from "./QuotePanel";
+import { TourCatalogPanel } from "./tours/TourCatalogPanel";
 import { UspPanel } from "./UspPanel";
 
 interface UspView {
@@ -32,6 +35,7 @@ interface ItemActions {
   onChangeItem: (itemId: string, patch: ItemPatch) => void;
   onDeleteItem: (itemId: string) => void;
   onAddItem: (day: number) => void;
+  onAddTour: (dayNo: number, slot: TourSlot, item: ItineraryItem) => void;
 }
 
 interface Props {
@@ -63,6 +67,8 @@ export function Dashboard({
   usp,
   exporter,
 }: Props) {
+  const { onAddTour, ...panelActions } = itemActions;
+
   return (
     <div className="space-y-4 p-4">
       <ItineraryPanel
@@ -73,8 +79,11 @@ export function Dashboard({
         pmChoice={pmChoice}
         onSelectPm={onSelectPm}
         onRetry={onRetryItinerary}
-        {...itemActions}
+        {...panelActions}
       />
+      {itinerary.status === "success" && days.length > 0 && (
+        <TourCatalogPanel input={input} meta={meta} days={days} onAddTour={onAddTour} />
+      )}
       <QuotePanel state={itinerary} quote={quote} input={input} days={days} generatedCurrency={generatedCurrency} />
       <UspPanel {...usp} />
       <ExportBar {...exporter} />

@@ -1,0 +1,59 @@
+import { TOUR_CATEGORY_MAP } from "@/lib/itemTypes";
+import { midpoint } from "@/lib/travelEstimate";
+import type { DayPlan, ItineraryItem, TourCandidate, TourSlot } from "@/types";
+
+/** 투어 후보를 일정 항목으로 바꾼다. 1인 요금은 검색 범위의 중간값(추정)으로 넣는다. */
+export function tourToItem(tour: TourCandidate): ItineraryItem {
+  const category = TOUR_CATEGORY_MAP[tour.category];
+  return {
+    id: `tour-${crypto.randomUUID().slice(0, 8)}`,
+    type: category.itemType,
+    admission: tour.category === "museum" ? "enter" : "none",
+    name: tour.name,
+    description: [tour.description, tour.includes ? `포함: ${tour.includes}` : ""].filter(Boolean).join(" · "),
+    stayMinutes: tour.durationMinutes,
+    travelMinutesToNext: null,
+    entryFee: midpoint(tour.priceLow, tour.priceHigh),
+    mealCost: 0,
+    isEstimated: true,
+    caution: tour.booking || undefined,
+    link: tour.searchUrl,
+    fromCatalog: true,
+  };
+}
+
+/** 그날에 넣을 수 있는 위치 목록 */
+export function slotOptions(day: DayPlan): { slot: TourSlot; label: string }[] {
+  if (day.kind === "linear") return [{ slot: "day", label: "하루 일정 (호텔 복귀 전)" }];
+  return [
+    { slot: "am", label: "오전 (점심 전)" },
+    ...day.pmFreeOptions.map((o) => ({ slot: `pm:${o.id}` as TourSlot, label: `오후 ${o.id} 코스` })),
+  ];
+}
+
+/** 항목을 그날의 지정한 위치에 끼워 넣는다. 마지막 항목이 점심/호텔이면 그 앞에 넣는다. */
+export function insertItem(day: DayPlan, slot: TourSlot, item: ItineraryItem): DayPlan {
+  const beforeLast = <T extends { type?: string }>(list: T[], toAdd: T, keepLastTypes: string[]) => {
+    const copy = [...list];
+    const last = copy[copy.length - 1];
+    if (copy.length > 1 && last && keepLastTypes.includes(last.type ?? "")) copy.splice(copy.length - 1, 0, toAdd);
+    else copy.push(toAdd);
+    return copy;
+  };
+
+  if (day.kind === "linear") return { ...day, items: beforeLast(day.items, item, ["hotel"]) };
+
+  if (slot === "am") {
+    // 오전 목록의 마지막은 점심 식당이므로 그 앞에 넣는다
+    const list = [...day.amGuided];
+    if (list.length > 1) list.splice(list.length - 1, 0, item);
+    else list.push(item);
+    return { ...day, amGuided: list };
+  }
+
+  const optionId = slot === "pm:B" ? "B" : "A";
+  return {
+    ...day,
+    pmFreeOptions: day.pmFreeOptions.map((o) => (o.id === optionId ? { ...o, items: [...o.items, item] } : o)),
+  };
+}

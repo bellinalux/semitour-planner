@@ -159,6 +159,10 @@ export interface ItineraryItem {
   isEstimated: boolean;
   /** 휴관일/영업시간 등 확인 필요 사항 */
   caution?: string;
+  /** 참고 링크 (예: 투어 예약처 검색) */
+  link?: string;
+  /** 투어 카탈로그에서 추가한 항목 */
+  fromCatalog?: boolean;
 }
 
 export interface PmFreeOption {
@@ -308,3 +312,33 @@ export interface SearchSource {
   title: string;
   url: string;
 }
+
+/** 지역 투어 카테고리 */
+export type TourCategory = "city" | "night" | "museum" | "daytrip" | "cruise" | "cooking" | "show" | "activity";
+
+/** 웹 검색으로 찾은 지역 투어 후보 */
+export interface TourCandidate {
+  name: string;
+  category: TourCategory;
+  description: string;
+  /** 소요 시간(분). 모르면 0 */
+  durationMinutes: number;
+  /** 1인 요금 범위 (견적 통화) */
+  priceLow: number;
+  priceHigh: number;
+  /** searched: 검색에서 확인한 요금 / estimated: AI 추정 */
+  priceBasis: "searched" | "estimated";
+  /** 요금에 포함되는 것 (입장권, 가이드, 식사 등) */
+  includes: string;
+  /** 예약 필요 여부, 집합 장소 등 */
+  booking: string;
+  /** 한국어 가이드나 한국어 후기가 확인된 경우 */
+  koreanGuide: boolean;
+  koreanNote: string;
+  highlights: string;
+  /** 예약처를 구글에서 검색하는 링크 */
+  searchUrl: string;
+}
+
+/** 일정에 넣을 위치: am(오전), pm:A / pm:B(오후 코스), day(하루 종일 일정) */
+export type TourSlot = "am" | "pm:A" | "pm:B" | "day";

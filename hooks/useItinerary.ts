@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
 import { defaultPmChoice, mapDayItems, tourDayCount, withTravelDays, type PmChoice } from "@/lib/itinerary";
+import { insertItem } from "@/lib/tourItem";
 import type {
   AsyncState,
   CourseMeta,
@@ -10,6 +11,7 @@ import type {
   DayPlan,
   ItineraryItem,
   PmFreeOption,
+  TourSlot,
   TripInput,
 } from "@/types";
 
@@ -131,6 +133,11 @@ export function useItinerary() {
     setDays((prev) => prev.map((day) => (day.day === dayNo && day.kind === "linear" ? { ...day, items: [...day.items, item] } : day)));
   }, []);
 
+  /** 투어 카탈로그에서 고른 투어를 지정한 날짜와 위치에 넣는다. */
+  const addTour = useCallback((dayNo: number, slot: TourSlot, item: ItineraryItem) => {
+    setDays((prev) => prev.map((day) => (day.day === dayNo ? insertItem(day, slot, item) : day)));
+  }, []);
+
   return {
     state,
     days,
@@ -142,5 +149,6 @@ export function useItinerary() {
     updateItem,
     deleteItem,
     addItem,
+    addTour,
   };
 }

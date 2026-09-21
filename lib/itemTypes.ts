@@ -1,4 +1,4 @@
-import type { HotelGrade, HotelPreference, ItemType } from "@/types";
+import type { HotelGrade, HotelPreference, ItemType, TourCategory } from "@/types";
 
 export const ITEM_TYPES: ItemType[] = [
   "flight",
@@ -53,3 +53,19 @@ export const HOTEL_GRADE_QUERY: Record<HotelGrade, string> = {
   "5": "5성급",
   resort: "리조트형 호텔(휴양 시설을 갖춘 곳)",
 };
+
+export const TOUR_CATEGORIES: { id: TourCategory; label: string; emoji: string; query: string; itemType: ItemType }[] = [
+  { id: "city", label: "시내 투어", emoji: "🏙️", query: "도시 핵심 명소를 도는 시내 투어(가이드 투어, 버스·도보 투어)", itemType: "experience" },
+  { id: "night", label: "야경 투어", emoji: "🌃", query: "야경을 보는 투어(야경 버스, 야간 도보 투어)", itemType: "experience" },
+  { id: "museum", label: "박물관·미술관", emoji: "🏛️", query: "박물관·미술관 가이드 투어나 입장권 포함 투어", itemType: "sightseeing" },
+  { id: "daytrip", label: "근교 당일 투어", emoji: "🚌", query: "도시에서 당일로 다녀오는 근교 투어", itemType: "experience" },
+  { id: "cruise", label: "크루즈", emoji: "🚢", query: "강이나 바다에서 즐기는 크루즈(디너 크루즈 포함)", itemType: "experience" },
+  { id: "cooking", label: "쿠킹·체험", emoji: "👩‍🍳", query: "쿠킹 클래스, 공예 등 현지 체험 프로그램", itemType: "experience" },
+  { id: "show", label: "공연·쇼", emoji: "🎭", query: "공연, 쇼, 콘서트", itemType: "experience" },
+  { id: "activity", label: "액티비티", emoji: "🏄", query: "해양 액티비티(바나나보트, 스노클링 등)와 야외 액티비티", itemType: "experience" },
+];
+
+export const TOUR_CATEGORY_MAP = Object.fromEntries(TOUR_CATEGORIES.map((c) => [c.id, c])) as Record<
+  TourCategory,
+  (typeof TOUR_CATEGORIES)[number]
+>;
