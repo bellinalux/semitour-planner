@@ -96,7 +96,11 @@ export async function generateJson<T extends z.ZodType>({
   temperature = 0.7,
   timeoutMs = 90_000,
 }: GenerateJsonOptions<T>): Promise<z.output<T>> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  // 대시보드에 붙여넣다가 딸려 오기 쉬운 따옴표, 공백, 줄바꿈, "GEMINI_API_KEY=" 글자를 걷어낸다
+  const apiKey = process.env.GEMINI_API_KEY?.trim()
+    .replace(/^GEMINI_API_KEY\s*=\s*/, "")
+    .replace(/^["']+|["']+$/g, "")
+    .trim();
   if (!apiKey) {
     throw new GeminiError("NO_KEY", "서버에 GEMINI_API_KEY가 설정되지 않았습니다. .env.local을 확인해 주세요.", 500);
   }
@@ -129,6 +133,15 @@ export async function generateJson<T extends z.ZodType>({
     );
 
     if (!result.ok) {
+      // Gemini는 잘못된 API 키에도 400을 돌려준다. 키 문제는 스키마 폴백으로 해결되지 않으므로 바로 알린다.
+      const isKeyProblem = result.status === 401 || result.status === 403 || /API key/i.test(result.message);
+      if (isKeyProblem) {
+        throw new GeminiError(
+          "UPSTREAM",
+          "API 키가 올바르지 않거나 권한이 없습니다. 서버에 등록한 GEMINI_API_KEY 값에 따옴표, 공백, 'GEMINI_API_KEY=' 글자가 섞이지 않았는지 확인해 주세요.",
+          502,
+        );
+      }
       if (result.status === 400 && useSchema) {
         console.error(`[gemini] 구조화 출력 스키마 거절(400): ${result.message}`);
         useSchema = false; // 구조화 출력 스키마가 거절된 경우: 프롬프트 + zod 검증만으로 재시도
@@ -137,11 +150,9 @@ export async function generateJson<T extends z.ZodType>({
         continue;
       }
       const hint =
-        result.status === 401 || result.status === 403
-          ? "API 키가 올바르지 않거나 권한이 없습니다."
-          : result.status === 429
-            ? "AI 사용량 한도를 초과했습니다. 잠시 후 다시 시도해 주세요."
-            : `AI 서버 오류 (${result.status}).`;
+        result.status === 429
+          ? "AI 사용량 한도를 초과했습니다. 잠시 후 다시 시도해 주세요."
+          : `AI 서버 오류 (${result.status}). ${result.message.slice(0, 120)}`;
       throw new GeminiError("UPSTREAM", hint, result.status === 429 ? 429 : 502);
     }
 
