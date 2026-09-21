@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useNumberText } from "@/hooks/useNumberText";
 import { Field, inputClass } from "./Field";
 
 interface Props {
@@ -17,16 +17,6 @@ interface Props {
   placeholder?: string;
 }
 
-const toText = (n: number) => (n === 0 ? "" : String(n));
-const toNumber = (text: string) => {
-  const n = Number(text);
-  return text === "" || Number.isNaN(n) ? 0 : n;
-};
-
-/**
- * 입력 중인 문자열("0.", "1e" 등)을 보존하기 위해 로컬 텍스트 상태를 두고,
- * 외부에서 값이 바뀐 경우(초기화, 저장값 복원)에만 텍스트를 다시 맞춘다.
- */
 export function NumberField({
   id,
   label,
@@ -40,27 +30,7 @@ export function NumberField({
   step = "any",
   placeholder = "0",
 }: Props) {
-  const [text, setText] = useState(toText(value));
-  const [prevValue, setPrevValue] = useState(value);
-
-  if (value !== prevValue) {
-    setPrevValue(value);
-    if (value !== toNumber(text)) setText(toText(value));
-  }
-
-  const commit = (raw: string) => {
-    setText(raw);
-    const n = toNumber(raw);
-    setPrevValue(n);
-    onChange(n);
-  };
-
-  const clampOnBlur = () => {
-    let n = toNumber(text);
-    if (n < min) n = min;
-    if (max !== undefined && n > max) n = max;
-    if (n !== toNumber(text)) commit(toText(n));
-  };
+  const { text, onTextChange, onBlur } = useNumberText(value, onChange, { min, max });
 
   return (
     <Field htmlFor={id} label={label} hint={hint}>
@@ -79,8 +49,8 @@ export function NumberField({
           step={step}
           value={text}
           placeholder={placeholder}
-          onChange={(e) => commit(e.target.value)}
-          onBlur={clampOnBlur}
+          onChange={(e) => onTextChange(e.target.value)}
+          onBlur={onBlur}
           className={`${inputClass} tabular-nums ${prefix ? "pl-9" : ""} ${suffix ? "pr-9" : ""}`}
         />
         {suffix && (

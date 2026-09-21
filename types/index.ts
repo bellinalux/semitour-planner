@@ -108,3 +108,44 @@ export interface UspItem {
   title: string;
   reason: string;
 }
+
+/** ---- 견적 계산 결과 (lib/cost.ts) ---- */
+
+export interface CostLine {
+  key: string;
+  label: string;
+  amount: number;
+  /** 계산 근거 (예: "3일 × 300,000") */
+  note?: string;
+}
+
+/** 특정 인원수에서의 원가·판매가 시나리오 */
+export interface QuoteScenario {
+  travelers: number;
+  /** 총 원가 (카드 수수료 제외) */
+  baseCost: number;
+  costPerPerson: number;
+  cardFee: number;
+  profit: number;
+  totalPrice: number;
+  pricePerPerson: number;
+  /** 가격 올림 후 실제 마진율 (%, 판매가 대비, 카드 수수료 차감 후) */
+  actualMarginRate: number;
+}
+
+export interface QuoteData {
+  ok: true;
+  travelers: number;
+  lines: CostLine[];
+  scenario: QuoteScenario;
+  matrix: QuoteScenario[];
+  /** 권장가로 팔 때 손실이 없는 최소 출발 인원 (달성 불가면 null) */
+  breakEvenTravelers: number | null;
+  /** 권장가로 팔 때 목표 마진을 달성하는 최소 출발 인원 (달성 불가면 null) */
+  targetMarginTravelers: number | null;
+  /** 우리 상품의 포함 항목 (입력 비용과 일정에서 유추) */
+  ourIncludes: CompetitorIncludes;
+  warnings: string[];
+}
+
+export type QuoteResult = QuoteData | { ok: false; error: string };

@@ -5,25 +5,22 @@ import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TripInputForm } from "@/components/form/TripInputForm";
 import { Header } from "@/components/layout/Header";
 import { MobileTabs, type PlannerTab } from "@/components/layout/MobileTabs";
+import { useItinerary } from "@/hooks/useItinerary";
 import { usePlannerInput } from "@/hooks/usePlannerInput";
 import type { AsyncState } from "@/types";
 
-interface Props {
-  /** 개발 중 로딩/에러 UI 확인용 초기 상태 (Step 2에서 제거) */
-  initialItinerary?: AsyncState;
-  initialUsp?: AsyncState;
-}
+// Step 4에서 /api/generate-usp 호출로 교체된다.
+const USP_IDLE: AsyncState = { status: "idle" };
 
-const IDLE: AsyncState = { status: "idle" };
-
-export function PlannerApp({ initialItinerary = IDLE, initialUsp = IDLE }: Props) {
+export function PlannerApp() {
   const { input, update, reset } = usePlannerInput();
+  const { state, days, pmChoice, generate, selectPmOption } = useItinerary();
   const [tab, setTab] = useState<PlannerTab>("input");
-  const [itinerary] = useState<AsyncState>(initialItinerary);
-  const [usp] = useState<AsyncState>(initialUsp);
 
-  // Step 2에서 /api/generate-itinerary 호출로 교체된다.
-  const handleGenerate = () => setTab("result");
+  const handleGenerate = () => {
+    setTab("result");
+    void generate(input);
+  };
 
   return (
     <div className="flex h-dvh flex-col">
@@ -41,7 +38,7 @@ export function PlannerApp({ initialItinerary = IDLE, initialUsp = IDLE }: Props
             onChange={update}
             onReset={reset}
             onGenerate={handleGenerate}
-            isGenerating={itinerary.status === "loading"}
+            isGenerating={state.status === "loading"}
           />
         </aside>
         <section
@@ -51,8 +48,12 @@ export function PlannerApp({ initialItinerary = IDLE, initialUsp = IDLE }: Props
           }`}
         >
           <Dashboard
-            itinerary={itinerary}
-            usp={usp}
+            itinerary={state}
+            days={days}
+            currency={input.currency}
+            pmChoice={pmChoice}
+            onSelectPm={selectPmOption}
+            usp={USP_IDLE}
             onRetryItinerary={handleGenerate}
             onRetryUsp={handleGenerate}
           />
