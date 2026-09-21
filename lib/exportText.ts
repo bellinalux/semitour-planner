@@ -27,7 +27,11 @@ const INCLUDE_LABELS: Record<keyof CompetitorIncludes, string> = {
   meals: "식사",
   admission: "입장료",
   vehicle: "차량",
+  hotel: "숙박",
+  flight: "항공",
 };
+
+const PACKAGE_LABELS = { land: "랜드만", land_hotel: "랜드+숙박", full: "풀패키지(항공 포함)" } as const;
 
 const LINE = "────────────────────";
 
@@ -109,19 +113,28 @@ export function buildInternalText(data: ExportData): string {
 
   const lines: string[] = [
     `[세미투어 견적서 — 내부용] ${titleOf(input)}`,
-    `${quote.travelers}명 · 통화 ${input.currency}${data.meta?.packageName ? ` · ${data.meta.packageName}` : ""}`,
+    `${quote.travelers}명 · 통화 ${input.currency} · 구성 ${PACKAGE_LABELS[quote.packageType]}${data.meta?.packageName ? ` · ${data.meta.packageName}` : ""}`,
     LINE,
     "",
     ...dayBlocks(data, cost, { altNote: true, showOvernight: true }),
     LINE,
     "■ 견적",
-    ...quote.lines.filter((l) => l.amount > 0).map((l) => `${l.label}: ${money(l.amount)}${l.note ? ` (${l.note})` : ""}`),
-    `총 원가: ${money(s.baseCost)} (1인 ${money(s.costPerPerson)})`,
+    ...quote.lines
+      .filter((l) => l.amount > 0)
+      .map(
+        (l) =>
+          `${l.label}: ${money(l.amount)}${l.note ? ` (${l.note})` : ""}${l.excluded ? " [미정·가격에서 제외]" : l.status === "estimated" ? " [추정]" : ""}`,
+      ),
+    `총 원가: ${money(s.baseCost)} (1인 ${money(s.costPerPerson)})${quote.undecidedLabels.length > 0 ? " — 미정 항목 제외 기준" : ""}`,
+    ...(quote.withUndecided
+      ? [`미정 항목(${quote.undecidedLabels.join(", ")}) 포함 시: 총 원가 ${money(quote.withUndecided.baseCost)} · 1인 ${money(quote.withUndecided.pricePerPerson)} · 이익률 ${quote.withUndecided.actualMarginRate.toFixed(1)}%`]
+      : []),
     `카드 수수료: ${money(s.cardFee)}`,
     `예상 이익: ${money(s.profit)} (마진율 ${s.actualMarginRate.toFixed(1)}%)`,
-    `▶ 최종 권장 판매가: 1인 ${money(s.pricePerPerson)} / 총 ${money(s.totalPrice)}`,
+    `▶ ${quote.pricingMode === "fixed_price" ? "판매가(직접 입력)" : "최종 권장 판매가"}: 1인 ${money(s.pricePerPerson)} / 총 ${money(s.totalPrice)}`,
     "",
-    "인원별 1인 권장가",
+    ...(quote.lodgingUnits > 0 ? [`숙소: ${quote.lodgingUnits}${input.lodgingType === "bnb" ? "유닛" : "실"} (${input.nights}박)`, ""] : [""]),
+    "인원별 1인 " + (quote.pricingMode === "fixed_price" ? "판매가" : "권장가"),
     ...quote.matrix.map((m) => `- ${m.travelers}명: ${money(m.pricePerPerson)} (이익률 ${m.actualMarginRate.toFixed(1)}%)`),
     `손익분기 최소 인원: ${quote.breakEvenTravelers === null ? "달성 불가" : `${quote.breakEvenTravelers}명`}`,
     `목표 마진 ${input.targetMarginRate}% 달성 최소 인원: ${quote.targetMarginTravelers === null ? "달성 불가" : `${quote.targetMarginTravelers}명`}`,
@@ -182,6 +195,7 @@ export function buildCustomerText(data: ExportData): string {
     `■ 포함 사항: ${included.length > 0 ? included.join(", ") : "별도 안내"}`,
     `■ 불포함 사항: ${excluded.join(", ")}`,
     "※ 입장료와 식대 등은 현지 사정에 따라 변동될 수 있습니다.",
+    ...(quote.undecidedLabels.length > 0 ? ["※ 일부 구성 요소의 요금이 확정되지 않아 최종 금액이 달라질 수 있습니다."] : []),
   ]
     .join("\n")
     .trim();

@@ -33,6 +33,24 @@ export const DEFAULT_INPUT: TripInput = {
   otherFixedCost: 0,
   groundDaysOverride: 0,
 
+  packageType: "land",
+  lodgingType: "hotel",
+  lodgingRatePerNight: 0,
+  guestsPerUnit: 2,
+  cleaningFeePerUnit: 0,
+  cityTaxPerPersonPerNight: 0,
+  flightPricePerPerson: 0,
+  costStatus: {
+    vehicle: "confirmed",
+    guide: "confirmed",
+    other: "confirmed",
+    lodging: "confirmed",
+    flight: "confirmed",
+  },
+
+  pricingMode: "target_margin",
+  fixedPricePerPerson: 0,
+
   tipPerPerson: 0,
   insurancePerPerson: 0,
 
@@ -48,7 +66,7 @@ export function createCompetitor(): Competitor {
     id: crypto.randomUUID(),
     name: "",
     price: 0,
-    includes: { guide: false, meals: false, admission: false, vehicle: false },
+    includes: { guide: false, meals: false, admission: false, vehicle: false, hotel: false, flight: false },
     note: "",
   };
 }

@@ -7,6 +7,8 @@ const INCLUDE_LABELS: Record<keyof CompetitorIncludes, string> = {
   meals: "식사",
   admission: "입장료",
   vehicle: "차량",
+  hotel: "숙박",
+  flight: "항공",
 };
 
 export const USP_SYSTEM_PROMPT = `당신은 여행사 B2B 세일즈 카피라이터입니다. 여행사와 가이드가 고객에게 이 투어를 판매할 때 쓸 "경쟁사 대비 장점(USP)"을 정확히 3가지 작성합니다.

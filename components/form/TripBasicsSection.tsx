@@ -98,7 +98,7 @@ export function TripBasicsSection({ input, onChange }: SectionProps) {
                   </span>
                 </span>
               </label>
-              {input.includesFlights && (
+              {input.includesFlights && input.packageType !== "full" && (
                 <div className="mt-3">
                   <TextField
                     id="originCity"

@@ -9,6 +9,8 @@ const INCLUDE_OPTIONS: { key: keyof CompetitorIncludes; label: string }[] = [
   { key: "meals", label: "식사" },
   { key: "admission", label: "입장료" },
   { key: "vehicle", label: "차량" },
+  { key: "hotel", label: "숙박" },
+  { key: "flight", label: "항공" },
 ];
 
 interface Props {
@@ -61,7 +63,7 @@ export function CompetitorCard({ index, competitor, currency, onChange, onRemove
               <label key={key} className="flex items-center gap-1.5 text-xs text-slate-700">
                 <input
                   type="checkbox"
-                  checked={competitor.includes[key]}
+                  checked={!!competitor.includes[key]}
                   onChange={(e) =>
                     onChange({
                       ...competitor,

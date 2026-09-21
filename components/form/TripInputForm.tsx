@@ -2,6 +2,7 @@ import { RotateCcw, Sparkles } from "lucide-react";
 import type { TripInput } from "@/types";
 import { CompetitorSection } from "./CompetitorSection";
 import { CostSection } from "./CostSection";
+import { PackageSection } from "./PackageSection";
 import { PricingSection } from "./PricingSection";
 import { TripBasicsSection } from "./TripBasicsSection";
 
@@ -31,6 +32,7 @@ export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerati
     >
       <div className="flex-1 space-y-4 p-4">
         <TripBasicsSection input={input} onChange={onChange} />
+        <PackageSection input={input} onChange={onChange} />
         <CostSection input={input} onChange={onChange} />
         <PricingSection input={input} onChange={onChange} />
         <CompetitorSection input={input} onChange={onChange} />

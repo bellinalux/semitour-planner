@@ -4,6 +4,7 @@ import { NumberField } from "@/components/ui/NumberField";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { CURRENCIES, currencySymbol, formatMoney } from "@/lib/currency";
 import type { CurrencyCode } from "@/types";
+import { CostField } from "./CostField";
 import type { SectionProps } from "./types";
 
 export function CostSection({ input, onChange }: SectionProps) {
@@ -15,7 +16,7 @@ export function CostSection({ input, onChange }: SectionProps) {
   return (
     <SectionCard
       title="고정비용"
-      description="입력한 통화 기준으로 견적이 계산됩니다"
+      description="각 비용은 확정 · 추정 · 미정으로 표시할 수 있습니다"
       icon={Wallet}
     >
       <div className="space-y-4">
@@ -47,19 +48,25 @@ export function CostSection({ input, onChange }: SectionProps) {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <NumberField
+          <CostField
             id="vehicleCostPerDay"
             label="차량비 (1일)"
+            costKey="vehicle"
+            input={input}
             value={input.vehicleCostPerDay}
             prefix={symbol}
-            onChange={(vehicleCostPerDay) => onChange({ vehicleCostPerDay })}
+            onValueChange={(vehicleCostPerDay) => onChange({ vehicleCostPerDay })}
+            onChange={onChange}
           />
-          <NumberField
+          <CostField
             id="guideCostPerDay"
             label="가이드비 (1일)"
+            costKey="guide"
+            input={input}
             value={input.guideCostPerDay}
             prefix={symbol}
-            onChange={(guideCostPerDay) => onChange({ guideCostPerDay })}
+            onValueChange={(guideCostPerDay) => onChange({ guideCostPerDay })}
+            onChange={onChange}
           />
         </div>
         <NumberField
@@ -74,13 +81,16 @@ export function CostSection({ input, onChange }: SectionProps) {
           hint="0(비움)이면 일정에서 자동 계산합니다. 항공 이동만 있는 날(출발일, 귀국 도착일)은 제외됩니다."
           onChange={(groundDaysOverride) => onChange({ groundDaysOverride })}
         />
-        <NumberField
+        <CostField
           id="otherFixedCost"
           label="기타 고정비 (총액)"
+          costKey="other"
+          input={input}
           value={input.otherFixedCost}
           prefix={symbol}
           hint="예) 전세 버스 주차료, 단체 보험, 행사 준비비"
-          onChange={(otherFixedCost) => onChange({ otherFixedCost })}
+          onValueChange={(otherFixedCost) => onChange({ otherFixedCost })}
+          onChange={onChange}
         />
 
         <div className="grid grid-cols-2 gap-3">

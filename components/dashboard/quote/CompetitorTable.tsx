@@ -16,6 +16,8 @@ const INCLUDE_COLUMNS: { key: keyof CompetitorIncludes; label: string }[] = [
   { key: "meals", label: "식사" },
   { key: "admission", label: "입장료" },
   { key: "vehicle", label: "차량" },
+  { key: "hotel", label: "숙박" },
+  { key: "flight", label: "항공" },
 ];
 
 function IncludeMark({ included }: { included: boolean }) {
@@ -56,7 +58,7 @@ export function CompetitorTable({ competitors, ourPricePerPerson, ourIncludes, c
   return (
     <div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-xs">
+        <table className="w-full min-w-[720px] text-xs">
           <caption className="sr-only">경쟁사 가격 및 포함 항목 비교</caption>
           <thead>
             <tr className="border-b border-slate-200 text-left text-[11px] text-slate-500">
@@ -78,7 +80,7 @@ export function CompetitorTable({ competitors, ourPricePerPerson, ourIncludes, c
               <td className="py-2.5 pr-3">—</td>
               {INCLUDE_COLUMNS.map((c) => (
                 <td key={c.key} className="py-2.5 pr-1">
-                  <IncludeMark included={ourIncludes[c.key]} />
+                  <IncludeMark included={!!ourIncludes[c.key]} />
                 </td>
               ))}
               <td className="py-2.5 pl-3 pr-2 font-normal text-indigo-700">입력한 비용·일정 기준</td>
@@ -96,7 +98,7 @@ export function CompetitorTable({ competitors, ourPricePerPerson, ourIncludes, c
                   </td>
                   {INCLUDE_COLUMNS.map((c) => (
                     <td key={c.key} className="py-2.5 pr-1">
-                      <IncludeMark included={competitor.includes[c.key]} />
+                      <IncludeMark included={!!competitor.includes[c.key]} />
                     </td>
                   ))}
                   <td className="py-2.5 pl-3 text-slate-500">{competitor.note || "—"}</td>
@@ -107,7 +109,7 @@ export function CompetitorTable({ competitors, ourPricePerPerson, ourIncludes, c
         </table>
       </div>
       <p className="mt-2 text-[11px] text-slate-400">
-        우리 상품의 포함 항목은 입력한 차량·가이드비와 일정의 입장료·식대에서 유추한 값입니다.
+        우리 상품의 포함 항목은 입력한 차량·가이드비, 일정의 입장료·식대, 판매 구성(숙박·항공)에서 정한 값입니다.
       </p>
     </div>
   );

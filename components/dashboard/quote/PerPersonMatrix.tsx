@@ -5,13 +5,17 @@ interface Props {
   quote: QuoteData;
   currency: CurrencyCode;
   targetMarginRate: number;
+  /** 인원별 필요한 숙소 수 (숙박이 없으면 null) */
+  unitsFor: ((travelers: number) => number) | null;
+  unitLabel: string;
 }
 
 function minTravelersText(n: number | null) {
   return n === null ? "달성 불가" : `${n}명`;
 }
 
-export function PerPersonMatrix({ quote, currency, targetMarginRate }: Props) {
+export function PerPersonMatrix({ quote, currency, targetMarginRate, unitsFor, unitLabel }: Props) {
+  const isFixed = quote.pricingMode === "fixed_price";
   const money = (v: number) => formatMoney(v, currency);
 
   return (
@@ -22,8 +26,9 @@ export function PerPersonMatrix({ quote, currency, targetMarginRate }: Props) {
           <thead>
             <tr className="border-b border-slate-200 text-left text-[11px] text-slate-500">
               <th className="py-2 pr-3 font-medium">인원</th>
+              {unitsFor && <th className="py-2 pr-3 text-right font-medium">숙소</th>}
               <th className="py-2 pr-3 text-right font-medium">1인 원가</th>
-              <th className="py-2 pr-3 text-right font-medium">1인 권장가</th>
+              <th className="py-2 pr-3 text-right font-medium">{isFixed ? "1인 판매가" : "1인 권장가"}</th>
               <th className="py-2 pr-3 text-right font-medium">총 판매가</th>
               <th className="py-2 text-right font-medium">이익률</th>
             </tr>
@@ -37,6 +42,12 @@ export function PerPersonMatrix({ quote, currency, targetMarginRate }: Props) {
                     {row.travelers}명
                     {isCurrent && <span className="ml-1.5 rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] text-white">현재</span>}
                   </td>
+                  {unitsFor && (
+                    <td className="py-2 pr-3 text-right tabular-nums">
+                      {unitsFor(row.travelers)}
+                      {unitLabel}
+                    </td>
+                  )}
                   <td className="py-2 pr-3 text-right tabular-nums">{money(row.costPerPerson)}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{money(row.pricePerPerson)}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{money(row.totalPrice)}</td>
@@ -58,7 +69,7 @@ export function PerPersonMatrix({ quote, currency, targetMarginRate }: Props) {
           <dd className="mt-0.5 font-semibold text-slate-900">{minTravelersText(quote.targetMarginTravelers)}</dd>
         </div>
         <p className="text-[11px] leading-4 text-slate-500 sm:col-span-2">
-          현재 인원({quote.travelers}명) 기준 권장가 {money(quote.scenario.pricePerPerson)}로 판매할 때 기준입니다. 이보다 적은 인원이
+          현재 인원({quote.travelers}명) 기준 {isFixed ? "판매가" : "권장가"} {money(quote.scenario.pricePerPerson)}로 판매할 때 기준입니다.{unitsFor ? " 숙소 수는 인원에 따라 계단식으로 늘어납니다." : ""} 이보다 적은 인원이
           출발하면 고정비 때문에 마진이 줄어듭니다.
         </p>
       </dl>

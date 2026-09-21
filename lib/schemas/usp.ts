@@ -5,6 +5,9 @@ const includesSchema = z.object({
   meals: z.boolean(),
   admission: z.boolean(),
   vehicle: z.boolean(),
+  // 이전에 저장된 경쟁사 정보에는 없을 수 있다
+  hotel: z.boolean().default(false),
+  flight: z.boolean().default(false),
 });
 
 /** ---------- 클라이언트 → 서버 요청 ---------- */

@@ -24,6 +24,8 @@ export interface CompetitorIncludes {
   meals: boolean;
   admission: boolean;
   vehicle: boolean;
+  hotel: boolean;
+  flight: boolean;
 }
 
 export interface Competitor {
@@ -37,6 +39,16 @@ export interface Competitor {
 
 /** 좌측 입력 폼의 전체 상태 */
 export type PlannerMode = "ai" | "paste";
+
+/** 판매 구성: 랜드(현지 프로그램)만 / 랜드+숙박 / 항공까지 포함한 풀패키지 */
+export type PackageType = "land" | "land_hotel" | "full";
+/** 비용 확정도: 확정(입력값) / 추정(대략) / 미정(아직 모름 — 기본 가격에서 제외) */
+export type Certainty = "confirmed" | "estimated" | "undecided";
+/** 확정도를 지정하는 비용 항목 */
+export type CostKey = "vehicle" | "guide" | "other" | "lodging" | "flight";
+export type LodgingType = "hotel" | "bnb";
+/** target_margin: 목표 마진으로 판매가 계산 / fixed_price: 판매가를 넣고 마진 확인 */
+export type PricingMode = "target_margin" | "fixed_price";
 
 export interface TripInput {
   /** ai: AI가 세미투어를 생성 / paste: 업체가 쓴 코스를 붙여넣어 구조화 */
@@ -67,6 +79,24 @@ export interface TripInput {
   otherFixedCost: number;
   /** 차량·가이드가 실제로 붙는 일수. 0이면 일정에서 자동 계산 */
   groundDaysOverride: number;
+
+  packageType: PackageType;
+  lodgingType: LodgingType;
+  /** 1실(호텔) 또는 1유닛(BnB)의 1박 요금 */
+  lodgingRatePerNight: number;
+  /** 1실/1유닛에 묵는 인원. 필요한 방 수 = ceil(인원 ÷ 이 값) */
+  guestsPerUnit: number;
+  /** BnB 청소비 (유닛당 1회) */
+  cleaningFeePerUnit: number;
+  /** 숙박세 (1인 1박) */
+  cityTaxPerPersonPerNight: number;
+  /** 왕복 항공료 (1인, 세금 포함) */
+  flightPricePerPerson: number;
+  costStatus: Record<CostKey, Certainty>;
+
+  pricingMode: PricingMode;
+  /** pricingMode === "fixed_price"일 때 1인 판매가 */
+  fixedPricePerPerson: number;
 
   /** 1인당 비용 */
   tipPerPerson: number;
@@ -167,6 +197,10 @@ export interface CostLine {
   key: string;
   label: string;
   amount: number;
+  /** 확정도. 항목이 확정도 대상이 아니면 없음 */
+  status?: Certainty;
+  /** 미정이라 기본 가격 계산에서 뺀 항목 */
+  excluded?: boolean;
   /** 계산 근거 (예: "3일 × 300,000") */
   note?: string;
 }
@@ -190,7 +224,14 @@ export interface QuoteData {
   travelers: number;
   /** 차량·가이드 비용을 계산한 일수 */
   groundDays: number;
+  packageType: PackageType;
+  pricingMode: PricingMode;
+  /** 필요한 숙소 수(방/유닛). 숙박이 없으면 0 */
+  lodgingUnits: number;
   lines: CostLine[];
+  /** 미정 항목(금액이 있는 것)을 포함했을 때의 시나리오. 미정 항목이 없으면 null */
+  withUndecided: QuoteScenario | null;
+  undecidedLabels: string[];
   scenario: QuoteScenario;
   matrix: QuoteScenario[];
   /** 권장가로 팔 때 손실이 없는 최소 출발 인원 (달성 불가면 null) */
@@ -203,3 +244,26 @@ export interface QuoteData {
 }
 
 export type QuoteResult = QuoteData | { ok: false; error: string };
+
+/** AI가 추정한 항공/숙박 시세 (실시간 요금이 아님) */
+export interface TravelEstimate {
+  flight: {
+    roundTripLow: number;
+    roundTripHigh: number;
+    outboundHours: number;
+    inboundHours: number;
+    direct: boolean;
+    note: string;
+  };
+  /** 도착지 − 출발지 시차 (시간) */
+  timeDifferenceHours: number;
+  lodging: {
+    hotelLow: number;
+    hotelHigh: number;
+    bnbLow: number;
+    bnbHigh: number;
+    cityTaxPerPersonPerNight: number;
+    note: string;
+  };
+  seasonNote: string;
+}

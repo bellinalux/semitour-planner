@@ -39,7 +39,12 @@ function parse(raw: string | null): TripInput {
   if (!raw) return DEFAULT_INPUT;
   try {
     const saved = JSON.parse(raw) as Partial<TripInput>;
-    const merged = { ...DEFAULT_INPUT, ...saved };
+    const merged = {
+      ...DEFAULT_INPUT,
+      ...saved,
+      // 중첩 객체는 이전에 저장된 값에 새 키가 없을 수 있어 기본값과 합친다
+      costStatus: { ...DEFAULT_INPUT.costStatus, ...saved.costStatus },
+    };
     // 박수가 없던 이전 저장값은 "일수 − 1"로 채운다
     if (saved.nights === undefined) merged.nights = Math.max(0, merged.days - 1);
     return merged;

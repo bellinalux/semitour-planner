@@ -3,11 +3,13 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import type { AsyncState, CurrencyCode, DayPlan, QuoteResult, TripInput } from "@/types";
+import { lodgingUnitsFor } from "@/lib/cost";
+import type { AsyncState, CurrencyCode, DayPlan, PackageType, QuoteResult, TripInput } from "@/types";
 import { CompetitorTable } from "./quote/CompetitorTable";
 import { CostBreakdownTable } from "./quote/CostBreakdownTable";
 import { PerPersonMatrix } from "./quote/PerPersonMatrix";
 import { QuoteKpis } from "./quote/QuoteKpis";
+import { UndecidedRange } from "./quote/UndecidedRange";
 
 interface Props {
   /** 견적은 일정 결과에 의존하므로 일정 상태를 그대로 받는다 */
@@ -37,6 +39,12 @@ function QuoteSkeleton() {
 function SubHeading({ children }: { children: React.ReactNode }) {
   return <h3 className="mb-2 text-xs font-semibold text-slate-800">{children}</h3>;
 }
+
+const PACKAGE_LABELS: Record<PackageType, string> = {
+  land: "랜드만",
+  land_hotel: "랜드+숙박",
+  full: "풀패키지 (항공 포함)",
+};
 
 function QuoteContent({ quote, input, days, generatedCurrency }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
@@ -71,16 +79,53 @@ function QuoteContent({ quote, input, days, generatedCurrency }: Omit<Props, "st
         </ul>
       )}
 
-      <QuoteKpis scenario={quote.scenario} currency={input.currency} exchangeRateToKrw={input.exchangeRateToKrw} />
+      <p className="text-[11px] text-slate-500">
+        판매 구성 <span className="font-semibold text-slate-700">{PACKAGE_LABELS[quote.packageType]}</span>
+        {quote.lodgingUnits > 0 && (
+          <>
+            {" · "}숙소 {quote.lodgingUnits}
+            {input.lodgingType === "bnb" ? "유닛" : "실"} × {input.nights}박
+          </>
+        )}
+        {" · "}차량·가이드 {quote.groundDays}일
+      </p>
+
+      <QuoteKpis
+        scenario={quote.scenario}
+        pricingMode={quote.pricingMode}
+        currency={input.currency}
+        exchangeRateToKrw={input.exchangeRateToKrw}
+      />
+
+      {quote.withUndecided && (
+        <UndecidedRange
+          labels={quote.undecidedLabels}
+          base={quote.scenario}
+          withUndecided={quote.withUndecided}
+          currency={input.currency}
+        />
+      )}
 
       <section>
         <SubHeading>원가 내역</SubHeading>
-        <CostBreakdownTable lines={quote.lines} scenario={quote.scenario} currency={input.currency} />
+        <CostBreakdownTable
+          lines={quote.lines}
+          scenario={quote.scenario}
+          currency={input.currency}
+          pricingMode={quote.pricingMode}
+          withUndecided={quote.withUndecided}
+        />
       </section>
 
       <section>
         <SubHeading>인원별 견적 · 손익분기</SubHeading>
-        <PerPersonMatrix quote={quote} currency={input.currency} targetMarginRate={input.targetMarginRate} />
+        <PerPersonMatrix
+          quote={quote}
+          currency={input.currency}
+          targetMarginRate={input.targetMarginRate}
+          unitsFor={quote.lodgingUnits > 0 ? (n) => lodgingUnitsFor(n, input.guestsPerUnit) : null}
+          unitLabel={input.lodgingType === "bnb" ? "유닛" : "실"}
+        />
       </section>
 
       <section>

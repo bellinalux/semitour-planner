@@ -1,8 +1,9 @@
 import { formatMoney } from "@/lib/currency";
-import type { CurrencyCode, QuoteScenario } from "@/types";
+import type { CurrencyCode, PricingMode, QuoteScenario } from "@/types";
 
 interface Props {
   scenario: QuoteScenario;
+  pricingMode: PricingMode;
   currency: CurrencyCode;
   /** 1 견적통화 = ? KRW. 0이거나 KRW면 환산 금액을 숨긴다 */
   exchangeRateToKrw: number;
@@ -13,7 +14,7 @@ function KrwHint({ amount, currency, rate }: { amount: number; currency: Currenc
   return <p className="mt-0.5 text-[11px] tabular-nums opacity-70">≈ {formatMoney(amount * rate, "KRW")}</p>;
 }
 
-export function QuoteKpis({ scenario, currency, exchangeRateToKrw }: Props) {
+export function QuoteKpis({ scenario, pricingMode, currency, exchangeRateToKrw }: Props) {
   const money = (v: number) => formatMoney(v, currency);
 
   return (
@@ -26,15 +27,15 @@ export function QuoteKpis({ scenario, currency, exchangeRateToKrw }: Props) {
       </div>
 
       <div className="rounded-lg bg-indigo-600 p-3 text-white shadow-sm">
-        <p className="text-[11px] font-medium text-indigo-100">최종 권장 판매가 (1인)</p>
+        <p className="text-[11px] font-medium text-indigo-100">{pricingMode === "fixed_price" ? "판매가 · 입력값 (1인)" : "최종 권장 판매가 (1인)"}</p>
         <p className="mt-1 text-xl font-bold tabular-nums">{money(scenario.pricePerPerson)}</p>
         <p className="mt-0.5 text-[11px] tabular-nums text-indigo-100">총 {money(scenario.totalPrice)}</p>
         <KrwHint amount={scenario.pricePerPerson} currency={currency} rate={exchangeRateToKrw} />
       </div>
 
       <div className="rounded-lg bg-emerald-50 p-3 ring-1 ring-emerald-200">
-        <p className="text-[11px] font-medium text-emerald-700">예상 이익</p>
-        <p className="mt-1 text-lg font-bold tabular-nums text-emerald-800">{money(scenario.profit)}</p>
+        <p className={`text-[11px] font-medium ${scenario.profit >= 0 ? "text-emerald-700" : "text-red-600"}`}>예상 이익</p>
+        <p className={`mt-1 text-lg font-bold tabular-nums ${scenario.profit >= 0 ? "text-emerald-800" : "text-red-700"}`}>{money(scenario.profit)}</p>
         <p className="mt-0.5 text-[11px] tabular-nums text-emerald-700">
           마진율 {scenario.actualMarginRate.toFixed(1)}% (카드 수수료 차감 후)
         </p>
