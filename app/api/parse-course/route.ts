@@ -1,12 +1,16 @@
 import { courseRequestSchema, courseResponseSchema, toCoursePlan } from "@/lib/schemas/course";
 import { buildCourseUserPrompt, COURSE_SYSTEM_PROMPT } from "@/lib/server/coursePrompt";
 import { GeminiError, generateJson } from "@/lib/server/gemini";
+import { guardRequest } from "@/lib/server/guard";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
 }
 
 export async function POST(request: Request) {
+  const blocked = await guardRequest(request);
+  if (blocked) return blocked;
+
   let body: unknown;
   try {
     body = await request.json();

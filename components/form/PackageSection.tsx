@@ -2,6 +2,7 @@ import { Boxes } from "lucide-react";
 import { SectionCard } from "@/components/ui/SectionCard";
 import type { PackageType } from "@/types";
 import { FlightFields } from "./FlightFields";
+import { HotelFinder } from "./HotelFinder";
 import { LodgingFields } from "./LodgingFields";
 import { PackageTypeSwitch } from "./PackageTypeSwitch";
 import { TravelEstimatePanel } from "./TravelEstimatePanel";
@@ -28,6 +29,7 @@ export function PackageSection({ input, onChange }: SectionProps) {
         ) : (
           <>
             <LodgingFields input={input} onChange={onChange} />
+            <HotelFinder input={input} onChange={onChange} />
             {input.packageType === "full" && <FlightFields input={input} onChange={onChange} />}
             <TravelEstimatePanel input={input} onChange={onChange} />
           </>

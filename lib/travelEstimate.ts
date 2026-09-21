@@ -1,7 +1,7 @@
 import type { CostKey, TravelEstimate, TripInput } from "@/types";
 
 /** 범위의 중간값을 보기 좋은 단위로 반올림한다 */
-function midpoint(low: number, high: number): number {
+export function midpoint(low: number, high: number): number {
   const mid = (low + high) / 2;
   if (mid >= 10000) return Math.round(mid / 1000) * 1000;
   if (mid >= 1000) return Math.round(mid / 100) * 100;

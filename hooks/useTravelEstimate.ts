@@ -2,13 +2,14 @@
 
 import { useCallback, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
-import type { AsyncState, CurrencyCode, TravelEstimate } from "@/types";
+import type { AsyncState, CurrencyCode, HotelGrade, TravelEstimate } from "@/types";
 
 interface EstimateParams {
   origin: string;
   destination: string;
   currency: CurrencyCode;
   nights: number;
+  hotelGrade: HotelGrade;
 }
 
 /** 항공/숙박 시세 AI 추정 요청 상태와 결과 */

@@ -41,6 +41,10 @@ function includedLabels(includes: CompetitorIncludes, included: boolean): string
     .map((k) => INCLUDE_LABELS[k]);
 }
 
+function hotelLine(hotel: NonNullable<TripInput["selectedHotel"]>): string {
+  return `${hotel.name} (${hotel.grade}, ${hotel.area})`;
+}
+
 function titleOf(input: TripInput): string {
   return `${input.destination} ${input.nights}박 ${input.days}일`;
 }
@@ -133,7 +137,13 @@ export function buildInternalText(data: ExportData): string {
     `예상 이익: ${money(s.profit)} (마진율 ${s.actualMarginRate.toFixed(1)}%)`,
     `▶ ${quote.pricingMode === "fixed_price" ? "판매가(직접 입력)" : "최종 권장 판매가"}: 1인 ${money(s.pricePerPerson)} / 총 ${money(s.totalPrice)}`,
     "",
-    ...(quote.lodgingUnits > 0 ? [`숙소: ${quote.lodgingUnits}${input.lodgingType === "bnb" ? "유닛" : "실"} (${input.nights}박)`, ""] : [""]),
+    ...(quote.lodgingUnits > 0
+      ? [
+          `숙소: ${quote.lodgingUnits}${input.lodgingType === "bnb" ? "유닛" : "실"} (${input.nights}박)`,
+          ...(input.selectedHotel ? [`선택한 숙소: ${hotelLine(input.selectedHotel)}${input.selectedHotel.priceBasis === "estimated" ? " [요금 추정]" : ""}`] : []),
+          "",
+        ]
+      : [""]),
     "인원별 1인 " + (quote.pricingMode === "fixed_price" ? "판매가" : "권장가"),
     ...quote.matrix.map((m) => `- ${m.travelers}명: ${money(m.pricePerPerson)} (이익률 ${m.actualMarginRate.toFixed(1)}%)`),
     `손익분기 최소 인원: ${quote.breakEvenTravelers === null ? "달성 불가" : `${quote.breakEvenTravelers}명`}`,
@@ -191,7 +201,11 @@ export function buildCustomerText(data: ExportData): string {
     "",
     ...dayBlocks(data, detail, { altNote: false, showOvernight: false }),
     LINE,
-    ...(meta?.hotelGrade ? [`■ 숙소: ${meta.hotelGrade}`] : []),
+    ...(input.selectedHotel && quote.lodgingUnits > 0
+      ? [`■ 숙소: ${hotelLine(input.selectedHotel)}`]
+      : meta?.hotelGrade
+        ? [`■ 숙소: ${meta.hotelGrade}`]
+        : []),
     `■ 포함 사항: ${included.length > 0 ? included.join(", ") : "별도 안내"}`,
     `■ 불포함 사항: ${excluded.join(", ")}`,
     "※ 입장료와 식대 등은 현지 사정에 따라 변동될 수 있습니다.",

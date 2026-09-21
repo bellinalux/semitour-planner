@@ -1,3 +1,4 @@
+import { accessRequired } from "@/lib/server/access";
 import { APP_VERSION } from "@/lib/version";
 
 /** Cloudflare의 trace 응답("key=value" 줄들)에서 값을 읽는다 */
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
   return Response.json({
     ok: true,
     version: APP_VERSION,
+    accessGate: accessRequired() ? "on" : "off",
     geminiKey: rawKey && rawKey.trim() ? "set" : "missing",
     keyLength: rawKey ? rawKey.trim().length : 0,
     similarEnvNames: similarNames,

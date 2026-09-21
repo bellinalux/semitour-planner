@@ -13,6 +13,15 @@
   "placement": {
     "region": "aws:us-east-1"
   },
+  // AI 호출 횟수 제한: IP(key)마다 60초에 10회. 남용과 비용 폭주를 막는 용도다.
+  // namespace_id는 이 계정 안에서만 겹치지 않는 임의의 양의 정수 문자열이면 된다.
+  "ratelimits": [
+    {
+      "name": "AI_RATE_LIMITER",
+      "namespace_id": "20260921",
+      "simple": { "limit": 10, "period": 60 }
+    }
+  ],
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",

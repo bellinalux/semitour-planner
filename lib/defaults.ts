@@ -35,6 +35,9 @@ export const DEFAULT_INPUT: TripInput = {
 
   packageType: "land",
   lodgingType: "hotel",
+  hotelGrade: "any",
+  hotelPreferences: [],
+  selectedHotel: null,
   lodgingRatePerNight: 0,
   guestsPerUnit: 2,
   cleaningFeePerUnit: 0,

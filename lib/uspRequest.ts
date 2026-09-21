@@ -50,7 +50,7 @@ export function buildUspRequest(
     features: {
       nights: input.nights,
       cities: meta?.cities ?? [],
-      hotelGrade: meta?.hotelGrade ?? "",
+      hotelGrade: meta?.hotelGrade || (input.selectedHotel ? `${input.selectedHotel.name} (${input.selectedHotel.grade})` : ""),
       noShopping: meta?.noShopping ?? false,
       noOption: meta?.noOption ?? false,
       highlights: meta?.highlights ?? [],

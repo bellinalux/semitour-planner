@@ -47,6 +47,9 @@ export type Certainty = "confirmed" | "estimated" | "undecided";
 /** 확정도를 지정하는 비용 항목 */
 export type CostKey = "vehicle" | "guide" | "other" | "lodging" | "flight";
 export type LodgingType = "hotel" | "bnb";
+/** 호텔 등급: 전체(3~5성) / 3성 / 4성 / 5성 / 리조트 */
+export type HotelGrade = "any" | "3" | "4" | "5" | "resort";
+export type HotelPreference = "transit" | "airport" | "korean" | "breakfast" | "value";
 /** target_margin: 목표 마진으로 판매가 계산 / fixed_price: 판매가를 넣고 마진 확인 */
 export type PricingMode = "target_margin" | "fixed_price";
 
@@ -82,6 +85,10 @@ export interface TripInput {
 
   packageType: PackageType;
   lodgingType: LodgingType;
+  hotelGrade: HotelGrade;
+  hotelPreferences: HotelPreference[];
+  /** 호텔 찾기에서 고른 숙소 (없으면 null) */
+  selectedHotel: SelectedHotel | null;
   /** 1실(호텔) 또는 1유닛(BnB)의 1박 요금 */
   lodgingRatePerNight: number;
   /** 1실/1유닛에 묵는 인원. 필요한 방 수 = ceil(인원 ÷ 이 값) */
@@ -266,4 +273,38 @@ export interface TravelEstimate {
     note: string;
   };
   seasonNote: string;
+}
+
+/** 웹 검색으로 찾은 호텔 후보 */
+export interface HotelCandidate {
+  name: string;
+  /** 등급 표기 (예: "4성급", "리조트") */
+  grade: string;
+  /** 구/지역 */
+  area: string;
+  nearestStation: string;
+  /** 가까운 역까지 도보 분. 모르면 0 */
+  walkMinutes: number;
+  /** 1박 요금 범위 (견적 통화) */
+  nightlyLow: number;
+  nightlyHigh: number;
+  /** searched: 검색에서 확인한 요금 / estimated: AI 추정 */
+  priceBasis: "searched" | "estimated";
+  /** 한국어 후기·기사 등에서 한국인 이용이 확인된 경우 */
+  koreanFriendly: boolean;
+  koreanNote: string;
+  highlights: string;
+  /** 구글 지도에서 검색하는 링크 */
+  mapUrl: string;
+}
+
+export type SelectedHotel = Pick<
+  HotelCandidate,
+  "name" | "grade" | "area" | "nearestStation" | "walkMinutes" | "nightlyLow" | "nightlyHigh" | "priceBasis" | "mapUrl"
+>;
+
+/** 검색 결과의 출처 */
+export interface SearchSource {
+  title: string;
+  url: string;
 }

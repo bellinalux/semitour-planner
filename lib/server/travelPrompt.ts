@@ -1,3 +1,4 @@
+import { HOTEL_GRADE_QUERY } from "@/lib/itemTypes";
 import type { TravelRequest } from "@/lib/schemas/travel";
 
 export const TRAVEL_SYSTEM_PROMPT = `당신은 해외 패키지 상품 원가를 기획하는 여행 비용 분석가입니다. 출발지와 여행지가 주어지면 항공과 숙박의 대략적인 시세를 추정합니다.
@@ -6,7 +7,7 @@ export const TRAVEL_SYSTEM_PROMPT = `당신은 해외 패키지 상품 원가를
 - 실시간 요금이 아니라 "평소(성수기·연휴 제외)의 통상적인 시세 범위"를 추정합니다. 정확히 모르면 범위를 넓게 잡습니다.
 - 모든 금액은 요청한 통화 단위의 숫자입니다. 통화 기호나 단위 설명은 넣지 않습니다.
 - 항공은 이코노미 왕복 1인 요금(세금·유류할증료 포함)입니다. 직항이 있으면 직항 기준으로 비행 시간을 씁니다.
-- 숙박은 호텔은 4성급 2인 1실 1박, BnB는 아파트 1유닛(4인 기준) 1박 요금입니다.
+- 숙박은 호텔은 요청한 등급의 2인 1실 1박, BnB는 아파트 1유닛(4인 기준) 1박 요금입니다.
 - 숙박세/관광세가 있는 도시는 1인 1박 금액을, 없으면 0을 씁니다.
 - 시차는 (도착지 시각 − 출발지 시각)을 시간 단위로 씁니다. 도착지가 느리면 음수입니다.
 - note와 seasonNote는 한 줄로, 확실하지 않은 내용을 단정하지 않습니다.
@@ -16,7 +17,7 @@ export function buildTravelUserPrompt(req: TravelRequest): string {
   return [
     `출발지: ${req.origin}`,
     `여행지: ${req.destination}`,
-    `숙박: ${req.nights}박`,
+    `숙박: ${req.nights}박, 호텔 등급: ${req.hotelGrade === "any" ? "4성급 기준" : HOTEL_GRADE_QUERY[req.hotelGrade]}`,
     `요금 통화: ${req.currency} (모든 금액은 이 통화 단위)`,
     "",
     "위 조건의 항공 왕복 요금, 비행 시간, 시차, 호텔/BnB 1박 시세, 숙박세를 추정해 주세요.",

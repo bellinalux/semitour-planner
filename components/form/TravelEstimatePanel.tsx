@@ -26,6 +26,7 @@ export function TravelEstimatePanel({ input, onChange }: SectionProps) {
       destination: input.destination.trim(),
       currency,
       nights: input.nights,
+      hotelGrade: input.hotelGrade,
     });
     if (!result) return;
     const { patch, applied: names } = estimateToPatch(input, result);
@@ -66,7 +67,7 @@ export function TravelEstimatePanel({ input, onChange }: SectionProps) {
             </p>
           )}
           <p>
-            🏨 호텔(4성 2인실) {range(estimate.lodging.hotelLow, estimate.lodging.hotelHigh, currency)} / 박 · BnB(4인 유닛){" "}
+            🏨 호텔(2인실) {range(estimate.lodging.hotelLow, estimate.lodging.hotelHigh, currency)} / 박 · BnB(4인 유닛){" "}
             {range(estimate.lodging.bnbLow, estimate.lodging.bnbHigh, currency)} / 박
             {estimate.lodging.cityTaxPerPersonPerNight > 0 ? ` · 숙박세 ${formatMoney(estimate.lodging.cityTaxPerPersonPerNight, currency)}/인·박` : ""}
             {estimate.lodging.note ? ` · ${estimate.lodging.note}` : ""}

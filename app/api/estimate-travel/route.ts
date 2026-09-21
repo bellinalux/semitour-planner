@@ -1,12 +1,16 @@
 import { travelRequestSchema, travelResponseSchema, toTravelEstimate } from "@/lib/schemas/travel";
 import { GeminiError, generateJson } from "@/lib/server/gemini";
 import { buildTravelUserPrompt, TRAVEL_SYSTEM_PROMPT } from "@/lib/server/travelPrompt";
+import { guardRequest } from "@/lib/server/guard";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
 }
 
 export async function POST(request: Request) {
+  const blocked = await guardRequest(request);
+  if (blocked) return blocked;
+
   let body: unknown;
   try {
     body = await request.json();

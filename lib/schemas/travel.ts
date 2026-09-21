@@ -8,6 +8,7 @@ export const travelRequestSchema = z.object({
   destination: z.string().trim().min(1, "여행지를 입력해 주세요.").max(100),
   currency: z.enum(["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD", "AUD"]),
   nights: z.number().int().min(0).max(30),
+  hotelGrade: z.enum(["any", "3", "4", "5", "resort"]).default("4"),
 });
 
 export type TravelRequest = z.infer<typeof travelRequestSchema>;
@@ -25,8 +26,8 @@ export const travelResponseSchema = z.object({
   }),
   timeDifferenceHours: z.number().describe("도착지 시각 − 출발지 시각 (시간). 도착지가 느리면 음수"),
   lodging: z.object({
-    hotelLow: z.number().describe("4성급 호텔 2인 1실 1박 요금 하한 (요청 통화)"),
-    hotelHigh: z.number().describe("4성급 호텔 2인 1실 1박 요금 상한 (요청 통화)"),
+    hotelLow: z.number().describe("요청한 등급 호텔 2인 1실 1박 요금 하한 (요청 통화)"),
+    hotelHigh: z.number().describe("요청한 등급 호텔 2인 1실 1박 요금 상한 (요청 통화)"),
     bnbLow: z.number().describe("아파트/BnB 1유닛(4인 기준) 1박 요금 하한 (요청 통화)"),
     bnbHigh: z.number().describe("아파트/BnB 1유닛(4인 기준) 1박 요금 상한 (요청 통화)"),
     cityTaxPerPersonPerNight: z.number().describe("1인 1박 숙박세/관광세 (요청 통화). 없으면 0"),

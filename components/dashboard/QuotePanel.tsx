@@ -85,6 +85,7 @@ function QuoteContent({ quote, input, days, generatedCurrency }: Omit<Props, "st
           <>
             {" · "}숙소 {quote.lodgingUnits}
             {input.lodgingType === "bnb" ? "유닛" : "실"} × {input.nights}박
+            {input.selectedHotel ? ` (${input.selectedHotel.name})` : ""}
           </>
         )}
         {" · "}차량·가이드 {quote.groundDays}일
