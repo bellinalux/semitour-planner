@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { AsyncState, DayPlan, ItineraryItem, PmFreeOption, TripInput } from "@/types";
+import type { AsyncState, CurrencyCode, DayPlan, ItineraryItem, PmFreeOption, TripInput } from "@/types";
 
 type PmChoice = Record<number, PmFreeOption["id"]>;
 
@@ -32,6 +32,8 @@ export function useItinerary() {
   const [state, setState] = useState<AsyncState>({ status: "idle" });
   const [days, setDays] = useState<DayPlan[]>([]);
   const [pmChoice, setPmChoice] = useState<PmChoice>({});
+  /** 일정 금액이 어느 통화로 생성됐는지 (이후 통화를 바꾸면 견적에서 경고) */
+  const [generatedCurrency, setGeneratedCurrency] = useState<CurrencyCode | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
   const generate = useCallback(async (input: TripInput) => {
@@ -43,6 +45,7 @@ export function useItinerary() {
     try {
       const result = await requestItinerary(input, controller.signal);
       setDays(result);
+      setGeneratedCurrency(input.currency);
       setPmChoice(Object.fromEntries(result.map((d) => [d.day, d.pmFreeOptions[0]?.id ?? "A"])));
       setState({ status: "success" });
     } catch (err) {
@@ -75,5 +78,5 @@ export function useItinerary() {
     [],
   );
 
-  return { state, days, pmChoice, generate, selectPmOption, updateItemCost };
+  return { state, days, pmChoice, generatedCurrency, generate, selectPmOption, updateItemCost };
 }

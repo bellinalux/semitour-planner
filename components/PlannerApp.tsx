@@ -14,7 +14,7 @@ const USP_IDLE: AsyncState = { status: "idle" };
 
 export function PlannerApp() {
   const { input, update, reset } = usePlannerInput();
-  const { state, days, pmChoice, generate, selectPmOption } = useItinerary();
+  const { state, days, pmChoice, generatedCurrency, generate, selectPmOption, updateItemCost } = useItinerary();
   const [tab, setTab] = useState<PlannerTab>("input");
 
   const handleGenerate = () => {
@@ -50,9 +50,11 @@ export function PlannerApp() {
           <Dashboard
             itinerary={state}
             days={days}
-            currency={input.currency}
+            input={input}
             pmChoice={pmChoice}
+            generatedCurrency={generatedCurrency}
             onSelectPm={selectPmOption}
+            onChangeCost={updateItemCost}
             usp={USP_IDLE}
             onRetryItinerary={handleGenerate}
             onRetryUsp={handleGenerate}

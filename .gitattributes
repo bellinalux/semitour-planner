@@ -1,2 +1,2 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Auto detect text files and keep LF line endings on every OS (Next.js/ESLint expect LF)
+* text=auto eol=lf
