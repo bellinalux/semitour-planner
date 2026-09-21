@@ -13,8 +13,14 @@ export const THEMES: { id: ThemeId; label: string }[] = [
 export const MAX_COMPETITORS = 5;
 
 export const DEFAULT_INPUT: TripInput = {
+  mode: "ai",
+  courseText: "",
+
   destination: "",
+  originCity: "인천",
   days: 3,
+  nights: 2,
+  includesFlights: false,
   travelers: 6,
   themes: [],
   notes: "",
@@ -25,6 +31,7 @@ export const DEFAULT_INPUT: TripInput = {
   vehicleCostPerDay: 0,
   guideCostPerDay: 0,
   otherFixedCost: 0,
+  groundDaysOverride: 0,
 
   tipPerPerson: 0,
   insurancePerPerson: 0,

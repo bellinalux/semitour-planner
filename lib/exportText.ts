@@ -1,8 +1,17 @@
 import { compareWithCompetitors } from "@/lib/cost";
 import { formatMoney } from "@/lib/currency";
 import { formatDuration } from "@/lib/format";
+import { ITEM_TYPE_META } from "@/lib/itemTypes";
 import { pickPmOption, type PmChoice } from "@/lib/itinerary";
-import type { CompetitorIncludes, DayPlan, ItineraryItem, QuoteData, TripInput, UspItem } from "@/types";
+import type {
+  CompetitorIncludes,
+  CourseMeta,
+  DayPlan,
+  ItineraryItem,
+  QuoteData,
+  TripInput,
+  UspItem,
+} from "@/types";
 
 interface ExportData {
   input: TripInput;
@@ -10,6 +19,7 @@ interface ExportData {
   pmChoice: PmChoice;
   quote: QuoteData;
   usps: UspItem[];
+  meta: CourseMeta | null;
 }
 
 const INCLUDE_LABELS: Record<keyof CompetitorIncludes, string> = {
@@ -27,10 +37,27 @@ function includedLabels(includes: CompetitorIncludes, included: boolean): string
     .map((k) => INCLUDE_LABELS[k]);
 }
 
-function itemLines(items: ItineraryItem[], detail: (item: ItineraryItem) => string): string[] {
+function titleOf(input: TripInput): string {
+  return `${input.destination} ${input.nights}박 ${input.days}일`;
+}
+
+/** 세미투어 항목: 번호 + 설명 + 이동 시간 */
+function numberedLines(items: ItineraryItem[], detail: (item: ItineraryItem) => string): string[] {
   return items.flatMap((item, index) => {
-    const lines = [`${index + 1}. ${item.name} ${detail(item)}`, `   ${item.description}`];
-    if (item.travelMinutesToNext !== null) lines.push(`   ↓ 이동 ${formatDuration(item.travelMinutesToNext)}`);
+    const lines = [`${index + 1}. ${item.name} ${detail(item)}`.trimEnd()];
+    if (item.description) lines.push(`   ${item.description}`);
+    if (item.travelMinutesToNext !== null && item.travelMinutesToNext > 0)
+      lines.push(`   ↓ 이동 ${formatDuration(item.travelMinutesToNext)}`);
+    return lines;
+  });
+}
+
+/** 업체 코스 항목: 유형 이모지 + 이름 (순서대로) */
+function linearLines(items: ItineraryItem[], detail: (item: ItineraryItem) => string): string[] {
+  return items.flatMap((item) => {
+    const emoji = ITEM_TYPE_META[item.type ?? "sightseeing"].emoji;
+    const lines = [`${emoji} ${item.name} ${detail(item)}`.trimEnd()];
+    if (item.description) lines.push(`   ${item.description}`);
     return lines;
   });
 }
@@ -38,20 +65,25 @@ function itemLines(items: ItineraryItem[], detail: (item: ItineraryItem) => stri
 function dayBlocks(
   { days, pmChoice }: Pick<ExportData, "days" | "pmChoice">,
   detail: (item: ItineraryItem) => string,
-  altNote: boolean,
+  options: { altNote: boolean; showOvernight: boolean },
 ): string[] {
   return days.flatMap((day) => {
+    const overnight = options.showOvernight && day.overnightCity ? ` (숙박: ${day.overnightCity})` : "";
+    const head = `[DAY ${day.day}] ${day.theme}${overnight}`;
+
+    if (day.kind === "linear") return [head, "", ...linearLines(day.items, detail), ""];
+
     const pm = pickPmOption(day, pmChoice);
     const others = day.pmFreeOptions.filter((o) => o.id !== pm?.id);
     return [
-      `[DAY ${day.day}] ${day.theme}`,
+      head,
       "",
       "■ 오전 · 가이드 투어",
-      ...itemLines(day.amGuided, detail),
+      ...numberedLines(day.amGuided, detail),
       "",
       `■ 오후 · 반자유 일정 (코스 ${pm?.id}: ${pm?.title ?? ""})`,
-      ...(pm ? itemLines(pm.items, detail) : []),
-      ...(altNote && others.length > 0
+      ...(pm ? numberedLines(pm.items, detail) : []),
+      ...(options.altNote && others.length > 0
         ? ["", `  (다른 오후 코스: ${others.map((o) => `${o.id} ${o.title}`).join(" / ")})`]
         : []),
       "",
@@ -66,18 +98,21 @@ export function buildInternalText(data: ExportData): string {
   const s = quote.scenario;
 
   const cost = (item: ItineraryItem) => {
-    const parts = [`체류 ${formatDuration(item.stayMinutes)}`];
-    if (item.entryFee > 0) parts.push(`입장료 ${money(item.entryFee)}`);
+    const parts: string[] = [];
+    if (item.timeNote) parts.push(item.timeNote);
+    else if (item.stayMinutes > 0) parts.push(`체류 ${formatDuration(item.stayMinutes)}`);
+    if (item.admission === "view_only") parts.push("외부 조망");
+    if (item.entryFee > 0) parts.push(`${item.type === "experience" || item.type === "massage" ? "체험비" : "입장료"} ${money(item.entryFee)}`);
     if (item.mealCost > 0) parts.push(`식대 ${money(item.mealCost)}`);
-    return `(${parts.join(" · ")})`;
+    return parts.length > 0 ? `(${parts.join(" · ")})` : "";
   };
 
   const lines: string[] = [
-    `[세미투어 견적서 — 내부용] ${input.destination}`,
-    `${input.days}일 · ${quote.travelers}명 · 통화 ${input.currency}`,
+    `[세미투어 견적서 — 내부용] ${titleOf(input)}`,
+    `${quote.travelers}명 · 통화 ${input.currency}${data.meta?.packageName ? ` · ${data.meta.packageName}` : ""}`,
     LINE,
     "",
-    ...dayBlocks(data, cost, true),
+    ...dayBlocks(data, cost, { altNote: true, showOvernight: true }),
     LINE,
     "■ 견적",
     ...quote.lines.filter((l) => l.amount > 0).map((l) => `${l.label}: ${money(l.amount)}${l.note ? ` (${l.note})` : ""}`),
@@ -120,22 +155,30 @@ export function buildInternalText(data: ExportData): string {
 
 /** 고객용: 일정 + 판매가 + 포함/불포함. 원가, 마진, 경쟁사 정보는 넣지 않는다. */
 export function buildCustomerText(data: ExportData): string {
-  const { input, quote } = data;
+  const { input, quote, meta } = data;
   const money = (v: number) => formatMoney(v, input.currency);
   const s = quote.scenario;
 
-  const stay = (item: ItineraryItem) => `(약 ${formatDuration(item.stayMinutes)})`;
+  const detail = (item: ItineraryItem) => {
+    if (item.timeNote) return `(${item.timeNote})`;
+    if (item.admission === "view_only") return "(외부 조망)";
+    return item.stayMinutes > 0 ? `(약 ${formatDuration(item.stayMinutes)})` : "";
+  };
   const included = includedLabels(quote.ourIncludes, true);
-  const excluded = [...includedLabels(quote.ourIncludes, false), "저녁 식사(자유식)", "개인 경비"];
+  const isSemi = data.days.some((d) => d.kind === "semi");
+  const excluded = [...includedLabels(quote.ourIncludes, false), ...(isSemi ? ["저녁 식사(자유식)"] : []), "개인 경비"];
+  const labels = [meta?.noShopping ? "노쇼핑" : "", meta?.noOption ? "노옵션" : ""].filter(Boolean);
 
   return [
-    `[${input.destination} ${input.days}일 세미투어]`,
+    `${labels.length > 0 ? `[${labels.join("·")}] ` : ""}[${titleOf(input)}]`,
     `${quote.travelers}명 기준 · 1인 ${money(s.pricePerPerson)} (총 ${money(s.totalPrice)})`,
-    "오전에는 가이드와 함께, 오후에는 자유롭게 즐기는 세미투어입니다.",
+    ...(isSemi ? ["오전에는 가이드와 함께, 오후에는 자유롭게 즐기는 세미투어입니다."] : []),
+    ...(meta && meta.highlights.length > 0 ? ["", "★ " + meta.highlights.join(" + ")] : []),
     LINE,
     "",
-    ...dayBlocks(data, stay, false),
+    ...dayBlocks(data, detail, { altNote: false, showOvernight: false }),
     LINE,
+    ...(meta?.hotelGrade ? [`■ 숙소: ${meta.hotelGrade}`] : []),
     `■ 포함 사항: ${included.length > 0 ? included.join(", ") : "별도 안내"}`,
     `■ 불포함 사항: ${excluded.join(", ")}`,
     "※ 입장료와 식대 등은 현지 사정에 따라 변동될 수 있습니다.",

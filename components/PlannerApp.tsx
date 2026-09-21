@@ -11,6 +11,7 @@ import { useUsp } from "@/hooks/useUsp";
 import { calculateQuote } from "@/lib/cost";
 import { buildCustomerText, buildInternalText } from "@/lib/exportText";
 import { buildUspRequest } from "@/lib/uspRequest";
+import type { TripInput } from "@/types";
 
 export function PlannerApp() {
   const { input, update, reset } = usePlannerInput();
@@ -18,7 +19,7 @@ export function PlannerApp() {
   const usp = useUsp();
   const [tab, setTab] = useState<PlannerTab>("input");
 
-  const { days, pmChoice } = itinerary;
+  const { days, pmChoice, meta } = itinerary;
   const isReady = itinerary.state.status === "success";
 
   // 견적은 입력/일정/오후 코스 선택이 바뀔 때마다 다시 계산되어 모든 패널이 공유한다.
@@ -27,8 +28,8 @@ export function PlannerApp() {
     [isReady, input, days, pmChoice],
   );
   const uspRequest = useMemo(
-    () => (quote?.ok ? buildUspRequest(input, days, pmChoice, quote) : null),
-    [quote, input, days, pmChoice],
+    () => (quote?.ok ? buildUspRequest(input, days, pmChoice, quote, meta) : null),
+    [quote, input, days, pmChoice, meta],
   );
   const uspStale = usp.state.status === "success" && usp.generatedKey !== JSON.stringify(uspRequest);
 
@@ -38,9 +39,23 @@ export function PlannerApp() {
     const result = await itinerary.generate(input);
     if (!result) return;
 
+    // 붙여넣은 코스에서 읽은 기간/도시를 입력 폼에 반영한다 (박수는 코스 원문이 기준이다)
+    let nextInput: TripInput = input;
+    if (result.detected) {
+      const patch: Partial<TripInput> = {
+        days: result.detected.days,
+        nights: result.detected.nights,
+        destination: result.detected.cities.length > 0 ? result.detected.cities.join(", ") : input.destination,
+      };
+      update(patch);
+      nextInput = { ...input, ...patch };
+    }
+
     // 일정이 만들어지면 세일즈 포인트도 이어서 생성한다 (실패해도 일정/견적에는 영향 없음)
-    const firstQuote = calculateQuote(input, result.days, result.pmChoice);
-    if (firstQuote.ok) void usp.generate(buildUspRequest(input, result.days, result.pmChoice, firstQuote));
+    const firstQuote = calculateQuote(nextInput, result.days, result.pmChoice);
+    if (firstQuote.ok) {
+      void usp.generate(buildUspRequest(nextInput, result.days, result.pmChoice, firstQuote, result.meta));
+    }
   };
 
   const handleGenerateUsp = () => {
@@ -49,7 +64,7 @@ export function PlannerApp() {
 
   const exportData = () => {
     if (!quote?.ok) throw new Error("견적이 아직 준비되지 않았습니다.");
-    return { input, days, pmChoice, quote, usps: usp.state.status === "success" ? usp.usps : [] };
+    return { input, days, pmChoice, quote, meta, usps: usp.state.status === "success" ? usp.usps : [] };
   };
 
   return (
@@ -80,12 +95,17 @@ export function PlannerApp() {
           <Dashboard
             itinerary={itinerary.state}
             days={days}
+            meta={meta}
             input={input}
             quote={quote}
             pmChoice={pmChoice}
             generatedCurrency={itinerary.generatedCurrency}
             onSelectPm={itinerary.selectPmOption}
-            onChangeCost={itinerary.updateItemCost}
+            itemActions={{
+              onChangeItem: itinerary.updateItem,
+              onDeleteItem: itinerary.deleteItem,
+              onAddItem: itinerary.addItem,
+            }}
             onRetryItinerary={handleGenerate}
             usp={{
               state: usp.state,

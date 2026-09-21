@@ -39,7 +39,10 @@ function parse(raw: string | null): TripInput {
   if (!raw) return DEFAULT_INPUT;
   try {
     const saved = JSON.parse(raw) as Partial<TripInput>;
-    return { ...DEFAULT_INPUT, ...saved };
+    const merged = { ...DEFAULT_INPUT, ...saved };
+    // 박수가 없던 이전 저장값은 "일수 − 1"로 채운다
+    if (saved.nights === undefined) merged.nights = Math.max(0, merged.days - 1);
+    return merged;
   } catch {
     return DEFAULT_INPUT;
   }

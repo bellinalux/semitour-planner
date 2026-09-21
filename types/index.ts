@@ -36,9 +36,23 @@ export interface Competitor {
 }
 
 /** 좌측 입력 폼의 전체 상태 */
+export type PlannerMode = "ai" | "paste";
+
 export interface TripInput {
+  /** ai: AI가 세미투어를 생성 / paste: 업체가 쓴 코스를 붙여넣어 구조화 */
+  mode: PlannerMode;
+  /** 붙여넣은 코스 원문 (mode === "paste") */
+  courseText: string;
+
   destination: string;
+  /** 출발지 (항공 이동일 표시용) */
+  originCity: string;
+  /** 총 일수 (항공 이동일 포함) */
   days: number;
+  /** 숙박 수. "4박 6일"처럼 일수와 별개다 (귀국 항공이 심야/기내 숙박이면 일수 − 2) */
+  nights: number;
+  /** true면 첫날/마지막 날을 항공 이동일로 두고 그 사이만 AI가 관광 일정을 만든다 */
+  includesFlights: boolean;
   travelers: number;
   themes: ThemeId[];
   notes: string;
@@ -51,6 +65,8 @@ export interface TripInput {
   vehicleCostPerDay: number;
   guideCostPerDay: number;
   otherFixedCost: number;
+  /** 차량·가이드가 실제로 붙는 일수. 0이면 일정에서 자동 계산 */
+  groundDaysOverride: number;
 
   /** 1인당 비용 */
   tipPerPerson: number;
@@ -73,13 +89,32 @@ export interface AsyncState {
 
 /** ---- AI 일정 결과 (Step 2에서 API 응답 검증에 사용) ---- */
 
+export type ItemType =
+  | "flight"
+  | "transfer"
+  | "hotel"
+  | "sightseeing"
+  | "experience"
+  | "meal"
+  | "massage"
+  | "shopping"
+  | "free_time";
+
+/** 입장 여부: 입장(enter) / 외부 조망만(view_only) / 입장 개념 없음(none) / 불명(unknown) */
+export type Admission = "enter" | "view_only" | "none" | "unknown";
+
 export interface ItineraryItem {
   id: string;
+  /** 항목 유형. 없으면 관광(sightseeing)으로 본다 (AI 세미투어 항목) */
+  type?: ItemType;
+  admission?: Admission;
+  /** 원문에 적힌 소요 시간 표기 (예: "약 30~40분") */
+  timeNote?: string;
   name: string;
   description: string;
-  /** 예상 체류 시간(분) */
+  /** 예상 체류 시간(분). 0이면 알 수 없음 */
   stayMinutes: number;
-  /** 다음 장소까지 이동 시간(분), 마지막 장소는 null */
+  /** 다음 장소까지 이동 시간(분). 모르면 null (마지막 장소 여부는 목록 위치로 판단한다) */
   travelMinutesToNext: number | null;
   entryFee: number;
   mealCost: number;
@@ -98,10 +133,27 @@ export interface PmFreeOption {
 export interface DayPlan {
   day: number;
   theme: string;
-  /** 오전: 가이드 투어 */
+  /** semi: 오전 가이드 + 오후 반자유(A/B) / linear: 하루 전체를 순서대로 나열 (업체 코스, 이동일) */
+  kind: "semi" | "linear";
+  /** 그날 밤 숙박 도시. 숙박이 없으면(기내, 귀국일) 빈 값 */
+  overnightCity?: string;
+  /** 오전: 가이드 투어 (kind === "semi") */
   amGuided: ItineraryItem[];
-  /** 오후: 반자유 일정 (고객이 고르는 추천 코스 A/B) */
+  /** 오후: 반자유 일정 (kind === "semi", 고객이 고르는 추천 코스 A/B) */
   pmFreeOptions: PmFreeOption[];
+  /** 하루 전체 일정 (kind === "linear") */
+  items: ItineraryItem[];
+}
+
+/** 붙여넣은 코스에서 읽은 상품 정보 */
+export interface CourseMeta {
+  packageName: string;
+  cities: string[];
+  /** 원문이 "노쇼핑"/"노옵션"이라고 명시한 경우에만 true */
+  noShopping: boolean;
+  noOption: boolean;
+  hotelGrade: string;
+  highlights: string[];
 }
 
 export interface UspItem {
@@ -136,6 +188,8 @@ export interface QuoteScenario {
 export interface QuoteData {
   ok: true;
   travelers: number;
+  /** 차량·가이드 비용을 계산한 일수 */
+  groundDays: number;
   lines: CostLine[];
   scenario: QuoteScenario;
   matrix: QuoteScenario[];

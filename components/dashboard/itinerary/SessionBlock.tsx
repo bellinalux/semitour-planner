@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import type { CurrencyCode, ItineraryItem } from "@/types";
-import { TimelineItem, type ItemCostPatch } from "./TimelineItem";
+import { TimelineItem, type ItemPatch } from "./TimelineItem";
 
 interface Props {
   label: string;
@@ -9,7 +9,9 @@ interface Props {
   tone: "am" | "pm";
   items: ItineraryItem[];
   currency: CurrencyCode;
-  onChangeCost: (itemId: string, patch: ItemCostPatch) => void;
+  editing: boolean;
+  onChangeItem: (itemId: string, patch: ItemPatch) => void;
+  onDeleteItem: (itemId: string) => void;
   /** 헤더 아래에 끼워 넣을 요소 (오후 A/B 선택 등) */
   children?: React.ReactNode;
 }
@@ -19,7 +21,18 @@ const HEADER_TONE = {
   pm: "bg-emerald-50 text-emerald-700",
 } as const;
 
-export function SessionBlock({ label, sublabel, icon: Icon, tone, items, currency, onChangeCost, children }: Props) {
+export function SessionBlock({
+  label,
+  sublabel,
+  icon: Icon,
+  tone,
+  items,
+  currency,
+  editing,
+  onChangeItem,
+  onDeleteItem,
+  children,
+}: Props) {
   return (
     <div>
       <div className={`mb-3 flex items-center gap-2 rounded-lg px-3 py-2 ${HEADER_TONE[tone]}`}>
@@ -30,7 +43,17 @@ export function SessionBlock({ label, sublabel, icon: Icon, tone, items, currenc
       {children}
       <ol className="space-y-0">
         {items.map((item, index) => (
-          <TimelineItem key={item.id} item={item} order={index + 1} currency={currency} tone={tone} onChangeCost={onChangeCost} />
+          <TimelineItem
+            key={item.id}
+            item={item}
+            order={index + 1}
+            isLast={index === items.length - 1}
+            currency={currency}
+            tone={tone}
+            editing={editing}
+            onChangeItem={onChangeItem}
+            onDeleteItem={onDeleteItem}
+          />
         ))}
       </ol>
     </div>

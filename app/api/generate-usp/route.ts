@@ -16,6 +16,7 @@ export async function POST(request: Request) {
 
   const parsed = uspRequestSchema.safeParse(body);
   if (!parsed.success) {
+    console.error("[generate-usp] 요청 검증 실패:", parsed.error.issues.slice(0, 3).map((i) => `${i.path.join(".")}: ${i.message}`));
     return errorResponse("BAD_REQUEST", "USP 생성에 필요한 정보가 올바르지 않습니다.", 400);
   }
 

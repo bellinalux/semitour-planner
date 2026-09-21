@@ -5,37 +5,63 @@ import { NumberField } from "@/components/ui/NumberField";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { TextField } from "@/components/ui/TextField";
 import { THEMES } from "@/lib/defaults";
+import { tourDayCount } from "@/lib/itinerary";
 import type { ThemeId } from "@/types";
+import { CoursePasteField } from "./CoursePasteField";
+import { ModeSwitch } from "./ModeSwitch";
 import type { SectionProps } from "./types";
 
 export function TripBasicsSection({ input, onChange }: SectionProps) {
+  const isPaste = input.mode === "paste";
+
   const toggleTheme = (id: ThemeId) =>
     onChange({
-      themes: input.themes.includes(id)
-        ? input.themes.filter((t) => t !== id)
-        : [...input.themes, id],
+      themes: input.themes.includes(id) ? input.themes.filter((t) => t !== id) : [...input.themes, id],
     });
 
+  // 박수가 "일수 − 1"(당일 귀국)이던 상태에서 일수를 바꾸면 박수도 함께 따라간다
+  const changeDays = (days: number) =>
+    onChange({ days, nights: input.nights === input.days - 1 ? Math.max(0, days - 1) : input.nights });
+
   return (
-    <SectionCard title="여행 기본 정보" description="AI가 일정을 만들 때 사용합니다" icon={MapPin}>
+    <SectionCard
+      title="여행 기본 정보"
+      description={isPaste ? "붙여넣은 코스에서 기간과 도시를 자동으로 읽습니다" : "AI가 일정을 만들 때 사용합니다"}
+      icon={MapPin}
+    >
       <div className="space-y-4">
+        <ModeSwitch value={input.mode} onChange={(mode) => onChange({ mode })} />
+
+        {isPaste && <CoursePasteField value={input.courseText} onChange={(courseText) => onChange({ courseText })} />}
+
         <TextField
           id="destination"
-          label="여행지"
+          label={isPaste ? "여행지 (코스에서 자동 인식)" : "여행지"}
           value={input.destination}
           placeholder="예) 교토, 일본 / 리스본, 포르투갈"
           onChange={(destination) => onChange({ destination })}
         />
-        <div className="grid grid-cols-2 gap-3">
+
+        <div className="grid grid-cols-3 gap-3">
+          <NumberField
+            id="nights"
+            label="숙박"
+            value={input.nights}
+            min={0}
+            max={30}
+            step={1}
+            suffix="박"
+            onChange={(nights) => onChange({ nights })}
+          />
           <NumberField
             id="days"
-            label="여행 기간"
+            label="총 일수"
             value={input.days}
             min={1}
             max={14}
             step={1}
             suffix="일"
-            onChange={(days) => onChange({ days })}
+            onChange={changeDays}
           />
           <NumberField
             id="travelers"
@@ -48,26 +74,65 @@ export function TripBasicsSection({ input, onChange }: SectionProps) {
             onChange={(travelers) => onChange({ travelers })}
           />
         </div>
-        <Field htmlFor="themes" label="선호 테마" hint="여러 개 선택할 수 있습니다">
-          <div id="themes" className="flex flex-wrap gap-1.5">
-            {THEMES.map((theme) => (
-              <ChipToggle
-                key={theme.id}
-                label={theme.label}
-                selected={input.themes.includes(theme.id)}
-                onToggle={() => toggleTheme(theme.id)}
-              />
-            ))}
-          </div>
-        </Field>
-        <TextField
-          id="notes"
-          label="추가 요청사항"
-          multiline
-          value={input.notes}
-          placeholder="예) 시니어 고객 위주, 도보 이동 최소화, 채식 옵션 필요"
-          onChange={(notes) => onChange({ notes })}
-        />
+        <p className="-mt-2 text-[11px] leading-4 text-slate-500">
+          {input.nights}박 {input.days}일 · 귀국 항공이 밤 비행기라 기내에서 하루를 보내면 숙박이 일수 − 2가 됩니다.
+        </p>
+
+        {!isPaste && (
+          <>
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+              <label className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={input.includesFlights}
+                  onChange={(e) => onChange({ includesFlights: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>
+                  <span className="block text-xs font-medium text-slate-800">항공 이동일 포함 (해외 패키지)</span>
+                  <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">
+                    첫날(출발·도착)과 마지막 날(귀국)은 이동일로 두고, 그 사이 {tourDayCount(input)}일만 AI가 관광 일정을 만듭니다.
+                    {input.includesFlights && input.days < 3 && (
+                      <span className="font-medium text-red-600"> 총 일수는 3일 이상이어야 합니다.</span>
+                    )}
+                  </span>
+                </span>
+              </label>
+              {input.includesFlights && (
+                <div className="mt-3">
+                  <TextField
+                    id="originCity"
+                    label="출발지"
+                    value={input.originCity}
+                    placeholder="예) 인천"
+                    onChange={(originCity) => onChange({ originCity })}
+                  />
+                </div>
+              )}
+            </div>
+
+            <Field htmlFor="themes" label="선호 테마" hint="여러 개 선택할 수 있습니다">
+              <div id="themes" className="flex flex-wrap gap-1.5">
+                {THEMES.map((theme) => (
+                  <ChipToggle
+                    key={theme.id}
+                    label={theme.label}
+                    selected={input.themes.includes(theme.id)}
+                    onToggle={() => toggleTheme(theme.id)}
+                  />
+                ))}
+              </div>
+            </Field>
+            <TextField
+              id="notes"
+              label="추가 요청사항"
+              multiline
+              value={input.notes}
+              placeholder="예) 시니어 고객 위주, 도보 이동 최소화, 채식 옵션 필요"
+              onChange={(notes) => onChange({ notes })}
+            />
+          </>
+        )}
       </div>
     </SectionCard>
   );

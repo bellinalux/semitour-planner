@@ -15,7 +15,8 @@ export const USP_SYSTEM_PROMPT = `당신은 여행사 B2B 세일즈 카피라이
 1. 제공된 [사실]에 있는 내용만 근거로 씁니다. 사실에 없는 서비스, 수치, 후기, 수상 이력을 지어내지 않습니다.
 2. 금액이나 차이를 언급할 때는 [사실]에 계산되어 있는 값만 그대로 인용합니다. 직접 계산하지 않습니다.
 3. 경쟁사가 우리보다 나은 항목(더 저렴함, 우리가 포함하지 않는 항목을 포함함)은 장점으로 주장하지 않습니다. 오히려 그 부분은 피하고 다른 강점을 찾습니다.
-4. 경쟁사 정보가 없거나 부족하면 일반적인 단체 패키지투어와 비교했을 때의 구조적 차이(오전 가이드 + 오후 반자유 구성, 코스 선택 가능, 소규모 등 사실에 있는 것만)로 작성합니다.
+4. 경쟁사 정보가 없거나 부족하면 일반적인 단체 패키지투어와 비교했을 때의 구조적 차이(일정 구성, 포함 범위, 숙박 등 [사실]에 있는 것만)로 작성합니다.
+   "노쇼핑", "노옵션"은 [사실]에 명시된 경우에만 장점으로 쓸 수 있습니다.
 5. 각 장점은 서로 다른 관점(가격, 포함 범위, 일정 구성 중에서)이어야 하고, 겹치지 않게 합니다.
 6. title은 20자 안팎의 헤드라인, reason은 근거가 드러나는 1~2문장입니다. "최고", "유일", "완벽" 같은 과장 표현은 사실로 뒷받침될 때만 씁니다.
 7. 한국어로 작성하고, 지정된 JSON 스키마의 JSON만 출력합니다.
@@ -42,10 +43,22 @@ function includeDiff(ours: CompetitorIncludes, theirs: CompetitorIncludes) {
 export function buildUspUserPrompt(req: UspRequest): string {
   const money = (v: number) => formatMoney(v, req.currency);
 
-  const itineraryLines = req.itinerary.map(
-    (d) =>
-      `- ${d.day}일차 "${d.theme}": 오전(가이드 동행) ${d.amPlaces.join(" → ")} / 오후(반자유, ${d.pmTitle}) ${d.pmPlaces.join(" → ")}`,
+  const isSemi = req.itinerary.some((d) => d.pmTitle !== "");
+  const itineraryLines = req.itinerary.map((d) =>
+    d.pmTitle !== ""
+      ? `- ${d.day}일차 "${d.theme}": 오전(가이드 동행) ${d.amPlaces.join(" → ")} / 오후(반자유, ${d.pmTitle}) ${d.pmPlaces.join(" → ")}`
+      : `- ${d.day}일차 "${d.theme}": ${d.amPlaces.length > 0 ? d.amPlaces.join(" → ") : "이동일"}`,
   );
+
+  const f = req.features;
+  const featureLines = f
+    ? [
+        `숙박: ${f.nights}박${f.cities.length > 0 ? ` (${f.cities.join(" → ")})` : ""}${f.hotelGrade ? `, 호텔: ${f.hotelGrade}` : ""}`,
+        f.noShopping ? "노쇼핑: 상품 설명에 명시됨 (강제 쇼핑센터 방문 없음)" : "",
+        f.noOption ? "노옵션: 상품 설명에 명시됨 (선택관광 강요 없음)" : "",
+        f.highlights.length > 0 ? `상품이 내세우는 핵심 포인트: ${f.highlights.join(", ")}` : "",
+      ].filter(Boolean)
+    : [];
 
   const competitorLines = req.competitors.map((c, i) => {
     const name = c.name.trim() || `경쟁사 ${i + 1}`;
@@ -72,7 +85,10 @@ export function buildUspUserPrompt(req: UspRequest): string {
     `여행지: ${req.destination}, ${req.days}일, 예상 ${req.travelers}명, 통화 ${req.currency}`,
     `우리 투어 1인 판매가: ${money(req.pricePerPerson)}`,
     `우리 투어 포함 항목: ${includedLabels(req.ourIncludes)}`,
-    "투어 구조: 매일 오전은 가이드 동행 투어, 오후는 고객이 코스를 골라 자유롭게 다니는 반자유 일정(세미투어)",
+    isSemi
+      ? "투어 구조: 매일 오전은 가이드 동행 투어, 오후는 고객이 코스를 골라 자유롭게 다니는 반자유 일정(세미투어)"
+      : "투어 구조: 업체가 구성한 일차별 종일 일정 코스 (항공 이동일 포함)",
+    ...featureLines,
     "",
     "일정:",
     ...itineraryLines,

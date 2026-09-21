@@ -1,11 +1,10 @@
 import { formatMoney } from "@/lib/currency";
-import { pickPmOption } from "@/lib/itinerary";
+import { dayItems, groundDays, type PmChoice } from "@/lib/itinerary";
 import type {
   CostLine,
   CurrencyCode,
   DayPlan,
   ItineraryItem,
-  PmFreeOption,
   QuoteResult,
   QuoteScenario,
   TripInput,
@@ -26,13 +25,13 @@ export function roundUpPrice(value: number, currency: CurrencyCode): number {
   return Math.ceil(value / unit - 1e-9) * unit;
 }
 
-/** 실제로 진행되는 일정 항목: 오전 전체 + 선택한 오후 옵션 */
-function activeItems(days: DayPlan[], pmChoice: Record<number, PmFreeOption["id"]>): ItineraryItem[] {
-  return days.flatMap((day) => [...day.amGuided, ...(pickPmOption(day, pmChoice)?.items ?? [])]);
+/** 실제로 진행되는 일정 항목: 세미투어는 오전 전체 + 선택한 오후 옵션, 업체 코스는 전체 */
+function activeItems(days: DayPlan[], pmChoice: PmChoice): ItineraryItem[] {
+  return days.flatMap((day) => dayItems(day, pmChoice));
 }
 
 /** 일정에 따른 1인당 변동비(입장료, 식대) */
-export function sumItineraryCosts(days: DayPlan[], pmChoice: Record<number, PmFreeOption["id"]>) {
+export function sumItineraryCosts(days: DayPlan[], pmChoice: PmChoice) {
   const items = activeItems(days, pmChoice);
   return {
     admissionPerPerson: items.reduce((sum, i) => sum + i.entryFee, 0),
@@ -86,11 +85,7 @@ function minTravelersFor(price: number, targetMargin: number, ctx: Context): num
   return Math.max(1, Math.ceil(ctx.fixedTotal / contributionPerPerson - 1e-9));
 }
 
-export function calculateQuote(
-  input: TripInput,
-  days: DayPlan[],
-  pmChoice: Record<number, PmFreeOption["id"]>,
-): QuoteResult {
+export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmChoice): QuoteResult {
   const margin = input.targetMarginRate / 100;
   const cardFee = input.cardFeeRate / 100;
   const contingency = input.contingencyRate / 100;
@@ -104,8 +99,14 @@ export function calculateQuote(
 
   const travelers = Math.max(1, Math.round(input.travelers));
   const { admissionPerPerson, mealPerPerson } = sumItineraryCosts(days, pmChoice);
-  const fixedTotal =
-    input.days * (input.vehicleCostPerDay + input.guideCostPerDay) + input.otherFixedCost;
+  // 차량·가이드는 항공 이동만 있는 날을 뺀 "지상 일정 일수"만큼 든다. 직접 지정하면 그 값을 쓴다.
+  const tourDays =
+    input.groundDaysOverride > 0
+      ? Math.round(input.groundDaysOverride)
+      : days.length > 0
+        ? groundDays(days, pmChoice)
+        : input.days;
+  const fixedTotal = tourDays * (input.vehicleCostPerDay + input.guideCostPerDay) + input.otherFixedCost;
   const variablePerPerson =
     admissionPerPerson + mealPerPerson + input.tipPerPerson + input.insurancePerPerson;
 
@@ -123,19 +124,19 @@ export function calculateQuote(
     {
       key: "vehicle",
       label: "차량비",
-      amount: input.days * input.vehicleCostPerDay,
-      note: `${input.days}일 × ${money(input.vehicleCostPerDay)}`,
+      amount: tourDays * input.vehicleCostPerDay,
+      note: `${tourDays}일 × ${money(input.vehicleCostPerDay)}`,
     },
     {
       key: "guide",
       label: "가이드비",
-      amount: input.days * input.guideCostPerDay,
-      note: `${input.days}일 × ${money(input.guideCostPerDay)}`,
+      amount: tourDays * input.guideCostPerDay,
+      note: `${tourDays}일 × ${money(input.guideCostPerDay)}`,
     },
     { key: "other", label: "기타 고정비", amount: input.otherFixedCost },
     {
       key: "admission",
-      label: "입장료",
+      label: "입장·체험료",
       amount: admissionPerPerson * travelers,
       note: `1인 ${money(admissionPerPerson)} × ${travelers}명`,
     },
@@ -174,6 +175,7 @@ export function calculateQuote(
   return {
     ok: true,
     travelers,
+    groundDays: tourDays,
     lines,
     scenario,
     matrix,

@@ -14,7 +14,12 @@ interface Props {
 }
 
 export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerating }: Props) {
-  const canGenerate = input.destination.trim().length > 0 && input.days >= 1 && input.travelers >= 1;
+  const isPaste = input.mode === "paste";
+  const canGenerate = isPaste
+    ? input.courseText.trim().length >= 20
+    : input.destination.trim().length > 0 &&
+      input.days >= (input.includesFlights ? 3 : 1) &&
+      input.travelers >= 1;
 
   return (
     <form
@@ -46,7 +51,7 @@ export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerati
           className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           <Sparkles className="h-4 w-4" aria-hidden />
-          {isGenerating ? "생성 중..." : "일정·견적 생성"}
+          {isGenerating ? (isPaste ? "분석 중..." : "생성 중...") : isPaste ? "코스 분석·견적 생성" : "일정·견적 생성"}
         </button>
       </div>
     </form>

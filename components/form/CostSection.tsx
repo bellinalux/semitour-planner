@@ -8,8 +8,9 @@ import type { SectionProps } from "./types";
 
 export function CostSection({ input, onChange }: SectionProps) {
   const symbol = currencySymbol(input.currency);
-  const fixedTotal =
-    input.days * (input.vehicleCostPerDay + input.guideCostPerDay) + input.otherFixedCost;
+  // 일정 생성 전에는 총 일수로 예상하고, 생성 뒤에는 견적이 항공 이동만 있는 날을 빼고 정확히 계산한다
+  const groundDays = input.groundDaysOverride > 0 ? input.groundDaysOverride : input.days;
+  const fixedTotal = groundDays * (input.vehicleCostPerDay + input.guideCostPerDay) + input.otherFixedCost;
 
   return (
     <SectionCard
@@ -62,6 +63,18 @@ export function CostSection({ input, onChange }: SectionProps) {
           />
         </div>
         <NumberField
+          id="groundDaysOverride"
+          label="차량·가이드 적용 일수"
+          value={input.groundDaysOverride}
+          suffix="일"
+          min={0}
+          max={30}
+          step={1}
+          placeholder="자동"
+          hint="0(비움)이면 일정에서 자동 계산합니다. 항공 이동만 있는 날(출발일, 귀국 도착일)은 제외됩니다."
+          onChange={(groundDaysOverride) => onChange({ groundDaysOverride })}
+        />
+        <NumberField
           id="otherFixedCost"
           label="기타 고정비 (총액)"
           value={input.otherFixedCost}
@@ -89,7 +102,7 @@ export function CostSection({ input, onChange }: SectionProps) {
 
         <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2.5 text-xs">
           <span className="text-slate-500">
-            고정비 합계 ({input.days}일 × 차량+가이드 + 기타)
+            고정비 합계 (예상: {groundDays}일 × 차량+가이드 + 기타)
           </span>
           <span className="font-semibold tabular-nums text-slate-900">
             {formatMoney(fixedTotal, input.currency)}

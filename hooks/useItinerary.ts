@@ -2,19 +2,67 @@
 
 import { useCallback, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
-import { defaultPmChoice, type PmChoice } from "@/lib/itinerary";
-import type { AsyncState, CurrencyCode, DayPlan, ItineraryItem, PmFreeOption, TripInput } from "@/types";
+import { defaultPmChoice, mapDayItems, tourDayCount, withTravelDays, type PmChoice } from "@/lib/itinerary";
+import type {
+  AsyncState,
+  CourseMeta,
+  CurrencyCode,
+  DayPlan,
+  ItineraryItem,
+  PmFreeOption,
+  TripInput,
+} from "@/types";
+
+/** 코스 붙여넣기에서 읽어낸 기간/도시 (입력 폼에 반영하는 데 쓴다) */
+export interface DetectedTrip {
+  days: number;
+  nights: number;
+  cities: string[];
+}
 
 export interface GeneratedItinerary {
   days: DayPlan[];
   pmChoice: PmChoice;
+  meta: CourseMeta | null;
+  detected: DetectedTrip | null;
 }
 
-/** 일정 생성 요청 상태, 결과, 날짜별 오후 옵션(A/B) 선택을 관리한다. */
+/** 입력 모드에 따라 AI가 세미투어를 만들거나, 붙여넣은 업체 코스를 구조화한다. */
+async function requestItinerary(input: TripInput, signal: AbortSignal): Promise<Omit<GeneratedItinerary, "pmChoice">> {
+  if (input.mode === "paste") {
+    const result = await postJson<{ days: DayPlan[]; meta: CourseMeta; nights: number; totalDays: number }>(
+      "/api/parse-course",
+      { text: input.courseText, currency: input.currency },
+      signal,
+    );
+    return {
+      days: result.days,
+      meta: result.meta,
+      detected: { days: result.totalDays, nights: result.nights, cities: result.meta.cities },
+    };
+  }
+
+  const { days } = await postJson<{ days: DayPlan[] }>(
+    "/api/generate-itinerary",
+    {
+      destination: input.destination,
+      days: tourDayCount(input),
+      travelers: input.travelers,
+      currency: input.currency,
+      themes: input.themes,
+      notes: input.notes,
+    },
+    signal,
+  );
+  return { days: input.includesFlights ? withTravelDays(days, input) : days, meta: null, detected: null };
+}
+
+/** 일정 생성 요청 상태, 결과, 날짜별 오후 옵션(A/B) 선택, 항목 편집을 관리한다. */
 export function useItinerary() {
   const [state, setState] = useState<AsyncState>({ status: "idle" });
   const [days, setDays] = useState<DayPlan[]>([]);
   const [pmChoice, setPmChoice] = useState<PmChoice>({});
+  const [meta, setMeta] = useState<CourseMeta | null>(null);
   /** 일정 금액이 어느 통화로 생성됐는지 (이후 통화를 바꾸면 견적에서 경고) */
   const [generatedCurrency, setGeneratedCurrency] = useState<CurrencyCode | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
@@ -27,24 +75,14 @@ export function useItinerary() {
 
     setState({ status: "loading" });
     try {
-      const { days: result } = await postJson<{ days: DayPlan[] }>(
-        "/api/generate-itinerary",
-        {
-          destination: input.destination,
-          days: input.days,
-          travelers: input.travelers,
-          currency: input.currency,
-          themes: input.themes,
-          notes: input.notes,
-        },
-        controller.signal,
-      );
-      const choice = defaultPmChoice(result);
-      setDays(result);
+      const result = await requestItinerary(input, controller.signal);
+      const choice = defaultPmChoice(result.days);
+      setDays(result.days);
       setPmChoice(choice);
+      setMeta(result.meta);
       setGeneratedCurrency(input.currency);
       setState({ status: "success" });
-      return { days: result, pmChoice: choice };
+      return { ...result, pmChoice: choice };
     } catch (err) {
       if (controller.signal.aborted) return null; // 새 요청으로 대체된 경우
       setState({
@@ -60,21 +98,49 @@ export function useItinerary() {
     [],
   );
 
-  /** 사용자가 AI 추정 금액을 직접 고친다. 수정한 항목은 추정치 표시를 해제한다. */
-  const updateItemCost = useCallback(
-    (itemId: string, patch: Partial<Pick<ItineraryItem, "entryFee" | "mealCost">>) => {
-      const touch = (item: ItineraryItem) =>
-        item.id === itemId ? { ...item, ...patch, isEstimated: false } : item;
-      setDays((prev) =>
-        prev.map((day) => ({
-          ...day,
-          amGuided: day.amGuided.map(touch),
-          pmFreeOptions: day.pmFreeOptions.map((o) => ({ ...o, items: o.items.map(touch) })),
-        })),
-      );
-    },
-    [],
-  );
+  /** 항목을 고친다. 금액을 직접 고친 항목은 추정치 표시를 해제한다. */
+  const updateItem = useCallback((itemId: string, patch: Partial<ItineraryItem>) => {
+    const touchesCost = "entryFee" in patch || "mealCost" in patch;
+    setDays((prev) =>
+      prev.map((day) =>
+        mapDayItems(day, (item) =>
+          item.id === itemId ? { ...item, ...patch, ...(touchesCost ? { isEstimated: false } : {}) } : item,
+        ),
+      ),
+    );
+  }, []);
 
-  return { state, days, pmChoice, generatedCurrency, generate, selectPmOption, updateItemCost };
+  const deleteItem = useCallback((itemId: string) => {
+    setDays((prev) => prev.map((day) => mapDayItems(day, (item) => (item.id === itemId ? null : item))));
+  }, []);
+
+  /** 업체 코스(linear) 날짜의 끝에 빈 항목을 추가한다. */
+  const addItem = useCallback((dayNo: number) => {
+    const item: ItineraryItem = {
+      id: `new-${crypto.randomUUID().slice(0, 8)}`,
+      type: "sightseeing",
+      admission: "unknown",
+      name: "새 항목",
+      description: "",
+      stayMinutes: 0,
+      travelMinutesToNext: null,
+      entryFee: 0,
+      mealCost: 0,
+      isEstimated: false,
+    };
+    setDays((prev) => prev.map((day) => (day.day === dayNo && day.kind === "linear" ? { ...day, items: [...day.items, item] } : day)));
+  }, []);
+
+  return {
+    state,
+    days,
+    pmChoice,
+    meta,
+    generatedCurrency,
+    generate,
+    selectPmOption,
+    updateItem,
+    deleteItem,
+    addItem,
+  };
 }

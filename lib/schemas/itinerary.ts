@@ -76,6 +76,8 @@ export function toDayPlans(
       return {
         day: dayNo,
         theme: day.theme.trim(),
+        kind: "semi" as const,
+        items: [],
         amGuided: day.amGuided.map((item, i) =>
           toItem(item, `d${dayNo}-am-${i + 1}`, i === day.amGuided.length - 1),
         ),
