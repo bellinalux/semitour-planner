@@ -31,21 +31,21 @@ const itemSchema = z.object({
 const dayPlanSchema = z.object({
   day: z.number().describe("1부터 시작하는 일차"),
   theme: z.string().describe("그날의 한 줄 주제"),
-  amGuided: z.array(itemSchema).min(2).max(4).describe("오전 가이드 투어 일정"),
+  amGuided: z.array(itemSchema).min(2).max(4).describe("오전 가이드 투어 일정. 명소 2~3곳 + 마지막에 점심 식당 1곳"),
   pmFreeOptions: z
     .array(
       z.object({
         id: z.enum(["A", "B"]),
         title: z.string().describe("옵션 콘셉트 한 줄 (예: 골목 산책과 카페 코스)"),
-        items: z.array(itemSchema).min(2).max(3),
+        items: z.array(itemSchema).min(2).max(3).describe("오후 코스의 장소 2~3곳"),
       }),
     )
     .length(2)
-    .describe("오후 반자유 일정: 고객이 하나를 고르는 추천 코스 A/B"),
+    .describe("오후 반자유 일정: 고객이 하나를 고르는 추천 코스. 정확히 2개(id는 A, B)"),
 });
 
 export const itineraryResponseSchema = z.object({
-  days: z.array(dayPlanSchema).min(1).max(14),
+  days: z.array(dayPlanSchema).min(1).max(14).describe("요청한 여행 일수와 정확히 같은 개수"),
 });
 
 type RawItem = z.infer<typeof itemSchema>;

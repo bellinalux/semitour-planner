@@ -1,4 +1,5 @@
 import { formatMoney } from "@/lib/currency";
+import { pickPmOption } from "@/lib/itinerary";
 import type {
   CostLine,
   CurrencyCode,
@@ -27,10 +28,7 @@ export function roundUpPrice(value: number, currency: CurrencyCode): number {
 
 /** 실제로 진행되는 일정 항목: 오전 전체 + 선택한 오후 옵션 */
 function activeItems(days: DayPlan[], pmChoice: Record<number, PmFreeOption["id"]>): ItineraryItem[] {
-  return days.flatMap((day) => {
-    const pm = day.pmFreeOptions.find((o) => o.id === pmChoice[day.day]) ?? day.pmFreeOptions[0];
-    return [...day.amGuided, ...(pm?.items ?? [])];
-  });
+  return days.flatMap((day) => [...day.amGuided, ...(pickPmOption(day, pmChoice)?.items ?? [])]);
 }
 
 /** 일정에 따른 1인당 변동비(입장료, 식대) */

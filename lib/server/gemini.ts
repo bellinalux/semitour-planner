@@ -29,11 +29,23 @@ interface GeminiResponse {
   error?: { message?: string };
 }
 
-/** Gemini가 받아들이는 JSON Schema로 정리 ($schema 등 불필요한 키 제거) */
+/** Gemini가 거절하는 키(minItems/maxItems)는 빼고 보낸다. 개수 제한은 응답 후 zod가 검증한다. */
+const UNSUPPORTED_KEYS = new Set(["$schema", "minItems", "maxItems"]);
+
+function stripUnsupported(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(stripUnsupported);
+  if (node && typeof node === "object") {
+    return Object.fromEntries(
+      Object.entries(node as Record<string, unknown>)
+        .filter(([key]) => !UNSUPPORTED_KEYS.has(key))
+        .map(([key, value]) => [key, stripUnsupported(value)]),
+    );
+  }
+  return node;
+}
+
 function toResponseSchema(schema: z.ZodType) {
-  const json = z.toJSONSchema(schema) as Record<string, unknown>;
-  delete json.$schema;
-  return json;
+  return stripUnsupported(z.toJSONSchema(schema));
 }
 
 async function callGemini(
@@ -118,8 +130,10 @@ export async function generateJson<T extends z.ZodType>({
 
     if (!result.ok) {
       if (result.status === 400 && useSchema) {
+        console.error(`[gemini] 구조화 출력 스키마 거절(400): ${result.message}`);
         useSchema = false; // 구조화 출력 스키마가 거절된 경우: 프롬프트 + zod 검증만으로 재시도
         lastProblem = "";
+        attempt--; // 스키마 폴백은 재시도 횟수에 포함하지 않는다
         continue;
       }
       const hint =
@@ -142,6 +156,7 @@ export async function generateJson<T extends z.ZodType>({
     } catch {
       lastProblem = "유효한 JSON이 아닙니다.";
     }
+    console.error(`[gemini] 응답 검증 실패 (시도 ${attempt + 1}, 스키마 ${useSchema ? "사용" : "미사용"}): ${lastProblem}\n${text.slice(0, 400)}`);
   }
 
   throw new GeminiError("BAD_OUTPUT", "AI 응답을 해석하지 못했습니다. 다시 시도해 주세요.", 502);

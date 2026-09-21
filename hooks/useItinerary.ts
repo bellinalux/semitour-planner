@@ -1,30 +1,13 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { postJson } from "@/lib/api";
+import { defaultPmChoice, type PmChoice } from "@/lib/itinerary";
 import type { AsyncState, CurrencyCode, DayPlan, ItineraryItem, PmFreeOption, TripInput } from "@/types";
 
-type PmChoice = Record<number, PmFreeOption["id"]>;
-
-async function requestItinerary(input: TripInput, signal: AbortSignal): Promise<DayPlan[]> {
-  const res = await fetch("/api/generate-itinerary", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    signal,
-    body: JSON.stringify({
-      destination: input.destination,
-      days: input.days,
-      travelers: input.travelers,
-      currency: input.currency,
-      themes: input.themes,
-      notes: input.notes,
-    }),
-  });
-
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(data?.error?.message ?? `요청에 실패했습니다. (${res.status})`);
-  }
-  return data.days as DayPlan[];
+export interface GeneratedItinerary {
+  days: DayPlan[];
+  pmChoice: PmChoice;
 }
 
 /** 일정 생성 요청 상태, 결과, 날짜별 오후 옵션(A/B) 선택을 관리한다. */
@@ -36,24 +19,39 @@ export function useItinerary() {
   const [generatedCurrency, setGeneratedCurrency] = useState<CurrencyCode | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
-  const generate = useCallback(async (input: TripInput) => {
+  /** 성공하면 생성된 일정을 반환한다. 실패하거나 새 요청으로 대체되면 null. */
+  const generate = useCallback(async (input: TripInput): Promise<GeneratedItinerary | null> => {
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
 
     setState({ status: "loading" });
     try {
-      const result = await requestItinerary(input, controller.signal);
+      const { days: result } = await postJson<{ days: DayPlan[] }>(
+        "/api/generate-itinerary",
+        {
+          destination: input.destination,
+          days: input.days,
+          travelers: input.travelers,
+          currency: input.currency,
+          themes: input.themes,
+          notes: input.notes,
+        },
+        controller.signal,
+      );
+      const choice = defaultPmChoice(result);
       setDays(result);
+      setPmChoice(choice);
       setGeneratedCurrency(input.currency);
-      setPmChoice(Object.fromEntries(result.map((d) => [d.day, d.pmFreeOptions[0]?.id ?? "A"])));
       setState({ status: "success" });
+      return { days: result, pmChoice: choice };
     } catch (err) {
-      if (controller.signal.aborted) return; // 새 요청으로 대체된 경우
+      if (controller.signal.aborted) return null; // 새 요청으로 대체된 경우
       setState({
         status: "error",
         error: err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.",
       });
+      return null;
     }
   }, []);
 

@@ -1,11 +1,9 @@
 import { AlertTriangle, Calculator } from "lucide-react";
-import { useMemo } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { calculateQuote } from "@/lib/cost";
-import type { AsyncState, CurrencyCode, DayPlan, PmFreeOption, TripInput } from "@/types";
+import type { AsyncState, CurrencyCode, DayPlan, QuoteResult, TripInput } from "@/types";
 import { CompetitorTable } from "./quote/CompetitorTable";
 import { CostBreakdownTable } from "./quote/CostBreakdownTable";
 import { PerPersonMatrix } from "./quote/PerPersonMatrix";
@@ -14,9 +12,10 @@ import { QuoteKpis } from "./quote/QuoteKpis";
 interface Props {
   /** 견적은 일정 결과에 의존하므로 일정 상태를 그대로 받는다 */
   state: AsyncState;
+  /** 일정이 성공적으로 만들어진 뒤에만 값이 있다 */
+  quote: QuoteResult | null;
   input: TripInput;
   days: DayPlan[];
-  pmChoice: Record<number, PmFreeOption["id"]>;
   generatedCurrency: CurrencyCode | null;
 }
 
@@ -39,9 +38,7 @@ function SubHeading({ children }: { children: React.ReactNode }) {
   return <h3 className="mb-2 text-xs font-semibold text-slate-800">{children}</h3>;
 }
 
-function QuoteContent({ input, days, pmChoice, generatedCurrency }: Omit<Props, "state">) {
-  const quote = useMemo(() => calculateQuote(input, days, pmChoice), [input, days, pmChoice]);
-
+function QuoteContent({ quote, input, days, generatedCurrency }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
 
   // 일정을 만든 뒤 입력이 바뀌어 일정의 금액과 견적이 어긋나는 경우
@@ -99,7 +96,7 @@ function QuoteContent({ input, days, pmChoice, generatedCurrency }: Omit<Props, 
   );
 }
 
-export function QuotePanel({ state, input, days, pmChoice, generatedCurrency }: Props) {
+export function QuotePanel({ state, quote, input, days, generatedCurrency }: Props) {
   return (
     <SectionCard
       title="견적서"
@@ -107,7 +104,9 @@ export function QuotePanel({ state, input, days, pmChoice, generatedCurrency }: 
       icon={Calculator}
     >
       {state.status === "loading" && <QuoteSkeleton />}
-      {state.status === "success" && <QuoteContent input={input} days={days} pmChoice={pmChoice} generatedCurrency={generatedCurrency} />}
+      {state.status === "success" && quote && (
+        <QuoteContent quote={quote} input={input} days={days} generatedCurrency={generatedCurrency} />
+      )}
       {(state.status === "idle" || state.status === "error") && (
         <EmptyState
           icon={Calculator}

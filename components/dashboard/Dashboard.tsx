@@ -1,34 +1,50 @@
-import type { AsyncState, CurrencyCode, DayPlan, PmFreeOption, TripInput } from "@/types";
+import type { AsyncState, CurrencyCode, DayPlan, PmFreeOption, QuoteResult, TripInput, UspItem } from "@/types";
 import { ExportBar } from "./ExportBar";
 import { ItineraryPanel } from "./ItineraryPanel";
 import type { ItemCostPatch } from "./itinerary/TimelineItem";
 import { QuotePanel } from "./QuotePanel";
 import { UspPanel } from "./UspPanel";
 
+interface UspView {
+  state: AsyncState;
+  items: UspItem[];
+  isStale: boolean;
+  canGenerate: boolean;
+  onGenerate: () => void;
+}
+
+interface ExportView {
+  disabled: boolean;
+  getInternalText: () => string;
+  getCustomerText: () => string;
+}
+
 interface Props {
   itinerary: AsyncState;
   days: DayPlan[];
   input: TripInput;
+  quote: QuoteResult | null;
   pmChoice: Record<number, PmFreeOption["id"]>;
   generatedCurrency: CurrencyCode | null;
   onSelectPm: (day: number, id: PmFreeOption["id"]) => void;
   onChangeCost: (itemId: string, patch: ItemCostPatch) => void;
-  usp: AsyncState;
   onRetryItinerary: () => void;
-  onRetryUsp: () => void;
+  usp: UspView;
+  exporter: ExportView;
 }
 
 export function Dashboard({
   itinerary,
   days,
   input,
+  quote,
   pmChoice,
   generatedCurrency,
   onSelectPm,
   onChangeCost,
-  usp,
   onRetryItinerary,
-  onRetryUsp,
+  usp,
+  exporter,
 }: Props) {
   return (
     <div className="space-y-4 p-4">
@@ -41,15 +57,9 @@ export function Dashboard({
         onChangeCost={onChangeCost}
         onRetry={onRetryItinerary}
       />
-      <QuotePanel
-        state={itinerary}
-        input={input}
-        days={days}
-        pmChoice={pmChoice}
-        generatedCurrency={generatedCurrency}
-      />
-      <UspPanel state={usp} onRetry={onRetryUsp} />
-      <ExportBar disabled={itinerary.status !== "success"} />
+      <QuotePanel state={itinerary} quote={quote} input={input} days={days} generatedCurrency={generatedCurrency} />
+      <UspPanel {...usp} />
+      <ExportBar {...exporter} />
     </div>
   );
 }
