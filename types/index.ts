@@ -319,7 +319,15 @@ export interface SearchSource {
 /** 지역 투어 카테고리 */
 export type TourCategory = "city" | "night" | "museum" | "daytrip" | "cruise" | "cooking" | "show" | "activity";
 
-/** 웹 검색으로 찾은 지역 투어 후보 */
+/** Viator 실제 판매 상품에서 가져온 정보 */
+export interface MarketInfo {
+  productCode: string;
+  rating: number;
+  reviews: number;
+  freeCancellation: boolean;
+}
+
+/** 웹 검색 또는 Viator에서 찾은 지역 투어 후보 */
 export interface TourCandidate {
   name: string;
   category: TourCategory;
@@ -329,8 +337,10 @@ export interface TourCandidate {
   /** 1인 요금 범위 (견적 통화) */
   priceLow: number;
   priceHigh: number;
-  /** searched: 검색에서 확인한 요금 / estimated: AI 추정 */
-  priceBasis: "searched" | "estimated";
+  /** searched: 검색에서 확인한 요금 / estimated: AI 추정 / market: 예약 사이트(Viator) 실제 판매가 */
+  priceBasis: "searched" | "estimated" | "market";
+  /** 예약 사이트(Viator)에서 가져온 상품이면 평점과 후기 수 */
+  market?: MarketInfo;
   /** 요금에 포함되는 것 (입장권, 가이드, 식사 등) */
   includes: string;
   /** 예약 필요 여부, 집합 장소 등 */
@@ -341,6 +351,14 @@ export interface TourCandidate {
   highlights: string;
   /** 예약처를 구글에서 검색하는 링크 */
   searchUrl: string;
+}
+
+/** Viator 판매 상품 조회 결과 */
+export interface ViatorSearchResult {
+  tours: TourCandidate[];
+  /** Viator 분류에서 해당 종류를 찾지 못해 건너뛴 투어 종류 */
+  skipped: TourCategory[];
+  destinationName: string;
 }
 
 /** 일정에 넣을 위치: am(오전), pm:A / pm:B(오후 코스), day(하루 종일 일정) */
@@ -366,4 +384,38 @@ export interface TourOption {
   participationRate: number;
   link?: string;
   note: string;
+}
+
+/** ---- 항공 시세 (Travelpayouts 캐시 최저가) ---- */
+
+export interface FlightDeal {
+  /** 출발일 YYYY-MM-DD */
+  departDate: string;
+  /** 귀국일 YYYY-MM-DD (모르면 빈 문자열) */
+  returnDate: string;
+  /** 왕복 1인 요금 (요청 통화) */
+  price: number;
+  /** 경유 횟수 (0이면 직항) */
+  transfers: number;
+  /** 항공사 IATA 코드 */
+  airline: string;
+  /** 이 캐시 요금의 예상 만료 시각 (ISO, 모르면 빈 문자열). 지났으면 실제와 다를 가능성이 크다 */
+  expiresAt: string;
+}
+
+export interface FlightPlace {
+  code: string;
+  label: string;
+}
+
+export interface FlightSearchResult {
+  origin: FlightPlace;
+  destination: FlightPlace;
+  currency: CurrencyCode;
+  /** 조회한 여행 기간(귀국일 − 출발일, 일) */
+  tripDays: number;
+  /** 가장 싼 순 상위 후보 */
+  deals: FlightDeal[];
+  /** 월별 최저가 */
+  byMonth: { month: string; deal: FlightDeal }[];
 }

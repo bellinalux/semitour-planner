@@ -15,13 +15,25 @@ export function suggestOptionPrice(
   return roundUpPrice(cost / denominator, input.currency);
 }
 
-/** 카탈로그 투어를 선택 옵션으로 바꾼다. 원가는 검색 요금(중간값), 요금은 권장가로 시작한다. */
+/**
+ * 카탈로그 투어를 선택 옵션으로 바꾼다.
+ *  - 웹 검색/AI 추정 요금: 그 요금을 원가로 보고, 요금은 권장가로 시작한다.
+ *  - Viator 판매가: 이미 소비자가 사는 정가이므로 그 가격을 옵션 요금으로 두고,
+ *    원가는 목표 마진과 카드 수수료를 뺀 가정값으로 채운다 (실제 매입가는 직접 고쳐야 한다).
+ */
 export function tourToOption(
   tour: TourCandidate,
   dayNo: number,
   input: Pick<TripInput, "targetMarginRate" | "cardFeeRate" | "currency">,
 ): TourOption {
-  const cost = midpoint(tour.priceLow, tour.priceHigh);
+  const market = tour.priceBasis === "market";
+  const listed = midpoint(tour.priceLow, tour.priceHigh);
+  const keepRate = Math.max(0, 1 - input.targetMarginRate / 100 - input.cardFeeRate / 100);
+  const cost = market ? Math.floor(listed * keepRate) : listed;
+  const price = market ? listed : suggestOptionPrice(cost, input);
+  const note = market
+    ? ["Viator 판매가를 옵션 요금으로 넣었습니다. 원가는 목표 마진을 뺀 가정값이니 실제 매입가로 고치세요", tour.booking].filter(Boolean).join(" · ")
+    : tour.booking;
   return {
     id: `opt-${crypto.randomUUID().slice(0, 8)}`,
     name: tour.name,
@@ -30,11 +42,11 @@ export function tourToOption(
     durationMinutes: tour.durationMinutes,
     dayNo,
     costPerPerson: cost,
-    pricePerPerson: suggestOptionPrice(cost, input),
+    pricePerPerson: price,
     minParticipants: DEFAULT_MIN_PARTICIPANTS,
     participationRate: DEFAULT_PARTICIPATION_RATE,
     link: tour.searchUrl,
-    note: tour.booking,
+    note,
   };
 }
 

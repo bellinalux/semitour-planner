@@ -20,6 +20,12 @@ interface Props {
   onAddOption: (dayNo: number) => void;
 }
 
+const BASIS: Record<TourCandidate["priceBasis"], { label: string; title: string; className: string }> = {
+  searched: { label: "검색 확인", title: "웹 검색에서 확인한 요금 (날짜·인원에 따라 달라짐)", className: "bg-emerald-100 text-emerald-700" },
+  market: { label: "Viator 판매가", title: "Viator에서 실제로 판매 중인 정가 (2인 이상 그룹의 1인 최저 요금)", className: "bg-sky-100 text-sky-700" },
+  estimated: { label: "추정", title: "AI 추정", className: "bg-amber-100 text-amber-700" },
+};
+
 const selectClass =
   "rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30";
 
@@ -64,13 +70,8 @@ export function TourCard({ tour, currency, days, addedTo, optionCount, onAdd, on
           <span className="inline-flex items-center gap-1.5">
             <Ticket className="h-3.5 w-3.5 text-slate-400" aria-hidden />
             <span className="font-semibold tabular-nums text-slate-900">1인 {price}</span>
-            <span
-              className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                tour.priceBasis === "searched" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-              }`}
-              title={tour.priceBasis === "searched" ? "웹 검색에서 확인한 요금 (날짜·인원에 따라 달라짐)" : "AI 추정"}
-            >
-              {tour.priceBasis === "searched" ? "검색 확인" : "추정"}
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${BASIS[tour.priceBasis].className}`} title={BASIS[tour.priceBasis].title}>
+              {BASIS[tour.priceBasis].label}
             </span>
           </span>
         </p>
@@ -139,7 +140,7 @@ export function TourCard({ tour, currency, days, addedTo, optionCount, onAdd, on
           rel="noopener noreferrer"
           className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:underline"
         >
-          예약처 검색
+          {tour.priceBasis === "market" ? "Viator에서 보기" : "예약처 검색"}
           <ExternalLink className="h-3 w-3" aria-hidden />
         </a>
       </div>

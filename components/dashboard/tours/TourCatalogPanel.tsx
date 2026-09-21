@@ -1,15 +1,16 @@
 "use client";
 
-import { AlertTriangle, Compass, Info, Loader2, Search } from "lucide-react";
+import { AlertTriangle, Compass, Info, Loader2, Search, Store } from "lucide-react";
 import { useState } from "react";
 import { ChipToggle } from "@/components/ui/ChipToggle";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useRequest } from "@/hooks/useRequest";
 import { useTourSearch } from "@/hooks/useTourSearch";
 import { TOUR_CATEGORIES } from "@/lib/itemTypes";
 import { slotOptions, tourToItem } from "@/lib/tourItem";
-import type { CourseMeta, DayPlan, ItineraryItem, TourCandidate, TourCategory, TourSlot, TripInput } from "@/types";
+import type { CourseMeta, DayPlan, ItineraryItem, TourCandidate, TourCategory, TourSlot, TripInput, ViatorSearchResult } from "@/types";
 import { TourCard } from "./TourCard";
 
 interface Props {
@@ -33,6 +34,7 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
   const [added, setAdded] = useState<Record<string, string[]>>({});
   const [optionAdded, setOptionAdded] = useState<Record<string, number>>({});
   const { state, result, run } = useTourSearch();
+  const viator = useRequest<{ destination: string; categories: TourCategory[]; currency: string }, ViatorSearchResult>("/api/viator-tours");
   const city = cities[Math.min(cityIndex, cities.length - 1)] ?? "";
 
   const toggle = (id: TourCategory) =>
@@ -44,20 +46,24 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
     return run({ destination: city, categories, currency: input.currency });
   };
 
-  const add = (tourName: string, dayNo: number, slot: TourSlot) => {
-    const tour = result?.tours.find((t) => t.name === tourName);
+  const searchViator = () => {
+    setAdded({});
+    setOptionAdded({});
+    return viator.run({ destination: city, categories, currency: input.currency });
+  };
+
+  const add = (tour: TourCandidate, dayNo: number, slot: TourSlot) => {
+    const tourName = tour.name;
     const day = days.find((d) => d.day === dayNo);
-    if (!tour || !day) return;
+    if (!day) return;
     onAddTour(dayNo, slot, tourToItem(tour));
     const where = `DAY ${dayNo} ${slotOptions(day).find((s) => s.slot === slot)?.label ?? ""}`.trim();
     setAdded((prev) => ({ ...prev, [tourName]: [...(prev[tourName] ?? []), where] }));
   };
 
-  const addOption = (tourName: string, dayNo: number) => {
-    const tour = result?.tours.find((t) => t.name === tourName);
-    if (!tour) return;
+  const addOption = (tour: TourCandidate, dayNo: number) => {
     onAddOption(tour, dayNo);
-    setOptionAdded((prev) => ({ ...prev, [tourName]: (prev[tourName] ?? 0) + 1 }));
+    setOptionAdded((prev) => ({ ...prev, [tour.name]: (prev[tour.name] ?? 0) + 1 }));
   };
 
   return (
@@ -102,6 +108,16 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
             {state.status === "loading" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Search className="h-4 w-4" aria-hidden />}
             {state.status === "loading" ? "웹에서 조사 중..." : "투어 검색"}
           </button>
+          <button
+            type="button"
+            onClick={searchViator}
+            disabled={city === "" || categories.length === 0 || viator.state.status === "loading"}
+            title="Viator에서 실제로 판매 중인 상품의 정가·평점·후기를 가져옵니다"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {viator.state.status === "loading" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Store className="h-4 w-4" aria-hidden />}
+            {viator.state.status === "loading" ? "판매 상품 조회 중..." : "실제 판매 상품·시세 (Viator)"}
+          </button>
           {categories.length === 0 && <span className="text-[11px] text-slate-500">투어 종류를 하나 이상 고르세요.</span>}
           {city === "" && <span className="text-[11px] text-slate-500">왼쪽에서 여행지를 먼저 입력하세요.</span>}
         </div>
@@ -140,8 +156,8 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
                   days={days}
                   addedTo={added[tour.name] ?? []}
                   optionCount={optionAdded[tour.name] ?? 0}
-                  onAdd={(dayNo, slot) => add(tour.name, dayNo, slot)}
-                  onAddOption={(dayNo) => addOption(tour.name, dayNo)}
+                  onAdd={(dayNo, slot) => add(tour, dayNo, slot)}
+                  onAddOption={(dayNo) => addOption(tour, dayNo)}
                 />
               ))}
             </ul>
@@ -163,6 +179,54 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
               요금과 운영 여부는 검색 시점의 참고 정보입니다. 판매 전에 예약처에서 날짜별 요금과 잔여 좌석을 확인하세요.
             </p>
           </div>
+        )}
+
+        {viator.state.status === "loading" && (
+          <div className="space-y-2" aria-busy="true" aria-label="Viator 조회 중">
+            <p className="text-[11px] text-slate-500">Viator에서 판매 중인 상품을 조회하고 있습니다.</p>
+            {[0, 1].map((i) => (
+              <Skeleton key={i} className="h-28 w-full" />
+            ))}
+          </div>
+        )}
+
+        {viator.state.status === "error" && (
+          <ErrorBanner title="Viator 상품을 가져오지 못했습니다" message={viator.state.error ?? "잠시 후 다시 시도해 주세요."} onRetry={searchViator} />
+        )}
+
+        {viator.state.status === "success" && viator.data && (
+          <section aria-label="Viator 판매 상품" className="space-y-2 border-t border-slate-100 pt-3">
+            <h3 className="text-xs font-semibold text-slate-800">
+              Viator 실제 판매 상품 · {viator.data.destinationName}
+              <span className="ml-1.5 font-normal text-slate-500">({viator.data.tours.length}개, 평점·후기 순)</span>
+            </h3>
+            {viator.data.tours.length === 0 ? (
+              <p className="rounded-md bg-slate-50 px-2.5 py-2 text-[11px] text-slate-500">조건에 맞는 판매 상품이 없습니다. 투어 종류를 바꿔 보세요.</p>
+            ) : (
+              <ul className="space-y-2">
+                {viator.data.tours.map((tour) => (
+                  <TourCard
+                    key={tour.market?.productCode ?? tour.name}
+                    tour={tour}
+                    currency={input.currency}
+                    days={days}
+                    addedTo={added[tour.name] ?? []}
+                    optionCount={optionAdded[tour.name] ?? 0}
+                    onAdd={(dayNo, slot) => add(tour, dayNo, slot)}
+                    onAddOption={(dayNo) => addOption(tour, dayNo)}
+                  />
+                ))}
+              </ul>
+            )}
+            {viator.data.skipped.length > 0 && (
+              <p className="text-[11px] text-amber-700">
+                Viator 분류에서 찾지 못해 건너뛴 종류: {viator.data.skipped.map((c) => TOUR_CATEGORIES.find((t) => t.id === c)?.label ?? c).join(", ")}
+              </p>
+            )}
+            <p className="text-[10px] leading-4 text-slate-400">
+              Viator가 판매하는 정가입니다. 우리가 직접 운영·구매하는 투어의 원가와는 다를 수 있어, &quot;선택 옵션&quot;에 넣으면 원가와 요금은 직접 조정하세요. 상품 링크에는 Viator 제휴 추적이 포함되어 있습니다.
+            </p>
+          </section>
         )}
       </div>
     </SectionCard>

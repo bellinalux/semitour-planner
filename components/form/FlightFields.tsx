@@ -2,6 +2,7 @@ import { ExternalLink } from "lucide-react";
 import { TextField } from "@/components/ui/TextField";
 import { currencySymbol } from "@/lib/currency";
 import { CostField } from "./CostField";
+import { FlightPricePanel } from "./FlightPricePanel";
 import type { SectionProps } from "./types";
 
 function flightSearchUrl(origin: string, destination: string): string {
@@ -34,6 +35,7 @@ export function FlightFields({ input, onChange }: SectionProps) {
         onValueChange={(flightPricePerPerson) => onChange({ flightPricePerPerson })}
         onChange={onChange}
       />
+      <FlightPricePanel input={input} onChange={onChange} />
       {canSearch && (
         <a
           href={flightSearchUrl(input.originCity.trim(), input.destination.trim())}

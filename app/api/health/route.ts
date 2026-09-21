@@ -1,4 +1,5 @@
 import { accessRequired } from "@/lib/server/access";
+import { readSecret } from "@/lib/server/external";
 import { APP_VERSION } from "@/lib/version";
 
 /** Cloudflare의 trace 응답("key=value" 줄들)에서 값을 읽는다 */
@@ -37,6 +38,9 @@ export async function GET(request: Request) {
     accessGate: accessRequired() ? "on" : "off",
     geminiKey: rawKey && rawKey.trim() ? "set" : "missing",
     keyLength: rawKey ? rawKey.trim().length : 0,
+    // 시세 API 키 등록 여부 (없으면 해당 기능만 안내 문구로 대체된다)
+    travelpayoutsToken: readSecret("TRAVELPAYOUTS_TOKEN") ? "set" : "missing",
+    viatorKey: readSecret("VIATOR_API_KEY") ? "set" : "missing",
     similarEnvNames: similarNames,
     ...(wantsProbe ? { egress: await probeEgress() } : {}),
   });
