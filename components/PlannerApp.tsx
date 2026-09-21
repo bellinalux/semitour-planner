@@ -4,18 +4,23 @@ import { useMemo, useState } from "react";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TripInputForm } from "@/components/form/TripInputForm";
 import { Header } from "@/components/layout/Header";
+import { SavedPlansMenu } from "@/components/layout/SavedPlansMenu";
 import { MobileTabs, type PlannerTab } from "@/components/layout/MobileTabs";
 import { useItinerary } from "@/hooks/useItinerary";
 import { usePlannerInput } from "@/hooks/usePlannerInput";
 import { useUsp } from "@/hooks/useUsp";
+import { useWorkPersistence } from "@/hooks/useWorkPersistence";
 import { calculateQuote } from "@/lib/cost";
 import { buildCustomerText, buildInternalText } from "@/lib/exportText";
 import { tourToOption } from "@/lib/options";
 import { buildUspRequest } from "@/lib/uspRequest";
+import type { PlanSnapshot, ResultSnapshot } from "@/lib/workspace";
 import type { TripInput } from "@/types";
 
+const NO_USPS: never[] = [];
+
 export function PlannerApp() {
-  const { input, update, reset } = usePlannerInput();
+  const { input, update, reset, replace } = usePlannerInput();
   const itinerary = useItinerary();
   const usp = useUsp();
   const [tab, setTab] = useState<PlannerTab>("input");
@@ -33,6 +38,26 @@ export function PlannerApp() {
     [quote, input, days, pmChoice, meta],
   );
   const uspStale = usp.state.status === "success" && usp.generatedKey !== JSON.stringify(uspRequest);
+
+  // 생성된 결과(일정·오후 선택·세일즈 포인트)는 새로고침해도 남도록 자동 보관한다
+  const usps = usp.state.status === "success" ? usp.usps : NO_USPS;
+  const uspKey = usp.state.status === "success" ? usp.generatedKey : null;
+  const result = useMemo<ResultSnapshot>(
+    () => ({ days, pmChoice, meta, generatedCurrency: itinerary.generatedCurrency, usps, uspKey }),
+    [days, pmChoice, meta, itinerary.generatedCurrency, usps, uspKey],
+  );
+  const restoreResult = (saved: ResultSnapshot) => {
+    itinerary.restore(saved);
+    usp.restore(saved.usps, saved.uspKey);
+  };
+  useWorkPersistence(result, restoreResult);
+
+  const snapshot = useMemo<PlanSnapshot>(() => ({ ...result, input }), [result, input]);
+  const handleLoadPlan = (saved: PlanSnapshot) => {
+    replace(saved.input);
+    restoreResult(saved);
+    if (saved.days.length > 0) setTab("result");
+  };
 
   const handleGenerate = async () => {
     setTab("result");
@@ -70,7 +95,7 @@ export function PlannerApp() {
 
   return (
     <div className="flex h-dvh flex-col">
-      <Header />
+      <Header actions={<SavedPlansMenu snapshot={snapshot} onLoad={handleLoadPlan} />} />
       <MobileTabs active={tab} onChange={setTab} />
       <main className="grid min-h-0 flex-1 lg:grid-cols-[440px_1fr]">
         <aside

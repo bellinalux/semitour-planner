@@ -41,5 +41,13 @@ export function useUsp() {
     setGeneratedKey(null);
   }, []);
 
-  return { state, usps, generatedKey, generate, reset };
+  /** 저장된 세일즈 포인트를 그대로 되살린다 */
+  const restore = useCallback((saved: UspItem[], key: string | null) => {
+    controllerRef.current?.abort();
+    setUsps(saved);
+    setGeneratedKey(saved.length > 0 ? key : null);
+    setState(saved.length > 0 ? { status: "success" } : { status: "idle" });
+  }, []);
+
+  return { state, usps, generatedKey, generate, reset, restore };
 }

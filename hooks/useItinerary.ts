@@ -138,6 +138,16 @@ export function useItinerary() {
     setDays((prev) => prev.map((day) => (day.day === dayNo ? insertItem(day, slot, item) : day)));
   }, []);
 
+  /** 저장된 일정을 그대로 되살린다 (진행 중인 생성 요청은 취소) */
+  const restore = useCallback((saved: Pick<GeneratedItinerary, "days" | "pmChoice" | "meta"> & { generatedCurrency: CurrencyCode | null }) => {
+    controllerRef.current?.abort();
+    setDays(saved.days);
+    setPmChoice(saved.pmChoice);
+    setMeta(saved.meta);
+    setGeneratedCurrency(saved.generatedCurrency);
+    setState(saved.days.length > 0 ? { status: "success" } : { status: "idle" });
+  }, []);
+
   return {
     state,
     days,
@@ -150,5 +160,6 @@ export function useItinerary() {
     deleteItem,
     addItem,
     addTour,
+    restore,
   };
 }

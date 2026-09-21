@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { DEFAULT_INPUT } from "@/lib/defaults";
+import { normalizeInput } from "@/lib/inputStorage";
 import type { TripInput } from "@/types";
 
 const STORAGE_KEY = "semitour-planner:input:v1";
@@ -38,16 +39,7 @@ function writeRaw(value: string | null) {
 function parse(raw: string | null): TripInput {
   if (!raw) return DEFAULT_INPUT;
   try {
-    const saved = JSON.parse(raw) as Partial<TripInput>;
-    const merged = {
-      ...DEFAULT_INPUT,
-      ...saved,
-      // 중첩 객체는 이전에 저장된 값에 새 키가 없을 수 있어 기본값과 합친다
-      costStatus: { ...DEFAULT_INPUT.costStatus, ...saved.costStatus },
-    };
-    // 박수가 없던 이전 저장값은 "일수 − 1"로 채운다
-    if (saved.nights === undefined) merged.nights = Math.max(0, merged.days - 1);
-    return merged;
+    return normalizeInput(JSON.parse(raw));
   } catch {
     return DEFAULT_INPUT;
   }
@@ -67,5 +59,8 @@ export function usePlannerInput() {
 
   const reset = useCallback(() => writeRaw(null), []);
 
-  return { input, update, reset };
+  /** 저장된 일정을 불러올 때처럼 입력 전체를 교체한다 */
+  const replace = useCallback((next: TripInput) => writeRaw(JSON.stringify(next)), []);
+
+  return { input, update, reset, replace };
 }

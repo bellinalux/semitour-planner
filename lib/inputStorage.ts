@@ -1,0 +1,23 @@
+import { DEFAULT_INPUT } from "@/lib/defaults";
+import type { TripInput } from "@/types";
+
+/**
+ * 저장된(또는 파일에서 읽은) 입력값을 현재 TripInput 형태로 맞춘다.
+ * 이전 버전에 없던 키는 기본값으로 채운다.
+ */
+export function normalizeInput(saved: unknown): TripInput {
+  if (typeof saved !== "object" || saved === null || Array.isArray(saved)) return DEFAULT_INPUT;
+  const s = saved as Partial<TripInput>;
+  const merged: TripInput = {
+    ...DEFAULT_INPUT,
+    ...s,
+    // 중첩 객체는 이전에 저장된 값에 새 키가 없을 수 있어 기본값과 합친다
+    costStatus: { ...DEFAULT_INPUT.costStatus, ...s.costStatus },
+    options: Array.isArray(s.options) ? s.options : DEFAULT_INPUT.options,
+    competitors: Array.isArray(s.competitors) ? s.competitors : DEFAULT_INPUT.competitors,
+    themes: Array.isArray(s.themes) ? s.themes : DEFAULT_INPUT.themes,
+  };
+  // 박수가 없던 이전 저장값은 "일수 − 1"로 채운다
+  if (s.nights === undefined) merged.nights = Math.max(0, merged.days - 1);
+  return merged;
+}
