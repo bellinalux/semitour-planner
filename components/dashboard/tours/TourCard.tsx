@@ -87,6 +87,11 @@ export function TourCard({ tour, currency, days, addedTo, optionCount, onAdd, on
           </p>
         )}
         {tour.koreanGuide && <p className="text-sky-700">{tour.koreanNote}</p>}
+        {tour.operator && (
+          <p>
+            <span className="font-medium text-slate-700">운영사</span> {tour.operator}
+          </p>
+        )}
         {tour.highlights && <p className="text-slate-500">{tour.highlights}</p>}
       </div>
 

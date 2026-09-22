@@ -9,6 +9,8 @@ export const tourRequestSchema = z.object({
   destination: z.string().trim().min(1, "여행지를 입력해 주세요.").max(100),
   categories: z.array(z.enum(CATEGORY_IDS)).min(1, "투어 종류를 하나 이상 선택해 주세요.").max(8),
   currency: z.enum(["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD", "AUD"]),
+  /** 입력하면 이 업체(예: 우리 회사)가 파는 투어만 찾는다. 비우면 전체 시장에서 찾는다 */
+  operatorName: z.string().trim().max(80).default(""),
 });
 
 export type TourRequest = z.infer<typeof tourRequestSchema>;
@@ -31,6 +33,7 @@ export const tourResponseSchema = z.object({
         koreanGuide: z.boolean().describe("한국어 가이드나 한국어 후기가 확인된 경우에만 true"),
         koreanNote: z.string().describe("한국어 가이드/후기 근거 한 줄. 확인 못하면 빈 문자열"),
         highlights: z.string().describe("이 투어를 추천하는 이유 한 줄"),
+        operator: z.string().describe("이 투어를 운영·판매하는 업체 이름 (여행사, 현지 투어사, 가이드 등). 확인 못하면 빈 문자열"),
       }),
     )
     .describe("추천 투어 6~10개, 요청한 종류를 골고루"),
@@ -68,6 +71,7 @@ export function toTourCandidates(parsed: Parsed, destination: string): TourCandi
       koreanGuide: t.koreanGuide && t.koreanNote.trim() !== "",
       koreanNote: t.koreanGuide ? t.koreanNote.trim() : "",
       highlights: t.highlights.trim(),
+      operator: t.operator.trim(),
       searchUrl: tourSearchUrl(t.name.trim(), destination),
     }));
 }

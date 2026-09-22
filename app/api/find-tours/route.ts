@@ -35,12 +35,27 @@ export async function POST(request: Request) {
       temperature: 0.1,
     });
 
-    const tours = toTourCandidates(structured, parsed.data.destination).map((t) =>
+    let tours = toTourCandidates(structured, parsed.data.destination).map((t) =>
       // 검색 근거가 없으면 "검색 확인"과 "한국어 확인" 표시를 믿을 수 없으므로 낮춘다
       research.searched ? t : { ...t, priceBasis: "estimated" as const, koreanGuide: false, koreanNote: "" },
     );
+
+    // 모델이 지시를 놓쳐 다른 업체 투어를 섞어 보낼 수 있으므로, 운영사 이름을 한 번 더 코드로 걸러낸다
+    const operator = parsed.data.operatorName.trim();
+    if (operator) {
+      const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+      const target = norm(operator);
+      tours = tours.filter((t) => norm(t.operator).includes(target) || target.includes(norm(t.operator)));
+    }
+
     if (tours.length === 0) {
-      return errorResponse("BAD_OUTPUT", "조건에 맞는 투어를 찾지 못했습니다. 종류를 바꿔서 다시 시도해 주세요.", 422);
+      return errorResponse(
+        "BAD_OUTPUT",
+        operator
+          ? `"${operator}"이(가) 운영하는 투어를 웹에서 찾지 못했습니다. 업체명 표기를 바꾸거나 투어 종류를 조정해 다시 시도해 주세요.`
+          : "조건에 맞는 투어를 찾지 못했습니다. 종류를 바꿔서 다시 시도해 주세요.",
+        422,
+      );
     }
     return Response.json({
       tours,

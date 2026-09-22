@@ -463,6 +463,8 @@ export interface TourCandidate {
   koreanGuide: boolean;
   koreanNote: string;
   highlights: string;
+  /** 이 투어를 운영·판매하는 업체 이름. 확인 못하면 빈 문자열 */
+  operator: string;
   /** 예약처를 구글에서 검색하는 링크 */
   searchUrl: string;
 }

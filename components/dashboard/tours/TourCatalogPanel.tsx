@@ -31,11 +31,13 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
   const cities = searchCities(input, meta);
   const [categories, setCategories] = useState<TourCategory[]>(["city", "night"]);
   const [cityIndex, setCityIndex] = useState(0);
+  const [operatorName, setOperatorName] = useState("");
   const [added, setAdded] = useState<Record<string, string[]>>({});
   const [optionAdded, setOptionAdded] = useState<Record<string, number>>({});
   const { state, result, run } = useTourSearch();
   const viator = useRequest<{ destination: string; categories: TourCategory[]; currency: string }, ViatorSearchResult>("/api/viator-tours");
   const city = cities[Math.min(cityIndex, cities.length - 1)] ?? "";
+  const operator = operatorName.trim();
 
   const toggle = (id: TourCategory) =>
     setCategories((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
@@ -43,7 +45,7 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
   const search = () => {
     setAdded({});
     setOptionAdded({});
-    return run({ destination: city, categories, currency: input.currency });
+    return run({ destination: city, categories, currency: input.currency, operatorName: operator });
   };
 
   const searchViator = () => {
@@ -98,6 +100,22 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
           ))}
         </div>
 
+        <div>
+          <label htmlFor="tourOperatorName" className="mb-1 block text-[11px] font-medium text-slate-600">
+            운영사 이름 (선택)
+          </label>
+          <input
+            id="tourOperatorName"
+            value={operatorName}
+            onChange={(e) => setOperatorName(e.target.value)}
+            placeholder="예) 스케치북트래블"
+            className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30"
+          />
+          <p className="mt-1 text-[11px] leading-4 text-slate-500">
+            비워 두면 시장 전체에서 찾습니다. 업체 이름을 넣으면 그 업체가 운영·판매하는 투어만 찾습니다. (예: 우리 회사 이름을 넣으면 우리가 진행하는 투어만 나옵니다)
+          </p>
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -106,7 +124,7 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
             className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {state.status === "loading" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Search className="h-4 w-4" aria-hidden />}
-            {state.status === "loading" ? "웹에서 조사 중..." : "투어 검색"}
+            {state.status === "loading" ? "웹에서 조사 중..." : operator ? `"${operator}" 투어 검색` : "투어 검색"}
           </button>
           <button
             type="button"
@@ -147,6 +165,11 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
               <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
               &quot;일정에 넣기&quot;는 1인 요금(검색 범위의 중간값)을 기본 견적의 입장·체험료에 넣고, &quot;선택 옵션으로 추가&quot;는 기본 요금 밖에서 고객이 고르는 옵션으로 등록합니다. 오후 코스는 고객이 선택한 코스만 원가에 포함됩니다.
             </p>
+            {operator && (
+              <p className="rounded-md bg-indigo-50 px-2.5 py-1.5 text-[11px] font-medium text-indigo-700">
+                &quot;{operator}&quot;이(가) 운영·판매하는 투어만 표시 중입니다.
+              </p>
+            )}
             <ul className="space-y-2">
               {result.tours.map((tour) => (
                 <TourCard

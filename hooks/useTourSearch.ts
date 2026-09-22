@@ -8,6 +8,8 @@ interface SearchParams {
   destination: string;
   categories: TourCategory[];
   currency: CurrencyCode;
+  /** 입력하면 이 업체가 파는 투어만 찾는다 */
+  operatorName?: string;
 }
 
 interface SearchResult {
