@@ -12,9 +12,11 @@ interface Props {
   onReset: () => void;
   onGenerate: () => void;
   isGenerating: boolean;
+  /** 일정에서 센 도시별 숙박 수 (도시별 숙박 요금 입력용) */
+  stays: { city: string; nights: number }[];
 }
 
-export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerating }: Props) {
+export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerating, stays }: Props) {
   const isPaste = input.mode === "paste";
   const canGenerate = isPaste
     ? input.courseText.trim().length >= 20
@@ -32,7 +34,7 @@ export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerati
     >
       <div className="flex-1 space-y-4 p-4">
         <TripBasicsSection input={input} onChange={onChange} />
-        <PackageSection input={input} onChange={onChange} />
+        <PackageSection input={input} onChange={onChange} stays={stays} />
         <CostSection input={input} onChange={onChange} />
         <PricingSection input={input} onChange={onChange} />
         <CompetitorSection input={input} onChange={onChange} />

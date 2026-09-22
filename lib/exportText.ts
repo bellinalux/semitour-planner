@@ -1,5 +1,6 @@
 import { compareWithCompetitors } from "@/lib/cost";
 import { formatMoney } from "@/lib/currency";
+import { customerFeeNote, feeTag, itemFeeText, localPayRows, localPaySection, moneyWithKrw } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { ITEM_TYPE_META } from "@/lib/itemTypes";
 import { pickPmOption, type PmChoice } from "@/lib/itinerary";
@@ -14,7 +15,7 @@ import type {
   UspItem,
 } from "@/types";
 
-interface ExportData {
+export interface ExportData {
   input: TripInput;
   days: DayPlan[];
   pmChoice: PmChoice;
@@ -32,26 +33,26 @@ const INCLUDE_LABELS: Record<keyof CompetitorIncludes, string> = {
   flight: "항공",
 };
 
-const PACKAGE_LABELS = { land: "랜드만", land_hotel: "랜드+숙박", full: "풀패키지(항공 포함)" } as const;
+export const PACKAGE_LABELS = { land: "랜드만", land_hotel: "랜드+숙박", full: "풀패키지(항공 포함)" } as const;
 
-const LINE = "────────────────────";
+export const LINE = "────────────────────";
 
-function includedLabels(includes: CompetitorIncludes, included: boolean): string[] {
+export function includedLabels(includes: CompetitorIncludes, included: boolean): string[] {
   return (Object.keys(INCLUDE_LABELS) as (keyof CompetitorIncludes)[])
     .filter((k) => includes[k] === included)
     .map((k) => INCLUDE_LABELS[k]);
 }
 
-function hotelLine(hotel: NonNullable<TripInput["selectedHotel"]>): string {
+export function hotelLine(hotel: NonNullable<TripInput["selectedHotel"]>): string {
   return `${hotel.name} (${hotel.grade}, ${hotel.area})`;
 }
 
 /** 선택 옵션이 있으면 노옵션 표기는 쓸 수 없다 */
-function claimsNoOption(input: TripInput, meta: CourseMeta | null): boolean {
+export function claimsNoOption(input: TripInput, meta: CourseMeta | null): boolean {
   return !!meta?.noOption && input.options.length === 0;
 }
 
-function titleOf(input: TripInput): string {
+export function titleOf(input: TripInput): string {
   return `${input.destination} ${input.nights}박 ${input.days}일`;
 }
 
@@ -116,9 +117,10 @@ export function buildInternalText(data: ExportData): string {
     if (item.timeNote) parts.push(item.timeNote);
     else if (item.stayMinutes > 0) parts.push(`체류 ${formatDuration(item.stayMinutes)}`);
     if (item.admission === "view_only") parts.push("외부 조망");
-    if (item.entryFee > 0) parts.push(`${item.type === "experience" || item.type === "massage" ? "체험비" : "입장료"} ${money(item.entryFee)}`);
-    if (item.mealCost > 0) parts.push(`식대 ${money(item.mealCost)}`);
-    return parts.length > 0 ? `(${parts.join(" · ")})` : "";
+    if (item.entryFee > 0) parts.push(`${item.type === "experience" || item.type === "massage" ? "체험비" : "입장료"} ${itemFeeText(item.entryFee, item, input)}`);
+    if (item.mealCost > 0) parts.push(`식대 ${moneyWithKrw(item.mealCost, input.currency, input.exchangeRateToKrw)}`);
+    const text = parts.length > 0 ? `(${parts.join(" · ")})` : "";
+    return `${text}${feeTag(item)}`.trim();
   };
 
   const lines: string[] = [
@@ -155,6 +157,13 @@ export function buildInternalText(data: ExportData): string {
     `손익분기 최소 인원: ${quote.breakEvenTravelers === null ? "달성 불가" : `${quote.breakEvenTravelers}명`}`,
     `목표 마진 ${input.targetMarginRate}% 달성 최소 인원: ${quote.targetMarginTravelers === null ? "달성 불가" : `${quote.targetMarginTravelers}명`}`,
   ];
+
+  const localPay = localPayRows(data.days, data.pmChoice);
+  if (localPay.rows.length > 0) {
+    lines.push("", LINE, "■ 현지 지불(불포함) 항목 — 원가·판매가에서 제외됨");
+    localPay.rows.forEach((r) => lines.push(`- DAY ${r.day} ${r.name}: ${r.amount > 0 ? itemFeeText(r.amount, r.item, input) : "금액 미입력"}${feeTag(r.item)}`));
+    if (localPay.perPerson > 0) lines.push(`1인 합계: ${moneyWithKrw(localPay.perPerson, input.currency, input.exchangeRateToKrw)}`);
+  }
 
   if (input.options.length > 0) {
     const sim = simulateOptions(input.options, quote.travelers, input.cardFeeRate);
@@ -199,22 +208,33 @@ export function buildInternalText(data: ExportData): string {
 /** 고객용: 일정 + 판매가 + 포함/불포함. 원가, 마진, 경쟁사 정보는 넣지 않는다. */
 export function buildCustomerText(data: ExportData): string {
   const { input, quote, meta } = data;
-  const money = (v: number) => formatMoney(v, input.currency);
   const s = quote.scenario;
 
   const detail = (item: ItineraryItem) => {
-    if (item.timeNote) return `(${item.timeNote})`;
-    if (item.admission === "view_only") return "(외부 조망)";
-    return item.stayMinutes > 0 ? `(약 ${formatDuration(item.stayMinutes)})` : "";
+    const time = item.timeNote
+      ? item.timeNote
+      : item.admission === "view_only"
+        ? "외부 조망"
+        : item.stayMinutes > 0
+          ? `약 ${formatDuration(item.stayMinutes)}`
+          : "";
+    const parts = [time, customerFeeNote(item, input)].filter(Boolean);
+    return parts.length > 0 ? `(${parts.join(" · ")})` : "";
   };
+  const localPayLines = localPaySection(data.days, data.pmChoice, input, false);
   const included = includedLabels(quote.ourIncludes, true);
   const isSemi = data.days.some((d) => d.kind === "semi");
-  const excluded = [...includedLabels(quote.ourIncludes, false), ...(isSemi ? ["저녁 식사(자유식)"] : []), "개인 경비"];
+  const excluded = [
+    ...includedLabels(quote.ourIncludes, false),
+    ...(isSemi ? ["저녁 식사(자유식)"] : []),
+    ...(localPayLines.length > 0 ? ["현지 지불 항목(별도 안내 참고)"] : []),
+    "개인 경비",
+  ];
   const labels = [meta?.noShopping ? "노쇼핑" : "", claimsNoOption(input, meta) ? "노옵션" : ""].filter(Boolean);
 
   return [
     `${labels.length > 0 ? `[${labels.join("·")}] ` : ""}[${titleOf(input)}]`,
-    `${quote.travelers}명 기준 · 1인 ${money(s.pricePerPerson)} (총 ${money(s.totalPrice)})`,
+    `${quote.travelers}명 기준 · 1인 ${moneyWithKrw(s.pricePerPerson, input.currency, input.exchangeRateToKrw)} (총 ${moneyWithKrw(s.totalPrice, input.currency, input.exchangeRateToKrw)})`,
     ...(isSemi ? ["오전에는 가이드와 함께, 오후에는 자유롭게 즐기는 세미투어입니다."] : []),
     ...(meta && meta.highlights.length > 0 ? ["", "★ " + meta.highlights.join(" + ")] : []),
     LINE,
@@ -226,12 +246,13 @@ export function buildCustomerText(data: ExportData): string {
           "■ 선택 옵션 안내 (기본 요금에 포함되어 있지 않으며, 참여는 자유입니다)",
           ...input.options.map(
             (o) =>
-              `- ${o.name}${o.dayNo > 0 ? ` (DAY ${o.dayNo}${o.durationMinutes > 0 ? ` · 약 ${formatDuration(o.durationMinutes)}` : ""})` : o.durationMinutes > 0 ? ` (약 ${formatDuration(o.durationMinutes)})` : ""}: 1인 ${money(o.pricePerPerson)} · 최소 ${o.minParticipants}명 이상 신청 시 진행`,
+              `- ${o.name}${o.dayNo > 0 ? ` (DAY ${o.dayNo}${o.durationMinutes > 0 ? ` · 약 ${formatDuration(o.durationMinutes)}` : ""})` : o.durationMinutes > 0 ? ` (약 ${formatDuration(o.durationMinutes)})` : ""}: 1인 ${moneyWithKrw(o.pricePerPerson, input.currency, input.exchangeRateToKrw)} · 최소 ${o.minParticipants}명 이상 신청 시 진행`,
           ),
           "※ 옵션에 참여하지 않으시는 경우 자유시간 또는 대체 일정으로 진행됩니다. 옵션은 현지 사정에 따라 변경·취소될 수 있습니다.",
           LINE,
         ]
       : []),
+    ...(localPayLines.length > 0 ? [...localPayLines, LINE] : []),
     ...(input.selectedHotel && quote.lodgingUnits > 0
       ? [`■ 숙소: ${hotelLine(input.selectedHotel)}`]
       : meta?.hotelGrade

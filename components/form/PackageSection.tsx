@@ -8,7 +8,7 @@ import { PackageTypeSwitch } from "./PackageTypeSwitch";
 import { TravelEstimatePanel } from "./TravelEstimatePanel";
 import type { SectionProps } from "./types";
 
-export function PackageSection({ input, onChange }: SectionProps) {
+export function PackageSection({ input, onChange, stays }: SectionProps & { stays: { city: string; nights: number }[] }) {
   // 항공까지 파는 풀패키지는 첫날/마지막 날이 이동일이므로 일정 구조도 함께 맞춘다
   const changePackage = (packageType: PackageType) =>
     onChange(packageType === "full" ? { packageType, includesFlights: true } : { packageType });
@@ -28,7 +28,7 @@ export function PackageSection({ input, onChange }: SectionProps) {
           </p>
         ) : (
           <>
-            <LodgingFields input={input} onChange={onChange} />
+            <LodgingFields input={input} onChange={onChange} stays={stays} />
             <HotelFinder input={input} onChange={onChange} />
             {input.packageType === "full" && <FlightFields input={input} onChange={onChange} />}
             <TravelEstimatePanel input={input} onChange={onChange} />

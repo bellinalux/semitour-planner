@@ -5,6 +5,8 @@
  * 정확한 사용량 계산기가 아니라 남용을 막는 용도다.
  */
 
+import { workerEnv } from "./cfEnv";
+
 interface RateLimiterBinding {
   limit(options: { key: string }): Promise<{ success: boolean }>;
 }
@@ -34,15 +36,8 @@ function memoryAllow(key: string, limit: number, windowMs = 60_000): boolean {
 
 /** Cloudflare Worker 바인딩을 읽는다. Worker가 아니면 null. */
 async function workerBinding(name: string): Promise<RateLimiterBinding | null> {
-  try {
-    // 일반 번들러가 해석하지 못하도록 이름을 나눠서 실행 시점에만 불러온다
-    const specifier = "cloudflare:" + "workers";
-    const mod = (await import(/* @vite-ignore */ specifier)) as { env?: Record<string, unknown> };
-    const binding = mod.env?.[name] as RateLimiterBinding | undefined;
-    return binding && typeof binding.limit === "function" ? binding : null;
-  } catch {
-    return null;
-  }
+  const binding = await workerEnv<RateLimiterBinding>(name);
+  return binding && typeof binding.limit === "function" ? binding : null;
 }
 
 export function clientKey(request: Request): string {

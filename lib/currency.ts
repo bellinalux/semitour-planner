@@ -13,7 +13,7 @@ export const CURRENCIES: { code: CurrencyCode; name: string; symbol: string }[] 
   { code: "AUD", name: "호주 달러", symbol: "A$" },
 ];
 
-const ZERO_DECIMAL: CurrencyCode[] = ["KRW", "JPY", "VND"];
+const ZERO_DECIMAL: CurrencyCode[] = ["KRW", "JPY", "VND", "THB"];
 
 export function currencySymbol(code: CurrencyCode): string {
   return CURRENCIES.find((c) => c.code === code)?.symbol ?? code;

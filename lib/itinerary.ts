@@ -34,6 +34,16 @@ export function groundDays(days: DayPlan[], pmChoice: PmChoice): number {
   return days.filter((d) => dayItems(d, pmChoice).some((i) => (i.type ?? "sightseeing") !== "flight")).length;
 }
 
+/** 도시별 숙박 수 (일정의 "그날 밤 숙박 도시" 기준, 처음 나온 순서) */
+export function overnightNights(days: DayPlan[]): { city: string; nights: number }[] {
+  const counts = new Map<string, number>();
+  for (const d of days) {
+    const city = (d.overnightCity ?? "").trim();
+    if (city) counts.set(city, (counts.get(city) ?? 0) + 1);
+  }
+  return [...counts].map(([city, nights]) => ({ city, nights }));
+}
+
 /** 항공 이동일 항목은 비용이 없는 고정 문구다 */
 function travelItem(id: string, type: "flight" | "transfer" | "hotel", name: string): ItineraryItem {
   return {

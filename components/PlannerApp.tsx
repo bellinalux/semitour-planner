@@ -7,10 +7,15 @@ import { Header } from "@/components/layout/Header";
 import { SavedPlansMenu } from "@/components/layout/SavedPlansMenu";
 import { MobileTabs, type PlannerTab } from "@/components/layout/MobileTabs";
 import { useItinerary } from "@/hooks/useItinerary";
+import { useRequest } from "@/hooks/useRequest";
 import { usePlannerInput } from "@/hooks/usePlannerInput";
 import { useUsp } from "@/hooks/useUsp";
 import { useWorkPersistence } from "@/hooks/useWorkPersistence";
 import { calculateQuote } from "@/lib/cost";
+import { applyFeeResults, feeCheckTargets, type FeeApplySummary } from "@/lib/fees";
+import type { VerifyFeesResponse } from "@/lib/schemas/market";
+import { overnightNights } from "@/lib/itinerary";
+import { buildEmojiCustomerText } from "@/lib/exportEmoji";
 import { buildCustomerText, buildInternalText } from "@/lib/exportText";
 import { tourToOption } from "@/lib/options";
 import { buildUspRequest } from "@/lib/uspRequest";
@@ -24,6 +29,11 @@ export function PlannerApp() {
   const itinerary = useItinerary();
   const usp = useUsp();
   const [tab, setTab] = useState<PlannerTab>("input");
+  const feeRequest = useRequest<
+    { destination: string; currency: string; exchangeRateToKrw: number; items: { id: string; name: string; city?: string }[] },
+    VerifyFeesResponse
+  >("/api/verify-fees");
+  const [feeSummary, setFeeSummary] = useState<FeeApplySummary | null>(null);
 
   const { days, pmChoice, meta } = itinerary;
   const isReady = itinerary.state.status === "success";
@@ -33,6 +43,7 @@ export function PlannerApp() {
     () => (isReady ? calculateQuote(input, days, pmChoice) : null),
     [isReady, input, days, pmChoice],
   );
+  const stays = useMemo(() => overnightNights(days), [days]);
   const uspRequest = useMemo(
     () => (quote?.ok ? buildUspRequest(input, days, pmChoice, quote, meta) : null),
     [quote, input, days, pmChoice, meta],
@@ -61,6 +72,7 @@ export function PlannerApp() {
 
   const handleGenerate = async () => {
     setTab("result");
+    setFeeSummary(null);
     usp.reset();
     const result = await itinerary.generate(input);
     if (!result) return;
@@ -82,6 +94,22 @@ export function PlannerApp() {
     if (firstQuote.ok) {
       void usp.generate(buildUspRequest(nextInput, result.days, result.pmChoice, firstQuote, result.meta));
     }
+  };
+
+  /** 입장료·체험료를 웹에서 확인해 일정 항목에 반영한다 */
+  const handleVerifyFees = async () => {
+    const items = feeCheckTargets(days).slice(0, 40);
+    if (items.length === 0) return;
+    const response = await feeRequest.run({
+      destination: input.destination.trim() || meta?.cities.join(", ") || "",
+      currency: input.currency,
+      exchangeRateToKrw: input.exchangeRateToKrw,
+      items,
+    });
+    if (!response) return;
+    const { days: next, summary } = applyFeeResults(days, response.results, response.checkedAt);
+    itinerary.replaceDays(next);
+    setFeeSummary(summary);
   };
 
   const handleGenerateUsp = () => {
@@ -110,6 +138,7 @@ export function PlannerApp() {
             onReset={reset}
             onGenerate={handleGenerate}
             isGenerating={itinerary.state.status === "loading"}
+            stays={stays}
           />
         </aside>
         <section
@@ -138,6 +167,15 @@ export function PlannerApp() {
               onChangeOptions: (options) => update({ options }),
             }}
             onRetryItinerary={handleGenerate}
+            feeCheck={{
+              state: feeRequest.state,
+              targetCount: Math.min(40, feeCheckTargets(days).length),
+              summary: feeSummary,
+              sources: feeRequest.data?.sources ?? [],
+              searched: feeRequest.data?.searched ?? true,
+              fxUpdatedAt: feeRequest.data?.fx[0]?.updatedAt ?? "",
+              onRun: () => void handleVerifyFees(),
+            }}
             usp={{
               state: usp.state,
               items: usp.usps,
@@ -149,6 +187,7 @@ export function PlannerApp() {
               disabled: !quote?.ok,
               getInternalText: () => buildInternalText(exportData()),
               getCustomerText: () => buildCustomerText(exportData()),
+              getEmojiText: () => buildEmojiCustomerText(exportData()),
             }}
           />
         </section>

@@ -39,6 +39,7 @@ export const DEFAULT_INPUT: TripInput = {
   hotelPreferences: [],
   selectedHotel: null,
   lodgingRatePerNight: 0,
+  lodgingCityRates: {},
   guestsPerUnit: 2,
   cleaningFeePerUnit: 0,
   cityTaxPerPersonPerNight: 0,

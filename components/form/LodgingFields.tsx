@@ -5,12 +5,17 @@ import type { LodgingType } from "@/types";
 import { CostField } from "./CostField";
 import type { SectionProps } from "./types";
 
+interface Props extends SectionProps {
+  /** 일정에서 센 도시별 숙박 수. 2곳 이상이면 도시별 요금을 입력할 수 있다 */
+  stays: { city: string; nights: number }[];
+}
+
 const TYPES: { id: LodgingType; label: string }[] = [
   { id: "hotel", label: "호텔" },
   { id: "bnb", label: "BnB·아파트" },
 ];
 
-export function LodgingFields({ input, onChange }: SectionProps) {
+export function LodgingFields({ input, onChange, stays }: Props) {
   const symbol = currencySymbol(input.currency);
   const isBnb = input.lodgingType === "bnb";
   const unitLabel = isBnb ? "유닛" : "실";
@@ -81,6 +86,27 @@ export function LodgingFields({ input, onChange }: SectionProps) {
           onChange={(cityTaxPerPersonPerNight) => onChange({ cityTaxPerPersonPerNight })}
         />
       </div>
+
+      {stays.length >= 2 && (
+        <div className="space-y-2 border-t border-slate-200 pt-3">
+          <p className="text-xs font-semibold text-slate-700">도시별 1{unitLabel} 1박 요금</p>
+          <p className="text-[11px] leading-4 text-slate-500">
+            도시마다 숙박 요금이 다르면 입력하세요. 비워 두거나 0이면 위의 기본 요금을 씁니다.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {stays.map((stay, i) => (
+              <NumberField
+                key={stay.city}
+                id={`lodgingCityRate-${i}`}
+                label={`${stay.city} (${stay.nights}박)`}
+                value={input.lodgingCityRates[stay.city] ?? 0}
+                prefix={symbol}
+                onChange={(rate) => onChange({ lodgingCityRates: { ...input.lodgingCityRates, [stay.city]: rate } })}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { accessRequired } from "@/lib/server/access";
 import { readSecret } from "@/lib/server/external";
+import { getKv } from "@/lib/server/planStore";
 import { APP_VERSION } from "@/lib/version";
 
 /** Cloudflare의 trace 응답("key=value" 줄들)에서 값을 읽는다 */
@@ -42,6 +43,8 @@ export async function GET(request: Request) {
     travelpayoutsToken: readSecret("TRAVELPAYOUTS_TOKEN") ? "set" : "missing",
     viatorKey: readSecret("VIATOR_API_KEY") ? "set" : "missing",
     similarEnvNames: similarNames,
+    // 서버 저장: 접속 코드가 켜져 있고 저장소(KV)가 연결돼야 쓸 수 있다
+    cloudSave: !accessRequired() ? "needs-access-code" : (await getKv())?.kind ?? "no-storage",
     ...(wantsProbe ? { egress: await probeEgress() } : {}),
   });
 }

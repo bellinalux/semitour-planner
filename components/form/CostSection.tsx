@@ -5,6 +5,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { CURRENCIES, currencySymbol, formatMoney } from "@/lib/currency";
 import type { CurrencyCode } from "@/types";
 import { CostField } from "./CostField";
+import { FxRateButton } from "./FxRateButton";
 import type { SectionProps } from "./types";
 
 export function CostSection({ input, onChange }: SectionProps) {
@@ -46,6 +47,13 @@ export function CostSection({ input, onChange }: SectionProps) {
             />
           )}
         </div>
+        {input.currency !== "KRW" ? (
+          <FxRateButton currency={input.currency} onRate={(exchangeRateToKrw) => onChange({ exchangeRateToKrw })} />
+        ) : (
+          <p className="text-[11px] leading-4 text-slate-500">
+            견적 통화가 원화이면 현지 통화 금액은 &quot;입장료 웹 확인&quot;으로 확인한 항목에만 함께 표시됩니다. 현지 통화(예: THB)로 견적하면 모든 금액에 원화 환산이 붙습니다.
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <CostField

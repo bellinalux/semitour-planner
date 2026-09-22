@@ -1,9 +1,11 @@
-import { AlertCircle, Bus, Clock, ExternalLink, Eye, Ticket, Trash2, Utensils } from "lucide-react";
+import { AlertCircle, BadgeCheck, Bus, Clock, ExternalLink, Eye, HelpCircle, Ticket, Trash2, Utensils, Wallet } from "lucide-react";
 import { MoneyInput } from "@/components/ui/MoneyInput";
 import { currencySymbol } from "@/lib/currency";
+import { feeHint, isLocalPay } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { feeLabel, ITEM_TYPE_META, ITEM_TYPES } from "@/lib/itemTypes";
 import type { Admission, CurrencyCode, ItemType, ItineraryItem } from "@/types";
+import { useFx } from "./FxContext";
 
 export type ItemPatch = Partial<ItineraryItem>;
 
@@ -46,9 +48,12 @@ const selectClass =
 
 export function TimelineItem({ item, order, isLast, currency, tone, editing, onChangeItem, onDeleteItem }: Props) {
   const symbol = currencySymbol(currency);
+  const { rate } = useFx();
   const { fee, meal } = costFields(item.type);
   const typeMeta = ITEM_TYPE_META[item.type ?? "sightseeing"];
   const showEstimateTag = fee || meal;
+  const localPay = isLocalPay(item);
+  const check = item.feeCheck;
 
   return (
     <li className="flex gap-3">
@@ -159,15 +164,79 @@ export function TimelineItem({ item, order, isLast, currency, tone, editing, onC
               onChange={(mealCost) => onChangeItem(item.id, { mealCost })}
             />
           )}
+          {(fee || meal) && (item.entryFee > 0 || item.mealCost > 0) && (
+            <span className="text-[11px] font-medium tabular-nums text-slate-500" title="현지 금액과 원화 환산 (환율은 왼쪽 '원화 환율'에 입력한 값)">
+              {feeHint(item.entryFee + item.mealCost, item, currency, rate)}
+            </span>
+          )}
           {showEstimateTag && (
             <span
-              className={`text-[10px] font-medium ${item.isEstimated ? "text-amber-600" : "text-emerald-600"}`}
-              title={item.isEstimated ? "AI 추정치 — 실제 금액을 확인하세요" : "직접 수정한 금액"}
+              className={`text-[10px] font-medium ${check && check.status !== "unverified" ? "text-emerald-600" : item.isEstimated ? "text-amber-600" : "text-emerald-600"}`}
+              title={item.isEstimated ? "AI 추정치 — 실제 금액을 확인하세요" : check && check.status !== "unverified" ? "웹에서 확인한 금액" : "직접 수정한 금액"}
             >
-              {item.isEstimated ? "AI 추정" : "직접 입력"}
+              {item.isEstimated ? "AI 추정" : check && check.status !== "unverified" ? "웹 확인" : "직접 입력"}
+            </span>
+          )}
+          {(fee || meal) && (
+            <button
+              type="button"
+              aria-pressed={localPay}
+              onClick={() => onChangeItem(item.id, { payment: localPay ? "included" : "local" })}
+              title={localPay ? "고객이 현지에서 직접 내는 항목입니다. 판매가와 원가에 넣지 않습니다. 누르면 판매가 포함으로 바뀝니다." : "판매가에 포함되는 항목입니다. 누르면 현지 지불(불포함)로 바뀝니다."}
+              className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
+                localPay ? "border-orange-300 bg-orange-50 text-orange-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              <Wallet className="h-3 w-3" aria-hidden />
+              {localPay ? "현지 지불(불포함)" : "판매가 포함"}
+            </button>
+          )}
+          {check?.status === "confirmed" && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+              <BadgeCheck className="h-3 w-3" aria-hidden />
+              요금 확인됨
+            </span>
+          )}
+          {check?.status === "free" && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+              <BadgeCheck className="h-3 w-3" aria-hidden />
+              무료 확인
+            </span>
+          )}
+          {check?.status === "unverified" && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+              <HelpCircle className="h-3 w-3" aria-hidden />
+              요금 확인 못함
+            </span>
+          )}
+          {check?.status === "differs" && check.foundAmount !== undefined && (
+            <span className="inline-flex flex-wrap items-center gap-1.5 rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+              웹 확인가 {symbol}
+              {check.foundAmount.toLocaleString("ko-KR")} (입력값과 다름)
+              <button
+                type="button"
+                onClick={() =>
+                  onChangeItem(item.id, {
+                    entryFee: check.foundAmount,
+                    isEstimated: false,
+                    feeCheck: { ...check, status: "confirmed", foundAmount: undefined },
+                  })
+                }
+                className="rounded border border-rose-300 bg-white px-1.5 py-px text-[10px] font-semibold text-rose-700 hover:bg-rose-100"
+              >
+                확인가 적용
+              </button>
             </span>
           )}
         </div>
+
+        {check && (check.sourceName || check.note) && (
+          <p className="mt-1.5 text-[11px] leading-4 text-slate-500">
+            {check.sourceName ? `확인 출처: ${check.sourceName}` : ""}
+            {check.sourceName && check.note ? " · " : ""}
+            {check.note}
+          </p>
+        )}
 
         {item.caution && (
           <p className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] leading-4 text-amber-800">

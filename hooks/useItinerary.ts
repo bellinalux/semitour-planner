@@ -103,14 +103,26 @@ export function useItinerary() {
   /** 항목을 고친다. 금액을 직접 고친 항목은 추정치 표시를 해제한다. */
   const updateItem = useCallback((itemId: string, patch: Partial<ItineraryItem>) => {
     const touchesCost = "entryFee" in patch || "mealCost" in patch;
+    // 입장료를 직접 고치면 이전 웹 확인 결과와 현지 금액은 더 이상 맞지 않으므로 지운다 (이번 수정에서 새로 지정한 값은 유지)
+    const staleFee = "entryFee" in patch && !("feeCheck" in patch);
     setDays((prev) =>
       prev.map((day) =>
         mapDayItems(day, (item) =>
-          item.id === itemId ? { ...item, ...patch, ...(touchesCost ? { isEstimated: false } : {}) } : item,
+          item.id === itemId
+            ? {
+                ...item,
+                ...patch,
+                ...(touchesCost ? { isEstimated: false } : {}),
+                ...(staleFee ? { feeCheck: undefined, local: "local" in patch ? patch.local : undefined } : {}),
+              }
+            : item,
         ),
       ),
     );
   }, []);
+
+  /** 웹 확인 결과를 반영한 일정으로 통째로 바꾼다 */
+  const replaceDays = useCallback((next: DayPlan[]) => setDays(next), []);
 
   const deleteItem = useCallback((itemId: string) => {
     setDays((prev) => prev.map((day) => mapDayItems(day, (item) => (item.id === itemId ? null : item))));
@@ -157,6 +169,7 @@ export function useItinerary() {
     generate,
     selectPmOption,
     updateItem,
+    replaceDays,
     deleteItem,
     addItem,
     addTour,

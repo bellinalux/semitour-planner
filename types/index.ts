@@ -91,6 +91,8 @@ export interface TripInput {
   selectedHotel: SelectedHotel | null;
   /** 1실(호텔) 또는 1유닛(BnB)의 1박 요금 */
   lodgingRatePerNight: number;
+  /** 도시별 1박 요금 (도시 이름 → 요금). 없거나 0이면 위의 기본 1박 요금을 쓴다 */
+  lodgingCityRates: Record<string, number>;
   /** 1실/1유닛에 묵는 인원. 필요한 방 수 = ceil(인원 ÷ 이 값) */
   guestsPerUnit: number;
   /** BnB 청소비 (유닛당 1회) */
@@ -166,6 +168,29 @@ export interface ItineraryItem {
   link?: string;
   /** 투어 카탈로그에서 추가한 항목 */
   fromCatalog?: boolean;
+  /**
+   * 요금을 누가 내는지. included(기본): 판매가에 포함되어 원가로 계산 / local: 고객이 현지에서 직접 지불하는
+   * 불포함 항목이라 원가와 판매가에서 빠지고 "현지 지불" 안내로만 표시된다.
+   */
+  payment?: "included" | "local";
+  /** 현지 통화로 확인한 입장·체험 요금 (웹 확인 결과). 견적 통화와 다를 수 있다 */
+  local?: { currency: CurrencyCode; amount: number };
+  /** 입장료 웹 확인 결과 */
+  feeCheck?: FeeCheck;
+}
+
+/** 입장료 웹 확인 결과 */
+export interface FeeCheck {
+  /** confirmed: 확인됨 / free: 무료 확인 / unverified: 확인 못함 / differs: 확인했지만 입력한 금액과 다름 */
+  status: "confirmed" | "free" | "unverified" | "differs";
+  /** 확인 근거나 유의사항 (예: 외국인 요금, 현장 현금 결제만) */
+  note: string;
+  /** 요금을 확인한 사이트 이름 */
+  sourceName: string;
+  /** 확인한 시각 (ISO) */
+  checkedAt: string;
+  /** differs일 때, 웹에서 확인한 금액 (견적 통화, 1인) */
+  foundAmount?: number;
 }
 
 export interface PmFreeOption {

@@ -13,6 +13,10 @@ export function normalizeInput(saved: unknown): TripInput {
     ...s,
     // 중첩 객체는 이전에 저장된 값에 새 키가 없을 수 있어 기본값과 합친다
     costStatus: { ...DEFAULT_INPUT.costStatus, ...s.costStatus },
+    lodgingCityRates:
+      typeof s.lodgingCityRates === "object" && s.lodgingCityRates !== null && !Array.isArray(s.lodgingCityRates)
+        ? s.lodgingCityRates
+        : DEFAULT_INPUT.lodgingCityRates,
     options: Array.isArray(s.options) ? s.options : DEFAULT_INPUT.options,
     competitors: Array.isArray(s.competitors) ? s.competitors : DEFAULT_INPUT.competitors,
     themes: Array.isArray(s.themes) ? s.themes : DEFAULT_INPUT.themes,

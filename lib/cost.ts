@@ -1,5 +1,6 @@
 import { formatMoney } from "@/lib/currency";
-import { dayItems, groundDays, type PmChoice } from "@/lib/itinerary";
+import { dayItems, groundDays, overnightNights, type PmChoice } from "@/lib/itinerary";
+import { lodgingCostPerUnit, lodgingSegments } from "@/lib/lodging";
 import type {
   CostKey,
   CostLine,
@@ -33,9 +34,9 @@ function activeItems(days: DayPlan[], pmChoice: PmChoice): ItineraryItem[] {
   return days.flatMap((day) => dayItems(day, pmChoice));
 }
 
-/** 일정에 따른 1인당 변동비(입장료, 식대) */
+/** 일정에 따른 1인당 변동비(입장료, 식대). 고객이 현지에서 직접 내는 항목은 판매가에 포함되지 않으므로 뺀다. */
 export function sumItineraryCosts(days: DayPlan[], pmChoice: PmChoice) {
-  const items = activeItems(days, pmChoice);
+  const items = activeItems(days, pmChoice).filter((i) => i.payment !== "local");
   return {
     admissionPerPerson: items.reduce((sum, i) => sum + i.entryFee, 0),
     mealPerPerson: items.reduce((sum, i) => sum + i.mealCost, 0),
@@ -49,6 +50,8 @@ export function lodgingUnitsFor(travelers: number, guestsPerUnit: number): numbe
 
 interface Context {
   input: TripInput;
+  /** 일정에서 센 도시별 숙박 수 (도시별 숙박 요금 계산용) */
+  lodgingStays: { city: string; nights: number }[];
   tourDays: number;
   admissionPerPerson: number;
   mealPerPerson: number;
@@ -92,12 +95,18 @@ function buildLines(n: number, ctx: Context): CostLine[] {
   if (ctx.includeLodging) {
     const units = lodgingUnitsFor(n, input.guestsPerUnit);
     const unitLabel = input.lodgingType === "bnb" ? "유닛" : "실";
+    const segments = lodgingSegments(input, ctx.lodgingStays);
+    const first = segments[0];
+    const note =
+      segments.length === 1 && first
+        ? `${units}${unitLabel} × ${first.nights}박 × ${money(first.rate)}`
+        : `${units}${unitLabel} × (${segments.map((sg) => `${sg.city || "기타"} ${sg.nights}박 × ${money(sg.rate)}`).join(" + ")})`;
     lines.push(
       withStatus("lodging", {
         key: "lodging",
         label: input.lodgingType === "bnb" ? "숙박비 (BnB)" : "숙박비 (호텔)",
-        amount: units * input.lodgingRatePerNight * input.nights,
-        note: `${units}${unitLabel} × ${input.nights}박 × ${money(input.lodgingRatePerNight)}`,
+        amount: units * lodgingCostPerUnit(segments),
+        note,
       }),
     );
     if (input.lodgingType === "bnb" && input.cleaningFeePerUnit > 0) {
@@ -227,6 +236,7 @@ export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmCh
 
   const ctx: Context = {
     input,
+    lodgingStays: overnightNights(days),
     tourDays,
     admissionPerPerson,
     mealPerPerson,
@@ -252,11 +262,17 @@ export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmCh
   if (input.vehicleCostPerDay + input.guideCostPerDay === 0) {
     warnings.push("차량비와 가이드비가 0으로 입력되어 원가가 실제보다 낮게 계산됩니다.");
   }
-  if (admissionPerPerson + mealPerPerson === 0) {
+  if (admissionPerPerson + mealPerPerson === 0 && !activeItems(days, pmChoice).some((i) => i.payment === "local")) {
     warnings.push("일정의 입장료·식대가 모두 0입니다. 일정표에서 금액을 확인해 주세요.");
   }
-  if (ctx.includeLodging && input.lodgingRatePerNight === 0) {
-    warnings.push("숙박이 포함된 구성인데 1박 요금이 0입니다. 숙박 요금을 입력하거나 AI 추정을 사용하세요.");
+  if (ctx.includeLodging) {
+    const segments = lodgingSegments(input, ctx.lodgingStays);
+    const unpriced = segments.filter((sg) => sg.rate === 0);
+    if (unpriced.length === 1 && segments.length === 1) {
+      warnings.push("숙박이 포함된 구성인데 1박 요금이 0입니다. 숙박 요금을 입력하거나 AI 추정을 사용하세요.");
+    } else if (unpriced.length > 0) {
+      warnings.push(`도시별 숙박 요금 중 0인 구간(${unpriced.map((sg) => sg.city || "기타").join(", ")})이 있어 숙박비가 실제보다 낮게 계산됩니다.`);
+    }
   }
   if (ctx.includeLodging && input.nights === 0) {
     warnings.push("숙박이 포함된 구성인데 박수가 0입니다.");

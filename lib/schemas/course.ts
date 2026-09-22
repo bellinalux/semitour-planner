@@ -34,6 +34,11 @@ const itemSchema = z.object({
       "1인 요금 추정 (요청 통화 단위): 입장료, 체험비, 마사지 요금, 크루즈 요금을 모두 여기에 넣는다. 마사지·체험·액티비티·크루즈·유료 명소는 유료이므로 0이면 안 되고 통상 요금을 추정한다. 무료 명소, 이동, 호텔, 자유시간, 식사, view_only/none이면 0. 식사가 포함된 체험(디너크루즈 등)은 전체 요금을 여기에",
     ),
   mealCost: z.number().describe("type이 meal일 때 1인 식대 추정 (요청 통화 단위). 그 외에는 0"),
+  paidLocally: z
+    .boolean()
+    .describe(
+      "원문이 이 항목의 요금을 '현지 지불', '현지 결제', '현장 결제', '현지 별도', '불포함'이라고 명시한 경우에만 true (고객이 현지에서 직접 내는 요금). 그런 말이 없으면 false",
+    ),
   caution: z.string().describe("확인이 필요한 사항(예약 필수 등). 없으면 빈 문자열"),
 });
 
@@ -76,6 +81,7 @@ function toItem(raw: ParsedCourse["days"][number]["items"][number], id: string):
     mealCost: raw.type === "meal" ? Math.max(0, raw.mealCost) : 0,
     isEstimated: true,
     caution: raw.caution.trim() || undefined,
+    ...(raw.paidLocally ? { payment: "local" as const } : {}),
   };
 }
 

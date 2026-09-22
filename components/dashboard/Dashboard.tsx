@@ -13,7 +13,7 @@ import type {
   UspItem,
 } from "@/types";
 import { ExportBar } from "./ExportBar";
-import { ItineraryPanel } from "./ItineraryPanel";
+import { ItineraryPanel, type FeeCheckView } from "./ItineraryPanel";
 import type { ItemPatch } from "./itinerary/TimelineItem";
 import { QuotePanel } from "./QuotePanel";
 import { OptionsPanel } from "./options/OptionsPanel";
@@ -32,6 +32,7 @@ interface ExportView {
   disabled: boolean;
   getInternalText: () => string;
   getCustomerText: () => string;
+  getEmojiText: () => string;
 }
 
 interface ItemActions {
@@ -60,6 +61,7 @@ interface Props {
   onRetryItinerary: () => void;
   usp: UspView;
   exporter: ExportView;
+  feeCheck: FeeCheckView;
 }
 
 export function Dashboard({
@@ -76,6 +78,7 @@ export function Dashboard({
   onRetryItinerary,
   usp,
   exporter,
+  feeCheck,
 }: Props) {
   const { onAddTour, ...panelActions } = itemActions;
 
@@ -86,6 +89,8 @@ export function Dashboard({
         days={days}
         meta={meta}
         currency={input.currency}
+        krwRate={input.exchangeRateToKrw}
+        feeCheck={feeCheck}
         pmChoice={pmChoice}
         onSelectPm={onSelectPm}
         onRetry={onRetryItinerary}

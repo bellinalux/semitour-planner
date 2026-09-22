@@ -22,6 +22,10 @@
       "simple": { "limit": 10, "period": 60 }
     }
   ],
+  // 서버 저장(일정 보관함)용 KV. id를 적지 않으면 배포할 때 Cloudflare가 자동으로 만들어 연결한다.
+  "kv_namespaces": [
+    { "binding": "PLANS" }
+  ],
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",

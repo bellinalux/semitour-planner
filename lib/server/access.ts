@@ -20,6 +20,15 @@ async function sha256Hex(text: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * 서버 저장(일정 보관함)의 작업공간 ID. 접근 코드로 만든 해시라서 같은 코드를 쓰는 사람끼리 같은 보관함을 본다.
+ * 접근 코드가 없으면(잠금 꺼짐) null — 그때는 아무나 남의 데이터에 접근할 수 있으므로 서버 저장을 쓰지 않는다.
+ */
+export async function workspaceId(): Promise<string | null> {
+  if (!accessRequired()) return null;
+  return (await sha256Hex(`semitour-workspace:${configuredCode()}`)).slice(0, 32);
+}
+
 /** 쿠키에 저장하는 값. 코드 자체가 아니라 코드로 만든 해시라서 쿠키가 노출돼도 코드를 알 수 없다. */
 async function expectedToken(): Promise<string> {
   return sha256Hex(`semitour-access:${configuredCode()}`);

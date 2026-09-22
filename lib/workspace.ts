@@ -25,6 +25,18 @@ export interface SavedPlan {
   snapshot: PlanSnapshot;
 }
 
+/** 저장 목록에 보여줄 요약. 서버 저장은 이것만 먼저 내려받고, 일정 전체는 불러올 때 받는다. */
+export interface PlanIndexEntry {
+  id: string;
+  name: string;
+  savedAt: string;
+  summary: string;
+}
+
+export function indexEntryOf(plan: SavedPlan): PlanIndexEntry {
+  return { id: plan.id, name: plan.name, savedAt: plan.savedAt, summary: planSummary(plan) };
+}
+
 export const EMPTY_RESULT: ResultSnapshot = {
   days: [],
   pmChoice: {},
