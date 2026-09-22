@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       schema: courseResponseSchema,
       temperature: 0.2,
       timeoutMs: 90_000,
+      files: parsed.data.file ? [parsed.data.file] : [],
     });
     if (result.days.length === 0) {
       return errorResponse(

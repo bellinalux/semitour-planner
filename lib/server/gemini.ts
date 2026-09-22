@@ -20,12 +20,21 @@ export class GeminiError extends Error {
   }
 }
 
+/** 텍스트 외에 함께 보낼 파일 파트 (이미지·PDF). 업로드한 코스표를 읽힐 때처럼 멀티모달 입력이 필요할 때 쓴다. */
+export interface InlineFilePart {
+  mimeType: string;
+  /** base64로 인코딩한 파일 내용 */
+  data: string;
+}
+
 interface GenerateJsonOptions<T extends z.ZodType> {
   system: string;
   user: string;
   schema: T;
   temperature?: number;
   timeoutMs?: number;
+  /** user 텍스트와 함께 보낼 파일 (사진·PDF 등) */
+  files?: InlineFilePart[];
 }
 
 /** 검색 근거로 참고한 웹 출처 */
@@ -175,8 +184,10 @@ export async function generateJson<T extends z.ZodType>({
   schema,
   temperature = 0.7,
   timeoutMs = 90_000,
+  files = [],
 }: GenerateJsonOptions<T>): Promise<z.output<T>> {
   resolveKey();
+  const fileParts = files.map((f) => ({ inlineData: { mimeType: f.mimeType, data: f.data } }));
 
   let useSchema = true;
   let lastProblem = "";
@@ -196,7 +207,7 @@ export async function generateJson<T extends z.ZodType>({
     const result = await callGemini(
       {
         systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: "user", parts: [{ text: user + retryNote }] }],
+        contents: [{ role: "user", parts: [{ text: user + retryNote }, ...fileParts] }],
         generationConfig,
       },
       timeoutMs,

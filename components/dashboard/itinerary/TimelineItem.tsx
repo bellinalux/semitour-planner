@@ -1,11 +1,13 @@
-import { Accessibility, AlertCircle, AlertTriangle, BadgeCheck, Bus, Clock, ExternalLink, Eye, HelpCircle, Plus, Sparkles, Ticket, Trash2, Utensils, Wallet, X } from "lucide-react";
+import { Accessibility, AlertCircle, AlertTriangle, ArrowRightLeft, BadgeCheck, BookmarkPlus, Bus, Check, ChevronDown, ChevronUp, Clock, Copy, ExternalLink, Eye, HelpCircle, Plus, Sparkles, Ticket, Trash2, Utensils, Wallet, X } from "lucide-react";
 import { useState } from "react";
 import { MoneyInput } from "@/components/ui/MoneyInput";
 import { currencySymbol } from "@/lib/currency";
 import { feeHint, isLocalPay, itemFeeText } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { feeLabel, ITEM_TYPE_META, ITEM_TYPES } from "@/lib/itemTypes";
-import type { Admission, CurrencyCode, ItemType, ItineraryItem, OptionSuggestion } from "@/types";
+import { slotOptions } from "@/lib/tourItem";
+import type { SegmentKind } from "@/lib/segmentLibrary";
+import type { Admission, CurrencyCode, DayPlan, ItemType, ItineraryItem, OptionSuggestion, TourSlot } from "@/types";
 import { useFx } from "./FxContext";
 
 export type ItemPatch = Partial<ItineraryItem>;
@@ -17,12 +19,17 @@ interface Props {
   currency: CurrencyCode;
   /** 이 항목이 속한 일차 (추천 옵션을 "선택 옵션"으로 추가할 때 필요) */
   dayNo: number;
+  /** 다른 날로 이동·복사할 대상을 고를 때 쓰는 전체 일정 */
+  days: DayPlan[];
   /** am/pm: 세미투어 오전/오후 (번호 표시) — linear: 업체 코스 (유형 이모지 표시) */
   tone: "am" | "pm" | "linear";
   editing: boolean;
   onChangeItem: (itemId: string, patch: ItemPatch) => void;
   onDeleteItem: (itemId: string) => void;
   onAddSuggestedOption: (suggestion: OptionSuggestion, dayNo: number) => void;
+  onMoveItem: (itemId: string, direction: "up" | "down") => void;
+  onRelocateItem: (itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => void;
+  onSaveSegment: (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => void;
 }
 
 const TONE = {
@@ -64,10 +71,32 @@ function costFields(type: ItemType | undefined) {
 const selectClass =
   "rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30";
 
-export function TimelineItem({ item, order, isLast, currency, dayNo, tone, editing, onChangeItem, onDeleteItem, onAddSuggestedOption }: Props) {
+export function TimelineItem({
+  item,
+  order,
+  isLast,
+  currency,
+  dayNo,
+  days,
+  tone,
+  editing,
+  onChangeItem,
+  onDeleteItem,
+  onAddSuggestedOption,
+  onMoveItem,
+  onRelocateItem,
+  onSaveSegment,
+}: Props) {
   const symbol = currencySymbol(currency);
   const { rate } = useFx();
   const [addedNames, setAddedNames] = useState<string[]>([]);
+  const [favorited, setFavorited] = useState(false);
+  const otherDays = days.filter((d) => d.day !== dayNo);
+  const [targetDay, setTargetDay] = useState<number>(otherDays[0]?.day ?? dayNo);
+  const targetDayPlan = days.find((d) => d.day === targetDay) ?? otherDays[0];
+  const targetSlots = targetDayPlan ? slotOptions(targetDayPlan) : [];
+  const [targetSlot, setTargetSlot] = useState<TourSlot>(targetSlots[0]?.slot ?? "day");
+  const activeTargetSlot = targetSlots.some((s) => s.slot === targetSlot) ? targetSlot : (targetSlots[0]?.slot ?? "day");
   const { fee, meal } = costFields(item.type);
   const typeMeta = ITEM_TYPE_META[item.type ?? "sightseeing"];
   const showEstimateTag = fee || meal;
@@ -125,6 +154,24 @@ export function TimelineItem({ item, order, isLast, currency, dayNo, tone, editi
             </select>
             <button
               type="button"
+              onClick={() => onMoveItem(item.id, "up")}
+              disabled={order === 1}
+              aria-label={`${item.name} 위로 이동`}
+              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <ChevronUp className="h-4 w-4" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => onMoveItem(item.id, "down")}
+              disabled={isLast}
+              aria-label={`${item.name} 아래로 이동`}
+              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <ChevronDown className="h-4 w-4" aria-hidden />
+            </button>
+            <button
+              type="button"
               onClick={() => onDeleteItem(item.id)}
               aria-label={`${item.name} 삭제`}
               className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
@@ -134,6 +181,55 @@ export function TimelineItem({ item, order, isLast, currency, dayNo, tone, editi
           </div>
         ) : (
           <h4 className="text-sm font-semibold text-slate-900">{item.name}</h4>
+        )}
+
+        {editing && otherDays.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <select
+              aria-label={`${item.name} 옮길 날짜`}
+              value={targetDayPlan?.day}
+              onChange={(e) => setTargetDay(Number(e.target.value))}
+              className={selectClass}
+            >
+              {otherDays.map((d) => (
+                <option key={d.day} value={d.day}>
+                  DAY {d.day} · {d.theme.slice(0, 12)}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label={`${item.name} 옮길 위치`}
+              value={activeTargetSlot}
+              onChange={(e) => setTargetSlot(e.target.value as TourSlot)}
+              className={selectClass}
+            >
+              {targetSlots.map((s) => (
+                <option key={s.slot} value={s.slot}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => targetDayPlan && onRelocateItem(item.id, targetDayPlan.day, activeTargetSlot, "move")}
+              disabled={!targetDayPlan}
+              title="다른 날짜로 옮깁니다 (여기서는 빠집니다)"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden />
+              이동
+            </button>
+            <button
+              type="button"
+              onClick={() => targetDayPlan && onRelocateItem(item.id, targetDayPlan.day, activeTargetSlot, "copy")}
+              disabled={!targetDayPlan}
+              title="다른 날짜에 복사합니다 (여기는 그대로 남습니다)"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Copy className="h-3.5 w-3.5" aria-hidden />
+              복사
+            </button>
+          </div>
         )}
 
         {item.description && <p className="mt-1 text-xs leading-5 text-slate-600">{item.description}</p>}
@@ -147,6 +243,25 @@ export function TimelineItem({ item, order, isLast, currency, dayNo, tone, editi
           )}
           {item.fromCatalog && (
             <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">투어 카탈로그</span>
+          )}
+          {favorited ? (
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+              <Check className="h-3 w-3" aria-hidden />
+              즐겨찾기됨
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                onSaveSegment([item], "place", item.name);
+                setFavorited(true);
+              }}
+              title="이 장소를 라이브러리에 저장해 다음에 검색으로 바로 넣을 수 있게 합니다"
+              className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-amber-50 hover:text-amber-700"
+            >
+              <BookmarkPlus className="h-3 w-3" aria-hidden />
+              즐겨찾기
+            </button>
           )}
           {item.link && (
             <a

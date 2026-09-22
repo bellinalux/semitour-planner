@@ -31,29 +31,35 @@ export function slotOptions(day: DayPlan): { slot: TourSlot; label: string }[] {
   ];
 }
 
-/** 항목을 그날의 지정한 위치에 끼워 넣는다. 마지막 항목이 점심/호텔이면 그 앞에 넣는다. */
-export function insertItem(day: DayPlan, slot: TourSlot, item: ItineraryItem): DayPlan {
-  const beforeLast = <T extends { type?: string }>(list: T[], toAdd: T, keepLastTypes: string[]) => {
+/** 항목 여러 개를 그날의 지정한 위치에 한 번에 끼워 넣는다. 마지막 항목이 점심/호텔이면 그 앞에 넣는다. */
+export function insertItems(day: DayPlan, slot: TourSlot, items: ItineraryItem[]): DayPlan {
+  if (items.length === 0) return day;
+  const beforeLast = <T extends { type?: string }>(list: T[], toAdd: T[], keepLastTypes: string[]) => {
     const copy = [...list];
     const last = copy[copy.length - 1];
-    if (copy.length > 1 && last && keepLastTypes.includes(last.type ?? "")) copy.splice(copy.length - 1, 0, toAdd);
-    else copy.push(toAdd);
+    if (copy.length > 1 && last && keepLastTypes.includes(last.type ?? "")) copy.splice(copy.length - 1, 0, ...toAdd);
+    else copy.push(...toAdd);
     return copy;
   };
 
-  if (day.kind === "linear") return { ...day, items: beforeLast(day.items, item, ["hotel"]) };
+  if (day.kind === "linear") return { ...day, items: beforeLast(day.items, items, ["hotel"]) };
 
   if (slot === "am") {
     // 오전 목록의 마지막은 점심 식당이므로 그 앞에 넣는다
     const list = [...day.amGuided];
-    if (list.length > 1) list.splice(list.length - 1, 0, item);
-    else list.push(item);
+    if (list.length > 1) list.splice(list.length - 1, 0, ...items);
+    else list.push(...items);
     return { ...day, amGuided: list };
   }
 
   const optionId = slot === "pm:B" ? "B" : "A";
   return {
     ...day,
-    pmFreeOptions: day.pmFreeOptions.map((o) => (o.id === optionId ? { ...o, items: [...o.items, item] } : o)),
+    pmFreeOptions: day.pmFreeOptions.map((o) => (o.id === optionId ? { ...o, items: [...o.items, ...items] } : o)),
   };
+}
+
+/** 항목 하나를 그날의 지정한 위치에 끼워 넣는다. */
+export function insertItem(day: DayPlan, slot: TourSlot, item: ItineraryItem): DayPlan {
+  return insertItems(day, slot, [item]);
 }

@@ -6,12 +6,18 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { TextField } from "@/components/ui/TextField";
 import { THEMES, TRAVEL_TYPES } from "@/lib/defaults";
 import { tourDayCount } from "@/lib/itinerary";
+import type { CourseFile } from "@/lib/courseFile";
 import type { ThemeId, TravelType } from "@/types";
 import { CoursePasteField } from "./CoursePasteField";
 import { ModeSwitch } from "./ModeSwitch";
 import type { SectionProps } from "./types";
 
-export function TripBasicsSection({ input, onChange }: SectionProps) {
+interface Props extends SectionProps {
+  courseFile: CourseFile | null;
+  onCourseFileChange: (file: CourseFile | null) => void;
+}
+
+export function TripBasicsSection({ input, onChange, courseFile, onCourseFileChange }: Props) {
   const isPaste = input.mode === "paste";
 
   const toggleTheme = (id: ThemeId) =>
@@ -32,7 +38,14 @@ export function TripBasicsSection({ input, onChange }: SectionProps) {
       <div className="space-y-4">
         <ModeSwitch value={input.mode} onChange={(mode) => onChange({ mode })} />
 
-        {isPaste && <CoursePasteField value={input.courseText} onChange={(courseText) => onChange({ courseText })} />}
+        {isPaste && (
+          <CoursePasteField
+            value={input.courseText}
+            onChange={(courseText) => onChange({ courseText })}
+            file={courseFile}
+            onFileChange={onCourseFileChange}
+          />
+        )}
 
         <TextField
           id="destination"

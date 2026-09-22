@@ -14,9 +14,11 @@ import type {
   TripInput,
   UspItem,
 } from "@/types";
+import type { CourseSegment, SegmentKind } from "@/lib/segmentLibrary";
 import { ExportBar } from "./ExportBar";
 import { DocumentBar } from "./DocumentBar";
 import { ItineraryPanel, type FeeCheckView, type OptionSuggestView } from "./ItineraryPanel";
+import { CourseLibraryPanel } from "./library/CourseLibraryPanel";
 import type { ItemPatch } from "./itinerary/TimelineItem";
 import { QuotePanel } from "./QuotePanel";
 import { OptionsPanel } from "./options/OptionsPanel";
@@ -43,6 +45,16 @@ interface ItemActions {
   onDeleteItem: (itemId: string) => void;
   onAddItem: (day: number) => void;
   onAddTour: (dayNo: number, slot: TourSlot, item: ItineraryItem) => void;
+  onMoveItem: (itemId: string, direction: "up" | "down") => void;
+  onRelocateItem: (itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => void;
+  onSaveSegment: (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => void;
+}
+
+interface LibraryView {
+  segments: CourseSegment[];
+  onInsert: (dayNo: number, slot: TourSlot, items: ItineraryItem[]) => void;
+  onAppendDay: (items: ItineraryItem[], theme: string) => void;
+  onDelete: (id: string) => void;
 }
 
 interface OptionActions {
@@ -68,6 +80,7 @@ interface Props {
   exporter: ExportView;
   feeCheck: FeeCheckView;
   optionSuggest: OptionSuggestView;
+  library: LibraryView;
   documents: React.ComponentProps<typeof DocumentBar>;
 }
 
@@ -88,6 +101,7 @@ export function Dashboard({
   exporter,
   feeCheck,
   optionSuggest,
+  library,
   documents,
 }: Props) {
   const { onAddTour, ...panelActions } = itemActions;
@@ -100,7 +114,7 @@ export function Dashboard({
         meta={meta}
         currency={input.currency}
         krwRate={input.exchangeRateToKrw}
-        travelType={input.travelType}
+        travelType={input.mode === "paste" ? "semi" : input.travelType}
         researchInfo={researchInfo}
         pickupNote={input.pickupNote}
         sendingNote={input.sendingNote}
@@ -114,6 +128,9 @@ export function Dashboard({
       />
       {itinerary.status === "success" && days.length > 0 && (
         <TourCatalogPanel input={input} meta={meta} days={days} onAddTour={onAddTour} onAddOption={optionActions.onAddOption} />
+      )}
+      {itinerary.status === "success" && days.length > 0 && (
+        <CourseLibraryPanel destination={input.destination} days={days} segments={library.segments} onInsert={library.onInsert} onAppendDay={library.onAppendDay} onDelete={library.onDelete} />
       )}
       {itinerary.status === "success" && days.length > 0 && (
         <OptionsPanel

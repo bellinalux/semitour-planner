@@ -1,4 +1,5 @@
 import { RotateCcw, Sparkles } from "lucide-react";
+import type { CourseFile } from "@/lib/courseFile";
 import type { TripInput } from "@/types";
 import { CompetitorSection } from "./CompetitorSection";
 import { DocumentSection } from "./DocumentSection";
@@ -15,12 +16,14 @@ interface Props {
   isGenerating: boolean;
   /** 일정에서 센 도시별 숙박 수 (도시별 숙박 요금 입력용) */
   stays: { city: string; nights: number }[];
+  courseFile: CourseFile | null;
+  onCourseFileChange: (file: CourseFile | null) => void;
 }
 
-export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerating, stays }: Props) {
+export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerating, stays, courseFile, onCourseFileChange }: Props) {
   const isPaste = input.mode === "paste";
   const canGenerate = isPaste
-    ? input.courseText.trim().length >= 20
+    ? input.courseText.trim().length >= 20 || courseFile !== null
     : input.destination.trim().length > 0 &&
       input.days >= (input.includesFlights ? 3 : 1) &&
       input.travelers >= 1;
@@ -34,7 +37,7 @@ export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerati
       }}
     >
       <div className="flex-1 space-y-4 p-4">
-        <TripBasicsSection input={input} onChange={onChange} />
+        <TripBasicsSection input={input} onChange={onChange} courseFile={courseFile} onCourseFileChange={onCourseFileChange} />
         <PackageSection input={input} onChange={onChange} stays={stays} />
         <CostSection input={input} onChange={onChange} />
         <PricingSection input={input} onChange={onChange} />

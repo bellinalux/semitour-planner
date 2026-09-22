@@ -1,9 +1,11 @@
 "use client";
 
-import { AlertTriangle, Check, Cloud, Download, FolderOpen, HardDrive, Loader2, Save, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, Calendar, Check, Cloud, Download, FolderOpen, HardDrive, Loader2, Save, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCloudPlans } from "@/hooks/useCloudPlans";
 import { useSavedPlans } from "@/hooks/useSavedPlans";
+import { dayItems } from "@/lib/itinerary";
+import type { DayPlan, ItineraryItem } from "@/types";
 import {
   fileNameFor,
   indexEntryOf,
@@ -22,6 +24,8 @@ interface Props {
   /** 지금 화면에 있는 작업 전체 */
   snapshot: PlanSnapshot;
   onLoad: (snapshot: PlanSnapshot) => void;
+  /** 다른 저장 일정에서 하루만 골라, 지금 만드는 일정의 새 날짜로 가져온다 */
+  onImportDay: (items: ItineraryItem[], theme: string) => void;
 }
 
 interface Notice {
@@ -62,7 +66,7 @@ function download(plan: SavedPlan) {
   URL.revokeObjectURL(url);
 }
 
-export function SavedPlansMenu({ snapshot, onLoad }: Props) {
+export function SavedPlansMenu({ snapshot, onLoad, onImportDay }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const local = useSavedPlans();
@@ -79,6 +83,10 @@ export function SavedPlansMenu({ snapshot, onLoad }: Props) {
   const [pending, setPending] = useState<{ id: string; action: "load" | "delete" } | null>(null);
   /** 서버와 통신 중인 작업 (중복 클릭 방지) */
   const [busy, setBusy] = useState(false);
+  /** "날짜만 가져오기"를 펼쳐 둔 항목과, 그 항목의 날짜 목록(불러온 뒤 캐시) */
+  const [importOpenId, setImportOpenId] = useState<string | null>(null);
+  const [importDays, setImportDays] = useState<Record<string, { theme: string; items: ItineraryItem[] }[]>>({});
+  const [importLoadingId, setImportLoadingId] = useState<string | null>(null);
 
   const store: StoreKind = preferred === "cloud" && cloud.status !== "unavailable" ? "cloud" : "local";
   const entries: PlanIndexEntry[] = useMemo(
@@ -182,6 +190,31 @@ export function SavedPlansMenu({ snapshot, onLoad }: Props) {
     setPending(null);
     setNotice(null);
     setOpen(false);
+  };
+
+  const toggleImport = async (entry: PlanIndexEntry) => {
+    if (importOpenId === entry.id) {
+      setImportOpenId(null);
+      return;
+    }
+    setImportOpenId(entry.id);
+    if (importDays[entry.id]) return;
+    setImportLoadingId(entry.id);
+    const res = await getFull(entry.id);
+    setImportLoadingId(null);
+    if ("error" in res) {
+      setNotice({ kind: "error", text: res.error });
+      return;
+    }
+    const { days, pmChoice } = res.plan.snapshot;
+    const preview = days.map((d: DayPlan) => ({ theme: `DAY ${d.day} · ${d.theme}`, items: dayItems(d, pmChoice) }));
+    setImportDays((prev) => ({ ...prev, [entry.id]: preview }));
+  };
+
+  const handleImportDay = (theme: string, items: ItineraryItem[]) => {
+    onImportDay(items, theme);
+    setNotice({ kind: "ok", text: `"${theme}"을(를) 지금 일정의 새 날짜로 가져왔습니다.` });
+    setImportOpenId(null);
   };
 
   const handleDelete = async (entry: PlanIndexEntry) => {
@@ -383,15 +416,48 @@ export function SavedPlansMenu({ snapshot, onLoad }: Props) {
                         </div>
 
                         {confirming === null && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => (dirty ? setPending({ id: entry.id, action: "load" }) : void handleLoad(entry.id))}
-                            className="mt-2 inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
-                          >
-                            <FolderOpen className="h-3.5 w-3.5" aria-hidden />
-                            불러오기
-                          </button>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => (dirty ? setPending({ id: entry.id, action: "load" }) : void handleLoad(entry.id))}
+                              className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+                            >
+                              <FolderOpen className="h-3.5 w-3.5" aria-hidden />
+                              불러오기
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void toggleImport(entry)}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                            >
+                              {importLoadingId === entry.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Calendar className="h-3.5 w-3.5" aria-hidden />}
+                              날짜만 가져오기
+                            </button>
+                          </div>
+                        )}
+                        {importOpenId === entry.id && importDays[entry.id] && (
+                          <div className="mt-2 space-y-1.5 rounded-md bg-slate-50 p-2">
+                            {importDays[entry.id].length === 0 ? (
+                              <p className="text-[11px] text-slate-500">이 일정에는 아직 날짜가 없습니다.</p>
+                            ) : (
+                              importDays[entry.id].map((d, i) => (
+                                <div key={i} className="flex items-center justify-between gap-2 rounded-md bg-white px-2 py-1.5 ring-1 ring-slate-200">
+                                  <span className="min-w-0 truncate text-[11px] text-slate-700">
+                                    {d.theme} <span className="text-slate-400">({d.items.length}곳)</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleImportDay(d.theme, d.items)}
+                                    disabled={d.items.length === 0}
+                                    className="shrink-0 rounded border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    가져오기
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
                         )}
                         {confirming === "load" && (
                           <div className="mt-2 rounded-md bg-amber-50 px-2.5 py-2 text-[11px] leading-4 text-amber-800">

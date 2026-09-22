@@ -1,11 +1,14 @@
-import { BedDouble, Plus, Sun, Sunset } from "lucide-react";
-import type { CurrencyCode, DayPlan, OptionSuggestion, PmFreeOption } from "@/types";
+import { BedDouble, BookmarkPlus, Plus, Sun, Sunset } from "lucide-react";
+import type { SegmentKind } from "@/lib/segmentLibrary";
+import type { DayPlan, CurrencyCode, ItineraryItem, OptionSuggestion, PmFreeOption, TourSlot } from "@/types";
 import { PmOptionSwitch } from "./PmOptionSwitch";
 import { SessionBlock } from "./SessionBlock";
 import { TimelineItem, type ItemPatch } from "./TimelineItem";
 
 interface Props {
   plan: DayPlan;
+  /** 다른 날로 이동·복사할 때, 새 날짜로 즐겨찾기를 넣을 때 쓰는 전체 일정 */
+  days: DayPlan[];
   currency: CurrencyCode;
   selectedPmId: PmFreeOption["id"];
   editing: boolean;
@@ -14,10 +17,14 @@ interface Props {
   onDeleteItem: (itemId: string) => void;
   onAddItem: (day: number) => void;
   onAddSuggestedOption: (suggestion: OptionSuggestion, dayNo: number) => void;
+  onMoveItem: (itemId: string, direction: "up" | "down") => void;
+  onRelocateItem: (itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => void;
+  onSaveSegment: (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => void;
 }
 
 export function DayCard({
   plan,
+  days,
   currency,
   selectedPmId,
   editing,
@@ -26,6 +33,9 @@ export function DayCard({
   onDeleteItem,
   onAddItem,
   onAddSuggestedOption,
+  onMoveItem,
+  onRelocateItem,
+  onSaveSegment,
 }: Props) {
   const selected = plan.pmFreeOptions.find((o) => o.id === selectedPmId) ?? plan.pmFreeOptions[0];
 
@@ -39,6 +49,16 @@ export function DayCard({
             <BedDouble className="h-3 w-3" aria-hidden />
             {plan.overnightCity} 숙박
           </span>
+        )}
+        {plan.kind === "linear" && plan.items.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onSaveSegment(plan.items, "day", plan.theme || `DAY ${plan.day}`)}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+          >
+            <BookmarkPlus className="h-3.5 w-3.5" aria-hidden />
+            즐겨찾기
+          </button>
         )}
       </header>
 
@@ -54,11 +74,15 @@ export function DayCard({
                   isLast={index === plan.items.length - 1}
                   currency={currency}
                   dayNo={plan.day}
+                  days={days}
                   tone="linear"
                   editing={editing}
                   onChangeItem={onChangeItem}
                   onDeleteItem={onDeleteItem}
                   onAddSuggestedOption={onAddSuggestedOption}
+                  onMoveItem={onMoveItem}
+                  onRelocateItem={onRelocateItem}
+                  onSaveSegment={onSaveSegment}
                 />
               ))}
             </ol>
@@ -83,10 +107,14 @@ export function DayCard({
               items={plan.amGuided}
               currency={currency}
               dayNo={plan.day}
+              days={days}
               editing={editing}
               onChangeItem={onChangeItem}
               onDeleteItem={onDeleteItem}
               onAddSuggestedOption={onAddSuggestedOption}
+              onMoveItem={onMoveItem}
+              onRelocateItem={onRelocateItem}
+              onSaveSegment={onSaveSegment}
             />
             {selected && (
               <SessionBlock
@@ -97,10 +125,14 @@ export function DayCard({
                 items={selected.items}
                 currency={currency}
                 dayNo={plan.day}
+                days={days}
                 editing={editing}
                 onChangeItem={onChangeItem}
                 onDeleteItem={onDeleteItem}
                 onAddSuggestedOption={onAddSuggestedOption}
+                onMoveItem={onMoveItem}
+                onRelocateItem={onRelocateItem}
+                onSaveSegment={onSaveSegment}
               >
                 <PmOptionSwitch
                   day={plan.day}

@@ -8,8 +8,9 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { FeeApplySummary } from "@/lib/fees";
 import type { OptionSuggestApplySummary } from "@/lib/optionSuggestions";
+import type { SegmentKind } from "@/lib/segmentLibrary";
 import { TRAVEL_TYPES } from "@/lib/defaults";
-import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, OptionSuggestion, PmFreeOption, SearchSource, TravelType } from "@/types";
+import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, ItineraryItem, OptionSuggestion, PmFreeOption, SearchSource, TourSlot, TravelType } from "@/types";
 import { DayCard } from "./itinerary/DayCard";
 import { FxContext } from "./itinerary/FxContext";
 import type { ItemPatch } from "./itinerary/TimelineItem";
@@ -58,6 +59,9 @@ interface Props {
   onDeleteItem: (itemId: string) => void;
   onAddItem: (day: number) => void;
   onAddSuggestedOption: (suggestion: OptionSuggestion, dayNo: number) => void;
+  onMoveItem: (itemId: string, direction: "up" | "down") => void;
+  onRelocateItem: (itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => void;
+  onSaveSegment: (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => void;
   onRetry: () => void;
 }
 
@@ -239,6 +243,9 @@ export function ItineraryPanel({
   onDeleteItem,
   onAddItem,
   onAddSuggestedOption,
+  onMoveItem,
+  onRelocateItem,
+  onSaveSegment,
   onRetry,
 }: Props) {
   const [editing, setEditing] = useState(false);
@@ -335,6 +342,7 @@ export function ItineraryPanel({
             <DayCard
               key={plan.day}
               plan={plan}
+              days={days}
               currency={currency}
               selectedPmId={pmChoice[plan.day] ?? "A"}
               editing={editing}
@@ -343,6 +351,9 @@ export function ItineraryPanel({
               onDeleteItem={onDeleteItem}
               onAddItem={onAddItem}
               onAddSuggestedOption={onAddSuggestedOption}
+              onMoveItem={onMoveItem}
+              onRelocateItem={onRelocateItem}
+              onSaveSegment={onSaveSegment}
             />
           ))}
           </FxContext.Provider>

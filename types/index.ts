@@ -457,6 +457,32 @@ export interface TravelEstimate {
   seasonNote: string;
 }
 
+/** AI 웹 검색으로 찾은 개별 항공편 (편명·시간·공항까지 확인한 상세 목록용) */
+export interface FlightOption {
+  airline: string;
+  /** 편명 (예: KE651). 확인 못하면 빈 문자열 */
+  flightNumber: string;
+  /** 출발일 YYYY-MM-DD. 확인 못하면 빈 문자열 */
+  departDate: string;
+  /** 출발 공항 (예: 인천(ICN)) */
+  departAirport: string;
+  /** 출발 시각 (예: 09:20). 확인 못하면 빈 문자열 */
+  departTime: string;
+  arriveAirport: string;
+  arriveTime: string;
+  /** 경유 횟수. 0이면 직항 */
+  stops: number;
+  /** 총 소요시간 표기 (예: "5시간 30분"). 확인 못하면 빈 문자열 */
+  duration: string;
+  /** 왕복 1인 요금 (요청 통화). 확인 못하면 0 */
+  price: number;
+  /** searched: 실제 판매가 확인 / estimated: AI 추정 */
+  basis: "searched" | "estimated";
+  sourceName: string;
+  /** 이 항공편을 검색하는 링크 (직접 예약 링크를 못 찾으면 검색 링크로 대신한다) */
+  link: string;
+}
+
 /** AI 웹 검색(Google Flights, 네이버 항공권, 스카이스캐너 등)으로 확인한 항공 요금 */
 export interface FlightWebEstimate {
   roundTripLow: number;

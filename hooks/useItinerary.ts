@@ -2,8 +2,9 @@
 
 import { useCallback, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
-import { defaultPmChoice, mapDayItems, tourDayCount, withTravelDays, type PmChoice } from "@/lib/itinerary";
-import { insertItem } from "@/lib/tourItem";
+import { appendDay, defaultPmChoice, mapDayItems, moveItem, relocateItem, tourDayCount, withTravelDays, type PmChoice } from "@/lib/itinerary";
+import { insertItem, insertItems } from "@/lib/tourItem";
+import type { CourseFile } from "@/lib/courseFile";
 import type {
   AsyncState,
   CourseMeta,
@@ -34,15 +35,16 @@ export interface GeneratedItinerary {
   researched: boolean;
 }
 
-/** 입력 모드에 따라 AI가 세미투어를 만들거나, 붙여넣은 업체 코스를 구조화한다. */
+/** 입력 모드에 따라 AI가 세미투어를 만들거나, 붙여넣은(또는 사진·PDF로 올린) 업체 코스를 구조화한다. */
 async function requestItinerary(
   input: TripInput,
+  courseFile: CourseFile | null,
   signal: AbortSignal,
 ): Promise<Omit<GeneratedItinerary, "pmChoice">> {
   if (input.mode === "paste") {
     const result = await postJson<{ days: DayPlan[]; meta: CourseMeta; nights: number; totalDays: number }>(
       "/api/parse-course",
-      { text: input.courseText, currency: input.currency },
+      { text: input.courseText, currency: input.currency, ...(courseFile ? { file: { mimeType: courseFile.mimeType, data: courseFile.data } } : {}) },
       signal,
     );
     return {
@@ -92,14 +94,14 @@ export function useItinerary() {
   const controllerRef = useRef<AbortController | null>(null);
 
   /** 성공하면 생성된 일정을 반환한다. 실패하거나 새 요청으로 대체되면 null. */
-  const generate = useCallback(async (input: TripInput): Promise<GeneratedItinerary | null> => {
+  const generate = useCallback(async (input: TripInput, courseFile: CourseFile | null = null): Promise<GeneratedItinerary | null> => {
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
 
     setState({ status: "loading" });
     try {
-      const result = await requestItinerary(input, controller.signal);
+      const result = await requestItinerary(input, courseFile, controller.signal);
       const choice = defaultPmChoice(result.days);
       setDays(result.days);
       setPmChoice(choice);
@@ -173,6 +175,27 @@ export function useItinerary() {
     setDays((prev) => prev.map((day) => (day.day === dayNo ? insertItem(day, slot, item) : day)));
   }, []);
 
+  /** 같은 목록 안에서 항목 순서를 한 칸 위·아래로 옮긴다. */
+  const moveItemOrder = useCallback((itemId: string, direction: "up" | "down") => {
+    setDays((prev) => moveItem(prev, itemId, direction));
+  }, []);
+
+  /** 항목을 다른 날짜·위치로 옮기거나(move) 복사한다(copy). */
+  const relocate = useCallback((itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => {
+    setDays((prev) => relocateItem(prev, itemId, targetDay, targetSlot, mode));
+  }, []);
+
+  /** 라이브러리에서 고른 코스 조각(오전/오후/장소)을 지정한 날짜·위치에 넣는다. id는 새로 발급한다. */
+  const insertSegment = useCallback((dayNo: number, slot: TourSlot, items: ItineraryItem[]) => {
+    const fresh = items.map((item) => ({ ...item, id: `seg-${crypto.randomUUID().slice(0, 8)}` }));
+    setDays((prev) => prev.map((day) => (day.day === dayNo ? insertItems(day, slot, fresh) : day)));
+  }, []);
+
+  /** 라이브러리에서 고른 하루 일정, 또는 다른 저장 일정의 하루를 맨 뒤 새 날짜로 추가한다. */
+  const appendDayFromSegment = useCallback((items: ItineraryItem[], theme: string) => {
+    setDays((prev) => appendDay(prev, items, theme));
+  }, []);
+
   /** 저장된 일정을 그대로 되살린다 (진행 중인 생성 요청은 취소) */
   const restore = useCallback((saved: Pick<GeneratedItinerary, "days" | "pmChoice" | "meta"> & { generatedCurrency: CurrencyCode | null }) => {
     controllerRef.current?.abort();
@@ -198,6 +221,10 @@ export function useItinerary() {
     deleteItem,
     addItem,
     addTour,
+    moveItemOrder,
+    relocate,
+    insertSegment,
+    appendDayFromSegment,
     restore,
   };
 }

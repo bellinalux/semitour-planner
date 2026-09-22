@@ -13,6 +13,7 @@ import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { usePrintDocument } from "@/hooks/usePrintDocument";
 import { useRequest } from "@/hooks/useRequest";
 import { usePlannerInput } from "@/hooks/usePlannerInput";
+import { useSegmentLibrary } from "@/hooks/useSegmentLibrary";
 import { useUsp } from "@/hooks/useUsp";
 import { useWorkPersistence } from "@/hooks/useWorkPersistence";
 import { missingLegalFields } from "@/lib/company";
@@ -21,13 +22,15 @@ import { applyFeeResults, feeCheckTargets, type FeeApplySummary } from "@/lib/fe
 import { applyOptionSuggestions, optionSuggestTargets, suggestionToOption, type OptionSuggestApplySummary } from "@/lib/optionSuggestions";
 import type { VerifyFeesResponse } from "@/lib/schemas/market";
 import type { SuggestOptionsResponse } from "@/lib/schemas/optionSuggest";
+import { newSegmentId, type SegmentKind } from "@/lib/segmentLibrary";
 import { overnightNights } from "@/lib/itinerary";
 import { buildEmojiCustomerText } from "@/lib/exportEmoji";
 import { buildCustomerText, buildInternalText } from "@/lib/exportText";
 import { tourToOption } from "@/lib/options";
 import { buildUspRequest } from "@/lib/uspRequest";
 import type { PlanSnapshot, ResultSnapshot } from "@/lib/workspace";
-import type { TripInput } from "@/types";
+import type { CourseFile } from "@/lib/courseFile";
+import type { ItineraryItem, TripInput } from "@/types";
 
 const NO_USPS: never[] = [];
 
@@ -46,6 +49,8 @@ export function PlannerApp() {
     SuggestOptionsResponse
   >("/api/suggest-options");
   const [optionSuggestSummary, setOptionSuggestSummary] = useState<OptionSuggestApplySummary | null>(null);
+  const segmentLibrary = useSegmentLibrary();
+  const [courseFile, setCourseFile] = useState<CourseFile | null>(null);
   const { company } = useCompanyProfile();
   const { kind: printKind, print } = usePrintDocument();
 
@@ -95,7 +100,7 @@ export function PlannerApp() {
     setFeeSummary(null);
     setOptionSuggestSummary(null);
     usp.reset();
-    const result = await itinerary.generate(input);
+    const result = await itinerary.generate(input, courseFile);
     if (!result) return;
 
     // 붙여넣은 코스에서 읽은 기간/도시를 입력 폼에 반영한다 (박수는 코스 원문이 기준이다)
@@ -149,6 +154,20 @@ export function PlannerApp() {
     setOptionSuggestSummary(summary);
   };
 
+  /** 오전·오후·하루 일정이나 장소 하나를 라이브러리에 즐겨찾기로 저장한다 */
+  const handleSaveSegment = (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => {
+    const name = window.prompt("라이브러리에 저장할 이름", defaultName);
+    if (!name || !name.trim()) return;
+    const error = segmentLibrary.save({
+      id: newSegmentId(),
+      name: name.trim(),
+      destination: input.destination.trim() || meta?.cities.join(", ") || "미지정",
+      kind,
+      items,
+    });
+    if (error) window.alert(error);
+  };
+
   const handleGenerateUsp = () => {
     if (uspRequest) void usp.generate(uspRequest);
   };
@@ -166,7 +185,7 @@ export function PlannerApp() {
         actions={
           <>
             <CompanySettings />
-            <SavedPlansMenu snapshot={snapshot} onLoad={handleLoadPlan} />
+            <SavedPlansMenu snapshot={snapshot} onLoad={handleLoadPlan} onImportDay={itinerary.appendDayFromSegment} />
           </>
         }
       />
@@ -185,6 +204,8 @@ export function PlannerApp() {
             onGenerate={handleGenerate}
             isGenerating={itinerary.state.status === "loading"}
             stays={stays}
+            courseFile={courseFile}
+            onCourseFileChange={setCourseFile}
           />
         </aside>
         <section
@@ -208,6 +229,9 @@ export function PlannerApp() {
               onDeleteItem: itinerary.deleteItem,
               onAddItem: itinerary.addItem,
               onAddTour: itinerary.addTour,
+              onMoveItem: itinerary.moveItemOrder,
+              onRelocateItem: itinerary.relocate,
+              onSaveSegment: handleSaveSegment,
             }}
             optionActions={{
               onAddOption: (tour, dayNo) => update({ options: [...input.options, tourToOption(tour, dayNo, input)] }),
@@ -231,6 +255,12 @@ export function PlannerApp() {
               sources: optionSuggestRequest.data?.sources ?? [],
               searched: optionSuggestRequest.data?.searched ?? true,
               onRun: () => void handleSuggestOptions(),
+            }}
+            library={{
+              segments: segmentLibrary.segments,
+              onInsert: itinerary.insertSegment,
+              onAppendDay: itinerary.appendDayFromSegment,
+              onDelete: segmentLibrary.remove,
             }}
             usp={{
               state: usp.state,

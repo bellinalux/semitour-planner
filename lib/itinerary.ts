@@ -1,4 +1,5 @@
-import type { DayPlan, ItineraryItem, PmFreeOption, TripInput } from "@/types";
+import { insertItems } from "@/lib/tourItem";
+import type { DayPlan, ItineraryItem, PmFreeOption, TourSlot, TripInput } from "@/types";
 
 export type PmChoice = Record<number, PmFreeOption["id"]>;
 
@@ -97,4 +98,65 @@ export function withTravelDays(tourDays: DayPlan[], input: Pick<TripInput, "orig
 /** 항공 이동일을 제외하고 AI가 만들어야 하는 관광일 수 */
 export function tourDayCount(input: Pick<TripInput, "days" | "includesFlights">): number {
   return input.includesFlights ? Math.max(1, input.days - 2) : input.days;
+}
+
+/** ---------- 항목 재정렬·이동·복사, 날짜 가져오기 ---------- */
+
+/** item이 들어있는 목록과, 그 목록을 바꿔 day에 다시 넣는 함수. 못 찾으면 null. */
+function locateList(day: DayPlan, itemId: string): { items: ItineraryItem[]; set: (items: ItineraryItem[]) => DayPlan } | null {
+  if (day.items.some((i) => i.id === itemId)) return { items: day.items, set: (items) => ({ ...day, items }) };
+  if (day.amGuided.some((i) => i.id === itemId)) return { items: day.amGuided, set: (items) => ({ ...day, amGuided: items }) };
+  for (const opt of day.pmFreeOptions) {
+    if (opt.items.some((i) => i.id === itemId)) {
+      return {
+        items: opt.items,
+        set: (items) => ({ ...day, pmFreeOptions: day.pmFreeOptions.map((o) => (o.id === opt.id ? { ...o, items } : o)) }),
+      };
+    }
+  }
+  return null;
+}
+
+/** 같은 목록(오전/오후 코스/하루 일정) 안에서 항목 순서를 한 칸 위·아래로 옮긴다. */
+export function moveItem(days: DayPlan[], itemId: string, direction: "up" | "down"): DayPlan[] {
+  return days.map((day) => {
+    const found = locateList(day, itemId);
+    if (!found) return day;
+    const idx = found.items.findIndex((i) => i.id === itemId);
+    const swapWith = direction === "up" ? idx - 1 : idx + 1;
+    if (swapWith < 0 || swapWith >= found.items.length) return day;
+    const next = [...found.items];
+    [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+    return found.set(next);
+  });
+}
+
+/** 항목을 찾아 꺼낸다 (제거한 뒤의 days도 함께 돌려준다). 없으면 null. */
+function extractItem(days: DayPlan[], itemId: string): { item: ItineraryItem; without: DayPlan[] } | null {
+  let extracted: ItineraryItem | null = null;
+  const without = days.map((day) => {
+    const found = locateList(day, itemId);
+    if (!found) return day;
+    const idx = found.items.findIndex((i) => i.id === itemId);
+    extracted = found.items[idx];
+    return found.set(found.items.filter((i) => i.id !== itemId));
+  });
+  return extracted ? { item: extracted, without } : null;
+}
+
+/** 항목을 다른 날짜·위치로 옮기거나(move) 복사한다(copy). 대상을 못 찾으면 그대로 돌려준다. */
+export function relocateItem(days: DayPlan[], itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy"): DayPlan[] {
+  const found = extractItem(days, itemId);
+  if (!found) return days;
+  const toInsert = mode === "copy" ? { ...found.item, id: `cp-${crypto.randomUUID().slice(0, 8)}` } : found.item;
+  const base = mode === "copy" ? days : found.without;
+  return base.map((day) => (day.day === targetDay ? insertItems(day, targetSlot, [toInsert]) : day));
+}
+
+/** 새 항목 목록을 하루 전체(linear)로 만들어 맨 뒤에 추가한다. 항목 id는 새로 발급한다. */
+export function appendDay(days: DayPlan[], items: ItineraryItem[], theme: string): DayPlan[] {
+  const nextDayNo = (days[days.length - 1]?.day ?? 0) + 1;
+  const fresh = items.map((item) => ({ ...item, id: `imp-${crypto.randomUUID().slice(0, 8)}` }));
+  const day: DayPlan = { day: nextDayNo, theme, kind: "linear", items: fresh, amGuided: [], pmFreeOptions: [] };
+  return [...days, day];
 }

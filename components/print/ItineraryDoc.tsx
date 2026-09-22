@@ -3,12 +3,21 @@ import { customerFeeNote, localPayRows } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { moneyWithKrw } from "@/lib/fees";
 import type { ItineraryItem } from "@/types";
-import { DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
+import { DocCover, DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
+
+const ACCESSIBILITY_LABELS = { ok: "이용 가능", limited: "일부 구간 어려움", difficult: "이용 어려움", unknown: "확인 못함" } as const;
+const ACCESSIBILITY_TONE = {
+  ok: "bg-emerald-50 text-emerald-800",
+  limited: "bg-amber-50 text-amber-800",
+  difficult: "bg-rose-50 text-rose-800",
+  unknown: "bg-slate-100 text-slate-500",
+} as const;
 
 function ItemLine({ item, input, number }: { item: ItineraryItem; input: DocProps["input"]; number: number }) {
   const time = item.timeNote || (item.stayMinutes > 0 ? `약 ${formatDuration(item.stayMinutes)}` : "");
   const fee = customerFeeNote(item, input);
   const notes = [time, item.admission === "view_only" ? "외부 조망" : "", fee].filter(Boolean);
+  const a = item.accessibility;
 
   return (
     <li className="py-0.5">
@@ -18,6 +27,15 @@ function ItemLine({ item, input, number }: { item: ItineraryItem; input: DocProp
           <span className="font-medium">{item.name}</span>
           {notes.length > 0 && <span className="text-slate-500"> ({notes.join(" · ")})</span>}
           {item.description && <span className="block text-slate-500">{item.description}</span>}
+          {item.caution && <span className="block text-amber-700">⚠ {item.caution}</span>}
+          {a && (
+            <span className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${ACCESSIBILITY_TONE[a.level]}`}>
+              ♿ 이용 편의시설: {ACCESSIBILITY_LABELS[a.level]}
+              {a.level !== "unknown" &&
+                ` — 휠체어 ${a.wheelchairAccessible ? "가능" : "어려움"} · 장애인 화장실 ${a.accessibleRestroom ? "있음" : "없음/미확인"} · 엘리베이터 ${a.elevator ? "있음" : "없음/미확인"} · 경사로 ${a.ramp ? "있음" : "없음/미확인"}`}
+              {a.note && ` (${a.note})`}
+            </span>
+          )}
         </span>
       </div>
       {item.travelMinutesToNext !== null && item.travelMinutesToNext > 0 && (
@@ -36,6 +54,14 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company }: Do
 
   return (
     <DocShell title="여행일정표" subtitle={title} company={company}>
+      <DocCover
+        title={title}
+        destination={input.destination || "-"}
+        period={`${tripPeriod(input)} (${input.nights}박 ${input.days}일)`}
+        travelers={`${quote.travelers}명`}
+        priceLine={`1인 ${money(quote.scenario.pricePerPerson)}`}
+      />
+
       <DocSection title="여행 개요">
         <DocFacts
           rows={[
@@ -64,9 +90,9 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company }: Do
             const meals = dayMeals(days, index, pmChoice, input);
             const date = dayDate(input, day.day);
             return (
-              <div key={day.day} className="break-inside-avoid border border-slate-200">
-                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 bg-slate-50 px-2 py-1.5">
-                  <p className="font-bold">
+              <div key={day.day} className="break-inside-avoid border border-emerald-100">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-2 py-1.5">
+                  <p className="font-bold text-emerald-900">
                     DAY {day.day}
                     {date && <span className="ml-1.5 font-normal text-slate-600">{date}</span>}
                     {day.theme && <span className="ml-1.5 font-normal text-slate-600">· {day.theme}</span>}
