@@ -84,6 +84,9 @@ export const DEFAULT_INPUT: TripInput = {
   customerName: "",
   travelerNames: [],
   travelAlert: null,
+  pickupNote: "",
+  sendingNote: "",
+  breakfastIncluded: true,
 };
 
 export function createCompetitor(): Competitor {

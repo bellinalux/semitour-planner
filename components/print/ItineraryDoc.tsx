@@ -52,6 +52,8 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company }: Do
                 : "출발 전 외교부 해외안전여행(0404.go.kr)에서 확인해 주세요",
             },
             ...(input.customerName.trim() ? [{ label: "수신", value: input.customerName.trim() }] : []),
+            ...(input.pickupNote.trim() ? [{ label: "공항 픽업", value: input.pickupNote.trim() }] : []),
+            ...(input.sendingNote.trim() ? [{ label: "공항 샌딩", value: input.sendingNote.trim() }] : []),
           ]}
         />
       </DocSection>
@@ -70,7 +72,10 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company }: Do
                     {day.theme && <span className="ml-1.5 font-normal text-slate-600">· {day.theme}</span>}
                   </p>
                   <p className="text-[10px] text-slate-600">
-                    식사 조: {meals.breakfast} / 중: {meals.lunch} / 석: {meals.dinner}
+                    식사 조: {meals.breakfast.mark}
+                    {meals.breakfast.cuisine && `(${meals.breakfast.cuisine})`} / 중: {meals.lunch.mark}
+                    {meals.lunch.cuisine && `(${meals.lunch.cuisine})`} / 석: {meals.dinner.mark}
+                    {meals.dinner.cuisine && `(${meals.dinner.cuisine})`}
                     {day.overnightCity ? ` · 숙박: ${day.overnightCity}` : ""}
                   </p>
                 </div>

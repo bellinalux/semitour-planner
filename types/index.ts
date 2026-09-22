@@ -178,6 +178,12 @@ export interface TripInput {
   travelerNames: string[];
   /** 여행지 여행경보단계 (법정 표시 항목) */
   travelAlert: TravelAlert | null;
+  /** 공항 픽업(도착) 안내 문구. 비어 있으면 문서·일정표에 표시하지 않는다 */
+  pickupNote: string;
+  /** 공항 샌딩(출국) 안내 문구. 비어 있으면 문서·일정표에 표시하지 않는다 */
+  sendingNote: string;
+  /** 숙박 다음날 아침 호텔 조식이 포함되는지. 랜드만(land) 구성이면 숙박이 없어 무시된다 */
+  breakfastIncluded: boolean;
 }
 
 /** 외교부 여행경보단계 (관광진흥법 시행규칙 §21 제8호 법정 표시 항목) */
@@ -282,6 +288,8 @@ export interface ItineraryItem {
   feeCheck?: FeeCheck;
   /** 이용 편의시설 확인 결과. 여행 유형이 장애인투어(accessible)일 때만 채워진다 */
   accessibility?: AccessibilityInfo;
+  /** 식사 항목의 음식 종류 (예: 현지식, 한식, 바베큐, 씨푸드, 뷔페). 식사가 아니면 사용하지 않는다 */
+  cuisine?: string;
   /** 이 코스에서 팔 만한 선택 옵션(웹 조사 결과). "코스별 옵션 추천"을 실행하면 채워진다 */
   suggestedOptions?: OptionSuggestion[];
 }

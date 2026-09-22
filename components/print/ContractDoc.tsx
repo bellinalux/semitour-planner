@@ -68,7 +68,7 @@ function OneCover({ recipient, breakBefore, data }: { recipient: DocRecipient; b
           <table className="w-full border-collapse">
             <tbody>
               <tr className="border-b border-slate-300">
-                <th scope="row" className="w-28 bg-slate-50 px-2 py-6 text-left align-top font-medium text-slate-600">
+                <th scope="row" className="w-32 shrink-0 bg-slate-50 px-2 py-6 text-left align-top font-medium text-slate-600">
                   여행사
                 </th>
                 <td className="px-2 py-6 align-top">
@@ -76,7 +76,7 @@ function OneCover({ recipient, breakBefore, data }: { recipient: DocRecipient; b
                 </td>
               </tr>
               <tr>
-                <th scope="row" className="w-28 bg-slate-50 px-2 py-6 text-left align-top font-medium text-slate-600">
+                <th scope="row" className="w-32 shrink-0 bg-slate-50 px-2 py-6 text-left align-top font-medium text-slate-600">
                   여행자
                 </th>
                 <td className="px-2 py-6 align-top">{recipient.name} (서명)　　계약일자 ________________</td>

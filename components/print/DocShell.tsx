@@ -25,7 +25,7 @@ export function DocShell({ title, subtitle, company, children }: ShellProps) {
   const lines = companyLines(company);
 
   return (
-    <article className="mx-auto max-w-[190mm] bg-white p-8 text-[11px] leading-5 text-slate-900 print:p-0">
+    <article className="mx-auto max-w-[190mm] break-keep bg-white p-8 text-[11px] leading-5 text-slate-900 print:p-0">
       <header className="flex items-end justify-between gap-4 border-b-2 border-slate-800 pb-3">
         <div>
           <h1 className="text-xl font-bold tracking-tight">{title}</h1>
@@ -67,7 +67,7 @@ export function DocFacts({ rows }: { rows: { label: string; value: string }[] })
       <tbody>
         {rows.map((row) => (
           <tr key={row.label} className="border-b border-slate-200">
-            <th scope="row" className="w-28 bg-slate-50 px-2 py-1.5 text-left align-top font-medium text-slate-600">
+            <th scope="row" className="w-32 shrink-0 bg-slate-50 px-2 py-1.5 text-left align-top font-medium text-slate-600">
               {row.label}
             </th>
             <td className="px-2 py-1.5 align-top">{row.value}</td>

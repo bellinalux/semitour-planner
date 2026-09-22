@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Check, Hotel, Info, Loader2, Pencil, SearchCheck, Sparkles } from "lucide-react";
+import { CalendarDays, Check, Hotel, Info, Loader2, Pencil, PlaneLanding, PlaneTakeoff, SearchCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -50,6 +50,8 @@ interface Props {
   currency: CurrencyCode;
   travelType: TravelType;
   researchInfo: { sources: SearchSource[]; researched: boolean };
+  pickupNote: string;
+  sendingNote: string;
   pmChoice: Record<number, PmFreeOption["id"]>;
   onSelectPm: (day: number, id: PmFreeOption["id"]) => void;
   onChangeItem: (itemId: string, patch: ItemPatch) => void;
@@ -135,6 +137,19 @@ function TravelTypeBanner({ travelType, researchInfo }: { travelType: TravelType
   );
 }
 
+function TransferNote({ icon: Icon, label, note }: { icon: typeof PlaneLanding; label: string; note: string }) {
+  if (!note.trim()) return null;
+  return (
+    <p className="flex items-start gap-1.5 rounded-md border border-sky-100 bg-sky-50/60 px-3 py-2 text-[11px] leading-4 text-sky-900">
+      <Icon className="mt-px h-3.5 w-3.5 shrink-0 text-sky-500" aria-hidden />
+      <span>
+        <span className="font-semibold">{label}: </span>
+        {note.trim()}
+      </span>
+    </p>
+  );
+}
+
 function FeeCheckNotice({ view }: { view: FeeCheckView }) {
   const { state, summary, sources, searched, fxUpdatedAt } = view;
   if (state.status === "error") {
@@ -216,6 +231,8 @@ export function ItineraryPanel({
   currency,
   travelType,
   researchInfo,
+  pickupNote,
+  sendingNote,
   pmChoice,
   onSelectPm,
   onChangeItem,
@@ -312,6 +329,7 @@ export function ItineraryPanel({
           </p>
           <FeeCheckNotice view={feeCheck} />
           <OptionSuggestNotice view={optionSuggest} />
+          <TransferNote icon={PlaneLanding} label="공항 픽업" note={pickupNote} />
           <FxContext.Provider value={{ currency, rate: krwRate }}>
           {days.map((plan) => (
             <DayCard
@@ -328,6 +346,7 @@ export function ItineraryPanel({
             />
           ))}
           </FxContext.Provider>
+          <TransferNote icon={PlaneTakeoff} label="공항 샌딩" note={sendingNote} />
         </div>
       )}
     </SectionCard>

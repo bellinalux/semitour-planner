@@ -183,6 +183,19 @@ export function TimelineItem({ item, order, isLast, currency, dayNo, tone, editi
               onChange={(mealCost) => onChangeItem(item.id, { mealCost })}
             />
           )}
+          {meal && (
+            <label className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 py-0.5 pl-2 pr-1 text-[11px] font-medium text-slate-600">
+              음식 종류
+              <input
+                type="text"
+                value={item.cuisine ?? ""}
+                placeholder="현지식"
+                aria-label="음식 종류"
+                onChange={(e) => onChangeItem(item.id, { cuisine: e.target.value })}
+                className="w-16 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30"
+              />
+            </label>
+          )}
           {(fee || meal) && (item.entryFee > 0 || item.mealCost > 0) && (
             <span className="text-[11px] font-medium tabular-nums text-slate-500" title="현지 금액과 원화 환산 (환율은 왼쪽 '원화 환율'에 입력한 값)">
               {feeHint(item.entryFee + item.mealCost, item, currency, rate)}

@@ -44,47 +44,69 @@ export function dayDate(input: Pick<TripInput, "departureDate">, dayNo: number):
 
 export type MealMark = "호텔식" | "포함" | "현지 지불" | "불포함";
 
+/** 한 끼 표기: 포함 상태 + 음식 종류(현지식·한식 등, 없으면 빈 문자열) */
+export interface MealSlot {
+  mark: MealMark;
+  cuisine: string;
+}
+
 export interface DayMeals {
-  breakfast: MealMark;
-  lunch: MealMark;
-  dinner: MealMark;
+  breakfast: MealSlot;
+  lunch: MealSlot;
+  dinner: MealSlot;
 }
 
 const DINNER = /저녁|석식|디너|dinner|야식/i;
 const LUNCH = /점심|중식|런치|lunch/i;
 const BREAKFAST = /아침|조식|브런치|breakfast/i;
 
-function markOf(item: ItineraryItem): MealMark {
-  return isLocalPay(item) ? "현지 지불" : "포함";
+/**
+ * 식사 항목인가. type이 "meal"이면 확실하고, AI 세미투어 항목처럼 type이 없으면
+ * 식대가 있거나 이름이 조/중/석 표현과 일치할 때만 식사로 본다(관광 항목과 구분하기 위함).
+ */
+function looksLikeMeal(item: ItineraryItem): boolean {
+  if (item.type === "meal") return true;
+  if (item.type !== undefined) return false;
+  return item.mealCost > 0 || DINNER.test(item.name) || LUNCH.test(item.name) || BREAKFAST.test(item.name);
+}
+
+function slotOf(item: ItineraryItem): MealSlot {
+  return { mark: isLocalPay(item) ? "현지 지불" : "포함", cuisine: item.cuisine?.trim() || "" };
 }
 
 /**
  * 하루의 조·중·석 표기를 만든다.
- * 조식은 전날 숙박이 있으면 호텔식으로 본다. 중·석은 식사 항목 이름으로 나누고,
- * 이름으로 구분되지 않는 식사는 점심 → 저녁 순으로 채운다.
+ * 조식은 전날 숙박이 있고 조식 포함 설정이 켜져 있으면 호텔식으로 본다. 중·석은 식사 항목
+ * 이름으로 나누고, 이름으로 구분되지 않는 식사는 점심 → 저녁 순으로 채운다.
  */
-export function dayMeals(days: DayPlan[], index: number, pmChoice: PmChoice, input: Pick<TripInput, "packageType">): DayMeals {
+export function dayMeals(
+  days: DayPlan[],
+  index: number,
+  pmChoice: PmChoice,
+  input: Pick<TripInput, "packageType" | "breakfastIncluded">,
+): DayMeals {
   const day = days[index];
   const previous = index > 0 ? days[index - 1] : null;
   const stayedLastNight = previous !== null && (previous.overnightCity ?? "").trim() !== "";
+  const hotelBreakfast = stayedLastNight && input.packageType !== "land" && input.breakfastIncluded;
   const meals: DayMeals = {
-    breakfast: stayedLastNight && input.packageType !== "land" ? "호텔식" : "불포함",
-    lunch: "불포함",
-    dinner: "불포함",
+    breakfast: { mark: hotelBreakfast ? "호텔식" : "불포함", cuisine: "" },
+    lunch: { mark: "불포함", cuisine: "" },
+    dinner: { mark: "불포함", cuisine: "" },
   };
   if (!day) return meals;
 
-  const items = dayItems(day, pmChoice).filter((i) => i.type === "meal");
+  const items = dayItems(day, pmChoice).filter(looksLikeMeal);
   const rest: ItineraryItem[] = [];
   for (const item of items) {
-    if (DINNER.test(item.name)) meals.dinner = markOf(item);
-    else if (LUNCH.test(item.name)) meals.lunch = markOf(item);
-    else if (BREAKFAST.test(item.name)) meals.breakfast = markOf(item);
+    if (DINNER.test(item.name)) meals.dinner = slotOf(item);
+    else if (LUNCH.test(item.name)) meals.lunch = slotOf(item);
+    else if (BREAKFAST.test(item.name)) meals.breakfast = slotOf(item);
     else rest.push(item);
   }
   for (const item of rest) {
-    if (meals.lunch === "불포함") meals.lunch = markOf(item);
-    else if (meals.dinner === "불포함") meals.dinner = markOf(item);
+    if (meals.lunch.mark === "불포함") meals.lunch = slotOf(item);
+    else if (meals.dinner.mark === "불포함") meals.dinner = slotOf(item);
   }
   return meals;
 }

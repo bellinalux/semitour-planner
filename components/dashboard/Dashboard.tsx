@@ -102,6 +102,8 @@ export function Dashboard({
         krwRate={input.exchangeRateToKrw}
         travelType={input.travelType}
         researchInfo={researchInfo}
+        pickupNote={input.pickupNote}
+        sendingNote={input.sendingNote}
         feeCheck={feeCheck}
         optionSuggest={optionSuggest}
         onAddSuggestedOption={optionActions.onAddSuggestedOption}

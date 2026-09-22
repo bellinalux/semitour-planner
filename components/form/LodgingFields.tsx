@@ -47,6 +47,16 @@ export function LodgingFields({ input, onChange, stays }: Props) {
         </div>
       </div>
 
+      <label className="flex cursor-pointer items-center gap-2 text-[11px] text-slate-600">
+        <input
+          type="checkbox"
+          checked={input.breakfastIncluded}
+          onChange={(e) => onChange({ breakfastIncluded: e.target.checked })}
+          className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+        />
+        숙박 다음날 호텔 조식 포함 (일정표의 &quot;조식&quot; 표시에 반영됩니다)
+      </label>
+
       <div className="grid grid-cols-2 gap-3">
         <CostField
           id="lodgingRatePerNight"

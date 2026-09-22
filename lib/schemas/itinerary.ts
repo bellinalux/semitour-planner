@@ -39,6 +39,7 @@ const itemSchema = z.object({
   entryFee: z.number().describe("1인 입장료 (견적 통화 단위, 무료면 0)"),
   mealCost: z.number().describe("1인 식대 (견적 통화 단위, 식사 장소가 아니면 0)"),
   caution: z.string().describe("휴관일·예약 필요 등 확인이 필요한 사항. 없으면 빈 문자열"),
+  cuisine: z.string().describe("식사(식당) 항목이면 음식 종류를 짧게 씁니다 (예: 현지식, 한식, 중식, 바베큐, 씨푸드, 뷔페). 식사 항목이 아니면 빈 문자열"),
   accessibility: accessibilitySchema
     .optional()
     .describe("여행 유형이 accessible(장애인투어)일 때만 채웁니다. 그 외 유형이면 생략합니다."),
@@ -77,6 +78,7 @@ function toItem(raw: RawItem, id: string, isLast: boolean): ItineraryItem {
     mealCost: Math.max(0, raw.mealCost),
     isEstimated: true,
     caution: raw.caution.trim() || undefined,
+    cuisine: raw.cuisine.trim() || undefined,
     accessibility: raw.accessibility ? { ...raw.accessibility, note: raw.accessibility.note.trim() } : undefined,
   };
 }

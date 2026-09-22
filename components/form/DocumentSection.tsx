@@ -91,6 +91,24 @@ export function DocumentSection({ input, onChange }: SectionProps) {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
+          <TextField
+            id="pickupNote"
+            label="공항 픽업 안내"
+            value={input.pickupNote}
+            placeholder="예) 수완나품 공항 도착 로비, 현지 가이드 피켓 대기"
+            onChange={(pickupNote) => onChange({ pickupNote })}
+          />
+          <TextField
+            id="sendingNote"
+            label="공항 샌딩 안내"
+            value={input.sendingNote}
+            placeholder="예) 출발 3시간 전 호텔 로비 집결"
+            onChange={(sendingNote) => onChange({ sendingNote })}
+          />
+        </div>
+        <p className="-mt-2 text-[11px] leading-4 text-slate-500">비워 두면 일정표에 표시하지 않습니다. 일정 속 이동 항목과 별개로, 픽업·샌딩 담당·장소·시간 등을 안내 문구로 적는 곳입니다.</p>
+
+        <div className="grid grid-cols-2 gap-3">
           <Field htmlFor="departureDate" label="출발일" hint="비우면 문서에 '미정'으로 표시됩니다">
             <input
               id="departureDate"

@@ -22,6 +22,9 @@ export function normalizeInput(saved: unknown): TripInput {
     options: Array.isArray(s.options) ? s.options : DEFAULT_INPUT.options,
     travelAlert: typeof s.travelAlert === "object" && s.travelAlert !== null ? s.travelAlert : null,
     travelType: typeof s.travelType === "string" && TRAVEL_TYPE_IDS.has(s.travelType) ? s.travelType : DEFAULT_INPUT.travelType,
+    pickupNote: typeof s.pickupNote === "string" ? s.pickupNote : DEFAULT_INPUT.pickupNote,
+    sendingNote: typeof s.sendingNote === "string" ? s.sendingNote : DEFAULT_INPUT.sendingNote,
+    breakfastIncluded: typeof s.breakfastIncluded === "boolean" ? s.breakfastIncluded : DEFAULT_INPUT.breakfastIncluded,
     travelerNames: Array.isArray(s.travelerNames) ? s.travelerNames.filter((n): n is string => typeof n === "string") : DEFAULT_INPUT.travelerNames,
     competitors: Array.isArray(s.competitors)
       ? s.competitors.map((c) => ({ ...c, shopping: c.shopping ?? "unknown", optionTour: c.optionTour ?? "unknown" }))
