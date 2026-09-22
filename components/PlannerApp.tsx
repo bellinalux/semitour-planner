@@ -20,8 +20,10 @@ import { missingLegalFields } from "@/lib/company";
 import { calculateQuote } from "@/lib/cost";
 import { applyFeeResults, feeCheckTargets, type FeeApplySummary } from "@/lib/fees";
 import { applyOptionSuggestions, optionSuggestTargets, suggestionToOption, type OptionSuggestApplySummary } from "@/lib/optionSuggestions";
+import { accessibilityCheckTargets, applyAccessibilityResults, type AccessibilityApplySummary } from "@/lib/accessibilityCheck";
 import type { VerifyFeesResponse } from "@/lib/schemas/market";
 import type { SuggestOptionsResponse } from "@/lib/schemas/optionSuggest";
+import type { VerifyAccessibilityResponse } from "@/lib/schemas/accessibility";
 import { newSegmentId, type SegmentKind } from "@/lib/segmentLibrary";
 import { overnightNights } from "@/lib/itinerary";
 import { buildEmojiCustomerText } from "@/lib/exportEmoji";
@@ -49,6 +51,10 @@ export function PlannerApp() {
     SuggestOptionsResponse
   >("/api/suggest-options");
   const [optionSuggestSummary, setOptionSuggestSummary] = useState<OptionSuggestApplySummary | null>(null);
+  const accessibilityRequest = useRequest<{ destination: string; items: { id: string; name: string; city?: string }[] }, VerifyAccessibilityResponse>(
+    "/api/verify-accessibility",
+  );
+  const [accessibilitySummary, setAccessibilitySummary] = useState<AccessibilityApplySummary | null>(null);
   const segmentLibrary = useSegmentLibrary();
   const [courseFile, setCourseFile] = useState<CourseFile | null>(null);
   const { company } = useCompanyProfile();
@@ -99,6 +105,7 @@ export function PlannerApp() {
     setTab("result");
     setFeeSummary(null);
     setOptionSuggestSummary(null);
+    setAccessibilitySummary(null);
     usp.reset();
     const result = await itinerary.generate(input, courseFile);
     if (!result) return;
@@ -152,6 +159,20 @@ export function PlannerApp() {
     const { days: next, summary } = applyOptionSuggestions(days, response.results, input.currency);
     itinerary.replaceDays(next);
     setOptionSuggestSummary(summary);
+  };
+
+  /** "확인 못함"으로 남은 이용 편의시설을 웹에서 다시 검색해 반영한다 */
+  const handleVerifyAccessibility = async () => {
+    const items = accessibilityCheckTargets(days).slice(0, 30);
+    if (items.length === 0) return;
+    const response = await accessibilityRequest.run({
+      destination: input.destination.trim() || meta?.cities.join(", ") || "",
+      items,
+    });
+    if (!response) return;
+    const { days: next, summary } = applyAccessibilityResults(days, response.results);
+    itinerary.replaceDays(next);
+    setAccessibilitySummary(summary);
   };
 
   /** 오전·오후·하루 일정이나 장소 하나를 라이브러리에 즐겨찾기로 저장한다 */
@@ -255,6 +276,14 @@ export function PlannerApp() {
               sources: optionSuggestRequest.data?.sources ?? [],
               searched: optionSuggestRequest.data?.searched ?? true,
               onRun: () => void handleSuggestOptions(),
+            }}
+            accessibilityCheck={{
+              state: accessibilityRequest.state,
+              targetCount: Math.min(30, accessibilityCheckTargets(days).length),
+              summary: accessibilitySummary,
+              sources: accessibilityRequest.data?.sources ?? [],
+              searched: accessibilityRequest.data?.searched ?? true,
+              onRun: () => void handleVerifyAccessibility(),
             }}
             library={{
               segments: segmentLibrary.segments,

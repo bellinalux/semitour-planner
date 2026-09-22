@@ -17,7 +17,7 @@ import type {
 import type { CourseSegment, SegmentKind } from "@/lib/segmentLibrary";
 import { ExportBar } from "./ExportBar";
 import { DocumentBar } from "./DocumentBar";
-import { ItineraryPanel, type FeeCheckView, type OptionSuggestView } from "./ItineraryPanel";
+import { ItineraryPanel, type AccessibilityCheckView, type FeeCheckView, type OptionSuggestView } from "./ItineraryPanel";
 import { CourseLibraryPanel } from "./library/CourseLibraryPanel";
 import type { ItemPatch } from "./itinerary/TimelineItem";
 import { QuotePanel } from "./QuotePanel";
@@ -80,6 +80,7 @@ interface Props {
   exporter: ExportView;
   feeCheck: FeeCheckView;
   optionSuggest: OptionSuggestView;
+  accessibilityCheck: AccessibilityCheckView;
   library: LibraryView;
   documents: React.ComponentProps<typeof DocumentBar>;
 }
@@ -101,6 +102,7 @@ export function Dashboard({
   exporter,
   feeCheck,
   optionSuggest,
+  accessibilityCheck,
   library,
   documents,
 }: Props) {
@@ -120,6 +122,7 @@ export function Dashboard({
         sendingNote={input.sendingNote}
         feeCheck={feeCheck}
         optionSuggest={optionSuggest}
+        accessibilityCheck={accessibilityCheck}
         onAddSuggestedOption={optionActions.onAddSuggestedOption}
         pmChoice={pmChoice}
         onSelectPm={onSelectPm}

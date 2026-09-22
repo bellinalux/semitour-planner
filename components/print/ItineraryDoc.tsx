@@ -28,11 +28,11 @@ function ItemLine({ item, input, number }: { item: ItineraryItem; input: DocProp
           {notes.length > 0 && <span className="text-slate-500"> ({notes.join(" · ")})</span>}
           {item.description && <span className="block text-slate-500">{item.description}</span>}
           {item.caution && <span className="block text-amber-700">⚠ {item.caution}</span>}
-          {a && (
+          {/* 확인 못한(unknown) 이용 편의시설 정보는 고객용 문서에 신뢰할 수 없는 내용을 보여주지 않도록 아예 표시하지 않는다 */}
+          {a && a.level !== "unknown" && (
             <span className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${ACCESSIBILITY_TONE[a.level]}`}>
-              ♿ 이용 편의시설: {ACCESSIBILITY_LABELS[a.level]}
-              {a.level !== "unknown" &&
-                ` — 휠체어 ${a.wheelchairAccessible ? "가능" : "어려움"} · 장애인 화장실 ${a.accessibleRestroom ? "있음" : "없음/미확인"} · 엘리베이터 ${a.elevator ? "있음" : "없음/미확인"} · 경사로 ${a.ramp ? "있음" : "없음/미확인"}`}
+              ♿ 이용 편의시설: {ACCESSIBILITY_LABELS[a.level]} — 휠체어 {a.wheelchairAccessible ? "가능" : "어려움"} · 장애인 화장실{" "}
+              {a.accessibleRestroom ? "있음" : "없음/미확인"} · 엘리베이터 {a.elevator ? "있음" : "없음/미확인"} · 경사로 {a.ramp ? "있음" : "없음/미확인"}
               {a.note && ` (${a.note})`}
             </span>
           )}

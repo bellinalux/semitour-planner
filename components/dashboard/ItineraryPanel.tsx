@@ -1,11 +1,12 @@
 "use client";
 
-import { CalendarDays, Check, Hotel, Info, Loader2, Pencil, PlaneLanding, PlaneTakeoff, SearchCheck, Sparkles } from "lucide-react";
+import { Accessibility, CalendarDays, Check, Hotel, Info, Loader2, Pencil, PlaneLanding, PlaneTakeoff, SearchCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
+import type { AccessibilityApplySummary } from "@/lib/accessibilityCheck";
 import type { FeeApplySummary } from "@/lib/fees";
 import type { OptionSuggestApplySummary } from "@/lib/optionSuggestions";
 import type { SegmentKind } from "@/lib/segmentLibrary";
@@ -40,12 +41,24 @@ export interface OptionSuggestView {
   onRun: () => void;
 }
 
+/** 이용 편의시설(확인 못함) 재검색 (버튼, 진행 상태, 결과 요약) */
+export interface AccessibilityCheckView {
+  state: AsyncState;
+  /** "확인 못함"으로 남아 재검색할 코스 수 */
+  targetCount: number;
+  summary: AccessibilityApplySummary | null;
+  sources: { title: string; url: string }[];
+  searched: boolean;
+  onRun: () => void;
+}
+
 interface Props {
   state: AsyncState;
   /** 1 견적통화 = ? 원 (항목별 원화 환산 표기에 쓴다) */
   krwRate: number;
   feeCheck: FeeCheckView;
   optionSuggest: OptionSuggestView;
+  accessibilityCheck: AccessibilityCheckView;
   days: DayPlan[];
   meta: CourseMeta | null;
   currency: CurrencyCode;
@@ -225,11 +238,45 @@ function OptionSuggestNotice({ view }: { view: OptionSuggestView }) {
   );
 }
 
+function AccessibilityCheckNotice({ view }: { view: AccessibilityCheckView }) {
+  const { state, summary, sources, searched } = view;
+  if (state.status === "error") {
+    return <ErrorBanner title="이용 편의시설을 확인하지 못했습니다" message={state.error ?? "잠시 후 다시 시도해 주세요."} onRetry={view.onRun} />;
+  }
+  if (state.status !== "success" || !summary) return null;
+  return (
+    <div className="space-y-1.5 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-[11px] leading-4 text-slate-700">
+      <p className="font-semibold text-emerald-800">
+        재검색 결과: 새로 확인됨 {summary.confirmed}개 · 여전히 확인 못함 {summary.stillUnknown}개
+      </p>
+      {!searched && <p className="text-amber-700">웹 검색 근거를 확보하지 못해 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.</p>}
+      {summary.stillUnknown > 0 && (
+        <p>여전히 확인 못한 코스는 인쇄되는 여행일정표에는 표시되지 않습니다(화면에서만 &quot;확인 못함&quot;으로 보입니다). 방문 전 직접 확인하거나 필요하면 다시 재검색하세요.</p>
+      )}
+      {sources.length > 0 && (
+        <details>
+          <summary className="cursor-pointer font-medium text-emerald-700">참고한 출처 ({sources.length})</summary>
+          <ul className="mt-1 space-y-0.5">
+            {sources.map((src) => (
+              <li key={src.url}>
+                <a href={src.url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
+                  {src.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export function ItineraryPanel({
   state,
   krwRate,
   feeCheck,
   optionSuggest,
+  accessibilityCheck,
   days,
   meta,
   currency,
@@ -278,6 +325,20 @@ export function ItineraryPanel({
       </button>
     ) : undefined;
 
+  const accessibilityButton =
+    state.status === "success" && accessibilityCheck.targetCount > 0 ? (
+      <button
+        type="button"
+        onClick={accessibilityCheck.onRun}
+        disabled={accessibilityCheck.state.status === "loading"}
+        title="&quot;확인 못함&quot;으로 남은 코스의 휠체어 이용 편의시설을 웹에서 다시 검색합니다"
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {accessibilityCheck.state.status === "loading" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Accessibility className="h-3.5 w-3.5" aria-hidden />}
+        {accessibilityCheck.state.status === "loading" ? "편의시설 재검색 중..." : `이용 편의시설 재검색 (${accessibilityCheck.targetCount})`}
+      </button>
+    ) : undefined;
+
   const editToggle =
     state.status === "success" ? (
       <button
@@ -304,6 +365,7 @@ export function ItineraryPanel({
         <div className="flex flex-wrap justify-end gap-2">
           {verifyButton}
           {suggestButton}
+          {accessibilityButton}
           {editToggle}
         </div>
       }
@@ -336,6 +398,7 @@ export function ItineraryPanel({
           </p>
           <FeeCheckNotice view={feeCheck} />
           <OptionSuggestNotice view={optionSuggest} />
+          <AccessibilityCheckNotice view={accessibilityCheck} />
           <TransferNote icon={PlaneLanding} label="공항 픽업" note={pickupNote} />
           <FxContext.Provider value={{ currency, rate: krwRate }}>
           {days.map((plan) => (
