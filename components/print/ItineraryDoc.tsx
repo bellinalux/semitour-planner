@@ -1,4 +1,3 @@
-import { formatMoney } from "@/lib/currency";
 import { CANCELLATION_TERMS, dayDate, dayMeals, documentItems, includeLists, noticeLines, tripPeriod } from "@/lib/documents";
 import { customerFeeNote, localPayRows } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
@@ -147,7 +146,7 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company }: Do
                     {option.durationMinutes > 0 && <span className="text-slate-500"> (약 {formatDuration(option.durationMinutes)})</span>}
                   </td>
                   <td className="w-24 px-2 py-1 text-right text-slate-600">{option.minParticipants}명 이상</td>
-                  <td className="w-32 px-2 py-1 text-right tabular-nums">1인 {formatMoney(option.pricePerPerson, input.currency)}</td>
+                  <td className="w-32 px-2 py-1 text-right tabular-nums">1인 {money(option.pricePerPerson)}</td>
                 </tr>
               ))}
             </tbody>

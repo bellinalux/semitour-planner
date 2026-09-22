@@ -173,3 +173,25 @@ export function noticeLines(input: TripInput, company: CompanyProfile): string[]
   lines.push("현지 사정(기상, 교통, 휴관일 등)에 따라 일정의 순서가 바뀔 수 있으며, 이 경우에도 동일 수준의 대체 일정으로 진행합니다.");
   return lines;
 }
+
+/** ---------- 수신처(견적서·계약서를 몇 부, 누구 앞으로 만들지) ---------- */
+
+export interface DocRecipient {
+  /** 수신 이름 (단체 문서는 customerName, 개인별 문서는 각 여행자 이름) */
+  name: string;
+  personCount: number;
+  pricePerPerson: number;
+  totalPrice: number;
+}
+
+/**
+ * 견적서·계약서를 몇 부 만들지 정한다.
+ * travelerNames를 입력했으면(개인별) 사람마다 1인 기준 문서 하나씩, 아니면(단체) 전체 인원 문서 한 부.
+ */
+export function resolveRecipients(input: Pick<TripInput, "customerName" | "travelerNames">, quote: QuoteData): DocRecipient[] {
+  const names = input.travelerNames.map((n) => n.trim()).filter(Boolean);
+  if (names.length === 0) {
+    return [{ name: input.customerName.trim() || "-", personCount: quote.travelers, pricePerPerson: quote.scenario.pricePerPerson, totalPrice: quote.scenario.totalPrice }];
+  }
+  return names.map((name) => ({ name, personCount: 1, pricePerPerson: quote.scenario.pricePerPerson, totalPrice: quote.scenario.pricePerPerson }));
+}

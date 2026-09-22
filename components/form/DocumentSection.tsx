@@ -45,6 +45,51 @@ export function DocumentSection({ input, onChange }: SectionProps) {
           onChange={(customerName) => onChange({ customerName })}
         />
 
+        <div className="space-y-1.5">
+          <div role="radiogroup" aria-label="견적서·계약서 발급 단위" className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white">
+            {(
+              [
+                { individual: false, label: "단체 문서 1부" },
+                { individual: true, label: "개인별로 각각" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.label}
+                type="button"
+                role="radio"
+                aria-checked={(input.travelerNames.length > 0) === opt.individual}
+                onClick={() => onChange({ travelerNames: opt.individual ? (input.travelerNames.length > 0 ? input.travelerNames : [""]) : [] })}
+                className={`px-2.5 py-1.5 text-[11px] font-medium ${
+                  (input.travelerNames.length > 0) === opt.individual ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] leading-4 text-slate-500">
+            &quot;개인별로 각각&quot;을 고르면 아래 이름마다 1인 기준 견적서·계약서를 따로 만듭니다(같은 인쇄물 안에서 사람마다 새 문서로 나뉩니다). 청구서·일정표는 지금처럼 한 부만 나옵니다.
+          </p>
+          {input.travelerNames.length > 0 && (
+            <div className="space-y-1">
+              <label htmlFor="travelerNames" className="block text-[11px] font-medium text-slate-600">
+                여행자 명단 (한 줄에 한 명)
+              </label>
+              <textarea
+                id="travelerNames"
+                rows={Math.min(8, Math.max(3, input.travelerNames.length + 1))}
+                value={input.travelerNames.join("\n")}
+                placeholder={"예)\n김○○\n이○○\n박○○"}
+                onChange={(e) => onChange({ travelerNames: e.target.value.split("\n") })}
+                className={`${inputClass} resize-y font-normal`}
+              />
+              <p className="text-[11px] text-slate-400">
+                빈 줄은 무시합니다. 지금 {input.travelerNames.map((n) => n.trim()).filter(Boolean).length}명 입력됨 (견적 인원 {input.travelers}명과 다를 수 있습니다).
+              </p>
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <Field htmlFor="departureDate" label="출발일" hint="비우면 문서에 '미정'으로 표시됩니다">
             <input

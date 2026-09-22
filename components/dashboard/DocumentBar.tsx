@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Calculator, FileText, Printer, Receipt } from "lucide-react";
+import { AlertTriangle, Calculator, FileSignature, FileText, Printer, Receipt } from "lucide-react";
 import { DOC_LABELS, type DocKind } from "@/components/print/PrintDocuments";
 
 interface Props {
@@ -14,6 +14,7 @@ const BUTTONS: { kind: DocKind; icon: typeof FileText; description: string }[] =
   { kind: "itinerary", icon: FileText, description: "일정·포함 사항·취소 규정" },
   { kind: "quote", icon: Printer, description: "요금·결제 조건" },
   { kind: "invoice", icon: Receipt, description: "청구 내역·입금 안내" },
+  { kind: "contract", icon: FileSignature, description: "국외여행 표준약관 전문 첨부, 서명란 포함" },
 ];
 
 const INTERNAL: { kind: DocKind; icon: typeof FileText; description: string } = {

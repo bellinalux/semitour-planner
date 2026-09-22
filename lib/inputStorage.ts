@@ -19,6 +19,7 @@ export function normalizeInput(saved: unknown): TripInput {
         : DEFAULT_INPUT.lodgingCityRates,
     options: Array.isArray(s.options) ? s.options : DEFAULT_INPUT.options,
     travelAlert: typeof s.travelAlert === "object" && s.travelAlert !== null ? s.travelAlert : null,
+    travelerNames: Array.isArray(s.travelerNames) ? s.travelerNames.filter((n): n is string => typeof n === "string") : DEFAULT_INPUT.travelerNames,
     competitors: Array.isArray(s.competitors)
       ? s.competitors.map((c) => ({ ...c, shopping: c.shopping ?? "unknown", optionTour: c.optionTour ?? "unknown" }))
       : DEFAULT_INPUT.competitors,

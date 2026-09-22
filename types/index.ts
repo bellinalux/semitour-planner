@@ -162,6 +162,11 @@ export interface TripInput {
   departureDate: string;
   /** 문서 수신처 (고객명·단체명) */
   customerName: string;
+  /**
+   * 개인별 여행자 명단. 비어 있으면(단체 문서) customerName 하나로 견적서·계약서를 한 부만 만든다.
+   * 이름을 넣으면(개인별 문서) 사람마다 1인 기준 견적서·계약서를 각각 따로 만든다(같은 인쇄 안에서 사람별로 새 문서로 나뉜다).
+   */
+  travelerNames: string[];
   /** 여행지 여행경보단계 (법정 표시 항목) */
   travelAlert: TravelAlert | null;
 }

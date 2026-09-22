@@ -69,6 +69,7 @@ export const DEFAULT_INPUT: TripInput = {
   minTravelers: 0,
   departureDate: "",
   customerName: "",
+  travelerNames: [],
   travelAlert: null,
 };
 
