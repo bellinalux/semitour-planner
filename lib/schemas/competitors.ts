@@ -42,6 +42,11 @@ export const competitorResponseSchema = z.object({
         highlight: z.string().describe("이 상품의 특징 한 줄. 없으면 빈 문자열"),
         basis: z.enum(["searched", "estimated"]).describe("판매 페이지에서 요금을 확인했으면 searched, 아니면 estimated"),
         sourceName: z.string().describe("요금을 확인한 사이트 이름. 없으면 빈 문자열"),
+        productUrl: z
+          .string()
+          .describe(
+            "이 상품의 실제 판매 페이지(상세 페이지) URL. 조사 메모에 정확한 URL이 적혀 있을 때만 그대로 옮기고, 메모에 없거나 확실하지 않으면 빈 문자열로 둡니다. 홈페이지나 검색결과 URL을 지어내지 않습니다.",
+          ),
       }),
     )
     .describe("찾은 경쟁 상품 목록 (3~6개)"),
@@ -51,10 +56,20 @@ type Parsed = z.infer<typeof competitorResponseSchema>;
 
 const clean = (s: string) => s.trim();
 
-/** 여행사 상품을 구글에서 다시 찾아볼 수 있는 검색 링크 */
-function searchUrl(agency: string, productName: string): string {
+/** 여행사 상품을 구글에서 다시 찾아볼 수 있는 검색 링크 (실제 상품 URL을 모를 때의 대체 수단) */
+function fallbackSearchUrl(agency: string, productName: string): string {
   const q = [agency, productName].filter(Boolean).join(" ").slice(0, 120);
   return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+}
+
+/** 조사 메모에서 옮겨 온 값이 실제로 쓸 수 있는 http(s) URL인지 (모델이 잘못 채운 값을 거른다) */
+function isUsableUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 /** 검증된 응답을 앱 내부 형태로 다듬는다. 이름이 없거나 요금이 음수인 항목은 버린다. */
@@ -83,6 +98,7 @@ export function toCompetitorCandidates(parsed: Parsed): CompetitorCandidate[] {
       highlight: clean(p.highlight),
       basis: p.pricePerPerson > 0 ? p.basis : "estimated",
       sourceName: clean(p.sourceName),
-      searchUrl: searchUrl(clean(p.agency), clean(p.productName)),
+      searchUrl: isUsableUrl(clean(p.productUrl)) ? clean(p.productUrl) : fallbackSearchUrl(clean(p.agency), clean(p.productName)),
+      linkIsDirect: isUsableUrl(clean(p.productUrl)),
     }));
 }

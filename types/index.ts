@@ -65,7 +65,10 @@ export interface CompetitorCandidate {
   /** searched: 판매 페이지에서 확인 / estimated: AI 추정 */
   basis: "searched" | "estimated";
   sourceName: string;
+  /** 실제 상품 판매 페이지 URL이면 그대로, 확인 못했으면 구글 검색 링크로 대신한다 */
   searchUrl: string;
+  /** true면 searchUrl이 실제 상품 페이지, false면 구글 검색으로 대신한 링크 */
+  linkIsDirect: boolean;
 }
 
 /** 좌측 입력 폼의 전체 상태 */

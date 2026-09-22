@@ -143,9 +143,10 @@ export function CompetitorFinder({ input, onChange }: SectionProps) {
                         href={product.searchUrl}
                         target="_blank"
                         rel="noopener noreferrer"
+                        title={product.linkIsDirect ? "이 상품의 판매 페이지로 바로 이동합니다" : "정확한 상품 페이지를 찾지 못해 검색 결과로 이동합니다"}
                         className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:underline"
                       >
-                        판매 페이지 검색
+                        {product.linkIsDirect ? "상품 페이지 바로가기" : "판매 페이지 검색"}
                         <ExternalLink className="h-3 w-3" aria-hidden />
                       </a>
                     </div>
