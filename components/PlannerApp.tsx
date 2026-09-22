@@ -4,13 +4,18 @@ import { useMemo, useState } from "react";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TripInputForm } from "@/components/form/TripInputForm";
 import { Header } from "@/components/layout/Header";
+import { CompanySettings } from "@/components/layout/CompanySettings";
+import { PrintDocuments } from "@/components/print/PrintDocuments";
 import { SavedPlansMenu } from "@/components/layout/SavedPlansMenu";
 import { MobileTabs, type PlannerTab } from "@/components/layout/MobileTabs";
 import { useItinerary } from "@/hooks/useItinerary";
+import { useCompanyProfile } from "@/hooks/useCompanyProfile";
+import { usePrintDocument } from "@/hooks/usePrintDocument";
 import { useRequest } from "@/hooks/useRequest";
 import { usePlannerInput } from "@/hooks/usePlannerInput";
 import { useUsp } from "@/hooks/useUsp";
 import { useWorkPersistence } from "@/hooks/useWorkPersistence";
+import { missingLegalFields } from "@/lib/company";
 import { calculateQuote } from "@/lib/cost";
 import { applyFeeResults, feeCheckTargets, type FeeApplySummary } from "@/lib/fees";
 import type { VerifyFeesResponse } from "@/lib/schemas/market";
@@ -34,6 +39,8 @@ export function PlannerApp() {
     VerifyFeesResponse
   >("/api/verify-fees");
   const [feeSummary, setFeeSummary] = useState<FeeApplySummary | null>(null);
+  const { company } = useCompanyProfile();
+  const { kind: printKind, print } = usePrintDocument();
 
   const { days, pmChoice, meta } = itinerary;
   const isReady = itinerary.state.status === "success";
@@ -43,6 +50,12 @@ export function PlannerApp() {
     () => (isReady ? calculateQuote(input, days, pmChoice) : null),
     [isReady, input, days, pmChoice],
   );
+  // 인쇄 문서는 견적이 준비된 뒤에만 만들 수 있다
+  const docData = useMemo(
+    () => (quote?.ok ? { input, days, pmChoice, quote, meta, company } : null),
+    [quote, input, days, pmChoice, meta, company],
+  );
+
   const stays = useMemo(() => overnightNights(days), [days]);
   const uspRequest = useMemo(
     () => (quote?.ok ? buildUspRequest(input, days, pmChoice, quote, meta) : null),
@@ -122,8 +135,17 @@ export function PlannerApp() {
   };
 
   return (
-    <div className="flex h-dvh flex-col">
-      <Header actions={<SavedPlansMenu snapshot={snapshot} onLoad={handleLoadPlan} />} />
+    <>
+    <PrintDocuments kind={printKind} data={docData} />
+    <div className="screen-only flex h-dvh flex-col">
+      <Header
+        actions={
+          <>
+            <CompanySettings />
+            <SavedPlansMenu snapshot={snapshot} onLoad={handleLoadPlan} />
+          </>
+        }
+      />
       <MobileTabs active={tab} onChange={setTab} />
       <main className="grid min-h-0 flex-1 lg:grid-cols-[440px_1fr]">
         <aside
@@ -189,9 +211,15 @@ export function PlannerApp() {
               getCustomerText: () => buildCustomerText(exportData()),
               getEmojiText: () => buildEmojiCustomerText(exportData()),
             }}
+            documents={{
+              disabled: !quote?.ok,
+              missingLegal: missingLegalFields(company),
+              onPrint: print,
+            }}
           />
         </section>
       </main>
     </div>
+    </>
   );
 }

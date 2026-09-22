@@ -13,6 +13,7 @@ import type {
   UspItem,
 } from "@/types";
 import { ExportBar } from "./ExportBar";
+import { DocumentBar } from "./DocumentBar";
 import { ItineraryPanel, type FeeCheckView } from "./ItineraryPanel";
 import type { ItemPatch } from "./itinerary/TimelineItem";
 import { QuotePanel } from "./QuotePanel";
@@ -62,6 +63,7 @@ interface Props {
   usp: UspView;
   exporter: ExportView;
   feeCheck: FeeCheckView;
+  documents: React.ComponentProps<typeof DocumentBar>;
 }
 
 export function Dashboard({
@@ -79,6 +81,7 @@ export function Dashboard({
   usp,
   exporter,
   feeCheck,
+  documents,
 }: Props) {
   const { onAddTour, ...panelActions } = itemActions;
 
@@ -108,9 +111,18 @@ export function Dashboard({
           onChange={optionActions.onChangeOptions}
         />
       )}
-      <QuotePanel state={itinerary} quote={quote} input={input} days={days} generatedCurrency={generatedCurrency} />
+      <QuotePanel
+        state={itinerary}
+        quote={quote}
+        input={input}
+        days={days}
+        pmChoice={pmChoice}
+        meta={meta}
+        generatedCurrency={generatedCurrency}
+      />
       <UspPanel {...usp} />
       <ExportBar {...exporter} />
+      <DocumentBar {...documents} />
     </div>
   );
 }

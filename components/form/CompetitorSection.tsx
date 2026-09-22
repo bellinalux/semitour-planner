@@ -4,6 +4,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { createCompetitor, MAX_COMPETITORS } from "@/lib/defaults";
 import type { Competitor } from "@/types";
 import { CompetitorCard } from "./CompetitorCard";
+import { CompetitorFinder } from "./CompetitorFinder";
 import type { SectionProps } from "./types";
 
 export function CompetitorSection({ input, onChange }: SectionProps) {
@@ -36,7 +37,7 @@ export function CompetitorSection({ input, onChange }: SectionProps) {
         <EmptyState
           icon={Swords}
           title="등록된 경쟁사가 없습니다"
-          description="경쟁사 상품의 가격과 포함 항목을 넣으면 비교표와 USP가 만들어집니다. (선택 사항)"
+          description="아래 버튼으로 대형 여행사 상품을 찾아 넣거나, 직접 가격과 포함 항목을 입력하세요. (선택 사항)"
         />
       ) : (
         <div className="space-y-3">
@@ -57,6 +58,8 @@ export function CompetitorSection({ input, onChange }: SectionProps) {
           )}
         </div>
       )}
+
+      <CompetitorFinder input={input} onChange={onChange} />
     </SectionCard>
   );
 }

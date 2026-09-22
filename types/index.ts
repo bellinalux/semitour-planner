@@ -28,13 +28,44 @@ export interface CompetitorIncludes {
   flight: boolean;
 }
 
+/** 쇼핑·선택관광 정책: none 없음(노쇼핑/노옵션) / some 있음 / unknown 확인 안 됨 */
+export type TourPolicy = "none" | "some" | "unknown";
+
 export interface Competitor {
   id: string;
   name: string;
   /** 1인 판매가 (견적 통화 기준) */
   price: number;
   includes: CompetitorIncludes;
+  /** 지정 쇼핑센터 방문 등 쇼핑 일정이 있는지 */
+  shopping: TourPolicy;
+  /** 선택관광(옵션)이 있는지 */
+  optionTour: TourPolicy;
   note: string;
+  /** 웹 검색으로 찾아 넣은 상품이면 그 근거 */
+  source?: { agency: string; url: string; sourceName: string; basis: "searched" | "estimated"; foundAt: string };
+}
+
+/** 웹 검색으로 찾은 대형 여행사 경쟁 상품 */
+export interface CompetitorCandidate {
+  agency: string;
+  productName: string;
+  /** 성인 1인 요금 (요청 통화). 확인 못했으면 0 */
+  pricePerPerson: number;
+  priceNote: string;
+  nights: number;
+  days: number;
+  hotelGrade: string;
+  includes: CompetitorIncludes;
+  noShopping: boolean;
+  noOption: boolean;
+  /** 쇼핑·옵션 언급을 찾지 못했으면 true (노쇼핑이라고 단정하지 않는다) */
+  policyUnknown: boolean;
+  highlight: string;
+  /** searched: 판매 페이지에서 확인 / estimated: AI 추정 */
+  basis: "searched" | "estimated";
+  sourceName: string;
+  searchUrl: string;
 }
 
 /** 좌측 입력 폼의 전체 상태 */
@@ -120,6 +151,61 @@ export interface TripInput {
 
   /** 기본 견적 밖의 선택 옵션 */
   options: TourOption[];
+
+  /** ---- 고객 문서(일정표·견적서·청구서)용 ---- */
+  /** 최저 행사인원. 이 인원에 미달하면 출발 7일 전까지 통지해야 한다 (관광진흥법 시행규칙 §21) */
+  minTravelers: number;
+  /** 출발일 (YYYY-MM-DD). 비어 있으면 문서에 "미정"으로 표시한다 */
+  departureDate: string;
+  /** 문서 수신처 (고객명·단체명) */
+  customerName: string;
+  /** 여행지 여행경보단계 (법정 표시 항목) */
+  travelAlert: TravelAlert | null;
+}
+
+/** 외교부 여행경보단계 (관광진흥법 시행규칙 §21 제8호 법정 표시 항목) */
+export interface TravelAlert {
+  /** 조회한 국가 이름 */
+  country: string;
+  /** 0 지정 없음 / 1 여행유의 / 2 여행자제 / 3 출국권고 / 4 여행금지 */
+  level: number;
+  levelLabel: string;
+  /** 특별여행주의보 등 부가 안내 */
+  note: string;
+  checkedAt: string;
+  /** api: 외교부 공공데이터 조회 / manual: 직접 입력 */
+  source: "api" | "manual";
+}
+
+/**
+ * 회사 정보. 고객 문서에 넣어야 하는 법정 표시 항목을 담는다.
+ * (관광진흥법 시행규칙 §21: 등록번호·상호·소재지·등록관청, 보증보험 가입 내용 등)
+ */
+export interface CompanyProfile {
+  /** 상호 */
+  name: string;
+  /** 여행업 등록번호 */
+  registrationNumber: string;
+  /** 등록관청 (예: ○○시 ○○구청) */
+  registrationAuthority: string;
+  /** 사업자등록번호 (세금계산서·청구서용) */
+  businessNumber: string;
+  /** 대표자 */
+  ceo: string;
+  /** 소재지 */
+  address: string;
+  phone: string;
+  email: string;
+  /** 보증보험·공제 가입 또는 영업보증금 예치 내용 */
+  insurance: string;
+  /** 여행자보험 가입 안내 (관행) */
+  travelerInsurance: string;
+  /** 계약금 비율 (%) — 표준약관상 여행요금의 10% 이하 */
+  depositRate: number;
+  /** 입금 계좌 (청구서용) */
+  bankAccount: string;
+  /** 현지 인솔자·긴급 비상연락처 */
+  emergencyContact: string;
 }
 
 export type RequestStatus = "idle" | "loading" | "error" | "success";

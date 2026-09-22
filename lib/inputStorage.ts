@@ -18,7 +18,10 @@ export function normalizeInput(saved: unknown): TripInput {
         ? s.lodgingCityRates
         : DEFAULT_INPUT.lodgingCityRates,
     options: Array.isArray(s.options) ? s.options : DEFAULT_INPUT.options,
-    competitors: Array.isArray(s.competitors) ? s.competitors : DEFAULT_INPUT.competitors,
+    travelAlert: typeof s.travelAlert === "object" && s.travelAlert !== null ? s.travelAlert : null,
+    competitors: Array.isArray(s.competitors)
+      ? s.competitors.map((c) => ({ ...c, shopping: c.shopping ?? "unknown", optionTour: c.optionTour ?? "unknown" }))
+      : DEFAULT_INPUT.competitors,
     themes: Array.isArray(s.themes) ? s.themes : DEFAULT_INPUT.themes,
   };
   // 박수가 없던 이전 저장값은 "일수 − 1"로 채운다

@@ -2,7 +2,10 @@ import { Trash2 } from "lucide-react";
 import { NumberField } from "@/components/ui/NumberField";
 import { TextField } from "@/components/ui/TextField";
 import { currencySymbol } from "@/lib/currency";
-import type { Competitor, CompetitorIncludes, CurrencyCode } from "@/types";
+import { POLICY_LABELS } from "@/lib/competitorDiff";
+import type { Competitor, CompetitorIncludes, CurrencyCode, TourPolicy } from "@/types";
+
+const POLICIES: TourPolicy[] = ["none", "some", "unknown"];
 
 const INCLUDE_OPTIONS: { key: keyof CompetitorIncludes; label: string }[] = [
   { key: "guide", label: "가이드" },
@@ -77,6 +80,35 @@ export function CompetitorCard({ index, competitor, currency, onChange, onRemove
             ))}
           </div>
         </fieldset>
+
+        <div className="grid grid-cols-2 gap-3">
+          {(
+            [
+              { key: "shopping", label: "쇼핑 일정" },
+              { key: "optionTour", label: "선택관광(옵션)" },
+            ] as const
+          ).map(({ key, label }) => (
+            <div key={key}>
+              <span className="mb-1.5 block text-xs font-medium text-slate-700">{label}</span>
+              <div role="radiogroup" aria-label={label} className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white">
+                {POLICIES.map((policy) => (
+                  <button
+                    key={policy}
+                    type="button"
+                    role="radio"
+                    aria-checked={competitor[key] === policy}
+                    onClick={() => onChange({ ...competitor, [key]: policy })}
+                    className={`px-2 py-1 text-[11px] font-medium ${
+                      competitor[key] === policy ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {POLICY_LABELS[policy]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
 
         <TextField
           id={`${id}-note`}

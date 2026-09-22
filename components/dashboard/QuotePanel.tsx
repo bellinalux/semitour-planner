@@ -3,11 +3,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { ourPolicy } from "@/lib/competitorDiff";
 import { lodgingUnitsFor } from "@/lib/cost";
-import type { AsyncState, CurrencyCode, DayPlan, PackageType, QuoteResult, TripInput } from "@/types";
+import type { PmChoice } from "@/lib/itinerary";
+import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PackageType, QuoteResult, TripInput } from "@/types";
 import { CompetitorTable } from "./quote/CompetitorTable";
 import { CostBreakdownTable } from "./quote/CostBreakdownTable";
 import { PerPersonMatrix } from "./quote/PerPersonMatrix";
+import { PriceGapAnalysis } from "./quote/PriceGapAnalysis";
 import { QuoteKpis } from "./quote/QuoteKpis";
 import { UndecidedRange } from "./quote/UndecidedRange";
 
@@ -18,6 +21,8 @@ interface Props {
   quote: QuoteResult | null;
   input: TripInput;
   days: DayPlan[];
+  pmChoice: PmChoice;
+  meta: CourseMeta | null;
   generatedCurrency: CurrencyCode | null;
 }
 
@@ -46,8 +51,10 @@ const PACKAGE_LABELS: Record<PackageType, string> = {
   full: "풀패키지 (항공 포함)",
 };
 
-function QuoteContent({ quote, input, days, generatedCurrency }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
+function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
+
+  const policy = ourPolicy(days, pmChoice, input, meta);
 
   // 일정을 만든 뒤 입력이 바뀌어 일정의 금액과 견적이 어긋나는 경우
   const staleWarnings: string[] = [];
@@ -135,14 +142,22 @@ function QuoteContent({ quote, input, days, generatedCurrency }: Omit<Props, "st
           competitors={input.competitors}
           ourPricePerPerson={quote.scenario.pricePerPerson}
           ourIncludes={quote.ourIncludes}
+          ourPolicy={policy}
           currency={input.currency}
         />
       </section>
+
+      {input.competitors.some((c) => c.price > 0) && (
+        <section>
+          <SubHeading>가격 차이 분석</SubHeading>
+          <PriceGapAnalysis competitors={input.competitors} quote={quote} input={input} ourPolicy={policy} currency={input.currency} />
+        </section>
+      )}
     </div>
   );
 }
 
-export function QuotePanel({ state, quote, input, days, generatedCurrency }: Props) {
+export function QuotePanel({ state, quote, input, days, pmChoice, meta, generatedCurrency }: Props) {
   return (
     <SectionCard
       title="견적서"
@@ -151,7 +166,7 @@ export function QuotePanel({ state, quote, input, days, generatedCurrency }: Pro
     >
       {state.status === "loading" && <QuoteSkeleton />}
       {state.status === "success" && quote && (
-        <QuoteContent quote={quote} input={input} days={days} generatedCurrency={generatedCurrency} />
+        <QuoteContent quote={quote} input={input} days={days} pmChoice={pmChoice} meta={meta} generatedCurrency={generatedCurrency} />
       )}
       {(state.status === "idle" || state.status === "error") && (
         <EmptyState

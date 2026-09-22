@@ -6,6 +6,8 @@ export interface Place {
   city: string;
   /** 영문 국가 이름 (예: Thailand) */
   country: string;
+  /** 한글 국가 이름 (예: 태국) — 외교부 여행경보 조회에 쓴다 */
+  countryKo: string;
   /** IATA 도시 코드 (예: BKK). 모르면 빈 문자열 */
   iata: string;
 }
@@ -13,6 +15,7 @@ export interface Place {
 const placeSchema = z.object({
   city: z.string().describe("입력한 장소가 속한 도시(또는 대표 도시)의 영문 이름. 예: Pattaya, Paris, Osaka"),
   country: z.string().describe("그 도시가 속한 나라의 영문 이름. 예: Thailand, France, Japan"),
+  countryKo: z.string().describe("그 나라의 한글 이름. 예: 태국, 프랑스, 일본. 외교부가 쓰는 정식 국가명으로 적습니다"),
   iata: z
     .string()
     .describe(
@@ -20,7 +23,7 @@ const placeSchema = z.object({
     ),
 });
 
-const SYSTEM = `당신은 여행 지명 변환기입니다. 한국어 또는 영어로 된 장소 이름을 받아 영문 도시명, 영문 국가명, IATA 도시 코드를 JSON으로만 답합니다.
+const SYSTEM = `당신은 여행 지명 변환기입니다. 한국어 또는 영어로 된 장소 이름을 받아 영문 도시명, 영문·한글 국가명, IATA 도시 코드를 JSON으로만 답합니다.
 - 여러 도시가 쉼표로 적혀 있으면 첫 번째 도시를 기준으로 합니다.
 - 출발지가 "인천"이면 서울(SEL)로 봅니다.
 - 추측하지 말고, 확실하지 않은 IATA 코드는 빈 문자열로 둡니다.`;
@@ -50,6 +53,7 @@ export async function resolvePlace(text: string): Promise<Place> {
   const place: Place = {
     city: parsed.city.trim(),
     country: parsed.country.trim(),
+    countryKo: parsed.countryKo.trim(),
     iata: /^[A-Z]{3}$/.test(iata) ? iata : "",
   };
   if (cache.size > 200) cache.clear();

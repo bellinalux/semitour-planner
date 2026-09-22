@@ -65,6 +65,11 @@ export const DEFAULT_INPUT: TripInput = {
   competitors: [],
 
   options: [],
+
+  minTravelers: 0,
+  departureDate: "",
+  customerName: "",
+  travelAlert: null,
 };
 
 export function createCompetitor(): Competitor {
@@ -73,6 +78,8 @@ export function createCompetitor(): Competitor {
     name: "",
     price: 0,
     includes: { guide: false, meals: false, admission: false, vehicle: false, hotel: false, flight: false },
+    shopping: "unknown",
+    optionTour: "unknown",
     note: "",
   };
 }

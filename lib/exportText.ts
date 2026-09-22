@@ -1,3 +1,4 @@
+import { analyzeCompetitors, ourPolicy, POLICY_LABELS } from "@/lib/competitorDiff";
 import { compareWithCompetitors } from "@/lib/cost";
 import { formatMoney } from "@/lib/currency";
 import { customerFeeNote, feeTag, itemFeeText, localPayRows, localPaySection, moneyWithKrw } from "@/lib/fees";
@@ -193,8 +194,33 @@ export function buildInternalText(data: ExportData): string {
             ? ` → 우리가 ${money(cmp.diff)} 저렴`
             : ` → 경쟁사가 ${money(-cmp.diff)} 저렴`;
       const inc = includedLabels(c.includes, true);
-      lines.push(`- ${name}: ${price}${diff} / 포함: ${inc.length > 0 ? inc.join(", ") : "없음"}${c.note ? ` / ${c.note}` : ""}`);
+      lines.push(
+        `- ${name}: ${price}${diff} / 포함: ${inc.length > 0 ? inc.join(", ") : "없음"} / 쇼핑: ${POLICY_LABELS[c.shopping]} · 옵션: ${POLICY_LABELS[c.optionTour]}${c.note ? ` / ${c.note}` : ""}`,
+      );
     });
+
+    const policy = ourPolicy(data.days, data.pmChoice, input, data.meta);
+    lines.push(`우리 상품 — 쇼핑: ${POLICY_LABELS[policy.shopping]} · 옵션: ${POLICY_LABELS[policy.optionTour]}`);
+
+    const diffs = analyzeCompetitors(input.competitors.filter((c) => c.price > 0), quote, input, policy);
+    if (diffs.length > 0) {
+      lines.push("", "■ 가격 차이 분석 (같은 조건으로 맞춘 뒤)");
+      diffs.forEach((d) => {
+        const name = d.competitor.name.trim() || "경쟁사";
+        const adjusted =
+          d.adjustments.length > 0
+            ? ` (우리 ${money(s.pricePerPerson)} + ${d.adjustments.map((a) => `${a.label} ${money(a.amount)}`).join(" + ")} = ${money(d.adjustedOurPrice)})`
+            : "";
+        const verdict =
+          d.adjustedDiff === null
+            ? "비교 불가"
+            : d.adjustedDiff < 0
+              ? `우리가 ${money(-d.adjustedDiff)} 비쌈`
+              : `우리가 ${money(d.adjustedDiff)} 저렴`;
+        lines.push(`- ${name}: ${verdict}${adjusted}`);
+        d.reasons.forEach((r) => lines.push(`   ${r.kind === "premium" ? "▲" : r.kind === "gap" ? "▼" : "·"} ${r.text}`));
+      });
+    }
   }
 
   if (usps.length > 0) {

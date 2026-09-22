@@ -42,6 +42,7 @@ export async function GET(request: Request) {
     // 시세 API 키 등록 여부 (없으면 해당 기능만 안내 문구로 대체된다)
     travelpayoutsToken: readSecret("TRAVELPAYOUTS_TOKEN") ? "set" : "missing",
     viatorKey: readSecret("VIATOR_API_KEY") ? "set" : "missing",
+    dataGoKrKey: readSecret("DATA_GO_KR_KEY") ? "set" : "missing",
     similarEnvNames: similarNames,
     // 서버 저장: 접속 코드가 켜져 있고 저장소(KV)가 연결돼야 쓸 수 있다
     cloudSave: !accessRequired() ? "needs-access-code" : (await getKv())?.kind ?? "no-storage",

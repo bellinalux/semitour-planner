@@ -1,3 +1,4 @@
+import { ourPolicy } from "@/lib/competitorDiff";
 import { dayItems, pickPmOption, type PmChoice } from "@/lib/itinerary";
 import type { UspRequest } from "@/lib/schemas/usp";
 import type { CourseMeta, DayPlan, QuoteData, TripInput } from "@/types";
@@ -13,6 +14,7 @@ export function buildUspRequest(
   quote: QuoteData,
   meta: CourseMeta | null,
 ): UspRequest {
+  const policy = ourPolicy(days, pmChoice, input, meta);
   return {
     destination: input.destination.trim(),
     days: input.days,
@@ -45,15 +47,18 @@ export function buildUspRequest(
       name: c.name,
       price: c.price,
       includes: c.includes,
+      shopping: c.shopping,
+      optionTour: c.optionTour,
       note: c.note,
     })),
     features: {
       nights: input.nights,
       cities: meta?.cities ?? [],
       hotelGrade: meta?.hotelGrade || (input.selectedHotel ? `${input.selectedHotel.name} (${input.selectedHotel.grade})` : ""),
-      noShopping: meta?.noShopping ?? false,
+      // 일정에 쇼핑 항목이 없으면 노쇼핑으로 본다 (붙여넣은 코스가 명시했으면 그 값을 따른다)
+      noShopping: policy.shopping === "none",
       // 선택 옵션이 있으면 노옵션이라고 주장할 수 없다
-      noOption: (meta?.noOption ?? false) && input.options.length === 0,
+      noOption: policy.optionTour === "none",
       highlights: meta?.highlights ?? [],
     },
   };

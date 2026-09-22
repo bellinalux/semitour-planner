@@ -20,3 +20,27 @@ input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+/* ---- 인쇄(PDF 저장) ---- */
+/* 문서는 화면에서 숨기고 인쇄할 때만 보여 준다 */
+.print-root {
+  display: none;
+}
+
+@media print {
+  .screen-only {
+    display: none !important;
+  }
+  .print-root {
+    display: block !important;
+  }
+  html,
+  body {
+    height: auto !important;
+    background: #fff !important;
+  }
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}

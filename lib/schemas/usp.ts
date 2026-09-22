@@ -37,6 +37,8 @@ export const uspRequestSchema = z.object({
         name: z.string().max(100),
         price: z.number().min(0),
         includes: includesSchema,
+        shopping: z.enum(["none", "some", "unknown"]),
+        optionTour: z.enum(["none", "some", "unknown"]),
         note: z.string().max(300),
       }),
     )
