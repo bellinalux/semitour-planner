@@ -3,6 +3,7 @@ import { lodgingUnitsFor } from "@/lib/cost";
 import { currencySymbol } from "@/lib/currency";
 import type { LodgingType } from "@/types";
 import { CostField } from "./CostField";
+import { HotelWebSearchPanel } from "./HotelWebSearchPanel";
 import type { SectionProps } from "./types";
 
 interface Props extends SectionProps {
@@ -86,6 +87,8 @@ export function LodgingFields({ input, onChange, stays }: Props) {
           onChange={(cityTaxPerPersonPerNight) => onChange({ cityTaxPerPersonPerNight })}
         />
       </div>
+
+      <HotelWebSearchPanel input={input} onChange={onChange} />
 
       {stays.length >= 2 && (
         <div className="space-y-2 border-t border-slate-200 pt-3">

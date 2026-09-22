@@ -6,19 +6,24 @@ import { moneyWithKrw } from "@/lib/fees";
 import type { ItineraryItem } from "@/types";
 import { DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
 
-function ItemLine({ item, input }: { item: ItineraryItem; input: DocProps["input"] }) {
+function ItemLine({ item, input, number }: { item: ItineraryItem; input: DocProps["input"]; number: number }) {
   const time = item.timeNote || (item.stayMinutes > 0 ? `약 ${formatDuration(item.stayMinutes)}` : "");
   const fee = customerFeeNote(item, input);
   const notes = [time, item.admission === "view_only" ? "외부 조망" : "", fee].filter(Boolean);
 
   return (
-    <li className="flex gap-2 py-0.5">
-      <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
-      <span>
-        <span className="font-medium">{item.name}</span>
-        {notes.length > 0 && <span className="text-slate-500"> ({notes.join(" · ")})</span>}
-        {item.description && <span className="block text-slate-500">{item.description}</span>}
-      </span>
+    <li className="py-0.5">
+      <div className="flex gap-2">
+        <span className="w-4 shrink-0 text-right font-semibold text-slate-500">{number}.</span>
+        <span>
+          <span className="font-medium">{item.name}</span>
+          {notes.length > 0 && <span className="text-slate-500"> ({notes.join(" · ")})</span>}
+          {item.description && <span className="block text-slate-500">{item.description}</span>}
+        </span>
+      </div>
+      {item.travelMinutesToNext !== null && item.travelMinutesToNext > 0 && (
+        <p className="pl-6 text-slate-400">↓ 이동 {formatDuration(item.travelMinutesToNext)}</p>
+      )}
     </li>
   );
 }
@@ -75,8 +80,8 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company }: Do
                     <div key={block.label}>
                       {block.label && <p className="font-semibold text-slate-700">{block.label}</p>}
                       <ul>
-                        {block.items.map((item) => (
-                          <ItemLine key={item.id} item={item} input={input} />
+                        {block.items.map((item, index) => (
+                          <ItemLine key={item.id} item={item} input={input} number={index + 1} />
                         ))}
                       </ul>
                     </div>

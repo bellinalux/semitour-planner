@@ -415,6 +415,23 @@ export interface FlightWebEstimate {
   checkedAt: string;
 }
 
+/** AI 웹 검색(Booking.com, Agoda, 네이버 호텔 등)으로 확인한 숙박 요금 */
+export interface LodgingWebEstimate {
+  /** 1실(호텔) 또는 1유닛(BnB) 1박 요금 하한 */
+  rateLow: number;
+  rateHigh: number;
+  /** searched: 검색에서 실제 요금을 확인 / estimated: 근거 없이 AI가 추정 */
+  basis: "searched" | "estimated";
+  /** 1인 1박 숙박세·관광세. 확인 못하면 0 */
+  cityTaxPerPersonPerNight: number;
+  /** 추천 숙박 지역 등 메모 */
+  areaNote: string;
+  sourceName: string;
+  priceNote: string;
+  searchUrl: string;
+  checkedAt: string;
+}
+
 /** 웹 검색으로 찾은 호텔 후보 */
 export interface HotelCandidate {
   name: string;
