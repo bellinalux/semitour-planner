@@ -1,12 +1,12 @@
-import { Compass } from "lucide-react";
+import Image from "next/image";
 import { APP_VERSION } from "@/lib/version";
 
 export function Header({ actions }: { actions?: React.ReactNode }) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6">
       <div className="flex items-center gap-2.5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
-          <Compass className="h-4.5 w-4.5" aria-hidden />
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+          <Image src="/logo-mark.png" alt="스케치북트래블 로고" width={32} height={32} className="h-8 w-8 object-contain" priority />
         </span>
         <div className="leading-tight">
           <h1 className="flex items-center gap-2 text-sm font-semibold text-slate-900">

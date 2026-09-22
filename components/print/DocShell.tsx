@@ -27,9 +27,13 @@ export function DocShell({ title, subtitle, company, children }: ShellProps) {
   return (
     <article className="mx-auto max-w-[190mm] break-keep bg-white p-8 text-[11px] leading-5 text-slate-900 print:p-0">
       <header className="flex items-end justify-between gap-4 border-b-2 border-slate-800 pb-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">{title}</h1>
-          <p className="mt-1 text-xs text-slate-600">{subtitle}</p>
+        <div className="flex items-end gap-2.5">
+          {/* eslint-disable-next-line @next/next/no-img-element -- 인쇄 문서는 next/image 최적화 대상이 아니라 일반 img로 넣는다 */}
+          <img src="/logo-mark.png" alt="" aria-hidden className="h-9 w-9 shrink-0 object-contain" />
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">{title}</h1>
+            <p className="mt-1 text-xs text-slate-600">{subtitle}</p>
+          </div>
         </div>
         <div className="shrink-0 text-right">
           {company.name && <p className="text-sm font-semibold">{company.name}</p>}

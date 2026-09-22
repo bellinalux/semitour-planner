@@ -4,4 +4,4 @@
  *   - 같은 날이면 N을 1 증가
  *   - 날짜가 바뀌면 오늘 날짜 + N=1
  */
-export const APP_VERSION = "2026.09.22-13";
+export const APP_VERSION = "2026.09.22-14";
