@@ -146,10 +146,19 @@ const INCLUDE_LABELS: Record<string, string> = {
   flight: "왕복 항공",
 };
 
+/**
+ * 포함·불포함 목록. 대형 여행사(하나투어·모두투어 등) 상품 페이지가 공통으로 밝히는 항목을 따른다.
+ * "가이드·기사 경비(팁)"와 "여행자보험"은 포함/불포함 어느 쪽이든 반드시 밝히는 항목이라
+ * 팁·보험료를 0원 넘게 입력했으면 포함, 아니면 불포함(개인 가입 권장)으로 표시한다.
+ */
 export function includeLists(quote: QuoteData, input: TripInput, hasLocalPay: boolean): { included: string[]; excluded: string[] } {
   const keys = Object.keys(INCLUDE_LABELS) as (keyof typeof quote.ourIncludes)[];
   const included = keys.filter((k) => quote.ourIncludes[k]).map((k) => INCLUDE_LABELS[k]);
   const excluded = keys.filter((k) => !quote.ourIncludes[k]).map((k) => INCLUDE_LABELS[k]);
+  if (input.tipPerPerson > 0) included.push("가이드·기사 경비(팁)");
+  else excluded.push("가이드·기사 경비(팁, 현지 지불)");
+  if (input.insurancePerPerson > 0) included.push("여행자보험");
+  else excluded.push("여행자보험(개인 가입 권장)");
   if (hasLocalPay) excluded.push("현지 지불 항목(별도 안내)");
   if (input.options.length > 0) excluded.push("선택 옵션 요금");
   excluded.push("개인 경비");
