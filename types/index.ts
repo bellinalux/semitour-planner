@@ -282,6 +282,25 @@ export interface ItineraryItem {
   feeCheck?: FeeCheck;
   /** 이용 편의시설 확인 결과. 여행 유형이 장애인투어(accessible)일 때만 채워진다 */
   accessibility?: AccessibilityInfo;
+  /** 이 코스에서 팔 만한 선택 옵션(웹 조사 결과). "코스별 옵션 추천"을 실행하면 채워진다 */
+  suggestedOptions?: OptionSuggestion[];
+}
+
+/** 코스별로 추천된 선택 옵션 (대형 여행사·현지 판매처 웹 조사 결과) */
+export interface OptionSuggestion {
+  /** 옵션 이름 (예: 바나나보트, 제트스키, 수상택시) */
+  name: string;
+  description: string;
+  /** confirmed: 실제 판매가를 확인 / unverified: 확인 못함(요금 표시 안 함) */
+  status: "confirmed" | "unverified";
+  /** 견적 통화로 환산한 1인 요금. 확인 못했거나 환산하지 못했으면 0 */
+  amount: number;
+  /** 현지 통화 1인 요금 (확인됐고 견적 통화와 다를 때만) */
+  local?: { currency: CurrencyCode; amount: number };
+  /** 요금을 확인한 사이트·업체 이름 */
+  sourceName: string;
+  /** 예약 필요 여부 등 유의사항 */
+  note: string;
 }
 
 /** 장애인투어용 이용 편의시설 확인 결과 (웹 조사 결과) */

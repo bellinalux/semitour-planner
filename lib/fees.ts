@@ -28,7 +28,7 @@ export function moneyWithKrw(amount: number, currency: CurrencyCode, rate: numbe
  * 웹 확인으로 현지 통화 금액이 있고 견적 통화와 다르면 현지 금액을 앞세우고 견적 통화 금액을 원화로 함께 적는다.
  * (견적 통화가 원화인 경우: 현지 ฿500 → 약 ₩19,000)
  */
-export function itemFeeText(amount: number, item: ItineraryItem, input: Pick<TripInput, "currency" | "exchangeRateToKrw">): string {
+export function itemFeeText(amount: number, item: Pick<ItineraryItem, "local">, input: Pick<TripInput, "currency" | "exchangeRateToKrw">): string {
   const local = item.local;
   if (local && local.currency !== input.currency) {
     const krw = krwOf(amount, input.currency, input.exchangeRateToKrw);

@@ -4,6 +4,7 @@ import type {
   CurrencyCode,
   DayPlan,
   ItineraryItem,
+  OptionSuggestion,
   PmFreeOption,
   QuoteResult,
   SearchSource,
@@ -15,7 +16,7 @@ import type {
 } from "@/types";
 import { ExportBar } from "./ExportBar";
 import { DocumentBar } from "./DocumentBar";
-import { ItineraryPanel, type FeeCheckView } from "./ItineraryPanel";
+import { ItineraryPanel, type FeeCheckView, type OptionSuggestView } from "./ItineraryPanel";
 import type { ItemPatch } from "./itinerary/TimelineItem";
 import { QuotePanel } from "./QuotePanel";
 import { OptionsPanel } from "./options/OptionsPanel";
@@ -46,6 +47,7 @@ interface ItemActions {
 
 interface OptionActions {
   onAddOption: (tour: TourCandidate, dayNo: number) => void;
+  onAddSuggestedOption: (suggestion: OptionSuggestion, dayNo: number) => void;
   onChangeOptions: (options: TourOption[]) => void;
 }
 
@@ -65,6 +67,7 @@ interface Props {
   usp: UspView;
   exporter: ExportView;
   feeCheck: FeeCheckView;
+  optionSuggest: OptionSuggestView;
   documents: React.ComponentProps<typeof DocumentBar>;
 }
 
@@ -84,6 +87,7 @@ export function Dashboard({
   usp,
   exporter,
   feeCheck,
+  optionSuggest,
   documents,
 }: Props) {
   const { onAddTour, ...panelActions } = itemActions;
@@ -99,6 +103,8 @@ export function Dashboard({
         travelType={input.travelType}
         researchInfo={researchInfo}
         feeCheck={feeCheck}
+        optionSuggest={optionSuggest}
+        onAddSuggestedOption={optionActions.onAddSuggestedOption}
         pmChoice={pmChoice}
         onSelectPm={onSelectPm}
         onRetry={onRetryItinerary}

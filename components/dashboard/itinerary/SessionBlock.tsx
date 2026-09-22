@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import type { CurrencyCode, ItineraryItem } from "@/types";
+import type { CurrencyCode, ItineraryItem, OptionSuggestion } from "@/types";
 import { TimelineItem, type ItemPatch } from "./TimelineItem";
 
 interface Props {
@@ -9,9 +9,11 @@ interface Props {
   tone: "am" | "pm";
   items: ItineraryItem[];
   currency: CurrencyCode;
+  dayNo: number;
   editing: boolean;
   onChangeItem: (itemId: string, patch: ItemPatch) => void;
   onDeleteItem: (itemId: string) => void;
+  onAddSuggestedOption: (suggestion: OptionSuggestion, dayNo: number) => void;
   /** 헤더 아래에 끼워 넣을 요소 (오후 A/B 선택 등) */
   children?: React.ReactNode;
 }
@@ -28,9 +30,11 @@ export function SessionBlock({
   tone,
   items,
   currency,
+  dayNo,
   editing,
   onChangeItem,
   onDeleteItem,
+  onAddSuggestedOption,
   children,
 }: Props) {
   return (
@@ -49,10 +53,12 @@ export function SessionBlock({
             order={index + 1}
             isLast={index === items.length - 1}
             currency={currency}
+            dayNo={dayNo}
             tone={tone}
             editing={editing}
             onChangeItem={onChangeItem}
             onDeleteItem={onDeleteItem}
+            onAddSuggestedOption={onAddSuggestedOption}
           />
         ))}
       </ol>

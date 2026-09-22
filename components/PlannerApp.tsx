@@ -18,7 +18,9 @@ import { useWorkPersistence } from "@/hooks/useWorkPersistence";
 import { missingLegalFields } from "@/lib/company";
 import { calculateQuote } from "@/lib/cost";
 import { applyFeeResults, feeCheckTargets, type FeeApplySummary } from "@/lib/fees";
+import { applyOptionSuggestions, optionSuggestTargets, suggestionToOption, type OptionSuggestApplySummary } from "@/lib/optionSuggestions";
 import type { VerifyFeesResponse } from "@/lib/schemas/market";
+import type { SuggestOptionsResponse } from "@/lib/schemas/optionSuggest";
 import { overnightNights } from "@/lib/itinerary";
 import { buildEmojiCustomerText } from "@/lib/exportEmoji";
 import { buildCustomerText, buildInternalText } from "@/lib/exportText";
@@ -39,6 +41,11 @@ export function PlannerApp() {
     VerifyFeesResponse
   >("/api/verify-fees");
   const [feeSummary, setFeeSummary] = useState<FeeApplySummary | null>(null);
+  const optionSuggestRequest = useRequest<
+    { destination: string; currency: string; exchangeRateToKrw: number; items: { id: string; name: string; description?: string; city?: string }[] },
+    SuggestOptionsResponse
+  >("/api/suggest-options");
+  const [optionSuggestSummary, setOptionSuggestSummary] = useState<OptionSuggestApplySummary | null>(null);
   const { company } = useCompanyProfile();
   const { kind: printKind, print } = usePrintDocument();
 
@@ -86,6 +93,7 @@ export function PlannerApp() {
   const handleGenerate = async () => {
     setTab("result");
     setFeeSummary(null);
+    setOptionSuggestSummary(null);
     usp.reset();
     const result = await itinerary.generate(input);
     if (!result) return;
@@ -123,6 +131,22 @@ export function PlannerApp() {
     const { days: next, summary } = applyFeeResults(days, response.results, response.checkedAt);
     itinerary.replaceDays(next);
     setFeeSummary(summary);
+  };
+
+  /** 코스마다 팔 만한 선택 옵션(바나나보트, 제트스키 등)을 웹에서 찾아 일정 항목에 반영한다 */
+  const handleSuggestOptions = async () => {
+    const items = optionSuggestTargets(days).slice(0, 30);
+    if (items.length === 0) return;
+    const response = await optionSuggestRequest.run({
+      destination: input.destination.trim() || meta?.cities.join(", ") || "",
+      currency: input.currency,
+      exchangeRateToKrw: input.exchangeRateToKrw,
+      items,
+    });
+    if (!response) return;
+    const { days: next, summary } = applyOptionSuggestions(days, response.results, input.currency);
+    itinerary.replaceDays(next);
+    setOptionSuggestSummary(summary);
   };
 
   const handleGenerateUsp = () => {
@@ -187,6 +211,7 @@ export function PlannerApp() {
             }}
             optionActions={{
               onAddOption: (tour, dayNo) => update({ options: [...input.options, tourToOption(tour, dayNo, input)] }),
+              onAddSuggestedOption: (suggestion, dayNo) => update({ options: [...input.options, suggestionToOption(suggestion, dayNo, input)] }),
               onChangeOptions: (options) => update({ options }),
             }}
             onRetryItinerary={handleGenerate}
@@ -198,6 +223,14 @@ export function PlannerApp() {
               searched: feeRequest.data?.searched ?? true,
               fxUpdatedAt: feeRequest.data?.fx[0]?.updatedAt ?? "",
               onRun: () => void handleVerifyFees(),
+            }}
+            optionSuggest={{
+              state: optionSuggestRequest.state,
+              targetCount: Math.min(30, optionSuggestTargets(days).length),
+              summary: optionSuggestSummary,
+              sources: optionSuggestRequest.data?.sources ?? [],
+              searched: optionSuggestRequest.data?.searched ?? true,
+              onRun: () => void handleSuggestOptions(),
             }}
             usp={{
               state: usp.state,

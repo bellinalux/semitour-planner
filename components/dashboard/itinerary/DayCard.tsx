@@ -1,5 +1,5 @@
 import { BedDouble, Plus, Sun, Sunset } from "lucide-react";
-import type { CurrencyCode, DayPlan, PmFreeOption } from "@/types";
+import type { CurrencyCode, DayPlan, OptionSuggestion, PmFreeOption } from "@/types";
 import { PmOptionSwitch } from "./PmOptionSwitch";
 import { SessionBlock } from "./SessionBlock";
 import { TimelineItem, type ItemPatch } from "./TimelineItem";
@@ -13,6 +13,7 @@ interface Props {
   onChangeItem: (itemId: string, patch: ItemPatch) => void;
   onDeleteItem: (itemId: string) => void;
   onAddItem: (day: number) => void;
+  onAddSuggestedOption: (suggestion: OptionSuggestion, dayNo: number) => void;
 }
 
 export function DayCard({
@@ -24,6 +25,7 @@ export function DayCard({
   onChangeItem,
   onDeleteItem,
   onAddItem,
+  onAddSuggestedOption,
 }: Props) {
   const selected = plan.pmFreeOptions.find((o) => o.id === selectedPmId) ?? plan.pmFreeOptions[0];
 
@@ -51,10 +53,12 @@ export function DayCard({
                   order={index + 1}
                   isLast={index === plan.items.length - 1}
                   currency={currency}
+                  dayNo={plan.day}
                   tone="linear"
                   editing={editing}
                   onChangeItem={onChangeItem}
                   onDeleteItem={onDeleteItem}
+                  onAddSuggestedOption={onAddSuggestedOption}
                 />
               ))}
             </ol>
@@ -78,9 +82,11 @@ export function DayCard({
               tone="am"
               items={plan.amGuided}
               currency={currency}
+              dayNo={plan.day}
               editing={editing}
               onChangeItem={onChangeItem}
               onDeleteItem={onDeleteItem}
+              onAddSuggestedOption={onAddSuggestedOption}
             />
             {selected && (
               <SessionBlock
@@ -90,9 +96,11 @@ export function DayCard({
                 tone="pm"
                 items={selected.items}
                 currency={currency}
+                dayNo={plan.day}
                 editing={editing}
                 onChangeItem={onChangeItem}
                 onDeleteItem={onDeleteItem}
+                onAddSuggestedOption={onAddSuggestedOption}
               >
                 <PmOptionSwitch
                   day={plan.day}

@@ -1,10 +1,11 @@
-import { Accessibility, AlertCircle, AlertTriangle, BadgeCheck, Bus, Clock, ExternalLink, Eye, HelpCircle, Ticket, Trash2, Utensils, Wallet, X } from "lucide-react";
+import { Accessibility, AlertCircle, AlertTriangle, BadgeCheck, Bus, Clock, ExternalLink, Eye, HelpCircle, Plus, Sparkles, Ticket, Trash2, Utensils, Wallet, X } from "lucide-react";
+import { useState } from "react";
 import { MoneyInput } from "@/components/ui/MoneyInput";
 import { currencySymbol } from "@/lib/currency";
-import { feeHint, isLocalPay } from "@/lib/fees";
+import { feeHint, isLocalPay, itemFeeText } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { feeLabel, ITEM_TYPE_META, ITEM_TYPES } from "@/lib/itemTypes";
-import type { Admission, CurrencyCode, ItemType, ItineraryItem } from "@/types";
+import type { Admission, CurrencyCode, ItemType, ItineraryItem, OptionSuggestion } from "@/types";
 import { useFx } from "./FxContext";
 
 export type ItemPatch = Partial<ItineraryItem>;
@@ -14,11 +15,14 @@ interface Props {
   order: number;
   isLast: boolean;
   currency: CurrencyCode;
+  /** 이 항목이 속한 일차 (추천 옵션을 "선택 옵션"으로 추가할 때 필요) */
+  dayNo: number;
   /** am/pm: 세미투어 오전/오후 (번호 표시) — linear: 업체 코스 (유형 이모지 표시) */
   tone: "am" | "pm" | "linear";
   editing: boolean;
   onChangeItem: (itemId: string, patch: ItemPatch) => void;
   onDeleteItem: (itemId: string) => void;
+  onAddSuggestedOption: (suggestion: OptionSuggestion, dayNo: number) => void;
 }
 
 const TONE = {
@@ -60,9 +64,10 @@ function costFields(type: ItemType | undefined) {
 const selectClass =
   "rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30";
 
-export function TimelineItem({ item, order, isLast, currency, tone, editing, onChangeItem, onDeleteItem }: Props) {
+export function TimelineItem({ item, order, isLast, currency, dayNo, tone, editing, onChangeItem, onDeleteItem, onAddSuggestedOption }: Props) {
   const symbol = currencySymbol(currency);
   const { rate } = useFx();
+  const [addedNames, setAddedNames] = useState<string[]>([]);
   const { fee, meal } = costFields(item.type);
   const typeMeta = ITEM_TYPE_META[item.type ?? "sightseeing"];
   const showEstimateTag = fee || meal;
@@ -292,6 +297,54 @@ export function TimelineItem({ item, order, isLast, currency, tone, editing, onC
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {item.suggestedOptions && item.suggestedOptions.length > 0 && (
+          <div className="mt-2 space-y-1.5 rounded-md border border-indigo-100 bg-indigo-50/40 px-2.5 py-1.5 text-[11px] leading-4">
+            <p className="flex items-center gap-1.5 font-semibold text-indigo-800">
+              <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden />이 코스에서 팔 만한 선택 옵션
+            </p>
+            <ul className="space-y-1.5">
+              {item.suggestedOptions.map((s, i) => (
+                <li key={`${s.name}-${i}`} className="rounded-md bg-white px-2 py-1.5 ring-1 ring-indigo-100">
+                  <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800">{s.name}</p>
+                      {s.description && <p className="text-slate-500">{s.description}</p>}
+                    </div>
+                    {addedNames.includes(s.name) ? (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">
+                        추가됨
+                      </span>
+                    ) : (
+                      s.status === "confirmed" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onAddSuggestedOption(s, dayNo);
+                            setAddedNames((prev) => [...prev, s.name]);
+                          }}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-indigo-300 bg-indigo-50 px-1.5 py-0.5 font-semibold text-indigo-700 hover:bg-indigo-100"
+                        >
+                          <Plus className="h-3 w-3" aria-hidden />
+                          선택 옵션으로 추가
+                        </button>
+                      )
+                    )}
+                  </div>
+                  <p className="mt-1">
+                    {s.status === "confirmed" ? (
+                      <span className="font-semibold tabular-nums text-slate-900">{itemFeeText(s.amount, { local: s.local }, { currency, exchangeRateToKrw: rate })}</span>
+                    ) : (
+                      <span className="text-slate-500">요금 확인 못함</span>
+                    )}
+                    {s.sourceName && <span className="text-slate-400"> · 확인 출처: {s.sourceName}</span>}
+                  </p>
+                  {s.note && <p className="mt-0.5 text-slate-500">{s.note}</p>}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

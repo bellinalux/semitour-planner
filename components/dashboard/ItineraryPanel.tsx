@@ -1,14 +1,15 @@
 "use client";
 
-import { CalendarDays, Check, Hotel, Info, Loader2, Pencil, SearchCheck } from "lucide-react";
+import { CalendarDays, Check, Hotel, Info, Loader2, Pencil, SearchCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { FeeApplySummary } from "@/lib/fees";
+import type { OptionSuggestApplySummary } from "@/lib/optionSuggestions";
 import { TRAVEL_TYPES } from "@/lib/defaults";
-import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PmFreeOption, SearchSource, TravelType } from "@/types";
+import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, OptionSuggestion, PmFreeOption, SearchSource, TravelType } from "@/types";
 import { DayCard } from "./itinerary/DayCard";
 import { FxContext } from "./itinerary/FxContext";
 import type { ItemPatch } from "./itinerary/TimelineItem";
@@ -26,11 +27,24 @@ export interface FeeCheckView {
   onRun: () => void;
 }
 
+/** 코스별 선택 옵션 추천 (버튼, 진행 상태, 결과 요약) */
+export interface OptionSuggestView {
+  state: AsyncState;
+  /** 조사할 코스 수 */
+  targetCount: number;
+  summary: OptionSuggestApplySummary | null;
+  sources: { title: string; url: string }[];
+  /** 조사가 검색 근거 없이 이루어졌는지 */
+  searched: boolean;
+  onRun: () => void;
+}
+
 interface Props {
   state: AsyncState;
   /** 1 견적통화 = ? 원 (항목별 원화 환산 표기에 쓴다) */
   krwRate: number;
   feeCheck: FeeCheckView;
+  optionSuggest: OptionSuggestView;
   days: DayPlan[];
   meta: CourseMeta | null;
   currency: CurrencyCode;
@@ -41,6 +55,7 @@ interface Props {
   onChangeItem: (itemId: string, patch: ItemPatch) => void;
   onDeleteItem: (itemId: string) => void;
   onAddItem: (day: number) => void;
+  onAddSuggestedOption: (suggestion: OptionSuggestion, dayNo: number) => void;
   onRetry: () => void;
 }
 
@@ -159,10 +174,43 @@ function FeeCheckNotice({ view }: { view: FeeCheckView }) {
   );
 }
 
+function OptionSuggestNotice({ view }: { view: OptionSuggestView }) {
+  const { state, summary, sources, searched } = view;
+  if (state.status === "error") {
+    return <ErrorBanner title="선택 옵션을 찾지 못했습니다" message={state.error ?? "잠시 후 다시 시도해 주세요."} onRetry={view.onRun} />;
+  }
+  if (state.status !== "success" || !summary) return null;
+  return (
+    <div className="space-y-1.5 rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 text-[11px] leading-4 text-slate-700">
+      <p className="font-semibold text-indigo-800">
+        웹 조사 결과: 옵션을 찾은 코스 {summary.coursesWithOptions}개 · 확인된 옵션 {summary.confirmedOptions}개 · 어울리는 옵션 없음 {summary.noMatch}개
+      </p>
+      {!searched && <p className="text-amber-700">웹 검색 근거를 확보하지 못해 옵션을 찾지 못했습니다. 잠시 후 다시 시도해 주세요.</p>}
+      <p>코스마다 나온 &quot;선택 옵션으로 추가&quot; 버튼을 누르면 견적의 선택 옵션에 들어가고, 매출 시뮬레이션에도 바로 반영됩니다.</p>
+      {sources.length > 0 && (
+        <details>
+          <summary className="cursor-pointer font-medium text-indigo-700">참고한 출처 ({sources.length})</summary>
+          <ul className="mt-1 space-y-0.5">
+            {sources.map((src) => (
+              <li key={src.url}>
+                <a href={src.url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
+                  {src.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <p className="text-slate-400">요금은 검색 시점의 참고 정보입니다. 판매 전에 예약처에서 날짜별 요금과 예약 가능 여부를 확인하세요.</p>
+    </div>
+  );
+}
+
 export function ItineraryPanel({
   state,
   krwRate,
   feeCheck,
+  optionSuggest,
   days,
   meta,
   currency,
@@ -173,6 +221,7 @@ export function ItineraryPanel({
   onChangeItem,
   onDeleteItem,
   onAddItem,
+  onAddSuggestedOption,
   onRetry,
 }: Props) {
   const [editing, setEditing] = useState(false);
@@ -188,6 +237,20 @@ export function ItineraryPanel({
       >
         {feeCheck.state.status === "loading" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <SearchCheck className="h-3.5 w-3.5" aria-hidden />}
         {feeCheck.state.status === "loading" ? "요금 확인 중..." : "입장료 웹 확인"}
+      </button>
+    ) : undefined;
+
+  const suggestButton =
+    state.status === "success" ? (
+      <button
+        type="button"
+        onClick={optionSuggest.onRun}
+        disabled={optionSuggest.state.status === "loading" || optionSuggest.targetCount === 0}
+        title="바나나보트·수상택시처럼 각 코스에서 팔 만한 선택 옵션을 대형 여행사·예약처 기준으로 웹에서 찾아, 현지 요금과 원화 환산가로 보여줍니다"
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-indigo-300 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {optionSuggest.state.status === "loading" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Sparkles className="h-3.5 w-3.5" aria-hidden />}
+        {optionSuggest.state.status === "loading" ? "옵션 찾는 중..." : "코스별 옵션 추천"}
       </button>
     ) : undefined;
 
@@ -216,6 +279,7 @@ export function ItineraryPanel({
       action={
         <div className="flex flex-wrap justify-end gap-2">
           {verifyButton}
+          {suggestButton}
           {editToggle}
         </div>
       }
@@ -247,6 +311,7 @@ export function ItineraryPanel({
             입장료·식대·소요 시간은 AI 추정치입니다. &quot;입장료 웹 확인&quot;으로 현지 통화 금액을 확인하고, 각 항목의 &quot;현지 지불(불포함)&quot; 버튼으로 고객이 현지에서 직접 내는 항목을 표시하세요. 금액은 직접 수정할 수 있고, 수정하면 견적이 바로 다시 계산됩니다.
           </p>
           <FeeCheckNotice view={feeCheck} />
+          <OptionSuggestNotice view={optionSuggest} />
           <FxContext.Provider value={{ currency, rate: krwRate }}>
           {days.map((plan) => (
             <DayCard
@@ -259,6 +324,7 @@ export function ItineraryPanel({
               onChangeItem={onChangeItem}
               onDeleteItem={onDeleteItem}
               onAddItem={onAddItem}
+              onAddSuggestedOption={onAddSuggestedOption}
             />
           ))}
           </FxContext.Provider>
