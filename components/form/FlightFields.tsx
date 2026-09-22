@@ -3,6 +3,7 @@ import { TextField } from "@/components/ui/TextField";
 import { currencySymbol } from "@/lib/currency";
 import { CostField } from "./CostField";
 import { FlightPricePanel } from "./FlightPricePanel";
+import { FlightWebSearchPanel } from "./FlightWebSearchPanel";
 import type { SectionProps } from "./types";
 
 function flightSearchUrl(origin: string, destination: string): string {
@@ -36,6 +37,7 @@ export function FlightFields({ input, onChange }: SectionProps) {
         onChange={onChange}
       />
       <FlightPricePanel input={input} onChange={onChange} />
+      <FlightWebSearchPanel input={input} onChange={onChange} />
       {canSearch && (
         <a
           href={flightSearchUrl(input.originCity.trim(), input.destination.trim())}

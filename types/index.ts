@@ -396,6 +396,25 @@ export interface TravelEstimate {
   seasonNote: string;
 }
 
+/** AI 웹 검색(Google Flights, 네이버 항공권, 스카이스캐너 등)으로 확인한 항공 요금 */
+export interface FlightWebEstimate {
+  roundTripLow: number;
+  roundTripHigh: number;
+  /** searched: 검색에서 실제 요금을 확인 / estimated: 근거 없이 AI가 추정 */
+  basis: "searched" | "estimated";
+  direct: boolean;
+  /** 주로 다니는 항공사 (없으면 빈 문자열) */
+  airlines: string;
+  /** 저렴한 시기·요일 등 요금 관련 메모 */
+  cheapestNote: string;
+  /** 요금을 확인한 사이트 이름 */
+  sourceName: string;
+  /** 유의사항 (유류할증료 포함 여부 등) */
+  priceNote: string;
+  searchUrl: string;
+  checkedAt: string;
+}
+
 /** 웹 검색으로 찾은 호텔 후보 */
 export interface HotelCandidate {
   name: string;
