@@ -1,30 +1,129 @@
 import { ALERT_LABELS } from "@/lib/travelAlert";
 import type { TravelAlert } from "@/types";
-import { ExternalError, isRecord, readSecret } from "./external";
+import { ExternalError, fetchJson, isRecord, readSecret } from "./external";
 import { resolvePlace } from "./places";
 
 /**
- * 외교부 국가·지역별 여행경보 (공공데이터포털 1262000/TravelAlarmService2).
- * 관광진흥법 시행규칙 §21 제8호가 기획여행 안내에 표시하도록 정한 항목이다.
+ * 외교부 국가별 여행경보단계.
+ *
+ * 1순위: 0404.go.kr(외교부 해외안전여행 홈페이지)이 자기 화면(국가 지도)을 그릴 때 쓰는
+ * 공개 목록 API. 키·가입이 전혀 필요 없다. 공식 오픈API가 아니라 홈페이지 내부용이라
+ * 예고 없이 바뀌거나 막힐 수 있어, 실패하면 2순위로 넘어간다.
+ * 2순위: 공공데이터포털 TravelAlarmService2 (DATA_GO_KR_KEY를 등록했을 때만).
  */
-const BASE_URL = "https://apis.data.go.kr/1262000/TravelAlarmService2/getTravelAlarmList2";
-/** 국가 목록은 자주 바뀌지 않아 서버 메모리에 6시간 보관한다 */
+
 const CACHE_MS = 6 * 60 * 60 * 1000;
+
+/** 국외여행 표준약관·관광진흥법이 말하는 4단계 + 특별여행주의보 */
+type Level = 0 | 1 | 2 | 3 | 4;
+
+interface CountryRow {
+  countryKo: string;
+  countryEn: string;
+  /** 전역(국가 전체) 경보의 최고 단계. 없으면 0 */
+  levelAll: Level;
+  /** 일부 지역에만 걸린 경보의 최고 단계 (전역엔 없지만 참고할 값). 없으면 0 */
+  levelSome: Level;
+  special: boolean;
+}
+
+/* ---------------------------- 1순위: 0404.go.kr ---------------------------- */
+
+const MOFA_URL = "https://www.0404.go.kr/util/getNtnList";
+let mofaCache: { at: number; rows: CountryRow[] } | null = null;
+
+/** 단계 → All/Some 플래그 필드 이름 (0404 응답 형식) */
+const LEVEL_FIELDS: { level: Level; all: string; some: string }[] = [
+  { level: 4, all: "trvlPrhbAllYn", some: "trvlPrhbSomeYn" }, // 여행금지
+  { level: 3, all: "dptcnyAdvsAllYn", some: "dptcnyAdvsSomeYn" }, // 출국권고
+  { level: 2, all: "trvlRfranAllYn", some: "trvlRfranSomeYn" }, // 여행자제
+  { level: 1, all: "trvlCutnAllYn", some: "trvlCutnSomeYn" }, // 여행유의
+];
+
+function toCountryRow(raw: unknown): CountryRow | null {
+  if (!isRecord(raw)) return null;
+  const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const countryKo = text(raw.ntnNm);
+  if (!countryKo) return null;
+
+  let levelAll: Level = 0;
+  let levelSome: Level = 0;
+  for (const f of LEVEL_FIELDS) {
+    if (raw[f.all] === "Y" && f.level > levelAll) levelAll = f.level;
+    if (raw[f.some] === "Y" && f.level > levelSome) levelSome = f.level;
+  }
+  return {
+    countryKo,
+    countryEn: text(raw.ntnEnNm),
+    levelAll,
+    levelSome,
+    special: raw.spclTrvlCutnAllYn === "Y" || raw.spclTrvlCutnSomeYn === "Y",
+  };
+}
+
+async function loadMofaRows(): Promise<CountryRow[]> {
+  if (mofaCache && Date.now() - mofaCache.at < CACHE_MS) return mofaCache.rows;
+
+  const res = await fetchJson(
+    MOFA_URL,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ searchType: "total" }) },
+    15_000,
+    "여행경보(0404.go.kr)",
+  );
+  if (!res.ok || !isRecord(res.body) || res.body.success !== true || !Array.isArray(res.body.data)) {
+    throw new ExternalError("UPSTREAM", "0404.go.kr에서 국가 목록을 가져오지 못했습니다.", 502);
+  }
+
+  const rows = res.body.data.map(toCountryRow).filter((r): r is CountryRow => r !== null);
+  if (rows.length === 0) throw new ExternalError("BAD_OUTPUT", "0404.go.kr 응답에서 국가 목록을 읽지 못했습니다.", 502);
+
+  mofaCache = { at: Date.now(), rows };
+  return rows;
+}
+
+function findCountryRow(rows: CountryRow[], countryKo: string, countryEn: string): CountryRow | null {
+  const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+  const ko = norm(countryKo);
+  const en = norm(countryEn);
+  return rows.find((r) => (en && norm(r.countryEn) === en) || (ko && norm(r.countryKo).includes(ko))) ?? null;
+}
+
+async function lookupFromMofaSite(destination: string): Promise<TravelAlert> {
+  const place = await resolvePlace(destination);
+  const rows = await loadMofaRows();
+  const row = findCountryRow(rows, place.countryKo, place.country);
+  if (!row) throw new ExternalError("NOT_FOUND", `"${place.countryKo || destination}"을(를) 목록에서 찾지 못했습니다.`, 404);
+
+  // 전역 경보가 없으면 일부 지역 경보라도 참고로 보여 주되, 전역이 아니라고 밝힌다
+  const level = row.levelAll > 0 ? row.levelAll : row.levelSome;
+  const scopeNote = row.levelAll > 0 ? "" : row.levelSome > 0 ? "일부 지역에만 해당 (국가 전역 경보는 아님)" : "";
+  const specialNote = row.special ? "특별여행주의보 발령 지역 포함" : "";
+
+  return {
+    country: row.countryKo,
+    level,
+    levelLabel: ALERT_LABELS[level] ?? ALERT_LABELS[0],
+    note: [scopeNote, specialNote].filter(Boolean).join(" · "),
+    checkedAt: new Date().toISOString(),
+    source: "api",
+  };
+}
+
+/* ------------------------- 2순위: 공공데이터포털(예비) ------------------------- */
+
+const DATA_GO_KR_URL = "https://apis.data.go.kr/1262000/TravelAlarmService2/getTravelAlarmList2";
 
 interface AlarmRow {
   countryKo: string;
   countryEn: string;
-  iso: string;
   level: number;
-  /** 특별여행주의보 등 구분 */
   regionType: string;
   remark: string;
-  writtenAt: string;
 }
 
-let cache: { at: number; rows: AlarmRow[] } | null = null;
+let dataGoKrCache: { at: number; rows: AlarmRow[] } | null = null;
 
-function toRow(raw: unknown): AlarmRow | null {
+function toAlarmRow(raw: unknown): AlarmRow | null {
   if (!isRecord(raw)) return null;
   const text = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "");
   const countryKo = text(raw.country_nm);
@@ -33,20 +132,16 @@ function toRow(raw: unknown): AlarmRow | null {
   return {
     countryKo,
     countryEn: text(raw.country_eng_nm),
-    iso: text(raw.country_iso_alp2).toUpperCase(),
     level: Number.isFinite(level) && level >= 0 && level <= 4 ? level : 0,
     regionType: text(raw.region_ty),
     remark: text(raw.remark),
-    writtenAt: text(raw.written_dt),
   };
 }
 
-/** 응답 본문에서 목록 배열을 찾는다. 공공데이터 응답은 래핑 형태가 서비스마다 조금씩 다르다. */
 function extractItems(body: unknown): unknown[] {
   if (Array.isArray(body)) return body;
   if (!isRecord(body)) return [];
-  const data = body.data;
-  if (Array.isArray(data)) return data;
+  if (Array.isArray(body.data)) return body.data;
   const response = isRecord(body.response) ? body.response : null;
   const bodyNode = response && isRecord(response.body) ? response.body : null;
   if (bodyNode) {
@@ -58,79 +153,30 @@ function extractItems(body: unknown): unknown[] {
   return [];
 }
 
-async function loadRows(key: string): Promise<AlarmRow[]> {
-  if (cache && Date.now() - cache.at < CACHE_MS) return cache.rows;
+async function loadDataGoKrRows(key: string): Promise<AlarmRow[]> {
+  if (dataGoKrCache && Date.now() - dataGoKrCache.at < CACHE_MS) return dataGoKrCache.rows;
 
   const params = new URLSearchParams({ serviceKey: key, numOfRows: "300", pageNo: "1", returnType: "JSON" });
-  let res: Response;
-  try {
-    res = await fetch(`${BASE_URL}?${params}`, { signal: AbortSignal.timeout(20_000) });
-  } catch (err) {
-    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
-      throw new ExternalError("TIMEOUT", "여행경보 조회 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.", 504);
-    }
-    throw new ExternalError("UPSTREAM", "여행경보 서버에 연결하지 못했습니다.", 502);
-  }
+  const res = await fetchJson(`${DATA_GO_KR_URL}?${params}`, {}, 20_000, "여행경보(공공데이터포털)").catch(() => null);
+  if (!res) throw new ExternalError("UPSTREAM", "공공데이터포털 여행경보 서버에 연결하지 못했습니다.", 502);
+  if (!res.ok) throw new ExternalError("UPSTREAM", `공공데이터포털 여행경보 오류 (${res.status})`, 502);
 
-  const text = await res.text();
-  if (!res.ok) {
-    throw new ExternalError("UPSTREAM", `여행경보 서버 오류 (${res.status}). 서비스 키와 활용 신청 상태를 확인해 주세요.`, 502);
-  }
-
-  let body: unknown;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    // 키가 잘못되면 공공데이터포털이 XML 오류 문서를 돌려준다
-    const reason = /SERVICE_KEY_IS_NOT_REGISTERED|SERVICE ERROR|INVALID_REQUEST_PARAMETER/i.test(text)
-      ? "서비스 키가 등록되지 않았거나 승인 대기 중일 수 있습니다."
-      : "응답 형식을 읽지 못했습니다.";
-    throw new ExternalError("BAD_OUTPUT", `여행경보를 가져오지 못했습니다. ${reason}`, 502);
-  }
-
-  const rows = extractItems(body)
-    .map(toRow)
-    .filter((r): r is AlarmRow => r !== null);
-  if (rows.length === 0) {
-    throw new ExternalError("BAD_OUTPUT", "여행경보 목록이 비어 있습니다. 공공데이터포털에서 이 API의 활용 신청 상태를 확인해 주세요.", 502);
-  }
-  cache = { at: Date.now(), rows };
+  const rows = extractItems(res.body).map(toAlarmRow).filter((r): r is AlarmRow => r !== null);
+  if (rows.length === 0) throw new ExternalError("BAD_OUTPUT", "공공데이터포털 여행경보 목록이 비어 있습니다.", 502);
+  dataGoKrCache = { at: Date.now(), rows };
   return rows;
 }
 
-const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
-
-function findRow(rows: AlarmRow[], countryKo: string, countryEn: string): AlarmRow | null {
-  const ko = norm(countryKo);
-  const en = norm(countryEn);
-  // 같은 나라에 여러 줄(지역별 경보)이 있으면 가장 높은 단계를 대표로 삼는다
-  const matched = rows.filter((r) => (ko && norm(r.countryKo).includes(ko)) || (en && norm(r.countryEn) === en));
-  if (matched.length === 0) return null;
-  return matched.reduce((best, r) => (r.level > best.level ? r : best));
-}
-
-/** 여행지의 여행경보단계를 조회한다. */
-export async function lookupTravelAlert(destination: string): Promise<TravelAlert> {
-  const key = readSecret("DATA_GO_KR_KEY");
-  if (!key) {
-    throw new ExternalError(
-      "NO_KEY",
-      "여행경보 조회용 키(DATA_GO_KR_KEY)가 등록되지 않았습니다. 공공데이터포털에서 '외교부_국가·지역별 여행경보' 활용 신청 후 키를 등록하거나, 경보단계를 직접 입력해 주세요.",
-      503,
-    );
-  }
-
+async function lookupFromDataGoKr(destination: string, key: string): Promise<TravelAlert> {
   const place = await resolvePlace(destination);
-  const rows = await loadRows(key);
-  const row = findRow(rows, place.countryKo, place.country);
-  if (!row) {
-    throw new ExternalError(
-      "NOT_FOUND",
-      `"${place.countryKo || destination}"의 여행경보를 목록에서 찾지 못했습니다. 경보단계를 직접 입력해 주세요.`,
-      404,
-    );
-  }
+  const rows = await loadDataGoKrRows(key);
+  const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+  const ko = norm(place.countryKo);
+  const en = norm(place.country);
+  const matched = rows.filter((r) => (ko && norm(r.countryKo).includes(ko)) || (en && norm(r.countryEn) === en));
+  if (matched.length === 0) throw new ExternalError("NOT_FOUND", `"${place.countryKo || destination}"을(를) 목록에서 찾지 못했습니다.`, 404);
 
+  const row = matched.reduce((best, r) => (r.level > best.level ? r : best));
   const special = /특별여행/.test(row.regionType) || /특별여행/.test(row.remark);
   return {
     country: row.countryKo,
@@ -140,4 +186,21 @@ export async function lookupTravelAlert(destination: string): Promise<TravelAler
     checkedAt: new Date().toISOString(),
     source: "api",
   };
+}
+
+/* --------------------------------- 진입점 --------------------------------- */
+
+/** 여행지의 여행경보단계를 조회한다. 키 없이 0404.go.kr을 먼저 쓰고, 실패하면 공공데이터포털(키가 있을 때만)로 넘어간다. */
+export async function lookupTravelAlert(destination: string): Promise<TravelAlert> {
+  try {
+    return await lookupFromMofaSite(destination);
+  } catch (primaryErr) {
+    const key = readSecret("DATA_GO_KR_KEY");
+    if (!key) throw primaryErr;
+    try {
+      return await lookupFromDataGoKr(destination, key);
+    } catch {
+      throw primaryErr;
+    }
+  }
 }
