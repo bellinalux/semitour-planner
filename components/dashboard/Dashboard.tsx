@@ -63,6 +63,12 @@ interface OptionActions {
   onChangeOptions: (options: TourOption[]) => void;
 }
 
+interface RegionActions {
+  /** 지역(도시) 그룹의 첫 날짜 번호 → 다시 만들기 진행 상태 */
+  cityRegenState: Record<number, AsyncState>;
+  onRegenerateCity: (city: string, dayNumbers: number[]) => void;
+}
+
 interface Props {
   itinerary: AsyncState;
   days: DayPlan[];
@@ -75,6 +81,7 @@ interface Props {
   onSelectPm: (day: number, id: PmFreeOption["id"]) => void;
   itemActions: ItemActions;
   optionActions: OptionActions;
+  regionActions: RegionActions;
   onRetryItinerary: () => void;
   usp: UspView;
   exporter: ExportView;
@@ -97,6 +104,7 @@ export function Dashboard({
   onSelectPm,
   itemActions,
   optionActions,
+  regionActions,
   onRetryItinerary,
   usp,
   exporter,
@@ -120,6 +128,7 @@ export function Dashboard({
         researchInfo={researchInfo}
         pickupNote={input.pickupNote}
         sendingNote={input.sendingNote}
+        selectedHotels={input.selectedHotels}
         feeCheck={feeCheck}
         optionSuggest={optionSuggest}
         accessibilityCheck={accessibilityCheck}
@@ -127,10 +136,20 @@ export function Dashboard({
         pmChoice={pmChoice}
         onSelectPm={onSelectPm}
         onRetry={onRetryItinerary}
+        canRegenerateRegion={input.mode === "ai"}
+        cityRegenState={regionActions.cityRegenState}
+        onRegenerateCity={regionActions.onRegenerateCity}
         {...panelActions}
       />
       {itinerary.status === "success" && days.length > 0 && (
-        <TourCatalogPanel input={input} meta={meta} days={days} onAddTour={onAddTour} onAddOption={optionActions.onAddOption} />
+        <TourCatalogPanel
+          input={input}
+          meta={meta}
+          days={days}
+          onAddTour={onAddTour}
+          onAddOption={optionActions.onAddOption}
+          onDeleteItem={itemActions.onDeleteItem}
+        />
       )}
       {itinerary.status === "success" && days.length > 0 && (
         <CourseLibraryPanel destination={input.destination} days={days} segments={library.segments} onInsert={library.onInsert} onAppendDay={library.onAppendDay} onDelete={library.onDelete} />

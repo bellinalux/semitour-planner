@@ -11,6 +11,8 @@ export const itineraryRequestSchema = z.object({
   themes: z.array(z.enum(["history", "food", "nature", "shopping", "photo", "activity", "local"])).max(7),
   notes: z.string().max(500),
   travelType: z.enum(["semi", "package", "honeymoon", "senior", "accessible"]).default("semi"),
+  /** 사용자가 직접 지정한 도시 순서·일수 (예: "로마 2일, 피렌체 2일, 베니스 2일"). 비우면 AI가 알아서 도시를 구성한다 */
+  regionPlan: z.string().max(300).default(""),
 });
 
 export type ItineraryRequest = z.infer<typeof itineraryRequestSchema>;
@@ -48,6 +50,11 @@ const itemSchema = z.object({
 const dayPlanSchema = z.object({
   day: z.number().describe("1부터 시작하는 일차"),
   theme: z.string().describe("그날의 한 줄 주제"),
+  overnightCity: z
+    .string()
+    .describe(
+      "그날 밤 숙박하는 도시 이름. 여러 도시를 도는 여행이면 도시가 바뀌는 날을 정확히 반영합니다(예: 로마 2일 다음 피렌체로 이동하면 그날부터 '피렌체'). 단일 도시 여행이면 매일 그 도시 이름을 씁니다.",
+    ),
   amGuided: z.array(itemSchema).min(2).max(4).describe("오전 가이드 투어 일정. 명소 2~3곳 + 마지막에 점심 식당 1곳"),
   pmFreeOptions: z
     .array(
@@ -95,6 +102,7 @@ export function toDayPlans(
       return {
         day: dayNo,
         theme: day.theme.trim(),
+        overnightCity: day.overnightCity.trim() || undefined,
         kind: "semi" as const,
         items: [],
         amGuided: day.amGuided.map((item, i) =>

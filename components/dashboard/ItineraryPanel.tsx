@@ -1,6 +1,6 @@
 "use client";
 
-import { Accessibility, CalendarDays, Check, Hotel, Info, Loader2, Pencil, PlaneLanding, PlaneTakeoff, SearchCheck, Sparkles } from "lucide-react";
+import { Accessibility, CalendarDays, Check, Hotel, Info, Loader2, MapPin, Pencil, PlaneLanding, PlaneTakeoff, RefreshCw, SearchCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -8,10 +8,23 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { AccessibilityApplySummary } from "@/lib/accessibilityCheck";
 import type { FeeApplySummary } from "@/lib/fees";
+import { groupDaysByCity } from "@/lib/itinerary";
 import type { OptionSuggestApplySummary } from "@/lib/optionSuggestions";
 import type { SegmentKind } from "@/lib/segmentLibrary";
 import { TRAVEL_TYPES } from "@/lib/defaults";
-import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, ItineraryItem, OptionSuggestion, PmFreeOption, SearchSource, TourSlot, TravelType } from "@/types";
+import type {
+  AsyncState,
+  CourseMeta,
+  CurrencyCode,
+  DayPlan,
+  ItineraryItem,
+  OptionSuggestion,
+  PmFreeOption,
+  SearchSource,
+  SelectedHotel,
+  TourSlot,
+  TravelType,
+} from "@/types";
 import { DayCard } from "./itinerary/DayCard";
 import { FxContext } from "./itinerary/FxContext";
 import type { ItemPatch } from "./itinerary/TimelineItem";
@@ -66,6 +79,8 @@ interface Props {
   researchInfo: { sources: SearchSource[]; researched: boolean };
   pickupNote: string;
   sendingNote: string;
+  /** 지역(도시)별로 선택한 숙소. 키는 그 지역 이름(일정의 overnightCity와 같은 문자열) */
+  selectedHotels: Record<string, SelectedHotel>;
   pmChoice: Record<number, PmFreeOption["id"]>;
   onSelectPm: (day: number, id: PmFreeOption["id"]) => void;
   onChangeItem: (itemId: string, patch: ItemPatch) => void;
@@ -76,6 +91,10 @@ interface Props {
   onRelocateItem: (itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => void;
   onSaveSegment: (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => void;
   onRetry: () => void;
+  /** 지역(도시)만 따로 다시 만들기. AI 모드가 아니면(내 코스 붙여넣기) 표시하지 않는다 */
+  canRegenerateRegion: boolean;
+  cityRegenState: Record<number, AsyncState>;
+  onRegenerateCity: (city: string, dayNumbers: number[]) => void;
 }
 
 function ItinerarySkeleton() {
@@ -271,6 +290,49 @@ function AccessibilityCheckNotice({ view }: { view: AccessibilityCheckView }) {
   );
 }
 
+/** 연속된 같은 숙박 도시 구간의 헤더. 다지역 여행(2개 이상 도시)일 때만 표시된다. */
+function CityGroupHeader({
+  city,
+  dayRange,
+  canRegenerate,
+  regenState,
+  onRegenerate,
+}: {
+  city: string;
+  dayRange: string;
+  canRegenerate: boolean;
+  regenState: AsyncState;
+  onRegenerate: () => void;
+}) {
+  const loading = regenState.status === "loading";
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-900 px-3 py-2 text-white">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <MapPin className="h-4 w-4" aria-hidden />
+          {city}
+          <span className="font-normal text-slate-300">· {dayRange}</span>
+        </div>
+        {canRegenerate && (
+          <button
+            type="button"
+            onClick={onRegenerate}
+            disabled={loading}
+            title={`${city} 구간만 새로 만듭니다. 다른 지역의 일정은 그대로 유지됩니다.`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-2.5 py-1 text-xs font-medium text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <RefreshCw className="h-3.5 w-3.5" aria-hidden />}
+            {loading ? "다시 만드는 중..." : "이 지역만 다시 만들기"}
+          </button>
+        )}
+      </div>
+      {regenState.status === "error" && (
+        <p className="rounded-md bg-red-50 px-2.5 py-2 text-[11px] text-red-700">{regenState.error ?? "다시 만들기에 실패했습니다."}</p>
+      )}
+    </div>
+  );
+}
+
 export function ItineraryPanel({
   state,
   krwRate,
@@ -284,6 +346,7 @@ export function ItineraryPanel({
   researchInfo,
   pickupNote,
   sendingNote,
+  selectedHotels,
   pmChoice,
   onSelectPm,
   onChangeItem,
@@ -294,6 +357,9 @@ export function ItineraryPanel({
   onRelocateItem,
   onSaveSegment,
   onRetry,
+  canRegenerateRegion,
+  cityRegenState,
+  onRegenerateCity,
 }: Props) {
   const [editing, setEditing] = useState(false);
 
@@ -401,24 +467,52 @@ export function ItineraryPanel({
           <AccessibilityCheckNotice view={accessibilityCheck} />
           <TransferNote icon={PlaneLanding} label="공항 픽업" note={pickupNote} />
           <FxContext.Provider value={{ currency, rate: krwRate }}>
-          {days.map((plan) => (
-            <DayCard
-              key={plan.day}
-              plan={plan}
-              days={days}
-              currency={currency}
-              selectedPmId={pmChoice[plan.day] ?? "A"}
-              editing={editing}
-              onSelectPm={(id) => onSelectPm(plan.day, id)}
-              onChangeItem={onChangeItem}
-              onDeleteItem={onDeleteItem}
-              onAddItem={onAddItem}
-              onAddSuggestedOption={onAddSuggestedOption}
-              onMoveItem={onMoveItem}
-              onRelocateItem={onRelocateItem}
-              onSaveSegment={onSaveSegment}
-            />
-          ))}
+            {(() => {
+              const dayCard = (plan: DayPlan) => (
+                <DayCard
+                  key={plan.day}
+                  plan={plan}
+                  days={days}
+                  hotelName={plan.overnightCity ? selectedHotels[plan.overnightCity.trim()]?.name : undefined}
+                  currency={currency}
+                  selectedPmId={pmChoice[plan.day] ?? "A"}
+                  editing={editing}
+                  onSelectPm={(id) => onSelectPm(plan.day, id)}
+                  onChangeItem={onChangeItem}
+                  onDeleteItem={onDeleteItem}
+                  onAddItem={onAddItem}
+                  onAddSuggestedOption={onAddSuggestedOption}
+                  onMoveItem={onMoveItem}
+                  onRelocateItem={onRelocateItem}
+                  onSaveSegment={onSaveSegment}
+                />
+              );
+              const groups = groupDaysByCity(days);
+              const showGroups = groups.filter((g) => g.city).length >= 2;
+              if (!showGroups) return <div className="space-y-4">{days.map(dayCard)}</div>;
+              return (
+                <div className="space-y-5">
+                  {groups.map((group, gi) => {
+                    if (!group.city) return <div key={gi} className="space-y-4">{group.days.map(dayCard)}</div>;
+                    const first = group.days[0].day;
+                    const last = group.days[group.days.length - 1].day;
+                    const dayRange = first === last ? `DAY ${first}` : `DAY ${first}~${last} · ${group.days.length}일`;
+                    return (
+                      <div key={gi} className="space-y-3">
+                        <CityGroupHeader
+                          city={group.city}
+                          dayRange={dayRange}
+                          canRegenerate={canRegenerateRegion}
+                          regenState={cityRegenState[first] ?? { status: "idle" }}
+                          onRegenerate={() => onRegenerateCity(group.city, group.days.map((d) => d.day))}
+                        />
+                        <div className="space-y-4">{group.days.map(dayCard)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </FxContext.Provider>
           <TransferNote icon={PlaneTakeoff} label="공항 샌딩" note={sendingNote} />
         </div>

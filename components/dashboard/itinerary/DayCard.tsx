@@ -9,6 +9,8 @@ interface Props {
   plan: DayPlan;
   /** 다른 날로 이동·복사할 때, 새 날짜로 즐겨찾기를 넣을 때 쓰는 전체 일정 */
   days: DayPlan[];
+  /** 이 날짜의 숙박 도시에서 선택해 둔 호텔 이름 (없으면 표시하지 않는다) */
+  hotelName?: string;
   currency: CurrencyCode;
   selectedPmId: PmFreeOption["id"];
   editing: boolean;
@@ -25,6 +27,7 @@ interface Props {
 export function DayCard({
   plan,
   days,
+  hotelName,
   currency,
   selectedPmId,
   editing,
@@ -47,7 +50,7 @@ export function DayCard({
         {plan.overnightCity && (
           <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
             <BedDouble className="h-3 w-3" aria-hidden />
-            {plan.overnightCity} 숙박
+            {plan.overnightCity} 숙박{hotelName ? ` · ${hotelName}` : ""}
           </span>
         )}
         {plan.kind === "linear" && plan.items.length > 0 && (

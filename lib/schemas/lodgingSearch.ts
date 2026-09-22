@@ -7,7 +7,7 @@ const CURRENCIES = ["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD
 
 export const lodgingWebRequestSchema = z.object({
   destination: z.string().trim().min(1, "여행지를 입력해 주세요.").max(100),
-  lodgingType: z.enum(["hotel", "bnb"]),
+  lodgingType: z.enum(["hotel", "bnb", "resort"]),
   hotelGrade: z.enum(["any", "3", "4", "5", "resort"]).default("4"),
   currency: z.enum(CURRENCIES),
 });
@@ -32,8 +32,13 @@ const nonNeg = (n: number) => Math.max(0, Math.round(n));
 const ordered = (a: number, b: number): [number, number] => [Math.min(nonNeg(a), nonNeg(b)), Math.max(nonNeg(a), nonNeg(b))];
 
 /** 예약처를 다시 검색해 볼 수 있는 링크 */
-export function lodgingWebSearchUrl(destination: string, lodgingType: "hotel" | "bnb"): string {
-  const q = lodgingType === "bnb" ? `${destination} 에어비앤비 아파트 숙소` : `${destination} 호텔 예약`;
+export function lodgingWebSearchUrl(destination: string, lodgingType: "hotel" | "bnb" | "resort"): string {
+  const q =
+    lodgingType === "bnb"
+      ? `${destination} 에어비앤비 아파트 숙소`
+      : lodgingType === "resort"
+        ? `${destination} 리조트 예약`
+        : `${destination} 호텔 예약`;
   return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
 }
 

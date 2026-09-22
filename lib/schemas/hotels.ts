@@ -6,7 +6,7 @@ import type { HotelCandidate } from "@/types";
 export const hotelRequestSchema = z.object({
   destination: z.string().trim().min(1, "여행지를 입력해 주세요.").max(100),
   grade: z.enum(["any", "3", "4", "5", "resort"]),
-  lodgingType: z.enum(["hotel", "bnb"]),
+  lodgingType: z.enum(["hotel", "bnb", "resort"]),
   preferences: z.array(z.enum(["transit", "airport", "korean", "breakfast", "value"])).max(5),
   currency: z.enum(["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD", "AUD"]),
 });

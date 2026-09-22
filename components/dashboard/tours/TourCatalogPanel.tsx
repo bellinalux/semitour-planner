@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ChevronLeft, ChevronRight, Compass, Info, Loader2, Plus, Search, Store } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Compass, Info, Loader2, Plus, Search, Store, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ChipToggle } from "@/components/ui/ChipToggle";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -9,6 +9,8 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useRequest } from "@/hooks/useRequest";
 import { useTourSearch } from "@/hooks/useTourSearch";
 import { TOUR_CATEGORIES } from "@/lib/itemTypes";
+import { itemsInSameCityGroup } from "@/lib/itinerary";
+import type { FindDuplicatesRequest } from "@/lib/schemas/duplicates";
 import { slotOptions, tourToItem } from "@/lib/tourItem";
 import type { CourseMeta, DayPlan, ItineraryItem, TourCandidate, TourCategory, TourSlot, TripInput, ViatorSearchResult } from "@/types";
 import { TourCard } from "./TourCard";
@@ -19,6 +21,13 @@ interface Props {
   days: DayPlan[];
   onAddTour: (dayNo: number, slot: TourSlot, item: ItineraryItem) => void;
   onAddOption: (tour: TourCandidate, dayNo: number) => void;
+  onDeleteItem: (itemId: string) => void;
+}
+
+/** 새로 넣은 항목과 중복으로 의심되는, 이미 일정에 있던 항목들 (확인 후 삭제) */
+interface PendingDuplicates {
+  newItemName: string;
+  matches: { id: string; name: string; checked: boolean }[];
 }
 
 type SortMode = "default" | "priceAsc" | "priceDesc" | "source";
@@ -61,7 +70,7 @@ function groupBySource(tours: TourCandidate[]): { source: string; tours: TourCan
     .map(([source, list]) => ({ source, tours: list }));
 }
 
-export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: Props) {
+export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption, onDeleteItem }: Props) {
   const cities = searchCities(input, meta);
   const [categories, setCategories] = useState<TourCategory[]>(["city", "night"]);
   const [cityIndex, setCityIndex] = useState(0);
@@ -72,6 +81,8 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
   const [page, setPage] = useState(1);
   const { state, result, run, moreState, loadMore } = useTourSearch();
   const viator = useRequest<{ destination: string; categories: TourCategory[]; currency: string }, ViatorSearchResult>("/api/viator-tours");
+  const dupCheck = useRequest<FindDuplicatesRequest, { duplicateIds: string[] }>("/api/find-duplicate-items");
+  const [pendingDup, setPendingDup] = useState<PendingDuplicates | null>(null);
   const city = cities[Math.min(cityIndex, cities.length - 1)] ?? "";
   const operator = operatorName.trim();
 
@@ -103,13 +114,37 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
     return viator.run({ destination: city, categories, currency: input.currency });
   };
 
-  const add = (tour: TourCandidate, dayNo: number, slot: TourSlot) => {
+  const add = async (tour: TourCandidate, dayNo: number, slot: TourSlot) => {
     const tourName = tour.name;
     const day = days.find((d) => d.day === dayNo);
     if (!day) return;
-    onAddTour(dayNo, slot, tourToItem(tour));
+    const newItem = tourToItem(tour);
+    onAddTour(dayNo, slot, newItem);
     const where = `DAY ${dayNo} ${slotOptions(day).find((s) => s.slot === slot)?.label ?? ""}`.trim();
     setAdded((prev) => ({ ...prev, [tourName]: [...(prev[tourName] ?? []), where] }));
+
+    // 같은 숙박 도시 구간에 이미 있는 항목과 중복되는지 확인한다 (확인 후에만 지운다, 자동 삭제 없음)
+    const candidates = itemsInSameCityGroup(days, dayNo).filter((i) => i.id !== newItem.id);
+    if (candidates.length === 0) return;
+    const dupResult = await dupCheck.run({
+      newItem: { id: newItem.id, name: newItem.name, description: newItem.description ?? "" },
+      candidates: candidates.slice(0, 40).map((i) => ({ id: i.id, name: i.name, description: i.description ?? "" })),
+    });
+    if (dupResult && dupResult.duplicateIds.length > 0) {
+      const matches = candidates
+        .filter((i) => dupResult.duplicateIds.includes(i.id))
+        .map((i) => ({ id: i.id, name: i.name, checked: true }));
+      if (matches.length > 0) setPendingDup({ newItemName: newItem.name, matches });
+    }
+  };
+
+  const toggleDupMatch = (id: string) =>
+    setPendingDup((prev) => (prev ? { ...prev, matches: prev.matches.map((m) => (m.id === id ? { ...m, checked: !m.checked } : m)) } : prev));
+
+  const confirmDeleteDuplicates = () => {
+    if (!pendingDup) return;
+    for (const m of pendingDup.matches) if (m.checked) onDeleteItem(m.id);
+    setPendingDup(null);
   };
 
   const addOption = (tour: TourCandidate, dayNo: number) => {
@@ -137,6 +172,52 @@ export function TourCatalogPanel({ input, meta, days, onAddTour, onAddOption }: 
       icon={Compass}
     >
       <div className="space-y-3">
+        {pendingDup && (
+          <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+            <p className="flex items-start gap-1.5 text-xs font-semibold text-amber-900">
+              <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+              &quot;{pendingDup.newItemName}&quot;와(과) 겹치는 것 같은 코스가 이미 일정에 있습니다. 지울 항목을 확인하세요.
+            </p>
+            <ul className="space-y-1">
+              {pendingDup.matches.map((m) => (
+                <li key={m.id}>
+                  <label className="flex cursor-pointer items-center gap-2 text-[11px] text-amber-900">
+                    <input
+                      type="checkbox"
+                      checked={m.checked}
+                      onChange={() => toggleDupMatch(m.id)}
+                      className="h-3.5 w-3.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                    />
+                    {m.name}
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[10px] leading-4 text-amber-700">
+              낮투어·야경투어처럼 시간대나 체험이 다른 코스는 겹쳐도 자동으로 걸러지지 않았을 수 있습니다. 지울 항목만 체크한 뒤 삭제하세요.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={confirmDeleteDuplicates}
+                disabled={!pendingDup.matches.some((m) => m.checked)}
+                className="inline-flex items-center gap-1 rounded-md bg-amber-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Check className="h-3.5 w-3.5" aria-hidden />
+                선택 삭제
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingDup(null)}
+                className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden />
+                그대로 두기
+              </button>
+            </div>
+          </div>
+        )}
+
         {cities.length > 1 && (
           <div role="radiogroup" aria-label="투어를 찾을 도시" className="flex flex-wrap gap-1.5">
             {cities.map((c, i) => (

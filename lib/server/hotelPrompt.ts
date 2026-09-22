@@ -6,7 +6,9 @@ export function buildHotelResearchPrompt(req: HotelRequest): string {
   const kind =
     req.lodgingType === "bnb"
       ? "아파트먼트·BnB 형태 숙소"
-      : `${HOTEL_GRADE_QUERY[req.grade]} 호텔`;
+      : req.lodgingType === "resort"
+        ? "리조트형 숙소(수영장·부대시설을 갖춘 리조트)"
+        : `${HOTEL_GRADE_QUERY[req.grade]} 호텔`;
   const wants = req.preferences
     .map((id) => HOTEL_PREFERENCES.find((p) => p.id === id)?.query)
     .filter(Boolean)

@@ -115,6 +115,15 @@ export function TripBasicsSection({ input, onChange, courseFile, onCourseFileCha
               </div>
             </Field>
 
+            <TextField
+              id="regionPlan"
+              label="방문 지역 순서 (선택)"
+              multiline
+              value={input.regionPlan}
+              placeholder="예) 로마 2일, 피렌체 2일, 베니스 2일 (비워두면 AI가 알아서 도시를 구성합니다)"
+              onChange={(regionPlan) => onChange({ regionPlan })}
+            />
+
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
               <label className="flex cursor-pointer items-start gap-2">
                 <input

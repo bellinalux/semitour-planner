@@ -17,6 +17,9 @@ import type {
   TripInput,
 } from "@/types";
 
+/** 지역(도시)별로 다시 만들기 진행 상태. 그룹의 첫 날짜 번호를 키로 쓴다. */
+export type CityRegenState = Record<number, AsyncState>;
+
 /** 코스 붙여넣기에서 읽어낸 기간/도시 (입력 폼에 반영하는 데 쓴다) */
 export interface DetectedTrip {
   days: number;
@@ -66,6 +69,7 @@ async function requestItinerary(
       themes: input.themes,
       notes: input.notes,
       travelType: input.travelType,
+      regionPlan: input.regionPlan,
     },
     signal,
   );
@@ -91,6 +95,8 @@ export function useItinerary() {
   });
   /** 일정 금액이 어느 통화로 생성됐는지 (이후 통화를 바꾸면 견적에서 경고) */
   const [generatedCurrency, setGeneratedCurrency] = useState<CurrencyCode | null>(null);
+  /** 지역(도시)별로 다시 만들기 진행 상태. 그룹의 첫 날짜 번호를 키로 쓴다. */
+  const [cityRegenState, setCityRegenState] = useState<CityRegenState>({});
   const controllerRef = useRef<AbortController | null>(null);
 
   /** 성공하면 생성된 일정을 반환한다. 실패하거나 새 요청으로 대체되면 null. */
@@ -185,6 +191,51 @@ export function useItinerary() {
     setDays((prev) => relocateItem(prev, itemId, targetDay, targetSlot, mode));
   }, []);
 
+  /**
+   * 마음에 안 드는 지역(연속된 같은 숙박 도시 구간)만 새로 만든다. 나머지 날짜는 그대로 두고,
+   * 대상 날짜만 그 도시로 새로 생성한 일정으로 교체한다. targetDayNumbers 길이만큼만 새로 만든다.
+   */
+  const regenerateCity = useCallback(async (baseInput: TripInput, city: string, targetDayNumbers: number[]) => {
+    if (targetDayNumbers.length === 0) return;
+    const sorted = [...targetDayNumbers].sort((a, b) => a - b);
+    const key = sorted[0];
+    setCityRegenState((prev) => ({ ...prev, [key]: { status: "loading" } }));
+    try {
+      const { days: newDays } = await postJson<{ days: DayPlan[]; sources: SearchSource[]; researched: boolean }>(
+        "/api/generate-itinerary",
+        {
+          destination: city,
+          days: sorted.length,
+          travelers: baseInput.travelers,
+          currency: baseInput.currency,
+          themes: baseInput.themes,
+          notes: baseInput.notes,
+          travelType: baseInput.travelType,
+          regionPlan: "",
+        },
+      );
+      const replacement = new Map(sorted.map((dayNo, i) => [dayNo, newDays[i]]));
+      setDays((prev) =>
+        prev.map((day) => {
+          const repl = replacement.get(day.day);
+          if (!repl) return day;
+          return { ...repl, day: day.day, overnightCity: repl.overnightCity?.trim() || city };
+        }),
+      );
+      setPmChoice((prev) => {
+        const next = { ...prev };
+        for (const dayNo of sorted) next[dayNo] = replacement.get(dayNo)?.pmFreeOptions[0]?.id ?? "A";
+        return next;
+      });
+      setCityRegenState((prev) => ({ ...prev, [key]: { status: "success" } }));
+    } catch (err) {
+      setCityRegenState((prev) => ({
+        ...prev,
+        [key]: { status: "error", error: err instanceof Error ? err.message : "다시 만들기에 실패했습니다." },
+      }));
+    }
+  }, []);
+
   /** 라이브러리에서 고른 코스 조각(오전/오후/장소)을 지정한 날짜·위치에 넣는다. id는 새로 발급한다. */
   const insertSegment = useCallback((dayNo: number, slot: TourSlot, items: ItineraryItem[]) => {
     const fresh = items.map((item) => ({ ...item, id: `seg-${crypto.randomUUID().slice(0, 8)}` }));
@@ -223,6 +274,8 @@ export function useItinerary() {
     addTour,
     moveItemOrder,
     relocate,
+    cityRegenState,
+    regenerateCity,
     insertSegment,
     appendDayFromSegment,
     restore,

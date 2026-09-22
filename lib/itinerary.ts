@@ -45,6 +45,38 @@ export function overnightNights(days: DayPlan[]): { city: string; nights: number
   return [...counts].map(([city, nights]) => ({ city, nights }));
 }
 
+/** 특정 날짜와 같은 숙박 도시 구간(연속된 날짜들)에 속한 모든 항목을 모은다. 선택되지 않은 오후 코스도 포함한다. */
+export function itemsInSameCityGroup(days: DayPlan[], dayNo: number): ItineraryItem[] {
+  const groups = groupDaysByCity(days);
+  const group = groups.find((g) => g.days.some((d) => d.day === dayNo));
+  const scope = group ? group.days : days.filter((d) => d.day === dayNo);
+  return scope.flatMap((d) => [...d.items, ...d.amGuided, ...d.pmFreeOptions.flatMap((o) => o.items)]);
+}
+
+export interface CityGroup {
+  /** 빈 문자열이면 overnightCity가 없는 날짜(구분 불가) */
+  city: string;
+  days: DayPlan[];
+}
+
+/**
+ * 연속된 날짜 중 overnightCity가 같은 날짜끼리 묶는다. 도시가 2개 미만이면(단일 도시 여행)
+ * 화면에서 그룹 헤더를 굳이 보여줄 필요가 없으므로, 호출하는 쪽에서 groups.length < 2로 판단한다.
+ */
+export function groupDaysByCity(days: DayPlan[]): CityGroup[] {
+  const groups: CityGroup[] = [];
+  for (const day of days) {
+    const city = (day.overnightCity ?? "").trim();
+    const last = groups[groups.length - 1];
+    if (last && last.city === city) {
+      last.days.push(day);
+    } else {
+      groups.push({ city, days: [day] });
+    }
+  }
+  return groups;
+}
+
 /** 항공 이동일 항목은 비용이 없는 고정 문구다 */
 function travelItem(id: string, type: "flight" | "transfer" | "hotel", name: string): ItineraryItem {
   return {

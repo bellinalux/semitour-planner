@@ -1,4 +1,5 @@
 import { CANCELLATION_TERMS, dayDate, dayMeals, documentItems, includeLists, noticeLines, tripPeriod } from "@/lib/documents";
+import { hotelLines } from "@/lib/exportText";
 import { customerFeeNote, localPayRows } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { moneyWithKrw } from "@/lib/fees";
@@ -102,7 +103,9 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company }: Do
                     {meals.breakfast.cuisine && `(${meals.breakfast.cuisine})`} / 중: {meals.lunch.mark}
                     {meals.lunch.cuisine && `(${meals.lunch.cuisine})`} / 석: {meals.dinner.mark}
                     {meals.dinner.cuisine && `(${meals.dinner.cuisine})`}
-                    {day.overnightCity ? ` · 숙박: ${day.overnightCity}` : ""}
+                    {day.overnightCity
+                      ? ` · 숙박: ${day.overnightCity}${input.selectedHotels[day.overnightCity.trim()] ? ` (${input.selectedHotels[day.overnightCity.trim()].name})` : ""}`
+                      : ""}
                   </p>
                 </div>
                 <div className="space-y-1.5 px-2 py-1.5">
@@ -121,12 +124,18 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company }: Do
             );
           })}
         </div>
-        {input.selectedHotel && quote.lodgingUnits > 0 && (
+        {Object.keys(input.selectedHotels).length > 0 && quote.lodgingUnits > 0 && (
           <p className="mt-1.5 text-slate-600">
-            숙소: {input.selectedHotel.name} ({input.selectedHotel.grade}, {input.selectedHotel.area}) 또는 동급
+            {hotelLines(input.selectedHotels).map((line, i) => (
+              <span key={i} className="block">
+                숙소: {line} 또는 동급
+              </span>
+            ))}
           </p>
         )}
-        {!input.selectedHotel && meta?.hotelGrade && <p className="mt-1.5 text-slate-600">숙소: {meta.hotelGrade} 또는 동급</p>}
+        {Object.keys(input.selectedHotels).length === 0 && meta?.hotelGrade && (
+          <p className="mt-1.5 text-slate-600">숙소: {meta.hotelGrade} 또는 동급</p>
+        )}
       </DocSection>
 
       <DocSection title="포함 · 불포함 사항">

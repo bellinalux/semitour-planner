@@ -254,6 +254,10 @@ export function PlannerApp() {
               onRelocateItem: itinerary.relocate,
               onSaveSegment: handleSaveSegment,
             }}
+            regionActions={{
+              cityRegenState: itinerary.cityRegenState,
+              onRegenerateCity: (city, dayNumbers) => void itinerary.regenerateCity(input, city, dayNumbers),
+            }}
             optionActions={{
               onAddOption: (tour, dayNo) => update({ options: [...input.options, tourToOption(tour, dayNo, input)] }),
               onAddSuggestedOption: (suggestion, dayNo) => update({ options: [...input.options, suggestionToOption(suggestion, dayNo, input)] }),

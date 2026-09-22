@@ -92,7 +92,10 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency }:
           <>
             {" · "}숙소 {quote.lodgingUnits}
             {input.lodgingType === "bnb" ? "유닛" : "실"} × {input.nights}박
-            {input.selectedHotel ? ` (${input.selectedHotel.name})` : ""}
+            {(() => {
+              const names = Object.values(input.selectedHotels).map((h) => h.name);
+              return names.length > 0 ? ` (${names.join(", ")})` : "";
+            })()}
           </>
         )}
         {" · "}차량·가이드 {quote.groundDays}일

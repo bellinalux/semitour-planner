@@ -3,7 +3,7 @@ import { formatDuration } from "@/lib/format";
 import { ITEM_TYPE_META } from "@/lib/itemTypes";
 import { pickPmOption } from "@/lib/itinerary";
 import type { ItineraryItem, ItemType, TripInput } from "@/types";
-import { claimsNoOption, hotelLine, includedLabels, type ExportData } from "./exportText";
+import { claimsNoOption, hotelLines as formatHotelLines, includedLabels, type ExportData } from "./exportText";
 
 /**
  * 업체 코스표 스타일(이모지 + 번호 + 화살표) 고객용 텍스트.
@@ -134,8 +134,8 @@ export function buildEmojiCustomerText(data: ExportData): string {
       : [];
 
   const hotelLines =
-    input.selectedHotel && quote.lodgingUnits > 0
-      ? [`🏨 숙소: ${hotelLine(input.selectedHotel)}`]
+    Object.keys(input.selectedHotels).length > 0 && quote.lodgingUnits > 0
+      ? formatHotelLines(input.selectedHotels).map((line) => `🏨 숙소: ${line}`)
       : meta?.hotelGrade
         ? [`🏨 숙소: ${meta.hotelGrade}`]
         : [];

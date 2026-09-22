@@ -12,6 +12,7 @@ import type {
   DayPlan,
   ItineraryItem,
   QuoteData,
+  SelectedHotel,
   TripInput,
   UspItem,
 } from "@/types";
@@ -44,8 +45,25 @@ export function includedLabels(includes: CompetitorIncludes, included: boolean):
     .map((k) => INCLUDE_LABELS[k]);
 }
 
-export function hotelLine(hotel: NonNullable<TripInput["selectedHotel"]>): string {
+export function hotelLine(hotel: SelectedHotel): string {
   return `${hotel.name} (${hotel.grade}, ${hotel.area})`;
+}
+
+/** 지역별로 선택한 숙소를 "지역: 호텔 (등급, 지역)" 줄로 나열한다. 1곳뿐이면 지역 이름은 생략한다. */
+export function hotelLines(selectedHotels: TripInput["selectedHotels"]): string[] {
+  const entries = Object.entries(selectedHotels);
+  if (entries.length === 0) return [];
+  if (entries.length === 1) return [hotelLine(entries[0][1])];
+  return entries.map(([city, hotel]) => `${city}: ${hotelLine(hotel)}`);
+}
+
+/** "prefix: 호텔 (등급, 지역) [요금 추정]" 줄로 나열한다. 지역이 2곳 이상이면 "prefix (지역): ..."로 구분한다. */
+export function hotelSummaryLines(selectedHotels: TripInput["selectedHotels"], prefix: string): string[] {
+  const entries = Object.entries(selectedHotels);
+  const label = (hotel: SelectedHotel) => `${hotelLine(hotel)}${hotel.priceBasis === "estimated" ? " [요금 추정]" : ""}`;
+  if (entries.length === 0) return [];
+  if (entries.length === 1) return [`${prefix}: ${label(entries[0][1])}`];
+  return entries.map(([city, hotel]) => `${prefix} (${city}): ${label(hotel)}`);
 }
 
 /** 선택 옵션이 있으면 노옵션 표기는 쓸 수 없다 */
@@ -149,7 +167,7 @@ export function buildInternalText(data: ExportData): string {
     ...(quote.lodgingUnits > 0
       ? [
           `숙소: ${quote.lodgingUnits}${input.lodgingType === "bnb" ? "유닛" : "실"} (${input.nights}박)`,
-          ...(input.selectedHotel ? [`선택한 숙소: ${hotelLine(input.selectedHotel)}${input.selectedHotel.priceBasis === "estimated" ? " [요금 추정]" : ""}`] : []),
+          ...hotelSummaryLines(input.selectedHotels, "선택한 숙소"),
           "",
         ]
       : [""]),
@@ -279,8 +297,8 @@ export function buildCustomerText(data: ExportData): string {
         ]
       : []),
     ...(localPayLines.length > 0 ? [...localPayLines, LINE] : []),
-    ...(input.selectedHotel && quote.lodgingUnits > 0
-      ? [`■ 숙소: ${hotelLine(input.selectedHotel)}`]
+    ...(Object.keys(input.selectedHotels).length > 0 && quote.lodgingUnits > 0
+      ? hotelLines(input.selectedHotels).map((line) => `■ 숙소: ${line}`)
       : meta?.hotelGrade
         ? [`■ 숙소: ${meta.hotelGrade}`]
         : []),

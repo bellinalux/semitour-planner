@@ -13,6 +13,7 @@ interface Props extends SectionProps {
 
 const TYPES: { id: LodgingType; label: string }[] = [
   { id: "hotel", label: "호텔" },
+  { id: "resort", label: "리조트" },
   { id: "bnb", label: "BnB·아파트" },
 ];
 

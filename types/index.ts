@@ -87,7 +87,7 @@ export type PackageType = "land" | "land_hotel" | "full";
 export type Certainty = "confirmed" | "estimated" | "undecided";
 /** 확정도를 지정하는 비용 항목 */
 export type CostKey = "vehicle" | "guide" | "other" | "lodging" | "flight";
-export type LodgingType = "hotel" | "bnb";
+export type LodgingType = "hotel" | "bnb" | "resort";
 /** 호텔 등급: 전체(3~5성) / 3성 / 4성 / 5성 / 리조트 */
 export type HotelGrade = "any" | "3" | "4" | "5" | "resort";
 export type HotelPreference = "transit" | "airport" | "korean" | "breakfast" | "value";
@@ -114,6 +114,8 @@ export interface TripInput {
   notes: string;
   /** 여행 유형 (mode === "ai"일 때만 사용). 세미투어/패키지투어/신혼여행/시니어투어/장애인투어 */
   travelType: TravelType;
+  /** 사용자가 직접 지정한 방문 도시 순서·일수 (mode === "ai"일 때만 사용, 선택). 예: "로마 2일, 피렌체 2일, 베니스 2일". 비우면 AI가 알아서 도시를 구성한다 */
+  regionPlan: string;
 
   currency: CurrencyCode;
   /** 1 견적통화 = ? KRW (KRW 선택 시 사용하지 않음) */
@@ -130,8 +132,8 @@ export interface TripInput {
   lodgingType: LodgingType;
   hotelGrade: HotelGrade;
   hotelPreferences: HotelPreference[];
-  /** 호텔 찾기에서 고른 숙소 (없으면 null) */
-  selectedHotel: SelectedHotel | null;
+  /** 호텔 찾기에서 지역별로 고른 숙소. 키는 검색한 지역 이름(다지역 여행이면 일정의 overnightCity와 같은 문자열) */
+  selectedHotels: Record<string, SelectedHotel>;
   /** 1실(호텔) 또는 1유닛(BnB)의 1박 요금 */
   lodgingRatePerNight: number;
   /** 도시별 1박 요금 (도시 이름 → 요금). 없거나 0이면 위의 기본 1박 요금을 쓴다 */

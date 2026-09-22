@@ -6,7 +6,9 @@ export function buildLodgingResearchPrompt(req: LodgingWebRequest): string {
   const unitLine =
     req.lodgingType === "bnb"
       ? "에어비앤비·아파트형 숙소(BnB) 1유닛(4인 기준)의 1박 요금"
-      : `${HOTEL_GRADE_QUERY[req.hotelGrade]} 호텔 2인 1실의 1박 요금`;
+      : req.lodgingType === "resort"
+        ? "리조트형 숙소 2인 1실의 1박 요금"
+        : `${HOTEL_GRADE_QUERY[req.hotelGrade]} 호텔 2인 1실의 1박 요금`;
 
   return [
     `Google 검색 도구를 여러 번 사용해서, "${req.destination}"의 ${unitLine}을 조사해 주세요.`,
@@ -36,7 +38,7 @@ export function buildLodgingStructurePrompt(req: LodgingWebRequest, memo: string
   return [
     `요청 통화: ${req.currency} (rateLow, rateHigh는 이 통화 단위의 숫자)`,
     `여행지: ${req.destination}`,
-    `숙소 유형: ${req.lodgingType === "bnb" ? "BnB·아파트 1유닛(4인)" : `호텔 2인 1실, ${HOTEL_GRADE_QUERY[req.hotelGrade]}`}`,
+    `숙소 유형: ${req.lodgingType === "bnb" ? "BnB·아파트 1유닛(4인)" : req.lodgingType === "resort" ? "리조트 2인 1실" : `호텔 2인 1실, ${HOTEL_GRADE_QUERY[req.hotelGrade]}`}`,
     "",
     "<research_memo>",
     memo,

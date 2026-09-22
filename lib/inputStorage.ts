@@ -19,9 +19,15 @@ export function normalizeInput(saved: unknown): TripInput {
       typeof s.lodgingCityRates === "object" && s.lodgingCityRates !== null && !Array.isArray(s.lodgingCityRates)
         ? s.lodgingCityRates
         : DEFAULT_INPUT.lodgingCityRates,
+    // 이전 버전은 숙소를 하나만(selectedHotel) 저장했다. 그 형태가 남아 있으면 무시하고 빈 값으로 시작한다.
+    selectedHotels:
+      typeof s.selectedHotels === "object" && s.selectedHotels !== null && !Array.isArray(s.selectedHotels)
+        ? s.selectedHotels
+        : DEFAULT_INPUT.selectedHotels,
     options: Array.isArray(s.options) ? s.options : DEFAULT_INPUT.options,
     travelAlert: typeof s.travelAlert === "object" && s.travelAlert !== null ? s.travelAlert : null,
     travelType: typeof s.travelType === "string" && TRAVEL_TYPE_IDS.has(s.travelType) ? s.travelType : DEFAULT_INPUT.travelType,
+    regionPlan: typeof s.regionPlan === "string" ? s.regionPlan : DEFAULT_INPUT.regionPlan,
     pickupNote: typeof s.pickupNote === "string" ? s.pickupNote : DEFAULT_INPUT.pickupNote,
     sendingNote: typeof s.sendingNote === "string" ? s.sendingNote : DEFAULT_INPUT.sendingNote,
     breakfastIncluded: typeof s.breakfastIncluded === "boolean" ? s.breakfastIncluded : DEFAULT_INPUT.breakfastIncluded,

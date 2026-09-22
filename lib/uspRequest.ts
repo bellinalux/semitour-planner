@@ -54,7 +54,11 @@ export function buildUspRequest(
     features: {
       nights: input.nights,
       cities: meta?.cities ?? [],
-      hotelGrade: meta?.hotelGrade || (input.selectedHotel ? `${input.selectedHotel.name} (${input.selectedHotel.grade})` : ""),
+      hotelGrade:
+        meta?.hotelGrade ||
+        Object.values(input.selectedHotels)
+          .map((h) => `${h.name} (${h.grade})`)
+          .join(", "),
       // 일정에 쇼핑 항목이 없으면 노쇼핑으로 본다 (붙여넣은 코스가 명시했으면 그 값을 따른다)
       noShopping: policy.shopping === "none",
       // 선택 옵션이 있으면 노옵션이라고 주장할 수 없다

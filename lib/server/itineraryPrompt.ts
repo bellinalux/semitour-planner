@@ -19,6 +19,7 @@ export const ITINERARY_SYSTEM_PROMPT = `당신은 전 세계 여행지를 다루
 - 하루 오전 일정은 이동 시간을 포함해 약 3~4시간, 오후 옵션은 각각 약 3~4시간 분량으로 합니다.
 - 서로 다른 날짜에 같은 장소를 반복하지 않고, 날짜별로 지역이나 테마를 나누어 동선이 효율적이게 구성합니다. 첫날과 마지막 날은 도착/출발 부담을 고려합니다.
 - 사용자의 선호 테마를 반영합니다.
+- overnightCity에 그날 밤 숙박하는 도시를 반드시 채웁니다. 여러 도시를 도는 여행(예: 로마→피렌체→베니스)이면 도시가 바뀌는 날짜를 정확히 반영하고, 이동에 드는 하루는 그 이동 일정 자체를 오전/오후 코스로 자연스럽게 구성합니다(예: 오전에 이전 도시 마무리 관광, 오후에 이동+새 도시 도착 후 가벼운 일정).
 
 [출력]
 - 한국어로 작성합니다. 장소 이름은 한국어 표기 뒤에 괄호로 현지어/영문을 병기해도 됩니다.
@@ -64,6 +65,19 @@ export function itineraryStructureSystemPrompt(travelType: TravelType): string {
   return ITINERARY_SYSTEM_PROMPT + TRAVEL_TYPE_SYSTEM_ADDENDUM[travelType];
 }
 
+function regionPlanBlock(regionPlan: string): string {
+  const plan = regionPlan.trim();
+  if (!plan) return "";
+  return [
+    "<region_plan>",
+    plan,
+    "</region_plan>",
+    "위 <region_plan>은 사용자가 직접 지정한 방문 도시 순서와 도시별 일수입니다. 반드시 이 순서와 일수 배분을 그대로 따르세요.",
+    "도시가 바뀌는 날의 overnightCity를 정확히 그 도시로 채우고, 도시 간 이동은 자연스러운 이동일로 반영하세요(별도로 하루를 통째로 이동에만 쓰지 말고, 오전에 이전 도시를 마무리하거나 오후에 새 도시에 도착해 가벼운 일정을 넣는 식으로 구성).",
+    "",
+  ].join("\n");
+}
+
 export function buildItineraryUserPrompt(req: ItineraryRequest, researchMemo = ""): string {
   const themeLabels = req.themes
     .map((id) => THEMES.find((t) => t.id === id)?.label)
@@ -72,6 +86,7 @@ export function buildItineraryUserPrompt(req: ItineraryRequest, researchMemo = "
 
   return [
     typeResearchBlock(researchMemo),
+    regionPlanBlock(req.regionPlan),
     `여행지: ${req.destination}`,
     `여행 일수: ${req.days}일`,
     `예상 인원: ${req.travelers}명`,

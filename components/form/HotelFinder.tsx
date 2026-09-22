@@ -1,15 +1,21 @@
 "use client";
 
-import { AlertTriangle, Loader2, Search, X } from "lucide-react";
+import { AlertTriangle, ExternalLink, Loader2, Map, Search, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { ChipToggle } from "@/components/ui/ChipToggle";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useHotelSearch } from "@/hooks/useHotelSearch";
 import { HOTEL_GRADES, HOTEL_PREFERENCES } from "@/lib/itemTypes";
 import { midpoint } from "@/lib/travelEstimate";
-import type { HotelCandidate, HotelPreference } from "@/types";
+import type { HotelCandidate, HotelPreference, LodgingType } from "@/types";
 import { HotelCard } from "./HotelCard";
 import type { SectionProps } from "./types";
+
+interface Props extends SectionProps {
+  /** 일정에서 센 도시별 숙박 수. 2곳 이상이면 지역을 도시별로 고를 수 있다 */
+  stays: { city: string; nights: number }[];
+}
 
 /** 후보 카드에서 견적에 필요한 정보만 골라 선택한 숙소로 저장한다 */
 function toSelected(hotel: HotelCandidate) {
@@ -17,10 +23,26 @@ function toSelected(hotel: HotelCandidate) {
   return { name, grade, area, nearestStation, walkMinutes, nightlyLow, nightlyHigh, priceBasis, mapUrl };
 }
 
-export function HotelFinder({ input, onChange }: SectionProps) {
-  const { state, result, run } = useHotelSearch();
+function lodgingWord(lodgingType: LodgingType): string {
+  return lodgingType === "bnb" ? "BnB 숙소" : lodgingType === "resort" ? "리조트" : "호텔";
+}
+
+/** 그 지역의 숙소들을 구글 지도 검색 결과로 한 번에 훑어볼 수 있는 링크 (핀이 여러 개 함께 표시된다) */
+function regionMapUrl(region: string, lodgingType: LodgingType): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${region} ${lodgingWord(lodgingType)}`)}`;
+}
+
+export function HotelFinder({ input, onChange, stays }: Props) {
+  const [region, setRegion] = useState("");
   const isBnb = input.lodgingType === "bnb";
-  const canSearch = input.destination.trim() !== "";
+  const word = lodgingWord(input.lodgingType);
+  const { state, result, run } = useHotelSearch();
+
+  // 코스에 잡힌 숙박 도시들. 2곳 이상이면 도시별로 검색 지역을 고를 수 있다
+  const cities = useMemo(() => stays.map((s) => s.city).filter(Boolean), [stays]);
+  const effectiveRegion = region.trim() || cities[0] || input.destination.trim();
+  const canSearch = effectiveRegion !== "";
+  const perCity = cities.length >= 2;
 
   const togglePreference = (id: HotelPreference) =>
     onChange({
@@ -29,45 +51,95 @@ export function HotelFinder({ input, onChange }: SectionProps) {
         : [...input.hotelPreferences, id],
     });
 
-  const search = () =>
-    run({
-      destination: input.destination.trim(),
+  const search = () => {
+    if (!canSearch) return;
+    return run({
+      destination: effectiveRegion,
       grade: input.hotelGrade,
       lodgingType: input.lodgingType,
       preferences: input.hotelPreferences,
       currency: input.currency,
     });
+  };
 
-  // 호텔을 고르면 1박 요금이 그 호텔의 검색 요금 중간값(추정)으로 채워진다
-  const select = (hotel: HotelCandidate) =>
+  // 호텔을 고르면 검색한 지역을 키로 저장한다. 도시가 2곳 이상이면 그 도시의 1박 요금도 같이 채운다(도시별 요금).
+  const select = (hotel: HotelCandidate) => {
+    const key = effectiveRegion;
+    const rate = midpoint(hotel.nightlyLow, hotel.nightlyHigh);
     onChange({
-      selectedHotel: toSelected(hotel),
-      lodgingRatePerNight: midpoint(hotel.nightlyLow, hotel.nightlyHigh),
+      selectedHotels: { ...input.selectedHotels, [key]: toSelected(hotel) },
+      ...(perCity ? { lodgingCityRates: { ...input.lodgingCityRates, [key]: rate } } : { lodgingRatePerNight: rate }),
       costStatus: { ...input.costStatus, lodging: "estimated" },
     });
+  };
+
+  const deselect = (key: string) => {
+    const next = { ...input.selectedHotels };
+    delete next[key];
+    onChange({ selectedHotels: next });
+  };
+
+  const selectedEntries = Object.entries(input.selectedHotels);
 
   return (
     <div className="space-y-3 rounded-lg border border-indigo-200 bg-indigo-50/30 p-3">
-      <p className="text-xs font-semibold text-slate-800">{isBnb ? "숙소 찾기 (웹 검색)" : "호텔 찾기 (웹 검색)"}</p>
+      <p className="text-xs font-semibold text-slate-800">{isBnb ? "숙소 찾기 (웹 검색)" : `${word} 찾기 (웹 검색)`}</p>
 
-      {input.selectedHotel && (
-        <div className="flex items-start justify-between gap-2 rounded-md bg-white p-2.5 ring-1 ring-indigo-200">
-          <div className="min-w-0 text-[11px] leading-4 text-slate-600">
-            <p className="text-xs font-semibold text-slate-900">
-              선택한 숙소: {input.selectedHotel.name} <span className="font-normal text-slate-500">({input.selectedHotel.grade})</span>
-            </p>
-            <p>{input.selectedHotel.area}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onChange({ selectedHotel: null })}
-            aria-label="선택한 숙소 해제"
-            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-          >
-            <X className="h-4 w-4" aria-hidden />
-          </button>
-        </div>
+      {selectedEntries.length > 0 && (
+        <ul className="space-y-1.5">
+          {selectedEntries.map(([key, hotel]) => (
+            <li key={key} className="flex items-start justify-between gap-2 rounded-md bg-white p-2.5 ring-1 ring-indigo-200">
+              <div className="min-w-0 text-[11px] leading-4 text-slate-600">
+                <p className="text-xs font-semibold text-slate-900">
+                  {key}: {hotel.name} <span className="font-normal text-slate-500">({hotel.grade})</span>
+                </p>
+                <p>{hotel.area}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => deselect(key)}
+                aria-label={`${key} 선택한 숙소 해제`}
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
+
+      <div className="space-y-1.5">
+        <label htmlFor="hotelRegion" className="block text-[11px] font-medium text-slate-600">
+          검색 지역
+        </label>
+        <input
+          id="hotelRegion"
+          type="text"
+          value={region}
+          onChange={(e) => setRegion(e.target.value)}
+          placeholder={cities[0] ? `비워두면 "${cities[0]}"로 찾습니다` : input.destination.trim() ? `비워두면 "${input.destination.trim()}"로 찾습니다` : "예) 로마 시내"}
+          className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+        {cities.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {cities.map((city) => (
+              <button
+                key={city}
+                type="button"
+                onClick={() => setRegion(city)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  effectiveRegion === city ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-indigo-300"
+                }`}
+              >
+                {city}
+              </button>
+            ))}
+          </div>
+        )}
+        {perCity && (
+          <p className="text-[10px] leading-4 text-slate-500">코스에 여러 도시가 있어 도시별로 따로 검색하고 선택합니다.</p>
+        )}
+      </div>
 
       {!isBnb && (
         <div role="radiogroup" aria-label="호텔 등급" className="flex flex-wrap gap-1.5">
@@ -104,10 +176,27 @@ export function HotelFinder({ input, onChange }: SectionProps) {
           className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           {state.status === "loading" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Search className="h-4 w-4" aria-hidden />}
-          {state.status === "loading" ? "웹에서 조사 중..." : isBnb ? "숙소 검색" : "호텔 검색"}
+          {state.status === "loading" ? "웹에서 조사 중..." : `"${effectiveRegion || "지역"}" ${word} 검색`}
         </button>
-        {!canSearch && <span className="text-[11px] text-slate-500">여행지를 먼저 입력하세요.</span>}
+        {!canSearch && <span className="text-[11px] text-slate-500">여행지나 검색 지역을 먼저 입력하세요.</span>}
+        {canSearch && (
+          <a
+            href={regionMapUrl(effectiveRegion, input.lodgingType)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-white px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+          >
+            <Map className="h-4 w-4" aria-hidden />
+            지역 지도에서 보기
+            <ExternalLink className="h-3 w-3" aria-hidden />
+          </a>
+        )}
       </div>
+      {canSearch && (
+        <p className="text-[10px] leading-4 text-slate-500">
+          지도에서 보기를 누르면 &quot;{effectiveRegion} {word}&quot;를 구글 지도에서 검색해, 그 지역의 숙소들이 지도 위에 핀으로 함께 표시됩니다. 위치를 보고 마음에 드는 곳을 고른 뒤, 아래에서 같은 이름을 검색해 선택하세요.
+        </p>
+      )}
 
       {state.status === "loading" && (
         <div className="space-y-2" aria-busy="true" aria-label="호텔 검색 중">
@@ -136,7 +225,7 @@ export function HotelFinder({ input, onChange }: SectionProps) {
                 key={hotel.name}
                 hotel={hotel}
                 currency={input.currency}
-                selected={input.selectedHotel?.name === hotel.name}
+                selected={input.selectedHotels[effectiveRegion]?.name === hotel.name}
                 onSelect={() => select(hotel)}
               />
             ))}

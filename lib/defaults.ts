@@ -37,6 +37,7 @@ export const DEFAULT_INPUT: TripInput = {
   themes: [],
   notes: "",
   travelType: "semi",
+  regionPlan: "",
 
   currency: "KRW",
   exchangeRateToKrw: 1,
@@ -50,7 +51,7 @@ export const DEFAULT_INPUT: TripInput = {
   lodgingType: "hotel",
   hotelGrade: "any",
   hotelPreferences: [],
-  selectedHotel: null,
+  selectedHotels: {},
   lodgingRatePerNight: 0,
   lodgingCityRates: {},
   guestsPerUnit: 2,
