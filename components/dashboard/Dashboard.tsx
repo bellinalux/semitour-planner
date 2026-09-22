@@ -6,6 +6,7 @@ import type {
   ItineraryItem,
   PmFreeOption,
   QuoteResult,
+  SearchSource,
   TourCandidate,
   TourOption,
   TourSlot,
@@ -56,6 +57,7 @@ interface Props {
   quote: QuoteResult | null;
   pmChoice: Record<number, PmFreeOption["id"]>;
   generatedCurrency: CurrencyCode | null;
+  researchInfo: { sources: SearchSource[]; researched: boolean };
   onSelectPm: (day: number, id: PmFreeOption["id"]) => void;
   itemActions: ItemActions;
   optionActions: OptionActions;
@@ -74,6 +76,7 @@ export function Dashboard({
   quote,
   pmChoice,
   generatedCurrency,
+  researchInfo,
   onSelectPm,
   itemActions,
   optionActions,
@@ -93,6 +96,8 @@ export function Dashboard({
         meta={meta}
         currency={input.currency}
         krwRate={input.exchangeRateToKrw}
+        travelType={input.travelType}
+        researchInfo={researchInfo}
         feeCheck={feeCheck}
         pmChoice={pmChoice}
         onSelectPm={onSelectPm}

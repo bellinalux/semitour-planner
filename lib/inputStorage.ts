@@ -1,5 +1,7 @@
-import { DEFAULT_INPUT } from "@/lib/defaults";
+import { DEFAULT_INPUT, TRAVEL_TYPES } from "@/lib/defaults";
 import type { TripInput } from "@/types";
+
+const TRAVEL_TYPE_IDS: Set<string> = new Set(TRAVEL_TYPES.map((t) => t.id));
 
 /**
  * 저장된(또는 파일에서 읽은) 입력값을 현재 TripInput 형태로 맞춘다.
@@ -19,6 +21,7 @@ export function normalizeInput(saved: unknown): TripInput {
         : DEFAULT_INPUT.lodgingCityRates,
     options: Array.isArray(s.options) ? s.options : DEFAULT_INPUT.options,
     travelAlert: typeof s.travelAlert === "object" && s.travelAlert !== null ? s.travelAlert : null,
+    travelType: typeof s.travelType === "string" && TRAVEL_TYPE_IDS.has(s.travelType) ? s.travelType : DEFAULT_INPUT.travelType,
     travelerNames: Array.isArray(s.travelerNames) ? s.travelerNames.filter((n): n is string => typeof n === "string") : DEFAULT_INPUT.travelerNames,
     competitors: Array.isArray(s.competitors)
       ? s.competitors.map((c) => ({ ...c, shopping: c.shopping ?? "unknown", optionTour: c.optionTour ?? "unknown" }))

@@ -7,7 +7,8 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { FeeApplySummary } from "@/lib/fees";
-import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PmFreeOption } from "@/types";
+import { TRAVEL_TYPES } from "@/lib/defaults";
+import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PmFreeOption, SearchSource, TravelType } from "@/types";
 import { DayCard } from "./itinerary/DayCard";
 import { FxContext } from "./itinerary/FxContext";
 import type { ItemPatch } from "./itinerary/TimelineItem";
@@ -33,6 +34,8 @@ interface Props {
   days: DayPlan[];
   meta: CourseMeta | null;
   currency: CurrencyCode;
+  travelType: TravelType;
+  researchInfo: { sources: SearchSource[]; researched: boolean };
   pmChoice: Record<number, PmFreeOption["id"]>;
   onSelectPm: (day: number, id: PmFreeOption["id"]) => void;
   onChangeItem: (itemId: string, patch: ItemPatch) => void;
@@ -87,6 +90,36 @@ function MetaBanner({ meta }: { meta: CourseMeta }) {
   );
 }
 
+/** 세미투어가 아닌 유형으로 생성했을 때, 반영한 유형과 웹 조사 출처를 보여준다 */
+function TravelTypeBanner({ travelType, researchInfo }: { travelType: TravelType; researchInfo: { sources: SearchSource[]; researched: boolean } }) {
+  if (travelType === "semi") return null;
+  const label = TRAVEL_TYPES.find((t) => t.id === travelType)?.label ?? travelType;
+  return (
+    <div className="space-y-1 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2.5 text-[11px] leading-4 text-indigo-900">
+      <p className="font-semibold">
+        &quot;{label}&quot; 특성을 반영해 만든 일정입니다
+        {travelType === "accessible" && !researchInfo.researched && (
+          <span className="ml-1 font-normal text-amber-700">— 이용 편의시설 확인에 필요한 웹 검색 근거를 확보하지 못해, 각 항목의 확인 정도가 &quot;확인 못함&quot;으로 표시됩니다. 실제 방문 전 다시 확인하세요.</span>
+        )}
+      </p>
+      {researchInfo.sources.length > 0 && (
+        <details>
+          <summary className="cursor-pointer font-medium text-indigo-700">참고한 출처 ({researchInfo.sources.length})</summary>
+          <ul className="mt-1 space-y-0.5">
+            {researchInfo.sources.map((src) => (
+              <li key={src.url}>
+                <a href={src.url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
+                  {src.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
 function FeeCheckNotice({ view }: { view: FeeCheckView }) {
   const { state, summary, sources, searched, fxUpdatedAt } = view;
   if (state.status === "error") {
@@ -133,6 +166,8 @@ export function ItineraryPanel({
   days,
   meta,
   currency,
+  travelType,
+  researchInfo,
   pmChoice,
   onSelectPm,
   onChangeItem,
@@ -206,6 +241,7 @@ export function ItineraryPanel({
       {state.status === "success" && (
         <div className="space-y-4">
           {meta && <MetaBanner meta={meta} />}
+          <TravelTypeBanner travelType={travelType} researchInfo={researchInfo} />
           <p className="flex items-start gap-1.5 rounded-md bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-500">
             <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
             입장료·식대·소요 시간은 AI 추정치입니다. &quot;입장료 웹 확인&quot;으로 현지 통화 금액을 확인하고, 각 항목의 &quot;현지 지불(불포함)&quot; 버튼으로 고객이 현지에서 직접 내는 항목을 표시하세요. 금액은 직접 수정할 수 있고, 수정하면 견적이 바로 다시 계산됩니다.

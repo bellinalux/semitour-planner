@@ -1,4 +1,4 @@
-import { AlertCircle, BadgeCheck, Bus, Clock, ExternalLink, Eye, HelpCircle, Ticket, Trash2, Utensils, Wallet } from "lucide-react";
+import { Accessibility, AlertCircle, AlertTriangle, BadgeCheck, Bus, Clock, ExternalLink, Eye, HelpCircle, Ticket, Trash2, Utensils, Wallet, X } from "lucide-react";
 import { MoneyInput } from "@/components/ui/MoneyInput";
 import { currencySymbol } from "@/lib/currency";
 import { feeHint, isLocalPay } from "@/lib/fees";
@@ -32,6 +32,20 @@ const ADMISSION_LABELS: Record<Admission, string> = {
   view_only: "외부 조망만",
   none: "해당 없음",
   unknown: "미확인",
+};
+
+const ACCESSIBILITY_LABELS: Record<NonNullable<ItineraryItem["accessibility"]>["level"], string> = {
+  ok: "이용 가능",
+  limited: "일부 구간 어려움",
+  difficult: "이용 어려움",
+  unknown: "확인 못함",
+};
+
+const ACCESSIBILITY_TONE: Record<NonNullable<ItineraryItem["accessibility"]>["level"], string> = {
+  ok: "bg-emerald-50 text-emerald-800",
+  limited: "bg-amber-50 text-amber-800",
+  difficult: "bg-rose-50 text-rose-800",
+  unknown: "bg-slate-100 text-slate-600",
 };
 
 /** 비용 입력창을 보여줄 유형. 유형이 없는 항목(AI 세미투어)은 둘 다 보여준다. */
@@ -243,6 +257,42 @@ export function TimelineItem({ item, order, isLast, currency, tone, editing, onC
             <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
             {item.caution}
           </p>
+        )}
+
+        {item.accessibility && (
+          <div className={`mt-2 rounded-md px-2.5 py-1.5 text-[11px] leading-4 ${ACCESSIBILITY_TONE[item.accessibility.level]}`}>
+            <p className="flex items-center gap-1.5 font-semibold">
+              <Accessibility className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              이용 편의시설: {ACCESSIBILITY_LABELS[item.accessibility.level]}
+            </p>
+            {item.accessibility.level !== "unknown" && (
+              <p className="mt-0.5">
+                {[
+                  item.accessibility.wheelchairAccessible ? "휠체어 이용 가능" : "휠체어 이용 어려움",
+                  item.accessibility.accessibleRestroom ? "장애인 화장실 있음" : "장애인 화장실 없음/미확인",
+                  item.accessibility.elevator ? "엘리베이터 있음" : "엘리베이터 없음/미확인",
+                  item.accessibility.ramp ? "경사로 있음" : "경사로 없음/미확인",
+                ].join(" · ")}
+              </p>
+            )}
+            {item.accessibility.note && <p className="mt-0.5 text-slate-500">{item.accessibility.note}</p>}
+            {item.accessibility.mustSeeButHard && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 border-t border-rose-200/70 pt-1.5">
+                <span className="inline-flex items-center gap-1 font-semibold text-rose-700">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  꼭 봐야 할 대표 코스지만 이용이 어려움 — 고객 상황에 맞게 선택하세요
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onDeleteItem(item.id)}
+                  className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-100"
+                >
+                  <X className="h-3 w-3" aria-hidden />
+                  이 코스 빼기
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {!isLast && item.travelMinutesToNext !== null && item.travelMinutesToNext > 0 && (

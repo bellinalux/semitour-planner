@@ -30,7 +30,7 @@ export function PackageSection({ input, onChange, stays }: SectionProps & { stay
           <>
             <LodgingFields input={input} onChange={onChange} stays={stays} />
             <HotelFinder input={input} onChange={onChange} />
-            {input.packageType === "full" && <FlightFields input={input} onChange={onChange} />}
+            <FlightFields input={input} onChange={onChange} />
             <TravelEstimatePanel input={input} onChange={onChange} />
           </>
         )}

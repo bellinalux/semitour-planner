@@ -19,6 +19,13 @@ export type ThemeId =
   | "activity"
   | "local";
 
+/**
+ * 여행 유형. AI 일정 생성 프롬프트와(필요한 유형은) 웹 조사 내용을 바꾼다.
+ * semi: 오전 가이드+오후 반자유(기본) / package: 대표 필수 코스 중심 / honeymoon: 로맨틱 스팟 중심 /
+ * senior: 무리 없는 동선·효도관광 인기 코스 / accessible: 휠체어 이용 편의시설 확인
+ */
+export type TravelType = "semi" | "package" | "honeymoon" | "senior" | "accessible";
+
 export interface CompetitorIncludes {
   guide: boolean;
   meals: boolean;
@@ -105,6 +112,8 @@ export interface TripInput {
   travelers: number;
   themes: ThemeId[];
   notes: string;
+  /** 여행 유형 (mode === "ai"일 때만 사용). 세미투어/패키지투어/신혼여행/시니어투어/장애인투어 */
+  travelType: TravelType;
 
   currency: CurrencyCode;
   /** 1 견적통화 = ? KRW (KRW 선택 시 사용하지 않음) */
@@ -271,6 +280,26 @@ export interface ItineraryItem {
   local?: { currency: CurrencyCode; amount: number };
   /** 입장료 웹 확인 결과 */
   feeCheck?: FeeCheck;
+  /** 이용 편의시설 확인 결과. 여행 유형이 장애인투어(accessible)일 때만 채워진다 */
+  accessibility?: AccessibilityInfo;
+}
+
+/** 장애인투어용 이용 편의시설 확인 결과 (웹 조사 결과) */
+export interface AccessibilityInfo {
+  /** ok: 휠체어·거동불편 이용에 무리 없음 / limited: 일부 구간 어려움 / difficult: 이용이 사실상 어려움 / unknown: 확인 못함 */
+  level: "ok" | "limited" | "difficult" | "unknown";
+  wheelchairAccessible: boolean;
+  accessibleRestroom: boolean;
+  elevator: boolean;
+  ramp: boolean;
+  /** 확인 근거·유의사항 한 줄. 확인 못했으면 빈 문자열 */
+  note: string;
+  /**
+   * 대표 명소라 볼거리는 크지만 위 시설 문제로 휠체어·거동불편 여행자의 이용이 어려운 곳이면 true.
+   * 일정에서 빼지 않고 그대로 넣되, 화면에서 "꼭 봐야 할 코스지만 이용이 어려움"으로 표시해
+   * 담당자가 선택적으로 뺄 수 있게 한다.
+   */
+  mustSeeButHard: boolean;
 }
 
 /** 입장료 웹 확인 결과 */

@@ -18,6 +18,11 @@ export function FlightFields({ input, onChange }: SectionProps) {
       <span className="text-xs font-semibold text-slate-700">
         항공 ({input.originCity.trim() || "출발지"} → {input.destination.trim() || "여행지"} 왕복)
       </span>
+      {input.packageType !== "full" && (
+        <p className="text-[11px] leading-4 text-slate-500">
+          이 상품은 항공을 팔지 않아(랜드+숙박) 여기서 확인한 항공료는 견적에 더해지지 않습니다. 고객이 직접 예매할 항공권을 참고용으로 조회하거나, 견적서에 별도 안내할 때 쓰세요.
+        </p>
+      )}
       <TextField
         id="flightOrigin"
         label="출발지"

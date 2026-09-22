@@ -177,6 +177,7 @@ export function PlannerApp() {
             quote={quote}
             pmChoice={pmChoice}
             generatedCurrency={itinerary.generatedCurrency}
+            researchInfo={itinerary.researchInfo}
             onSelectPm={itinerary.selectPmOption}
             itemActions={{
               onChangeItem: itinerary.updateItem,

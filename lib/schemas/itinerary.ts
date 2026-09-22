@@ -10,11 +10,24 @@ export const itineraryRequestSchema = z.object({
   currency: z.enum(["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD", "AUD"]),
   themes: z.array(z.enum(["history", "food", "nature", "shopping", "photo", "activity", "local"])).max(7),
   notes: z.string().max(500),
+  travelType: z.enum(["semi", "package", "honeymoon", "senior", "accessible"]).default("semi"),
 });
 
 export type ItineraryRequest = z.infer<typeof itineraryRequestSchema>;
 
 /** ---------- LLM 응답 (모델에게 보여주는 스키마이기도 하다) ---------- */
+
+const accessibilitySchema = z.object({
+  level: z.enum(["ok", "limited", "difficult", "unknown"]).describe("휠체어·거동불편 여행자의 이용 가능 정도"),
+  wheelchairAccessible: z.boolean().describe("휠체어로 이용 가능한지"),
+  accessibleRestroom: z.boolean().describe("장애인 화장실이 있는지"),
+  elevator: z.boolean().describe("엘리베이터가 있는지"),
+  ramp: z.boolean().describe("경사로(램프)가 있는지"),
+  note: z.string().describe("조사 근거·유의사항 한 줄. 확인 못했으면 빈 문자열"),
+  mustSeeButHard: z
+    .boolean()
+    .describe("대표 명소라 대체하기 어렵지만 위 시설 문제로 휠체어·거동불편 여행자의 이용이 사실상 어려운 곳이면 true"),
+});
 
 const itemSchema = z.object({
   name: z.string().describe("명소/식당 이름 (현지에서 검색 가능한 실제 이름)"),
@@ -26,6 +39,9 @@ const itemSchema = z.object({
   entryFee: z.number().describe("1인 입장료 (견적 통화 단위, 무료면 0)"),
   mealCost: z.number().describe("1인 식대 (견적 통화 단위, 식사 장소가 아니면 0)"),
   caution: z.string().describe("휴관일·예약 필요 등 확인이 필요한 사항. 없으면 빈 문자열"),
+  accessibility: accessibilitySchema
+    .optional()
+    .describe("여행 유형이 accessible(장애인투어)일 때만 채웁니다. 그 외 유형이면 생략합니다."),
 });
 
 const dayPlanSchema = z.object({
@@ -61,6 +77,7 @@ function toItem(raw: RawItem, id: string, isLast: boolean): ItineraryItem {
     mealCost: Math.max(0, raw.mealCost),
     isEstimated: true,
     caution: raw.caution.trim() || undefined,
+    accessibility: raw.accessibility ? { ...raw.accessibility, note: raw.accessibility.note.trim() } : undefined,
   };
 }
 

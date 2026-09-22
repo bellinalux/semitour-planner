@@ -4,9 +4,9 @@ import { Field } from "@/components/ui/Field";
 import { NumberField } from "@/components/ui/NumberField";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { TextField } from "@/components/ui/TextField";
-import { THEMES } from "@/lib/defaults";
+import { THEMES, TRAVEL_TYPES } from "@/lib/defaults";
 import { tourDayCount } from "@/lib/itinerary";
-import type { ThemeId } from "@/types";
+import type { ThemeId, TravelType } from "@/types";
 import { CoursePasteField } from "./CoursePasteField";
 import { ModeSwitch } from "./ModeSwitch";
 import type { SectionProps } from "./types";
@@ -80,6 +80,28 @@ export function TripBasicsSection({ input, onChange }: SectionProps) {
 
         {!isPaste && (
           <>
+            <Field htmlFor="travelType" label="여행 유형" hint="유형에 맞는 특징을 웹에서 조사해 일정에 반영합니다">
+              <div id="travelType" role="radiogroup" aria-label="여행 유형" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {TRAVEL_TYPES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={input.travelType === t.id}
+                    onClick={() => onChange({ travelType: t.id as TravelType })}
+                    className={`rounded-md border px-2.5 py-1.5 text-left transition-colors ${
+                      input.travelType === t.id
+                        ? "border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600"
+                        : "border-slate-200 bg-white hover:border-indigo-300"
+                    }`}
+                  >
+                    <span className="block text-xs font-semibold text-slate-800">{t.label}</span>
+                    <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{t.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </Field>
+
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
               <label className="flex cursor-pointer items-start gap-2">
                 <input

@@ -11,6 +11,7 @@ import type {
   DayPlan,
   ItineraryItem,
   PmFreeOption,
+  SearchSource,
   TourSlot,
   TripInput,
 } from "@/types";
@@ -27,10 +28,17 @@ export interface GeneratedItinerary {
   pmChoice: PmChoice;
   meta: CourseMeta | null;
   detected: DetectedTrip | null;
+  /** 여행 유형별 웹 조사 출처 (세미투어면 조사하지 않으므로 빈 배열) */
+  sources: SearchSource[];
+  /** 웹 검색 근거로 조사됐는지 (장애인투어는 이게 false면 이용 편의시설 정보를 화면에서 "확인 못함"으로 표시한다) */
+  researched: boolean;
 }
 
 /** 입력 모드에 따라 AI가 세미투어를 만들거나, 붙여넣은 업체 코스를 구조화한다. */
-async function requestItinerary(input: TripInput, signal: AbortSignal): Promise<Omit<GeneratedItinerary, "pmChoice">> {
+async function requestItinerary(
+  input: TripInput,
+  signal: AbortSignal,
+): Promise<Omit<GeneratedItinerary, "pmChoice">> {
   if (input.mode === "paste") {
     const result = await postJson<{ days: DayPlan[]; meta: CourseMeta; nights: number; totalDays: number }>(
       "/api/parse-course",
@@ -41,10 +49,12 @@ async function requestItinerary(input: TripInput, signal: AbortSignal): Promise<
       days: result.days,
       meta: result.meta,
       detected: { days: result.totalDays, nights: result.nights, cities: result.meta.cities },
+      sources: [],
+      researched: false,
     };
   }
 
-  const { days } = await postJson<{ days: DayPlan[] }>(
+  const { days, sources, researched } = await postJson<{ days: DayPlan[]; sources: SearchSource[]; researched: boolean }>(
     "/api/generate-itinerary",
     {
       destination: input.destination,
@@ -53,10 +63,17 @@ async function requestItinerary(input: TripInput, signal: AbortSignal): Promise<
       currency: input.currency,
       themes: input.themes,
       notes: input.notes,
+      travelType: input.travelType,
     },
     signal,
   );
-  return { days: input.includesFlights ? withTravelDays(days, input) : days, meta: null, detected: null };
+  return {
+    days: input.includesFlights ? withTravelDays(days, input) : days,
+    meta: null,
+    detected: null,
+    sources,
+    researched,
+  };
 }
 
 /** 일정 생성 요청 상태, 결과, 날짜별 오후 옵션(A/B) 선택, 항목 편집을 관리한다. */
@@ -65,6 +82,11 @@ export function useItinerary() {
   const [days, setDays] = useState<DayPlan[]>([]);
   const [pmChoice, setPmChoice] = useState<PmChoice>({});
   const [meta, setMeta] = useState<CourseMeta | null>(null);
+  /** 여행 유형별 웹 조사 출처와, 실제로 검색을 실행했는지 */
+  const [researchInfo, setResearchInfo] = useState<{ sources: SearchSource[]; researched: boolean }>({
+    sources: [],
+    researched: false,
+  });
   /** 일정 금액이 어느 통화로 생성됐는지 (이후 통화를 바꾸면 견적에서 경고) */
   const [generatedCurrency, setGeneratedCurrency] = useState<CurrencyCode | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
@@ -82,6 +104,7 @@ export function useItinerary() {
       setDays(result.days);
       setPmChoice(choice);
       setMeta(result.meta);
+      setResearchInfo({ sources: result.sources, researched: result.researched });
       setGeneratedCurrency(input.currency);
       setState({ status: "success" });
       return { ...result, pmChoice: choice };
@@ -156,6 +179,7 @@ export function useItinerary() {
     setDays(saved.days);
     setPmChoice(saved.pmChoice);
     setMeta(saved.meta);
+    setResearchInfo({ sources: [], researched: false });
     setGeneratedCurrency(saved.generatedCurrency);
     setState(saved.days.length > 0 ? { status: "success" } : { status: "idle" });
   }, []);
@@ -165,6 +189,7 @@ export function useItinerary() {
     days,
     pmChoice,
     meta,
+    researchInfo,
     generatedCurrency,
     generate,
     selectPmOption,
