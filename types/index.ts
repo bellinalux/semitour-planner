@@ -465,6 +465,8 @@ export interface TourCandidate {
   highlights: string;
   /** 이 투어를 운영·판매하는 업체 이름. 확인 못하면 빈 문자열 */
   operator: string;
+  /** 요금을 확인한 사이트·플랫폼 이름 (예: Klook, Viator, 마이리얼트립, 공식 홈페이지). 확인 못하면 빈 문자열 */
+  sourceName: string;
   /** 예약처를 구글에서 검색하는 링크 */
   searchUrl: string;
 }

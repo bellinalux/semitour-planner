@@ -48,7 +48,15 @@ export async function POST(request: Request) {
       tours = tours.filter((t) => norm(t.operator).includes(target) || target.includes(norm(t.operator)));
     }
 
-    if (tours.length === 0) {
+    // "더 찾기"에서 이미 보여준 투어가 다시 섞여 오면 한 번 더 걸러낸다
+    if (parsed.data.excludeNames.length > 0) {
+      const seen = new Set(parsed.data.excludeNames.map((n) => n.trim().toLowerCase()));
+      tours = tours.filter((t) => !seen.has(t.name.toLowerCase()));
+    }
+
+    const isLoadMore = parsed.data.excludeNames.length > 0;
+    // "더 찾기"는 새로 찾은 게 0개여도 실패가 아니라 "더 이상 없다"는 정상 결과다
+    if (tours.length === 0 && !isLoadMore) {
       return errorResponse(
         "BAD_OUTPUT",
         operator

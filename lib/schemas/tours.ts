@@ -11,6 +11,8 @@ export const tourRequestSchema = z.object({
   currency: z.enum(["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD", "AUD"]),
   /** 입력하면 이 업체(예: 우리 회사)가 파는 투어만 찾는다. 비우면 전체 시장에서 찾는다 */
   operatorName: z.string().trim().max(80).default(""),
+  /** 이미 찾은 투어 이름들. "더 찾기"에서 이것들과 겹치지 않는 투어를 새로 찾는다 */
+  excludeNames: z.array(z.string().trim().max(160)).max(60).default([]),
 });
 
 export type TourRequest = z.infer<typeof tourRequestSchema>;
@@ -34,9 +36,10 @@ export const tourResponseSchema = z.object({
         koreanNote: z.string().describe("한국어 가이드/후기 근거 한 줄. 확인 못하면 빈 문자열"),
         highlights: z.string().describe("이 투어를 추천하는 이유 한 줄"),
         operator: z.string().describe("이 투어를 운영·판매하는 업체 이름 (여행사, 현지 투어사, 가이드 등). 확인 못하면 빈 문자열"),
+        sourceName: z.string().describe("요금을 확인한 사이트·플랫폼 이름 (예: Klook, Viator, 마이리얼트립, 공식 홈페이지). 확인 못하면 빈 문자열"),
       }),
     )
-    .describe("추천 투어 6~10개, 요청한 종류를 골고루"),
+    .describe("추천 투어 목록. 요청한 종류를 골고루"),
 });
 
 type Parsed = z.infer<typeof tourResponseSchema>;
@@ -72,6 +75,7 @@ export function toTourCandidates(parsed: Parsed, destination: string): TourCandi
       koreanNote: t.koreanGuide ? t.koreanNote.trim() : "",
       highlights: t.highlights.trim(),
       operator: t.operator.trim(),
+      sourceName: t.sourceName.trim(),
       searchUrl: tourSearchUrl(t.name.trim(), destination),
     }));
 }

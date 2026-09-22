@@ -187,6 +187,7 @@ export function productToTour(p: ViatorProduct, category: TourCategory): TourCan
     koreanNote: "",
     highlights: p.reviews > 0 ? `★ ${p.rating.toFixed(1)} (후기 ${p.reviews.toLocaleString("en-US")}건)` : "",
     operator: "",
+    sourceName: "Viator",
     searchUrl: p.productUrl,
   };
 }

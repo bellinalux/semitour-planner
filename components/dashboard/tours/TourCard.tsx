@@ -49,6 +49,9 @@ export function TourCard({ tour, currency, days, addedTo, optionCount, onAdd, on
         <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
           {category.emoji} {category.label}
         </span>
+        {tour.sourceName && (
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">출처 {tour.sourceName}</span>
+        )}
         {tour.koreanGuide && (
           <span className="inline-flex items-center gap-1 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
             <BadgeCheck className="h-3 w-3" aria-hidden />
