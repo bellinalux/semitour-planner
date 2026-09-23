@@ -263,6 +263,7 @@ export function PlannerApp() {
               onMoveItem: itinerary.moveItemOrder,
               onRelocateItem: itinerary.relocate,
               onReorderItems: itinerary.reorderSessionItems,
+              onInsertItems: itinerary.insertSegment,
               onSaveSegment: handleSaveSegment,
             }}
             regionActions={{

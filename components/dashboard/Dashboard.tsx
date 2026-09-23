@@ -49,6 +49,7 @@ interface ItemActions {
   onMoveItem: (itemId: string, direction: "up" | "down") => void;
   onRelocateItem: (itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => void;
   onReorderItems: (orderedIds: string[]) => void;
+  onInsertItems: (dayNo: number, slot: TourSlot, items: ItineraryItem[]) => void;
   onSaveSegment: (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => void;
 }
 

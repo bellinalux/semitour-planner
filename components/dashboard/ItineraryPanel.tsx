@@ -94,6 +94,7 @@ interface Props {
   onMoveItem: (itemId: string, direction: "up" | "down") => void;
   onRelocateItem: (itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => void;
   onReorderItems: (orderedIds: string[]) => void;
+  onInsertItems: (dayNo: number, slot: TourSlot, items: ItineraryItem[]) => void;
   onSaveSegment: (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => void;
   onRetry: () => void;
   /** 지역(도시)만 따로 다시 만들기. AI 모드가 아니면(내 코스 붙여넣기) 표시하지 않는다 */
@@ -385,6 +386,7 @@ export function ItineraryPanel({
   onMoveItem,
   onRelocateItem,
   onReorderItems,
+  onInsertItems,
   onSaveSegment,
   onRetry,
   canRegenerateRegion,
@@ -519,6 +521,7 @@ export function ItineraryPanel({
                   onRelocateItem={onRelocateItem}
                   onSaveSegment={onSaveSegment}
                   onReorderItems={onReorderItems}
+                  onInsertItems={onInsertItems}
                 />
               );
               const groups = groupDaysByCity(days);

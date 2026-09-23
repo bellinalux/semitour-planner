@@ -116,3 +116,32 @@ export function calcDayLoad(day: DayPlan, pmChoice: PmChoice): DayLoad {
 export function calcAllDayLoads(days: DayPlan[], pmChoice: PmChoice): DayLoad[] {
   return days.map((d) => calcDayLoad(d, pmChoice));
 }
+
+/** 저녁 활동을 시작하기에 적당한 마지막 시각(18:00). 이 시각까지 크게 남으면 "빈 시간"으로 본다. */
+export const DAY_FILL_TARGET_END_MINUTES = 18 * 60;
+/** 이 정도(분) 이상 비어야 "추천 일정 채우기"를 보여준다 (약 2시간 30분) */
+export const DAY_FILL_MIN_GAP_MINUTES = 150;
+
+export interface DayGap {
+  /** 채울 만한 여유 시간(분) */
+  freeMinutes: number;
+  /** 지금 일정이 끝나는(=비기 시작하는) 시각 */
+  fromTime: string;
+}
+
+/**
+ * 코스가 순서대로 나열된 날짜(kind === "linear")에서 저녁까지 남는 빈 시간을 계산한다.
+ * 도착일처럼 일찍 끝나 오후~저녁이 통째로 비는 날을 찾기 위한 것이라 linear 날짜만 대상으로 한다
+ * (세미투어 날짜는 오전+오후 구조가 이미 하루를 채우고 있어 이 계산이 필요 없다).
+ * 마지막 날(귀국·체크아웃일)은 대상에서 제외한다 — 출국 준비 시간이 필요해 일정을 더 채우면 안 된다.
+ */
+export function calcDayGap(day: DayPlan, pmChoice: PmChoice, isLastDay: boolean): DayGap | null {
+  if (day.kind !== "linear" || isLastDay) return null;
+  const load = calcDayLoad(day, pmChoice);
+  const start = parseClock(dayMeetingTime(day));
+  if (start === null) return null;
+  const endMinutes = start + load.totalMinutes;
+  const freeMinutes = DAY_FILL_TARGET_END_MINUTES - endMinutes;
+  if (freeMinutes < DAY_FILL_MIN_GAP_MINUTES) return null;
+  return { freeMinutes, fromTime: formatClock(endMinutes) };
+}

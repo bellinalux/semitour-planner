@@ -1,5 +1,6 @@
 import { TOUR_CATEGORY_MAP } from "@/lib/itemTypes";
 import { midpoint } from "@/lib/travelEstimate";
+import type { DayFillSuggestion } from "@/lib/schemas/dayFill";
 import type { DayPlan, ItineraryItem, TourCandidate, TourSlot } from "@/types";
 
 /** 투어 후보를 일정 항목으로 바꾼다. 1인 요금은 검색 범위의 중간값(추정)으로 넣는다. */
@@ -19,6 +20,22 @@ export function tourToItem(tour: TourCandidate): ItineraryItem {
     caution: tour.booking || undefined,
     link: tour.searchUrl,
     fromCatalog: true,
+  };
+}
+
+/** "추천일정 채우기"로 받은 추천 하나를 일정 항목으로 바꾼다. id는 넣는 쪽(insertSegment)에서 새로 발급한다. */
+export function dayFillToItem(s: DayFillSuggestion, isLast: boolean): ItineraryItem {
+  return {
+    id: `fill-${crypto.randomUUID().slice(0, 8)}`,
+    name: s.name,
+    description: [s.description, s.reason ? `— ${s.reason}` : ""].filter(Boolean).join(" "),
+    stayMinutes: Math.max(0, Math.round(s.stayMinutes)),
+    travelMinutesToNext: isLast ? null : Math.max(0, Math.round(s.travelMinutesToNext)),
+    entryFee: Math.max(0, s.entryFee),
+    mealCost: Math.max(0, s.mealCost),
+    isEstimated: true,
+    caution: s.caution || undefined,
+    cuisine: s.cuisine || undefined,
   };
 }
 

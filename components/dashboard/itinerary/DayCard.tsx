@@ -1,9 +1,10 @@
 import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Flag, Plus, Sun, Sunset } from "lucide-react";
-import { calcDayLoad, computeItemTimings, dayMeetingTime, estimatedEndTime, type DayLoadLevel } from "@/lib/dayLoad";
+import { calcDayGap, calcDayLoad, computeItemTimings, dayMeetingTime, estimatedEndTime, type DayLoadLevel } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
 import { dayItems } from "@/lib/itinerary";
 import type { SegmentKind } from "@/lib/segmentLibrary";
 import type { DayPlan, CurrencyCode, ItineraryItem, OptionSuggestion, PmFreeOption, TourSlot } from "@/types";
+import { DayFillPanel } from "./DayFillPanel";
 import { PmOptionSwitch } from "./PmOptionSwitch";
 import { RouteCheckPanel } from "./RouteCheckPanel";
 import { SessionBlock } from "./SessionBlock";
@@ -41,6 +42,7 @@ interface Props {
   onRelocateItem: (itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => void;
   onSaveSegment: (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => void;
   onReorderItems: (orderedIds: string[]) => void;
+  onInsertItems: (dayNo: number, slot: TourSlot, items: ItineraryItem[]) => void;
 }
 
 export function DayCard({
@@ -61,6 +63,7 @@ export function DayCard({
   onRelocateItem,
   onSaveSegment,
   onReorderItems,
+  onInsertItems,
 }: Props) {
   const city = (plan.overnightCity ?? "").trim() || undefined;
   const selected = plan.pmFreeOptions.find((o) => o.id === selectedPmId) ?? plan.pmFreeOptions[0];
@@ -69,6 +72,8 @@ export function DayCard({
   const meetingTime = dayMeetingTime(plan);
   const endTime = load.totalMinutes > 0 ? estimatedEndTime(meetingTime, load.totalMinutes) : null;
   const timings = computeItemTimings(dayItems(plan, pmChoiceForDay), meetingTime);
+  const isLastDay = days.length > 0 && plan.day === Math.max(...days.map((d) => d.day));
+  const gap = calcDayGap(plan, pmChoiceForDay, isLastDay);
 
   return (
     <article className="rounded-lg border border-slate-200">
@@ -125,6 +130,17 @@ export function DayCard({
       <div className="space-y-5 p-4">
         {plan.kind === "linear" ? (
           <div>
+            {gap && (
+              <DayFillPanel
+                dayNo={plan.day}
+                gap={gap}
+                destination={destination}
+                city={city}
+                currency={currency}
+                existingNames={plan.items.map((i) => i.name)}
+                onApply={onInsertItems}
+              />
+            )}
             <RouteCheckPanel items={plan.items} destination={destination} city={city} onApply={onReorderItems} />
             <ol>
               {plan.items.map((item, index) => (
