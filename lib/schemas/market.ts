@@ -60,6 +60,11 @@ export interface FeeCheckResult {
   note: string;
   /** 웹에서 확인한 통상적인 체류·관람 시간(분). 확인하지 못했으면 0 */
   recommendedStayMinutes: number;
+  /**
+   * 조사 결과 이곳이 식당·카페처럼 실제로 식사를 하는 곳으로 확인됐는데, 코스에는 식사(meal)가
+   * 아닌 다른 유형(관광 등)으로 잘못 분류돼 있으면 true. 확인 못했거나 원래도 식사 장소가 아니면 false.
+   */
+  shouldBeMeal: boolean;
 }
 
 export interface VerifyFeesResponse {

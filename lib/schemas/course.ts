@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { ITEM_TYPES } from "@/lib/itemTypes";
 import { isSupportedCourseFile, MAX_COURSE_FILE_BYTES } from "@/lib/courseFile";
+import { roundMinutes } from "@/lib/format";
+import { enforceMealWindows } from "@/lib/mealTiming";
 import type { CourseMeta, DayPlan, ItineraryItem } from "@/types";
 
 /** ---------- 클라이언트 → 서버 요청 ---------- */
@@ -42,6 +44,11 @@ const itemSchema = z.object({
       "입장 여부. 원문이 입장하지 않고 조망/외관만이라고 명시할 때만 view_only. 입장 개념이 없으면 none, 불확실하면 unknown",
     ),
   stayMinutes: z.number().describe("소요 시간(분). 원문에 있으면 그 값, 없으면 통상 소요 시간 추정. 모르면 0"),
+  travelMinutesToNext: z
+    .number()
+    .describe(
+      "다음 항목까지 이동 시간(분). 원문에 이동 수단·소요시간이 적혀 있으면 그 값, 없으면 실제 동선(도보/차량)을 고려한 현실적인 값으로 추정. 그날의 마지막 항목이면 0",
+    ),
   entryFee: z
     .number()
     .describe(
@@ -89,8 +96,8 @@ function toItem(raw: ParsedCourse["days"][number]["items"][number], id: string):
     timeNote: raw.timeNote.trim() || undefined,
     name: raw.name.trim(),
     description: raw.description.trim(),
-    stayMinutes: Math.max(0, Math.round(raw.stayMinutes)),
-    travelMinutesToNext: null,
+    stayMinutes: roundMinutes(raw.stayMinutes),
+    travelMinutesToNext: roundMinutes(raw.travelMinutesToNext),
     // 입장 개념이 없어도(마사지, 체험) 요금은 있을 수 있다. 외부 조망이나 요금이 없는 유형만 0으로 둔다.
     entryFee: raw.admission === "view_only" || NO_FEE_TYPES.has(raw.type) ? 0 : Math.max(0, raw.entryFee),
     mealCost: raw.type === "meal" ? Math.max(0, raw.mealCost) : 0,
@@ -117,7 +124,7 @@ export function toCoursePlan(parsed: ParsedCourse): {
       overnightCity: day.overnightCity.trim(),
       amGuided: [],
       pmFreeOptions: [],
-      items: day.items.map((item, i) => toItem(item, `d${dayNo}-i${i + 1}`)),
+      items: enforceMealWindows(day.items.map((item, i) => toItem(item, `d${dayNo}-i${i + 1}`))),
     };
   });
 

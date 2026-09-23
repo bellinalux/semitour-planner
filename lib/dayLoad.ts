@@ -26,6 +26,11 @@ function formatClock(minutes: number): string {
   return `${hh}:${mm}`;
 }
 
+/** "HH:mm"을 자정 기준 분으로 (외부에서 시각 비교·계산이 필요할 때 쓴다). 형식이 이상하면 null. */
+export function clockMinutes(time: string): number | null {
+  return parseClock(time);
+}
+
 /** 미팅 시각(HH:mm) + 하루 소요 시간(분)을 더한 예상 종료 시각. 형식이 이상하면 null. */
 export function estimatedEndTime(meetingTime: string, totalMinutes: number): string | null {
   const start = parseClock(meetingTime);

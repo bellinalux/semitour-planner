@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { roundMinutes } from "@/lib/format";
 import type { DayPlan, ItineraryItem } from "@/types";
 
 /** ---------- 클라이언트 → 서버 요청 ---------- */
@@ -79,8 +80,8 @@ function toItem(raw: RawItem, id: string, isLast: boolean): ItineraryItem {
     id,
     name: raw.name.trim(),
     description: raw.description.trim(),
-    stayMinutes: Math.max(0, Math.round(raw.stayMinutes)),
-    travelMinutesToNext: isLast ? null : Math.max(0, Math.round(raw.travelMinutesToNext)),
+    stayMinutes: roundMinutes(raw.stayMinutes),
+    travelMinutesToNext: isLast ? null : roundMinutes(raw.travelMinutesToNext),
     entryFee: Math.max(0, raw.entryFee),
     mealCost: Math.max(0, raw.mealCost),
     isEstimated: true,

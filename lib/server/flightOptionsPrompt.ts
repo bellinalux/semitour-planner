@@ -1,10 +1,25 @@
+import { addDays, formatDate, parseDate } from "@/lib/documents";
 import type { FlightOptionsRequest } from "@/lib/schemas/flightOptions";
+
+/**
+ * 귀국편이 도착지 공항에서 출발하는 날은 항상 "출발일로부터 nights일째(= Day nights+1)"이다.
+ * 숙박이 days − 1박(표준)이면 이 날이 마지막 날이라 귀국편이 그날 낮이나 저녁에 출발해 같은 날
+ * 또는 다음날 한국에 도착하고, 숙박이 days − 2박(귀국편이 심야 항공편)이면 이 날은 마지막 날
+ * "전날"이라 그날 밤 출발해 기내에서 하룻밤을 보내고 마지막 날 한국에 도착한다. 두 경우 모두
+ * 이 한 규칙(출발일 + nights일)으로 귀국편 출발일을 정확히 짚을 수 있다.
+ */
+function returnDepartDateLabel(req: FlightOptionsRequest): string {
+  const base = parseDate(req.departureDate.trim());
+  if (!base) return `출발일로부터 ${req.nights}일째(= Day ${req.nights + 1})`;
+  return `${formatDate(addDays(base, req.nights))} (Day ${req.nights + 1})`;
+}
 
 /** 1단계: Google 검색으로 개별 항공편을 여러 개 조사하는 요청 (자유 서술) */
 export function buildFlightOptionsResearchPrompt(req: FlightOptionsRequest): string {
   const when = req.departureDate.trim() ? `${req.departureDate.trim()} 출발 기준` : "앞으로 1~2개월 내 가까운 시일 기준";
   return [
-    `Google 검색 도구를 여러 번 사용해서, "${req.origin} → ${req.destination}" 왕복 항공권(이코노미, 성인 1인, ${when}, ${req.days - 1}박 ${req.days}일 일정)을 실제로 검색되는 편으로 5~8개 찾아 주세요.`,
+    `Google 검색 도구를 여러 번 사용해서, "${req.origin} → ${req.destination}" 왕복 항공권(이코노미, 성인 1인, ${when}, ${req.nights}박 ${req.days}일 일정)을 실제로 검색되는 편으로 5~8개 찾아 주세요.`,
+    `귀국편은 ${returnDepartDateLabel(req)}에 도착지 공항에서 출발하는 편으로 찾아 주세요. 그 편이 심야 항공편이라 한국 도착이 다음날(Day ${req.days})이 되는 것도 정상입니다 — 숙박이 여행 일수보다 2일 적게 잡혀 있으면(예: 3박 5일) 원래 그런 일정입니다.`,
     "네이버 항공권, Google Flights, 스카이스캐너, 카약, 인터파크투어 항공 등 항공권 검색 결과 페이지에 실제로 나열된 개별 항공편을 조사 대상으로 합니다. 기억에 의존해 편명이나 시간을 지어내지 마세요.",
     "직항과 경유를 섞어서, 그리고 항공사가 여러 곳이면 골고루 찾아 주세요.",
     "",

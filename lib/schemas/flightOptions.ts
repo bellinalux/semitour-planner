@@ -10,6 +10,11 @@ export const flightOptionsRequestSchema = z.object({
   destination: z.string().trim().min(1, "여행지를 입력해 주세요.").max(100),
   /** 여행 일수 (귀국일 계산용) */
   days: z.number().int().min(2).max(31),
+  /**
+   * 숙박 수. days − 1이면 표준 일정(마지막 날 귀국편 탑승), days − 2면 귀국편이 심야 항공편이라
+   * 기내에서 하룻밤을 보내는 일정이다. 귀국편 출발일 계산에 쓴다(출발일 + nights일째 = 귀국편 출발일).
+   */
+  nights: z.number().int().min(0).max(30),
   /** 출발 희망일 YYYY-MM-DD. 비우면 "가까운 시일"로 조사한다 */
   departureDate: z.string().trim().max(20).default(""),
   currency: z.enum(CURRENCIES),

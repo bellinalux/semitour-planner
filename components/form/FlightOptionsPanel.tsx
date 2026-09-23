@@ -43,15 +43,23 @@ function durationMinutes(text: string): number {
  * "/api/search-flight-price"(가격대만)의 더 상세한 버전이다.
  */
 export function FlightOptionsPanel({ input, onChange, onApplyFlight }: SectionProps & { onApplyFlight: (flight: FlightOption) => void }) {
-  const { state, data, run } = useRequest<{ origin: string; destination: string; days: number; departureDate: string; currency: string }, Result>(
-    "/api/search-flight-options",
-  );
+  const { state, data, run } = useRequest<
+    { origin: string; destination: string; days: number; nights: number; departureDate: string; currency: string },
+    Result
+  >("/api/search-flight-options");
   const [sort, setSort] = useState<SortMode>("priceAsc");
   const [stopFilter, setStopFilter] = useState<StopFilter>("all");
   const canRun = input.originCity.trim() !== "" && input.destination.trim() !== "" && input.days >= 2;
 
   const search = () => {
-    return run({ origin: input.originCity.trim(), destination: input.destination.trim(), days: input.days, departureDate: input.departureDate, currency: input.currency });
+    return run({
+      origin: input.originCity.trim(),
+      destination: input.destination.trim(),
+      days: input.days,
+      nights: input.nights,
+      departureDate: input.departureDate,
+      currency: input.currency,
+    });
   };
 
   const apply = (f: FlightOption) => onApplyFlight(f);

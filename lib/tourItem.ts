@@ -1,4 +1,5 @@
 import { TOUR_CATEGORY_MAP } from "@/lib/itemTypes";
+import { roundMinutes } from "@/lib/format";
 import { midpoint } from "@/lib/travelEstimate";
 import type { DayFillSuggestion } from "@/lib/schemas/dayFill";
 import type { DayPlan, ItineraryItem, TourCandidate, TourSlot } from "@/types";
@@ -12,7 +13,7 @@ export function tourToItem(tour: TourCandidate): ItineraryItem {
     admission: tour.category === "museum" ? "enter" : "none",
     name: tour.name,
     description: [tour.description, tour.includes ? `포함: ${tour.includes}` : ""].filter(Boolean).join(" · "),
-    stayMinutes: tour.durationMinutes,
+    stayMinutes: roundMinutes(tour.durationMinutes),
     travelMinutesToNext: null,
     entryFee: midpoint(tour.priceLow, tour.priceHigh),
     mealCost: 0,
@@ -29,8 +30,8 @@ export function dayFillToItem(s: DayFillSuggestion, isLast: boolean): ItineraryI
     id: `fill-${crypto.randomUUID().slice(0, 8)}`,
     name: s.name,
     description: [s.description, s.reason ? `— ${s.reason}` : ""].filter(Boolean).join(" "),
-    stayMinutes: Math.max(0, Math.round(s.stayMinutes)),
-    travelMinutesToNext: isLast ? null : Math.max(0, Math.round(s.travelMinutesToNext)),
+    stayMinutes: roundMinutes(s.stayMinutes),
+    travelMinutesToNext: isLast ? null : roundMinutes(s.travelMinutesToNext),
     entryFee: Math.max(0, s.entryFee),
     mealCost: Math.max(0, s.mealCost),
     isEstimated: true,

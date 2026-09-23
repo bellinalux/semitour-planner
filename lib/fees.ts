@@ -67,6 +67,8 @@ export interface FeeApplySummary {
   unverified: number;
   /** 웹에서 확인한 체류 시간으로 반영한 항목 수 */
   stayUpdated: number;
+  /** 실제로는 식당·카페로 확인돼 식사(meal)로 재분류한 항목 수 */
+  reclassifiedAsMeal: number;
 }
 
 /** 직접 입력한 금액과 웹 확인 금액이 이 비율 이내로 같으면 "일치"로 본다 */
@@ -84,7 +86,7 @@ export function applyFeeResults(
   checkedAt: string,
 ): { days: DayPlan[]; summary: FeeApplySummary } {
   const byId = new Map(results.map((r) => [r.id, r]));
-  const summary: FeeApplySummary = { applied: 0, free: 0, differs: 0, unverified: 0, stayUpdated: 0 };
+  const summary: FeeApplySummary = { applied: 0, free: 0, differs: 0, unverified: 0, stayUpdated: 0, reclassifiedAsMeal: 0 };
 
   const patchOf = (item: ItineraryItem, r: FeeCheckResult): ItineraryItem => {
     const base = { note: r.note, sourceName: r.sourceName, checkedAt };
@@ -95,9 +97,14 @@ export function applyFeeResults(
     const stayPatch = stayFound ? { stayMinutes: r.recommendedStayMinutes } : {};
     if (stayFound) summary.stayUpdated++;
 
+    // 조사 결과 실제로는 식당·카페인데 다른 유형(관광 등)으로 분류돼 있으면 식사(meal)로 바로잡는다
+    const reclassify = r.shouldBeMeal && item.type !== "meal";
+    const typePatch = reclassify ? { type: "meal" as const, admission: "none" as const } : {};
+    if (reclassify) summary.reclassifiedAsMeal++;
+
     if (r.status === "unverified") {
       summary.unverified++;
-      return { ...item, ...stayPatch, feeCheck: { ...base, status: "unverified", stayMinutesChecked: stayFound } };
+      return { ...item, ...stayPatch, ...typePatch, feeCheck: { ...base, status: "unverified", stayMinutesChecked: stayFound } };
     }
     if (r.amountInQuote === null) {
       // 현지 금액은 확인했지만 견적 통화로 환산하지 못한 경우: 금액은 그대로 두고 현지 금액만 보여 준다
@@ -105,6 +112,7 @@ export function applyFeeResults(
       return {
         ...item,
         ...stayPatch,
+        ...typePatch,
         local,
         feeCheck: { ...base, status: "unverified", stayMinutesChecked: stayFound, note: `${r.note} (견적 통화로 환산하지 못해 금액은 그대로 두었습니다)`.trim() },
       };
@@ -116,17 +124,20 @@ export function applyFeeResults(
     if (canOverwrite || close) {
       if (r.status === "free") summary.free++;
       else summary.applied++;
+      // 식사로 재분류한 경우, 확인한 금액은 입장료가 아니라 식대로 넣는다
+      const amountPatch = reclassify ? { entryFee: 0, mealCost: found } : { entryFee: found };
       return {
         ...item,
         ...stayPatch,
-        entryFee: found,
+        ...typePatch,
+        ...amountPatch,
         isEstimated: false,
         local,
         feeCheck: { ...base, status: r.status === "free" ? "free" : "confirmed", stayMinutesChecked: stayFound },
       };
     }
     summary.differs++;
-    return { ...item, ...stayPatch, local, feeCheck: { ...base, status: "differs", foundAmount: found, stayMinutesChecked: stayFound } };
+    return { ...item, ...stayPatch, ...typePatch, local, feeCheck: { ...base, status: "differs", foundAmount: found, stayMinutesChecked: stayFound } };
   };
 
   const next = days.map((day) => mapDayItems(day, (item) => (byId.has(item.id) ? patchOf(item, byId.get(item.id)!) : item)));

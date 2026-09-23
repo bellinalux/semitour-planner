@@ -203,8 +203,12 @@ function FeeCheckNotice({ view }: { view: FeeCheckView }) {
       <p className="font-semibold text-emerald-800">
         웹 확인 결과: 반영 {summary.applied}개 · 무료 {summary.free}개 · 입력값과 다름 {summary.differs}개 · 확인 못함 {summary.unverified}개
         {summary.stayUpdated > 0 ? ` · 체류 시간 반영 ${summary.stayUpdated}개` : ""}
+        {summary.reclassifiedAsMeal > 0 ? ` · 식당으로 재분류 ${summary.reclassifiedAsMeal}개` : ""}
       </p>
       {!searched && <p className="text-amber-700">웹 검색 근거를 확보하지 못해 금액·체류 시간을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.</p>}
+      {summary.reclassifiedAsMeal > 0 && (
+        <p>다른 유형으로 분류돼 있던 항목이 실제로는 식당·카페로 확인돼 식사로 바로잡았습니다. 일정에서 식사 시간대가 자연스러운지 다시 확인하세요.</p>
+      )}
       {summary.differs > 0 && <p>&quot;입력값과 다름&quot; 항목은 직접 입력한 금액을 그대로 두었습니다. 항목의 &quot;확인가 적용&quot; 버튼으로 바꿀 수 있어요.</p>}
       {summary.unverified > 0 && <p>확인하지 못한 항목은 AI 추정 금액 그대로입니다. 판매 전에 예약처나 공식 사이트에서 직접 확인하세요.</p>}
       {sources.length > 0 && (

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { roundMinutes } from "@/lib/format";
 import type { FeeCheckResult, VerifyFeesRequest, VerifyFeesResponse } from "@/lib/schemas/market";
 import { krwPerUnit } from "./fx";
 import { generateGroundedText, generateJson } from "./gemini";
@@ -19,6 +20,7 @@ function researchPrompt(req: VerifyFeesRequest): string {
     "4. 요금을 확인한 사이트 이름",
     "5. 유의사항 한 줄: 현장 현금 결제만 가능, 예약 필수, 요금이 시즌·요일별로 다름, 휴무일, 외국인 요금이 따로 있음 등",
     "6. 관광객들이 그 장소에서 보통 머무르는 시간(체류·관람 소요 시간, 분 단위). 공식 사이트·여행 후기·가이드북뿐 아니라, 하나투어·모두투어·노랑풍선 등 국내 여행사나 Klook·Viator 같은 예약 플랫폼의 패키지 상품·투어 일정표에 적힌 소요 시간도 함께 찾아 참고하세요(다른 여행사들이 실제로 몇 시간을 배정하는지가 가장 현실적인 기준입니다). 여러 출처의 시간이 다르면 가장 흔하게 나오는 값을 적으세요. 확인 못했으면 '확인 못함'이라고 쓰세요.",
+    "7. 이 장소가 실제로는 식당·카페처럼 '식사를 하는 곳'인지 확인하세요(이름만으로 짐작하지 말고 검색 결과로 확인). 식당·카페가 맞으면 '식당' 또는 '카페'라고 쓰고, 관광지·체험 시설 등 식사 장소가 아니면 '식사 장소 아님'이라고 쓰세요.",
     "",
     "여러 요금이 있으면(예: 패키지별, 시간대별) 가장 기본이 되는 성인 1인 요금을 적고 나머지는 유의사항에 쓰세요.",
   ].join("\n");
@@ -33,6 +35,7 @@ const SYSTEM = `당신은 입장료 조사 메모를 JSON으로 정리하는 편
 - confirmed: localCurrency는 요금의 통화(ISO 4217 3글자 대문자), localAmount는 외국인 성인 1인 금액(숫자). free나 unverified이면 localAmount는 0이고, localCurrency는 비워도 됩니다.
 - sourceName은 메모에 적힌 확인 사이트 이름(없으면 빈 문자열), note는 유의사항 한 줄(없으면 빈 문자열)입니다.
 - recommendedStayMinutes는 메모에서 확인한 통상적인 체류·관람 시간을 분 단위 숫자로 씁니다("약 1~2시간"이면 중간값). 메모에 없거나 '확인 못함'이면 0입니다.
+- shouldBeMeal은 메모가 이 장소를 '식당' 또는 '카페'로 확인했을 때만 true입니다. '식사 장소 아님'이거나 확인하지 못했으면 false입니다.
 - 한국어로 작성하고, 지정된 JSON 스키마의 JSON만 출력합니다.`;
 
 const resultSchema = z.object({
@@ -45,6 +48,7 @@ const resultSchema = z.object({
       sourceName: z.string().describe("요금을 확인한 사이트 이름. 없으면 빈 문자열"),
       note: z.string().describe("유의사항 한 줄. 없으면 빈 문자열"),
       recommendedStayMinutes: z.number().describe("통상적인 체류·관람 시간(분). 확인 못했으면 0"),
+      shouldBeMeal: z.boolean().describe("조사 결과 이곳이 식당·카페로 확인되면 true, 아니면 false"),
     }),
   ),
 });
@@ -103,12 +107,14 @@ export async function verifyFees(req: VerifyFeesRequest): Promise<VerifyFeesResp
   const results: FeeCheckResult[] = drafts.map(({ raw, item, currency, status }) => {
     const note = !research.searched ? "웹 검색 근거를 확보하지 못해 확인하지 못했습니다." : (raw?.note.trim() ?? "");
     // 검색 근거가 없으면 체류 시간도 믿을 수 없으므로 0(확인 못함)으로 둔다
-    const recommendedStayMinutes = research.searched && raw ? Math.max(0, Math.round(raw.recommendedStayMinutes)) : 0;
+    const recommendedStayMinutes = research.searched && raw ? roundMinutes(raw.recommendedStayMinutes) : 0;
+    // 검색 근거가 없으면 식당 여부도 믿을 수 없다
+    const shouldBeMeal = research.searched && (raw?.shouldBeMeal ?? false);
     if (status === "unverified") {
-      return { id: item.id, status, localCurrency: "", localAmount: 0, amountInQuote: null, sourceName: "", note: note || "웹에서 확인하지 못했습니다.", recommendedStayMinutes };
+      return { id: item.id, status, localCurrency: "", localAmount: 0, amountInQuote: null, sourceName: "", note: note || "웹에서 확인하지 못했습니다.", recommendedStayMinutes, shouldBeMeal };
     }
     if (status === "free") {
-      return { id: item.id, status, localCurrency: currency, localAmount: 0, amountInQuote: 0, sourceName: raw?.sourceName.trim() ?? "", note, recommendedStayMinutes };
+      return { id: item.id, status, localCurrency: currency, localAmount: 0, amountInQuote: 0, sourceName: raw?.sourceName.trim() ?? "", note, recommendedStayMinutes, shouldBeMeal };
     }
     const localAmount = raw?.localAmount ?? 0;
     let amountInQuote: number | null = null;
@@ -118,7 +124,7 @@ export async function verifyFees(req: VerifyFeesRequest): Promise<VerifyFeesResp
       const perLocal = rates.get(currency)?.rate;
       if (perLocal && krwPerQuote > 0) amountInQuote = roundFor(req.currency, (localAmount * perLocal) / krwPerQuote);
     }
-    return { id: item.id, status, localCurrency: currency, localAmount, amountInQuote, sourceName: raw?.sourceName.trim() ?? "", note, recommendedStayMinutes };
+    return { id: item.id, status, localCurrency: currency, localAmount, amountInQuote, sourceName: raw?.sourceName.trim() ?? "", note, recommendedStayMinutes, shouldBeMeal };
   });
 
   return {
