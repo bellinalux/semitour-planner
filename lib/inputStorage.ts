@@ -28,6 +28,7 @@ export function normalizeInput(saved: unknown): TripInput {
     options: Array.isArray(s.options) ? s.options : DEFAULT_INPUT.options,
     travelAlert: typeof s.travelAlert === "object" && s.travelAlert !== null ? s.travelAlert : null,
     travelType: typeof s.travelType === "string" && TRAVEL_TYPE_IDS.has(s.travelType) ? s.travelType : DEFAULT_INPUT.travelType,
+    tripScope: s.tripScope === "domestic" || s.tripScope === "overseas" ? s.tripScope : DEFAULT_INPUT.tripScope,
     regionPlan: typeof s.regionPlan === "string" ? s.regionPlan : DEFAULT_INPUT.regionPlan,
     pickupNote: typeof s.pickupNote === "string" ? s.pickupNote : DEFAULT_INPUT.pickupNote,
     sendingNote: typeof s.sendingNote === "string" ? s.sendingNote : DEFAULT_INPUT.sendingNote,

@@ -12,6 +12,8 @@ export const itineraryRequestSchema = z.object({
   themes: z.array(z.enum(["history", "food", "nature", "shopping", "photo", "activity", "local"])).max(7),
   notes: z.string().max(500),
   travelType: z.enum(["semi", "package", "honeymoon", "senior", "accessible"]).default("semi"),
+  /** 국내(한국을 방문하는 외국인 대상)/해외 여행. 대상 관광객이 누구인지에 따라 조사·추천 범위가 달라진다 */
+  tripScope: z.enum(["domestic", "overseas"]).default("overseas"),
   /** 사용자가 직접 지정한 도시 순서·일수 (예: "로마 2일, 피렌체 2일, 베니스 2일"). 비우면 AI가 알아서 도시를 구성한다 */
   regionPlan: z.string().max(300).default(""),
 });

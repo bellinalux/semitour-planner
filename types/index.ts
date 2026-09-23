@@ -26,6 +26,9 @@ export type ThemeId =
  */
 export type TravelType = "semi" | "package" | "honeymoon" | "senior" | "accessible";
 
+/** 국내여행/해외여행 구분. 하루 일정이 19:00 전에 끝나야 한다는 기준 등 일정 검증과 추천 검색 범위에 쓴다 */
+export type TripScope = "domestic" | "overseas";
+
 export interface CompetitorIncludes {
   guide: boolean;
   meals: boolean;
@@ -99,6 +102,9 @@ export interface TripInput {
   mode: PlannerMode;
   /** 붙여넣은 코스 원문 (mode === "paste") */
   courseText: string;
+
+  /** 국내여행/해외여행. 일정 검증(하루 종료 시각 기준)과 추천 코스 검색 범위(국내/해외 명소)에 쓴다 */
+  tripScope: TripScope;
 
   destination: string;
   /** 출발지 (항공 이동일 표시용) */

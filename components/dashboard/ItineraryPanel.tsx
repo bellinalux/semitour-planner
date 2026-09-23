@@ -25,6 +25,7 @@ import type {
   SelectedHotel,
   TourSlot,
   TravelType,
+  TripScope,
 } from "@/types";
 import { DayCard } from "./itinerary/DayCard";
 import { FxContext } from "./itinerary/FxContext";
@@ -79,6 +80,8 @@ interface Props {
   travelType: TravelType;
   /** 동선 확인에 쓰는 여행지 (국가·지역) */
   destination: string;
+  /** 국내(한국 방문 외국인 대상)/해외 여행. 추천일정 검색 대상 관광객을 정한다 */
+  tripScope: TripScope;
   researchInfo: { sources: SearchSource[]; researched: boolean };
   pickupNote: string;
   sendingNote: string;
@@ -376,6 +379,7 @@ export function ItineraryPanel({
   currency,
   travelType,
   destination,
+  tripScope,
   researchInfo,
   pickupNote,
   sendingNote,
@@ -512,6 +516,7 @@ export function ItineraryPanel({
                   days={days}
                   hotelName={plan.overnightCity ? selectedHotels[plan.overnightCity.trim()]?.name : undefined}
                   destination={destination}
+                  tripScope={tripScope}
                   currency={currency}
                   selectedPmId={pmChoice[plan.day] ?? "A"}
                   editing={editing}

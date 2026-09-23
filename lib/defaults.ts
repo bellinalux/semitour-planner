@@ -1,4 +1,4 @@
-import type { Competitor, ThemeId, TravelType, TripInput } from "@/types";
+import type { Competitor, ThemeId, TravelType, TripInput, TripScope } from "@/types";
 
 export const THEMES: { id: ThemeId; label: string }[] = [
   { id: "history", label: "역사·문화" },
@@ -22,11 +22,18 @@ export const TRAVEL_TYPES: { id: TravelType; label: string; hint: string }[] = [
   { id: "accessible", label: "장애인투어", hint: "휠체어 이용 편의시설(화장실·엘리베이터·경사로) 확인" },
 ];
 
+export const TRIP_SCOPES: { id: TripScope; label: string; hint: string }[] = [
+  { id: "overseas", label: "해외여행", hint: "일반적으로 08:00~19:00 사이에 하루 일정이 끝나도록 잡습니다" },
+  { id: "domestic", label: "국내여행", hint: "일반적으로 08:00~19:00 사이에 하루 일정이 끝나도록 잡습니다" },
+];
+
 export const MAX_COMPETITORS = 5;
 
 export const DEFAULT_INPUT: TripInput = {
   mode: "ai",
   courseText: "",
+
+  tripScope: "overseas",
 
   destination: "",
   originCity: "인천",

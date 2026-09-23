@@ -1,9 +1,9 @@
 import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Flag, Plus, Sun, Sunset } from "lucide-react";
-import { calcDayGap, calcDayLoad, computeItemTimings, dayMeetingTime, estimatedEndTime, type DayLoadLevel } from "@/lib/dayLoad";
+import { calcDayEnd, calcDayGap, calcDayLoad, computeItemTimings, dayMeetingTime, estimatedEndTime, STANDARD_DAY_END, type DayLoadLevel } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
 import { dayItems } from "@/lib/itinerary";
 import type { SegmentKind } from "@/lib/segmentLibrary";
-import type { DayPlan, CurrencyCode, ItineraryItem, OptionSuggestion, PmFreeOption, TourSlot } from "@/types";
+import type { DayPlan, CurrencyCode, ItineraryItem, OptionSuggestion, PmFreeOption, TourSlot, TripScope } from "@/types";
 import { DayFillPanel } from "./DayFillPanel";
 import { PmOptionSwitch } from "./PmOptionSwitch";
 import { RouteCheckPanel } from "./RouteCheckPanel";
@@ -29,6 +29,8 @@ interface Props {
   hotelName?: string;
   /** 동선 확인에 쓰는 여행지 (국가·지역) */
   destination: string;
+  /** 국내(한국 방문 외국인 대상)/해외 여행. 추천일정 검색 대상 관광객을 정한다 */
+  tripScope: TripScope;
   currency: CurrencyCode;
   selectedPmId: PmFreeOption["id"];
   editing: boolean;
@@ -50,6 +52,7 @@ export function DayCard({
   days,
   hotelName,
   destination,
+  tripScope,
   currency,
   selectedPmId,
   editing,
@@ -74,6 +77,7 @@ export function DayCard({
   const timings = computeItemTimings(dayItems(plan, pmChoiceForDay), meetingTime);
   const isLastDay = days.length > 0 && plan.day === Math.max(...days.map((d) => d.day));
   const gap = calcDayGap(plan, pmChoiceForDay, isLastDay);
+  const dayEnd = calcDayEnd(plan, pmChoiceForDay);
 
   return (
     <article className="rounded-lg border border-slate-200">
@@ -126,6 +130,12 @@ export function DayCard({
           {LOAD_WARNING[load.level]}
         </p>
       )}
+      {dayEnd?.isLate && (
+        <p className="flex items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          이 날짜는 {dayEnd.endTime}에 끝나 표준 종료 시각({STANDARD_DAY_END})을 넘깁니다. 근교투어·야간투어처럼 늦게 복귀하는 일정이 아니라면 코스를 조정하세요.
+        </p>
+      )}
 
       <div className="space-y-5 p-4">
         {plan.kind === "linear" ? (
@@ -137,6 +147,7 @@ export function DayCard({
                 destination={destination}
                 city={city}
                 currency={currency}
+                tripScope={tripScope}
                 existingNames={plan.items.map((i) => i.name)}
                 onApply={onInsertItems}
               />

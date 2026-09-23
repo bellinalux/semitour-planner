@@ -1,6 +1,6 @@
 import { THEMES } from "@/lib/defaults";
 import type { ItineraryRequest } from "@/lib/schemas/itinerary";
-import type { TravelType } from "@/types";
+import type { TravelType, TripScope } from "@/types";
 
 export const ITINERARY_SYSTEM_PROMPT = `당신은 전 세계 여행지를 다루는 B2B 세미투어 기획 전문가입니다. 여행사와 가이드가 고객에게 판매할 일정을 설계합니다.
 
@@ -58,12 +58,28 @@ const TRAVEL_TYPE_SYSTEM_ADDENDUM: Record<TravelType, string> = {
 - 이동 동선도 계단이 적고 경사가 완만한 경로를 우선합니다.`,
 };
 
+/** 국내(한국 방문 외국인 대상)/해외(한국인이 떠나는 여행) 여부로 기본 템플릿에 추가하는 규칙 */
+const TRIP_SCOPE_SYSTEM_ADDENDUM: Record<TripScope, string> = {
+  overseas: "",
+  domestic: `
+
+[국내투어 — 한국을 방문하는 외국인 관광객 대상]
+- 이 투어는 한국인이 아니라, 한국을 방문하는 외국인 관광객을 위한 것입니다.
+- <type_research_memo>에서 확인한, 외국인 관광객에게 실제로 인기 있는 명소·코스를 우선 배치합니다. 한국인에게만 익숙한 로컬 장소보다 해외 여행 후기·SNS에서 외국인이 자주 언급하는 대표적인 곳을 우선합니다.
+- 설명(description)은 외국인 고객에게 안내한다는 관점에서, 그 장소가 한국 문화·역사에서 어떤 의미인지 알기 쉽게 씁니다.`,
+};
+
 function typeResearchBlock(memo: string): string {
   return memo.trim() ? `<type_research_memo>\n${memo.trim()}\n</type_research_memo>\n\n` : "";
 }
 
-export function itineraryStructureSystemPrompt(travelType: TravelType): string {
-  return ITINERARY_SYSTEM_PROMPT + TRAVEL_TYPE_SYSTEM_ADDENDUM[travelType];
+export function itineraryStructureSystemPrompt(travelType: TravelType, tripScope: TripScope): string {
+  return ITINERARY_SYSTEM_PROMPT + TRAVEL_TYPE_SYSTEM_ADDENDUM[travelType] + TRIP_SCOPE_SYSTEM_ADDENDUM[tripScope];
+}
+
+/** 여행 유형(semi 제외)이거나 국내(외국인 대상)투어면, 일정을 짜기 전에 웹 검색으로 특징을 조사해야 한다 */
+export function needsItineraryResearch(req: Pick<ItineraryRequest, "travelType" | "tripScope">): boolean {
+  return req.travelType !== "semi" || req.tripScope === "domestic";
 }
 
 function regionPlanBlock(regionPlan: string): string {
@@ -99,7 +115,17 @@ export function buildItineraryUserPrompt(req: ItineraryRequest, researchMemo = "
   ].join("\n");
 }
 
-/** 1단계: 여행 유형별 특징을 Google 검색으로 조사하는 요청 (semi는 호출하지 않는다) */
+/** 국내(한국 방문 외국인 대상)투어일 때 덧붙이는 조사 항목 */
+function domesticScopeFocus(req: ItineraryRequest): string[] {
+  if (req.tripScope !== "domestic") return [];
+  return [
+    `Google 검색 도구를 여러 번 사용해서, ${req.destination}을(를) 방문하는 외국인 관광객에게 인기 있는 명소·코스·맛집을 조사해 주세요.`,
+    "TripAdvisor, Klook, Viator, Reddit, 해외 여행 유튜브·블로그처럼 외국인이 실제로 남긴 후기·추천을 우선 참고하세요.",
+    "장소마다 외국인에게 왜 인기 있는지(사진 명소, 체험, 한국 문화 이해 등)와 통상 소요 시간을 정리해 주세요.",
+  ];
+}
+
+/** 1단계: 여행 유형별 특징(및 국내투어면 외국인 인기 명소)을 Google 검색으로 조사하는 요청 */
 export function buildItineraryResearchPrompt(req: ItineraryRequest): string {
   const focus: Record<Exclude<TravelType, "semi">, string[]> = {
     package: [
@@ -127,6 +153,6 @@ export function buildItineraryResearchPrompt(req: ItineraryRequest): string {
     ],
   };
 
-  const lines = focus[req.travelType as Exclude<TravelType, "semi">] ?? [];
+  const lines = [...(focus[req.travelType as Exclude<TravelType, "semi">] ?? []), ...domesticScopeFocus(req)];
   return [...lines, "", `여행 일수는 ${req.days}일이며, 하루에 다닐 만한 분량으로 5~8곳을 조사해 주세요.`].join("\n");
 }

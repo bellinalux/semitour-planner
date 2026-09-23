@@ -10,6 +10,7 @@ import type { CourseFile } from "@/lib/courseFile";
 import type { ThemeId, TravelType } from "@/types";
 import { CoursePasteField } from "./CoursePasteField";
 import { ModeSwitch } from "./ModeSwitch";
+import { TripScopeSwitch } from "./TripScopeSwitch";
 import type { SectionProps } from "./types";
 
 interface Props extends SectionProps {
@@ -37,6 +38,7 @@ export function TripBasicsSection({ input, onChange, courseFile, onCourseFileCha
     >
       <div className="space-y-4">
         <ModeSwitch value={input.mode} onChange={(mode) => onChange({ mode })} />
+        <TripScopeSwitch value={input.tripScope} onChange={(tripScope) => onChange({ tripScope })} />
 
         {isPaste && (
           <CoursePasteField

@@ -6,7 +6,7 @@ import { formatDuration } from "@/lib/format";
 import type { DayGap } from "@/lib/dayLoad";
 import type { DayFillRequest, DayFillResponse } from "@/lib/schemas/dayFill";
 import { dayFillToItem } from "@/lib/tourItem";
-import type { CurrencyCode, ItineraryItem, TourSlot } from "@/types";
+import type { CurrencyCode, ItineraryItem, TourSlot, TripScope } from "@/types";
 
 interface Props {
   dayNo: number;
@@ -14,13 +14,14 @@ interface Props {
   destination: string;
   city?: string;
   currency: CurrencyCode;
+  tripScope: TripScope;
   /** 이미 일정에 있는 장소 이름 (중복 추천을 피하는 데 쓴다) */
   existingNames: string[];
   onApply: (dayNo: number, slot: TourSlot, items: ItineraryItem[]) => void;
 }
 
-/** 도착일처럼 오후~저녁이 통째로 비는 날짜에, 한국인 관광객에게 인기 있는 코스를 웹 검색으로 추천해 채운다. */
-export function DayFillPanel({ dayNo, gap, destination, city, currency, existingNames, onApply }: Props) {
+/** 도착일처럼 오후~저녁이 통째로 비는 날짜에, 대상 관광객(한국인 또는 한국 방문 외국인)에게 인기 있는 코스를 웹 검색으로 추천해 채운다. */
+export function DayFillPanel({ dayNo, gap, destination, city, currency, tripScope, existingNames, onApply }: Props) {
   const { state, data, run } = useRequest<DayFillRequest, DayFillResponse>("/api/suggest-day-fill");
 
   const suggest = () =>
@@ -28,6 +29,7 @@ export function DayFillPanel({ dayNo, gap, destination, city, currency, existing
       destination: destination.trim(),
       city: city?.trim() || undefined,
       currency,
+      tripScope,
       existingNames,
       freeMinutes: gap.freeMinutes,
       fromTime: gap.fromTime,
@@ -50,7 +52,7 @@ export function DayFillPanel({ dayNo, gap, destination, city, currency, existing
           type="button"
           onClick={suggest}
           disabled={state.status === "loading"}
-          title="한국인 관광객에게 인기 있는 코스를 웹 검색으로 찾아 이 빈 시간에 채웁니다"
+          title={tripScope === "domestic" ? "한국을 방문하는 외국인 관광객에게 인기 있는 코스를 웹 검색으로 찾아 이 빈 시간에 채웁니다" : "한국인 관광객에게 인기 있는 코스를 웹 검색으로 찾아 이 빈 시간에 채웁니다"}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {state.status === "loading" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Sparkles className="h-3.5 w-3.5" aria-hidden />}

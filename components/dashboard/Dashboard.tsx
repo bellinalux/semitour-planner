@@ -129,6 +129,7 @@ export function Dashboard({
         krwRate={input.exchangeRateToKrw}
         travelType={input.mode === "paste" ? "semi" : input.travelType}
         destination={input.destination}
+        tripScope={input.tripScope}
         researchInfo={researchInfo}
         pickupNote={input.pickupNote}
         sendingNote={input.sendingNote}

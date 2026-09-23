@@ -157,3 +157,35 @@ export function calcDayGap(day: DayPlan, pmChoice: PmChoice, isLastDay: boolean)
   if (freeMinutes < DAY_FILL_MIN_GAP_MINUTES) return null;
   return { freeMinutes, fromTime: formatClock(endMinutes) };
 }
+
+/** 국내·해외 여행 모두, 하루 일정은 일반적으로 이 시각 전에 끝나야 한다고 본다 */
+export const STANDARD_DAY_END = "19:00";
+
+/** 근교투어·당일치기처럼 복귀가 늦어질 수 있는 일정인지, 항목 이름·설명으로 짐작한다 */
+function hasLateReturnException(items: ItineraryItem[]): boolean {
+  return items.some((item) => /근교|당일치기|데이\s*투어|원데이|야간|야경|나이트|day\s*trip/i.test(`${item.name} ${item.description ?? ""}`));
+}
+
+export interface DayEndCheck {
+  /** 그날 일정의 계산된 종료 시각 */
+  endTime: string;
+  /** 표준 종료 시각(19:00)을 넘겼는데도 근교투어 등 예외에 해당하지 않는 경우 true */
+  isLate: boolean;
+}
+
+/**
+ * 하루 일정이 표준 종료 시각(19:00) 안에 끝나는지 확인한다. 근교투어·당일치기·야간투어처럼
+ * 복귀가 늦어질 수 있는 일정이 하루에 하나라도 있으면 늦게 끝나도 예외로 본다(경고하지 않는다).
+ * 항공 이동일처럼 일정이 없는 날(totalMinutes 0)은 대상이 아니다.
+ */
+export function calcDayEnd(day: DayPlan, pmChoice: PmChoice): DayEndCheck | null {
+  const load = calcDayLoad(day, pmChoice);
+  if (load.totalMinutes === 0) return null;
+  const endTime = estimatedEndTime(dayMeetingTime(day), load.totalMinutes);
+  if (!endTime) return null;
+  const endMinutes = parseClock(endTime);
+  const standardMinutes = parseClock(STANDARD_DAY_END);
+  if (endMinutes === null || standardMinutes === null) return null;
+  const isLate = endMinutes > standardMinutes && !hasLateReturnException(dayItems(day, pmChoice));
+  return { endTime, isLate };
+}

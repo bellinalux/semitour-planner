@@ -69,6 +69,7 @@ async function requestItinerary(
       themes: input.themes,
       notes: input.notes,
       travelType: input.travelType,
+      tripScope: input.tripScope,
       regionPlan: input.regionPlan,
     },
     signal,
@@ -221,6 +222,7 @@ export function useItinerary() {
           themes: baseInput.themes,
           notes: baseInput.notes,
           travelType: baseInput.travelType,
+          tripScope: baseInput.tripScope,
           regionPlan: "",
         },
       );

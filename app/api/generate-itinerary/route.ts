@@ -4,6 +4,7 @@ import {
   buildItineraryResearchPrompt,
   buildItineraryUserPrompt,
   itineraryStructureSystemPrompt,
+  needsItineraryResearch,
 } from "@/lib/server/itineraryPrompt";
 import { guardRequest } from "@/lib/server/guard";
 import { mapDayItems } from "@/lib/itinerary";
@@ -53,12 +54,12 @@ export async function POST(request: Request) {
   const req = parsed.data;
 
   try {
-    // 세미투어(기본)가 아니면, 일정을 짜기 전에 여행 유형별 특징을 먼저 웹에서 조사한다
-    const research =
-      req.travelType === "semi" ? null : await generateGroundedText({ user: buildItineraryResearchPrompt(req) });
+    // 세미투어(기본)이면서 해외여행이면 조사 없이 바로 만들고, 그 외(다른 여행 유형이거나 국내=외국인 대상 투어)는
+    // 일정을 짜기 전에 여행 유형별 특징(또는 외국인에게 인기 있는 명소)을 먼저 웹에서 조사한다
+    const research = needsItineraryResearch(req) ? await generateGroundedText({ user: buildItineraryResearchPrompt(req) }) : null;
 
     const result = await generateJson({
-      system: itineraryStructureSystemPrompt(req.travelType),
+      system: itineraryStructureSystemPrompt(req.travelType, req.tripScope),
       user: buildItineraryUserPrompt(req, research?.text ?? ""),
       schema: itineraryResponseSchema,
     });
