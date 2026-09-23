@@ -33,6 +33,19 @@ export function estimatedEndTime(meetingTime: string, totalMinutes: number): str
   return formatClock(start + Math.max(0, totalMinutes));
 }
 
+/**
+ * 두 "HH:mm" 시각(같은 날 또는 다음날로 넘어가는 경우 포함) 사이의 분 차이를 구한다.
+ * 항공편처럼 출발·도착이 이미 각자의 현지 시각으로 적혀 있을 때, 그 표기 그대로 이어붙이기 위한 값이다
+ * (실제 비행시간과는 다를 수 있다 — 시차 때문에 표기 시각 차이가 실제 소요시간과 다른 게 정상이다).
+ * 형식이 이상하면 null.
+ */
+export function clockDiffMinutes(from: string, to: string): number | null {
+  const f = parseClock(from);
+  const t = parseClock(to);
+  if (f === null || t === null) return null;
+  return ((t - f) % (24 * 60) + 24 * 60) % (24 * 60);
+}
+
 export interface ItemTiming {
   /** 이 코스의 시작 시각 (HH:mm) */
   start: string;
