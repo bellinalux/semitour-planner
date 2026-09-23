@@ -46,6 +46,13 @@ export function clockDiffMinutes(from: string, to: string): number | null {
   return ((t - f) % (24 * 60) + 24 * 60) % (24 * 60);
 }
 
+/** "HH:mm"에 분을 더한다(음수면 뺀다, 자정을 넘나들면 24시간 안으로 돌린다). 형식이 이상하면 null. */
+export function shiftClock(time: string, minutes: number): string | null {
+  const start = parseClock(time);
+  if (start === null) return null;
+  return formatClock(start + minutes);
+}
+
 export interface ItemTiming {
   /** 이 코스의 시작 시각 (HH:mm) */
   start: string;

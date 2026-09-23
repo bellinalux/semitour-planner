@@ -1,4 +1,4 @@
-import { clockDiffMinutes } from "@/lib/dayLoad";
+import { clockDiffMinutes, shiftClock } from "@/lib/dayLoad";
 import { addDays, parseDate } from "@/lib/documents";
 import { mapDayItems } from "@/lib/itinerary";
 import type { DayPlan, FlightOption, ItineraryItem, TripInput } from "@/types";
@@ -49,13 +49,37 @@ interface FlightGroup {
   items: ItineraryItem[];
 }
 
+/** 그 날짜 목록에서 대상 항목보다 앞에 있는 항목들의 체류+이동 시간 합계(분) */
+function precedingMinutes(items: ItineraryItem[], targetId: string): number {
+  let sum = 0;
+  for (const item of items) {
+    if (item.id === targetId) break;
+    sum += Math.max(0, item.stayMinutes) + Math.max(0, item.travelMinutesToNext ?? 0);
+  }
+  return sum;
+}
+
+/**
+ * 그 날짜의 오전 미팅 시각을, 지정한 항목의 계산된 시작 시각이 anchorTime(실제 항공편 시각)과
+ * 정확히 맞도록 거꾸로 계산해서 맞춘다. 항공 항목이 그 날짜의 첫 항목이 아니어도(귀국일의 체크아웃·
+ * 공항 이동처럼 앞에 다른 항목이 있어도) 앞선 항목들의 소요 시간만큼 빼서 계산하므로 동작한다.
+ */
+function anchorMeetingTime(days: DayPlan[], dayIndex: number, itemId: string, anchorTime: string): DayPlan[] {
+  const day = days[dayIndex];
+  const items = day.kind === "linear" ? day.items : day.amGuided;
+  const meetingTime = shiftClock(anchorTime, -precedingMinutes(items, itemId));
+  if (!meetingTime) return days;
+  return days.map((d, i) => (i === dayIndex ? { ...d, meetingTime } : d));
+}
+
 /**
  * 선택한 항공편의 가는 편·귀국편 정보를 일정의 항공(flight) 항목에 반영한다.
  *  - 항공 항목이 있는 첫 날짜를 가는 편, 마지막 날짜를 귀국편으로 본다.
  *  - 그 날짜에 항공 항목이 출발·도착 2개로 나뉘어 있으면(예: 붙여넣은 코스) 각각 이름·설명을 채우고,
  *    두 항목의 시각 차이만큼 이동 시간을 채워 이어지는 항목들의 시작 시각이 실제 도착 시각에 맞춰진다.
  *  - 항공 항목이 1개뿐이면(항공 이동일 자동 생성 등) 설명만 채운다.
- *  - 가는 편 항공 항목이 그 날짜의 첫 항목이면, 그 날짜의 오전 미팅 시각을 가는 편 출발 시각으로 맞춘다.
+ *  - 두 경우 모두, 그 날짜의 오전 미팅 시각을 거꾸로 계산해 출발 항목(귀국편도 "출발" 시각 기준)의
+ *    계산된 시작 시각이 실제 출발 시각과 맞도록 맞춘다. 앞에 체크아웃·공항 이동처럼 다른 항목이 있어도 된다.
  *  - 항공 항목이 없는 일정은 아무것도 바뀌지 않는다.
  */
 export function applyFlightToDays(days: DayPlan[], flight: FlightOption): DayPlan[] {
@@ -111,13 +135,14 @@ export function applyFlightToDays(days: DayPlan[], flight: FlightOption): DayPla
 
   let next = days.map((day) => mapDayItems(day, (item) => (patches.has(item.id) ? { ...item, ...patches.get(item.id)! } : item)));
 
-  // 가는 편이 그 날짜의 맨 첫 항목이면, 그 날짜의 오전 미팅 시각을 실제 출발 시각으로 맞춘다
+  // 가는 편 출발 항목의 계산된 시작 시각이 실제 출발 시각과 맞도록, 그 날짜의 미팅 시각을 거꾸로 맞춘다
   if (outboundLeg.departTime) {
-    const day = days[outboundGroup.dayIndex];
-    const firstItem = day.kind === "linear" ? day.items[0] : day.amGuided[0];
-    if (firstItem && firstItem.id === outboundGroup.items[0].id) {
-      next = next.map((d, i) => (i === outboundGroup.dayIndex ? { ...d, meetingTime: outboundLeg.departTime } : d));
-    }
+    next = anchorMeetingTime(next, outboundGroup.dayIndex, outboundGroup.items[0].id, outboundLeg.departTime);
+  }
+  // 귀국편도 마찬가지로, 출발 항목(항목이 1개뿐이면 그 항목)의 시작 시각을 귀국편 출발 시각에 맞춘다.
+  // 체크아웃·공항 이동처럼 앞선 항목이 있어도 그만큼 거슬러 올라가 미팅 시각을 계산하므로 정확히 맞는다.
+  if (returnGroup && returnGroup !== outboundGroup && returnLeg.departTime) {
+    next = anchorMeetingTime(next, returnGroup.dayIndex, returnGroup.items[0].id, returnLeg.departTime);
   }
 
   return next;
