@@ -1,8 +1,10 @@
 import { CANCELLATION_TERMS, dayDate, dayMeals, documentItems, includeLists, noticeLines, tripPeriod } from "@/lib/documents";
+import { computeItemTimings, dayMeetingTime, type ItemTiming } from "@/lib/dayLoad";
 import { hotelLines } from "@/lib/exportText";
 import { customerFeeNote, localPayRows } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { moneyWithKrw } from "@/lib/fees";
+import { dayItems } from "@/lib/itinerary";
 import type { ItineraryItem } from "@/types";
 import { DocCover, DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
 
@@ -14,7 +16,7 @@ const ACCESSIBILITY_TONE = {
   unknown: "bg-slate-100 text-slate-500",
 } as const;
 
-function ItemLine({ item, input, number }: { item: ItineraryItem; input: DocProps["input"]; number: number }) {
+function ItemLine({ item, input, number, timing }: { item: ItineraryItem; input: DocProps["input"]; number: number; timing?: ItemTiming }) {
   const time = item.timeNote || (item.stayMinutes > 0 ? `약 ${formatDuration(item.stayMinutes)}` : "");
   const fee = customerFeeNote(item, input);
   const notes = [time, item.admission === "view_only" ? "외부 조망" : "", fee].filter(Boolean);
@@ -25,6 +27,7 @@ function ItemLine({ item, input, number }: { item: ItineraryItem; input: DocProp
       <div className="flex gap-2">
         <span className="w-4 shrink-0 text-right font-semibold text-slate-500">{number}.</span>
         <span>
+          {timing && <span className="mr-1.5 font-semibold tabular-nums text-emerald-700">{timing.start}–{timing.end}</span>}
           <span className="font-medium">{item.name}</span>
           {notes.length > 0 && <span className="text-slate-500"> ({notes.join(" · ")})</span>}
           {item.description && <span className="block text-slate-500">{item.description}</span>}
@@ -90,6 +93,7 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company }: Do
           {days.map((day, index) => {
             const meals = dayMeals(days, index, pmChoice, input);
             const date = dayDate(input, day.day);
+            const timings = computeItemTimings(dayItems(day, pmChoice), dayMeetingTime(day));
             return (
               <div key={day.day} className="break-inside-avoid border border-emerald-100">
                 <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-2 py-1.5">
@@ -97,6 +101,7 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company }: Do
                     DAY {day.day}
                     {date && <span className="ml-1.5 font-normal text-slate-600">{date}</span>}
                     {day.theme && <span className="ml-1.5 font-normal text-slate-600">· {day.theme}</span>}
+                    <span className="ml-1.5 font-normal text-slate-600">· 오전 미팅 {dayMeetingTime(day)}</span>
                   </p>
                   <p className="text-[10px] text-slate-600">
                     식사 조: {meals.breakfast.mark}
@@ -114,7 +119,7 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company }: Do
                       {block.label && <p className="font-semibold text-slate-700">{block.label}</p>}
                       <ul>
                         {block.items.map((item, index) => (
-                          <ItemLine key={item.id} item={item} input={input} number={index + 1} />
+                          <ItemLine key={item.id} item={item} input={input} number={index + 1} timing={timings.get(item.id)} />
                         ))}
                       </ul>
                     </div>

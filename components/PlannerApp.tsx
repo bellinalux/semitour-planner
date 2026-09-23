@@ -248,11 +248,13 @@ export function PlannerApp() {
             onSelectPm={itinerary.selectPmOption}
             itemActions={{
               onChangeItem: itinerary.updateItem,
+              onChangeDay: itinerary.updateDay,
               onDeleteItem: itinerary.deleteItem,
               onAddItem: itinerary.addItem,
               onAddTour: itinerary.addTour,
               onMoveItem: itinerary.moveItemOrder,
               onRelocateItem: itinerary.relocate,
+              onReorderItems: itinerary.reorderSessionItems,
               onSaveSegment: handleSaveSegment,
             }}
             regionActions={{

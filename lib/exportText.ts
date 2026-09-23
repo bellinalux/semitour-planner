@@ -1,6 +1,7 @@
 import { analyzeCompetitors, ourPolicy, POLICY_LABELS } from "@/lib/competitorDiff";
 import { compareWithCompetitors } from "@/lib/cost";
 import { formatMoney } from "@/lib/currency";
+import { dayMeetingTime } from "@/lib/dayLoad";
 import { customerFeeNote, feeTag, itemFeeText, localPayRows, localPaySection, moneyWithKrw } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { ITEM_TYPE_META, stayTimeLabel } from "@/lib/itemTypes";
@@ -103,7 +104,7 @@ function dayBlocks(
 ): string[] {
   return days.flatMap((day) => {
     const overnight = options.showOvernight && day.overnightCity ? ` (숙박: ${day.overnightCity})` : "";
-    const head = `[DAY ${day.day}] ${day.theme}${overnight}`;
+    const head = `[DAY ${day.day}] ${day.theme}${overnight} · 오전 미팅 ${dayMeetingTime(day)}`;
 
     if (day.kind === "linear") return [head, "", ...linearLines(day.items, detail), ""];
 

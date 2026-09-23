@@ -3,6 +3,7 @@ import { useState } from "react";
 import { DurationInput } from "@/components/ui/DurationInput";
 import { MoneyInput } from "@/components/ui/MoneyInput";
 import { currencySymbol } from "@/lib/currency";
+import type { ItemTiming } from "@/lib/dayLoad";
 import { feeHint, isLocalPay, itemFeeText } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { feeLabel, ITEM_TYPE_META, ITEM_TYPES, stayTimeLabel } from "@/lib/itemTypes";
@@ -17,6 +18,8 @@ interface Props {
   item: ItineraryItem;
   order: number;
   isLast: boolean;
+  /** 오전 미팅 시각부터 계산한 이 코스의 시작·종료 시각 (조식 등 타임라인에서 제외된 항목은 없음) */
+  timing?: ItemTiming;
   currency: CurrencyCode;
   /** 이 항목이 속한 일차 (추천 옵션을 "선택 옵션"으로 추가할 때 필요) */
   dayNo: number;
@@ -76,6 +79,7 @@ export function TimelineItem({
   item,
   order,
   isLast,
+  timing,
   currency,
   dayNo,
   days,
@@ -117,6 +121,11 @@ export function TimelineItem({
       </div>
 
       <div className={`min-w-0 flex-1 ${isLast ? "" : "pb-3"}`}>
+        {timing && (
+          <p className="mb-0.5 text-[11px] font-semibold tabular-nums text-indigo-600" title="오전 미팅 시각부터 계산한 예상 시작·종료 시각">
+            {timing.start} – {timing.end}
+          </p>
+        )}
         {editing ? (
           <div className="flex flex-wrap items-center gap-1.5">
             <input

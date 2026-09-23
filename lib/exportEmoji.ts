@@ -1,3 +1,4 @@
+import { dayMeetingTime } from "@/lib/dayLoad";
 import { customerFeeNote, localPaySection, moneyWithKrw } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { ITEM_TYPE_META } from "@/lib/itemTypes";
@@ -104,7 +105,7 @@ export function buildEmojiCustomerText(data: ExportData): string {
 
   const dayLines = days.flatMap((day) => {
     const counter = { n: 0 };
-    const head = `DAY ${day.day}${day.theme ? ` · ${day.theme}` : ""}`;
+    const head = `DAY ${day.day}${day.theme ? ` · ${day.theme}` : ""} · 🕗 오전 미팅 ${dayMeetingTime(day)}`;
     if (day.kind === "linear") return ["", head, "", ...itemBlock(day.items, counter, input)];
 
     const pm = pickPmOption(day, pmChoice);

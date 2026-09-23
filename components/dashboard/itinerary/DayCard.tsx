@@ -1,9 +1,11 @@
-import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Plus, Sun, Sunset } from "lucide-react";
-import { calcDayLoad, type DayLoadLevel } from "@/lib/dayLoad";
+import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Flag, Plus, Sun, Sunset } from "lucide-react";
+import { calcDayLoad, computeItemTimings, dayMeetingTime, estimatedEndTime, type DayLoadLevel } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
+import { dayItems } from "@/lib/itinerary";
 import type { SegmentKind } from "@/lib/segmentLibrary";
 import type { DayPlan, CurrencyCode, ItineraryItem, OptionSuggestion, PmFreeOption, TourSlot } from "@/types";
 import { PmOptionSwitch } from "./PmOptionSwitch";
+import { RouteCheckPanel } from "./RouteCheckPanel";
 import { SessionBlock } from "./SessionBlock";
 import { TimelineItem, type ItemPatch } from "./TimelineItem";
 
@@ -24,37 +26,49 @@ interface Props {
   days: DayPlan[];
   /** 이 날짜의 숙박 도시에서 선택해 둔 호텔 이름 (없으면 표시하지 않는다) */
   hotelName?: string;
+  /** 동선 확인에 쓰는 여행지 (국가·지역) */
+  destination: string;
   currency: CurrencyCode;
   selectedPmId: PmFreeOption["id"];
   editing: boolean;
   onSelectPm: (id: PmFreeOption["id"]) => void;
   onChangeItem: (itemId: string, patch: ItemPatch) => void;
+  onChangeDay: (dayNo: number, patch: Partial<DayPlan>) => void;
   onDeleteItem: (itemId: string) => void;
   onAddItem: (day: number) => void;
   onAddSuggestedOption: (suggestion: OptionSuggestion, dayNo: number) => void;
   onMoveItem: (itemId: string, direction: "up" | "down") => void;
   onRelocateItem: (itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => void;
   onSaveSegment: (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => void;
+  onReorderItems: (orderedIds: string[]) => void;
 }
 
 export function DayCard({
   plan,
   days,
   hotelName,
+  destination,
   currency,
   selectedPmId,
   editing,
   onSelectPm,
   onChangeItem,
+  onChangeDay,
   onDeleteItem,
   onAddItem,
   onAddSuggestedOption,
   onMoveItem,
   onRelocateItem,
   onSaveSegment,
+  onReorderItems,
 }: Props) {
+  const city = (plan.overnightCity ?? "").trim() || undefined;
   const selected = plan.pmFreeOptions.find((o) => o.id === selectedPmId) ?? plan.pmFreeOptions[0];
-  const load = calcDayLoad(plan, { [plan.day]: selectedPmId });
+  const pmChoiceForDay = { [plan.day]: selectedPmId };
+  const load = calcDayLoad(plan, pmChoiceForDay);
+  const meetingTime = dayMeetingTime(plan);
+  const endTime = load.totalMinutes > 0 ? estimatedEndTime(meetingTime, load.totalMinutes) : null;
+  const timings = computeItemTimings(dayItems(plan, pmChoiceForDay), meetingTime);
 
   return (
     <article className="rounded-lg border border-slate-200">
@@ -67,12 +81,27 @@ export function DayCard({
             {plan.overnightCity} 숙박{hotelName ? ` · ${hotelName}` : ""}
           </span>
         )}
+        <label
+          className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200"
+          title="오전 미팅(투어 시작) 시각. 호텔 조식 이후 실제 투어가 시작되는 시각입니다."
+        >
+          <Flag className="h-3 w-3" aria-hidden />
+          미팅
+          <input
+            type="time"
+            value={meetingTime}
+            aria-label="오전 미팅 시각"
+            onChange={(e) => onChangeDay(plan.day, { meetingTime: e.target.value })}
+            className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] tabular-nums text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30"
+          />
+        </label>
         {load.totalMinutes > 0 && (
           <span
             title={`체류 ${formatDuration(load.stayMinutes)} + 이동 ${formatDuration(load.travelMinutes)}`}
             className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium ring-1 ${LOAD_BADGE_TONE[load.level]}`}
           >
             <Clock className="h-3 w-3" aria-hidden />총 {formatDuration(load.totalMinutes)}
+            {endTime ? ` (~${endTime} 종료)` : ""}
           </span>
         )}
         {plan.kind === "linear" && plan.items.length > 0 && (
@@ -96,6 +125,7 @@ export function DayCard({
       <div className="space-y-5 p-4">
         {plan.kind === "linear" ? (
           <div>
+            <RouteCheckPanel items={plan.items} destination={destination} city={city} onApply={onReorderItems} />
             <ol>
               {plan.items.map((item, index) => (
                 <TimelineItem
@@ -103,6 +133,7 @@ export function DayCard({
                   item={item}
                   order={index + 1}
                   isLast={index === plan.items.length - 1}
+                  timing={timings.get(item.id)}
                   currency={currency}
                   dayNo={plan.day}
                   days={days}
@@ -136,6 +167,9 @@ export function DayCard({
               icon={Sun}
               tone="am"
               items={plan.amGuided}
+              timings={timings}
+              destination={destination}
+              city={city}
               currency={currency}
               dayNo={plan.day}
               days={days}
@@ -146,6 +180,7 @@ export function DayCard({
               onMoveItem={onMoveItem}
               onRelocateItem={onRelocateItem}
               onSaveSegment={onSaveSegment}
+              onReorderItems={onReorderItems}
             />
             {selected && (
               <SessionBlock
@@ -154,6 +189,9 @@ export function DayCard({
                 icon={Sunset}
                 tone="pm"
                 items={selected.items}
+                timings={timings}
+                destination={destination}
+                city={city}
                 currency={currency}
                 dayNo={plan.day}
                 days={days}
@@ -164,6 +202,7 @@ export function DayCard({
                 onMoveItem={onMoveItem}
                 onRelocateItem={onRelocateItem}
                 onSaveSegment={onSaveSegment}
+                onReorderItems={onReorderItems}
               >
                 <PmOptionSwitch
                   day={plan.day}

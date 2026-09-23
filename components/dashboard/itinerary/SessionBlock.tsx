@@ -1,6 +1,8 @@
 import { BookmarkPlus, type LucideIcon } from "lucide-react";
+import type { ItemTiming } from "@/lib/dayLoad";
 import type { SegmentKind } from "@/lib/segmentLibrary";
 import type { CurrencyCode, DayPlan, ItineraryItem, OptionSuggestion, TourSlot } from "@/types";
+import { RouteCheckPanel } from "./RouteCheckPanel";
 import { TimelineItem, type ItemPatch } from "./TimelineItem";
 
 interface Props {
@@ -9,6 +11,10 @@ interface Props {
   icon: LucideIcon;
   tone: "am" | "pm";
   items: ItineraryItem[];
+  /** 항목 id → 시작·종료 시각 (오전 미팅 시각부터 계산) */
+  timings: Map<string, ItemTiming>;
+  destination: string;
+  city?: string;
   currency: CurrencyCode;
   dayNo: number;
   days: DayPlan[];
@@ -19,6 +25,7 @@ interface Props {
   onMoveItem: (itemId: string, direction: "up" | "down") => void;
   onRelocateItem: (itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => void;
   onSaveSegment: (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => void;
+  onReorderItems: (orderedIds: string[]) => void;
   /** 헤더 아래에 끼워 넣을 요소 (오후 A/B 선택 등) */
   children?: React.ReactNode;
 }
@@ -34,6 +41,9 @@ export function SessionBlock({
   icon: Icon,
   tone,
   items,
+  timings,
+  destination,
+  city,
   currency,
   dayNo,
   days,
@@ -44,6 +54,7 @@ export function SessionBlock({
   onMoveItem,
   onRelocateItem,
   onSaveSegment,
+  onReorderItems,
   children,
 }: Props) {
   return (
@@ -64,6 +75,7 @@ export function SessionBlock({
         )}
       </div>
       {children}
+      <RouteCheckPanel items={items} destination={destination} city={city} onApply={onReorderItems} />
       <ol className="space-y-0">
         {items.map((item, index) => (
           <TimelineItem
@@ -71,6 +83,7 @@ export function SessionBlock({
             item={item}
             order={index + 1}
             isLast={index === items.length - 1}
+            timing={timings.get(item.id)}
             currency={currency}
             dayNo={dayNo}
             days={days}

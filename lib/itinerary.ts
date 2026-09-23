@@ -163,6 +163,22 @@ export function moveItem(days: DayPlan[], itemId: string, direction: "up" | "dow
   });
 }
 
+/**
+ * 같은 목록(오전/오후 코스/하루 일정) 안의 항목을 지정한 id 순서대로 재배열한다 (동선 확인 결과 적용용).
+ * orderedIds의 첫 id가 속한 목록을 찾아 그 목록만 바꾼다. orderedIds에 없는 기존 항목은 뒤에 그대로 남긴다.
+ */
+export function reorderItems(days: DayPlan[], orderedIds: string[]): DayPlan[] {
+  if (orderedIds.length === 0) return days;
+  return days.map((day) => {
+    const found = locateList(day, orderedIds[0]);
+    if (!found) return day;
+    const byId = new Map(found.items.map((i) => [i.id, i]));
+    const reordered = orderedIds.map((id) => byId.get(id)).filter((i): i is ItineraryItem => !!i);
+    const remaining = found.items.filter((i) => !orderedIds.includes(i.id));
+    return found.set([...reordered, ...remaining]);
+  });
+}
+
 /** 항목을 찾아 꺼낸다 (제거한 뒤의 days도 함께 돌려준다). 없으면 null. */
 function extractItem(days: DayPlan[], itemId: string): { item: ItineraryItem; without: DayPlan[] } | null {
   let extracted: ItineraryItem | null = null;

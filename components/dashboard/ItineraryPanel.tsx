@@ -77,6 +77,8 @@ interface Props {
   meta: CourseMeta | null;
   currency: CurrencyCode;
   travelType: TravelType;
+  /** 동선 확인에 쓰는 여행지 (국가·지역) */
+  destination: string;
   researchInfo: { sources: SearchSource[]; researched: boolean };
   pickupNote: string;
   sendingNote: string;
@@ -85,11 +87,13 @@ interface Props {
   pmChoice: Record<number, PmFreeOption["id"]>;
   onSelectPm: (day: number, id: PmFreeOption["id"]) => void;
   onChangeItem: (itemId: string, patch: ItemPatch) => void;
+  onChangeDay: (dayNo: number, patch: Partial<DayPlan>) => void;
   onDeleteItem: (itemId: string) => void;
   onAddItem: (day: number) => void;
   onAddSuggestedOption: (suggestion: OptionSuggestion, dayNo: number) => void;
   onMoveItem: (itemId: string, direction: "up" | "down") => void;
   onRelocateItem: (itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => void;
+  onReorderItems: (orderedIds: string[]) => void;
   onSaveSegment: (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => void;
   onRetry: () => void;
   /** 지역(도시)만 따로 다시 만들기. AI 모드가 아니면(내 코스 붙여넣기) 표시하지 않는다 */
@@ -366,6 +370,7 @@ export function ItineraryPanel({
   meta,
   currency,
   travelType,
+  destination,
   researchInfo,
   pickupNote,
   sendingNote,
@@ -373,11 +378,13 @@ export function ItineraryPanel({
   pmChoice,
   onSelectPm,
   onChangeItem,
+  onChangeDay,
   onDeleteItem,
   onAddItem,
   onAddSuggestedOption,
   onMoveItem,
   onRelocateItem,
+  onReorderItems,
   onSaveSegment,
   onRetry,
   canRegenerateRegion,
@@ -498,17 +505,20 @@ export function ItineraryPanel({
                   plan={plan}
                   days={days}
                   hotelName={plan.overnightCity ? selectedHotels[plan.overnightCity.trim()]?.name : undefined}
+                  destination={destination}
                   currency={currency}
                   selectedPmId={pmChoice[plan.day] ?? "A"}
                   editing={editing}
                   onSelectPm={(id) => onSelectPm(plan.day, id)}
                   onChangeItem={onChangeItem}
+                  onChangeDay={onChangeDay}
                   onDeleteItem={onDeleteItem}
                   onAddItem={onAddItem}
                   onAddSuggestedOption={onAddSuggestedOption}
                   onMoveItem={onMoveItem}
                   onRelocateItem={onRelocateItem}
                   onSaveSegment={onSaveSegment}
+                  onReorderItems={onReorderItems}
                 />
               );
               const groups = groupDaysByCity(days);

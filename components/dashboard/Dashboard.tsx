@@ -42,11 +42,13 @@ interface ExportView {
 
 interface ItemActions {
   onChangeItem: (itemId: string, patch: ItemPatch) => void;
+  onChangeDay: (dayNo: number, patch: Partial<DayPlan>) => void;
   onDeleteItem: (itemId: string) => void;
   onAddItem: (day: number) => void;
   onAddTour: (dayNo: number, slot: TourSlot, item: ItineraryItem) => void;
   onMoveItem: (itemId: string, direction: "up" | "down") => void;
   onRelocateItem: (itemId: string, targetDay: number, targetSlot: TourSlot, mode: "move" | "copy") => void;
+  onReorderItems: (orderedIds: string[]) => void;
   onSaveSegment: (items: ItineraryItem[], kind: SegmentKind, defaultName: string) => void;
 }
 
@@ -125,6 +127,7 @@ export function Dashboard({
         currency={input.currency}
         krwRate={input.exchangeRateToKrw}
         travelType={input.mode === "paste" ? "semi" : input.travelType}
+        destination={input.destination}
         researchInfo={researchInfo}
         pickupNote={input.pickupNote}
         sendingNote={input.sendingNote}

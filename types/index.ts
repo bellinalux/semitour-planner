@@ -377,6 +377,11 @@ export interface DayPlan {
   pmFreeOptions: PmFreeOption[];
   /** 하루 전체 일정 (kind === "linear") */
   items: ItineraryItem[];
+  /**
+   * 오전 미팅(투어 시작) 시각 (HH:mm). 호텔 조식 이후, 실제 투어가 시작되는 시각이다.
+   * 비어 있으면 기본값 08:00으로 본다(dayMeetingTime 참고).
+   */
+  meetingTime?: string;
 }
 
 /** 붙여넣은 코스에서 읽은 상품 정보 */

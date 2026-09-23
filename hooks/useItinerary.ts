@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
-import { appendDay, defaultPmChoice, mapDayItems, moveItem, relocateItem, tourDayCount, withTravelDays, type PmChoice } from "@/lib/itinerary";
+import { appendDay, defaultPmChoice, mapDayItems, moveItem, relocateItem, reorderItems, tourDayCount, withTravelDays, type PmChoice } from "@/lib/itinerary";
 import { insertItem, insertItems } from "@/lib/tourItem";
 import type { CourseFile } from "@/lib/courseFile";
 import type {
@@ -155,6 +155,11 @@ export function useItinerary() {
   /** 웹 확인 결과를 반영한 일정으로 통째로 바꾼다 */
   const replaceDays = useCallback((next: DayPlan[]) => setDays(next), []);
 
+  /** 날짜 전체에 속하는 값(오전 미팅 시각 등)을 고친다. */
+  const updateDay = useCallback((dayNo: number, patch: Partial<DayPlan>) => {
+    setDays((prev) => prev.map((day) => (day.day === dayNo ? { ...day, ...patch } : day)));
+  }, []);
+
   const deleteItem = useCallback((itemId: string) => {
     setDays((prev) => prev.map((day) => mapDayItems(day, (item) => (item.id === itemId ? null : item))));
   }, []);
@@ -184,6 +189,11 @@ export function useItinerary() {
   /** 같은 목록 안에서 항목 순서를 한 칸 위·아래로 옮긴다. */
   const moveItemOrder = useCallback((itemId: string, direction: "up" | "down") => {
     setDays((prev) => moveItem(prev, itemId, direction));
+  }, []);
+
+  /** 같은 목록 안의 항목을 지정한 순서대로 재배열한다 (동선 확인 결과 적용). */
+  const reorderSessionItems = useCallback((orderedIds: string[]) => {
+    setDays((prev) => reorderItems(prev, orderedIds));
   }, []);
 
   /** 항목을 다른 날짜·위치로 옮기거나(move) 복사한다(copy). */
@@ -268,11 +278,13 @@ export function useItinerary() {
     generate,
     selectPmOption,
     updateItem,
+    updateDay,
     replaceDays,
     deleteItem,
     addItem,
     addTour,
     moveItemOrder,
+    reorderSessionItems,
     relocate,
     cityRegenState,
     regenerateCity,
