@@ -24,6 +24,7 @@ export function normalizeInput(saved: unknown): TripInput {
       typeof s.selectedHotels === "object" && s.selectedHotels !== null && !Array.isArray(s.selectedHotels)
         ? s.selectedHotels
         : DEFAULT_INPUT.selectedHotels,
+    selectedFlight: typeof s.selectedFlight === "object" && s.selectedFlight !== null ? s.selectedFlight : DEFAULT_INPUT.selectedFlight,
     options: Array.isArray(s.options) ? s.options : DEFAULT_INPUT.options,
     travelAlert: typeof s.travelAlert === "object" && s.travelAlert !== null ? s.travelAlert : null,
     travelType: typeof s.travelType === "string" && TRAVEL_TYPE_IDS.has(s.travelType) ? s.travelType : DEFAULT_INPUT.travelType,

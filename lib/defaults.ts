@@ -58,6 +58,7 @@ export const DEFAULT_INPUT: TripInput = {
   cleaningFeePerUnit: 0,
   cityTaxPerPersonPerNight: 0,
   flightPricePerPerson: 0,
+  selectedFlight: null,
   costStatus: {
     vehicle: "confirmed",
     guide: "confirmed",

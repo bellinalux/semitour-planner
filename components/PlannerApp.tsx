@@ -25,6 +25,7 @@ import type { VerifyFeesResponse } from "@/lib/schemas/market";
 import type { SuggestOptionsResponse } from "@/lib/schemas/optionSuggest";
 import type { VerifyAccessibilityResponse } from "@/lib/schemas/accessibility";
 import { newSegmentId, type SegmentKind } from "@/lib/segmentLibrary";
+import { applyFlightToDays } from "@/lib/flightApply";
 import { overnightNights } from "@/lib/itinerary";
 import { buildEmojiCustomerText } from "@/lib/exportEmoji";
 import { buildCustomerText, buildInternalText } from "@/lib/exportText";
@@ -32,7 +33,7 @@ import { tourToOption } from "@/lib/options";
 import { buildUspRequest } from "@/lib/uspRequest";
 import type { PlanSnapshot, ResultSnapshot } from "@/lib/workspace";
 import type { CourseFile } from "@/lib/courseFile";
-import type { ItineraryItem, TripInput } from "@/types";
+import type { FlightOption, ItineraryItem, TripInput } from "@/types";
 
 const NO_USPS: never[] = [];
 
@@ -194,6 +195,12 @@ export function PlannerApp() {
     if (uspRequest) void usp.generate(uspRequest);
   };
 
+  /** 항공편 상세 검색에서 고른 항공편을 저장하고, 항공 이동일 항목(있으면)에 편명·시간을 반영한다 */
+  const handleApplyFlight = (flight: FlightOption) => {
+    update({ selectedFlight: flight, flightPricePerPerson: flight.price, costStatus: { ...input.costStatus, flight: "estimated" } });
+    itinerary.replaceDays(applyFlightToDays(days, flight));
+  };
+
   const exportData = () => {
     if (!quote?.ok) throw new Error("견적이 아직 준비되지 않았습니다.");
     return { input, days, pmChoice, quote, meta, usps: usp.state.status === "success" ? usp.usps : [] };
@@ -228,6 +235,7 @@ export function PlannerApp() {
             stays={stays}
             courseFile={courseFile}
             onCourseFileChange={setCourseFile}
+            onApplyFlight={handleApplyFlight}
           />
         </aside>
         <section

@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import { TextField } from "@/components/ui/TextField";
 import { currencySymbol } from "@/lib/currency";
+import type { FlightOption } from "@/types";
 import { CostField } from "./CostField";
 import { FlightOptionsPanel } from "./FlightOptionsPanel";
 import { FlightPricePanel } from "./FlightPricePanel";
@@ -11,7 +12,7 @@ function flightSearchUrl(origin: string, destination: string): string {
   return `https://www.google.com/travel/flights?q=${encodeURIComponent(`Flights from ${origin} to ${destination}`)}`;
 }
 
-export function FlightFields({ input, onChange }: SectionProps) {
+export function FlightFields({ input, onChange, onApplyFlight }: SectionProps & { onApplyFlight: (flight: FlightOption) => void }) {
   const canSearch = input.originCity.trim() !== "" && input.destination.trim() !== "";
 
   return (
@@ -44,7 +45,7 @@ export function FlightFields({ input, onChange }: SectionProps) {
       />
       <FlightPricePanel input={input} onChange={onChange} />
       <FlightWebSearchPanel input={input} onChange={onChange} />
-      <FlightOptionsPanel input={input} onChange={onChange} />
+      <FlightOptionsPanel input={input} onChange={onChange} onApplyFlight={onApplyFlight} />
       {canSearch && (
         <a
           href={flightSearchUrl(input.originCity.trim(), input.destination.trim())}

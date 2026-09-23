@@ -146,6 +146,8 @@ export interface TripInput {
   cityTaxPerPersonPerNight: number;
   /** 왕복 항공료 (1인, 세금 포함) */
   flightPricePerPerson: number;
+  /** 항공편 상세 검색에서 골라 적용한 항공편 (가는 편·귀국편 정보). 안 골랐으면 null */
+  selectedFlight: FlightOption | null;
   costStatus: Record<CostKey, Certainty>;
 
   pricingMode: PricingMode;
@@ -501,6 +503,15 @@ export interface FlightOption {
   sourceName: string;
   /** 이 항공편을 검색하는 링크 (직접 예약 링크를 못 찾으면 검색 링크로 대신한다) */
   link: string;
+  /** ---- 귀국편(돌아오는 편) ---- 확인 못했으면 모두 빈 문자열/0 */
+  returnFlightNumber: string;
+  returnDepartDate: string;
+  returnDepartAirport: string;
+  returnDepartTime: string;
+  returnArriveAirport: string;
+  returnArriveTime: string;
+  returnStops: number;
+  returnDuration: string;
 }
 
 /** AI 웹 검색(Google Flights, 네이버 항공권, 스카이스캐너 등)으로 확인한 항공 요금 */

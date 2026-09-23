@@ -1,10 +1,11 @@
 "use client";
 
-import { AlertTriangle, ArrowUpDown, Check, ExternalLink, Loader2, PlaneTakeoff, Search } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, Calendar, Check, ExternalLink, Loader2, PlaneTakeoff, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useRequest } from "@/hooks/useRequest";
 import { formatMoney } from "@/lib/currency";
+import { checkReturnDate } from "@/lib/flightApply";
 import type { FlightOption } from "@/types";
 import type { SectionProps } from "./types";
 
@@ -41,23 +42,25 @@ function durationMinutes(text: string): number {
  * API가 아니라 AI 웹 검색으로 개별 항공편(편명·시간·공항)을 여러 개 찾아, 정렬·필터해서 고를 수 있게 한다.
  * "/api/search-flight-price"(가격대만)의 더 상세한 버전이다.
  */
-export function FlightOptionsPanel({ input, onChange }: SectionProps) {
+export function FlightOptionsPanel({ input, onChange, onApplyFlight }: SectionProps & { onApplyFlight: (flight: FlightOption) => void }) {
   const { state, data, run } = useRequest<{ origin: string; destination: string; days: number; departureDate: string; currency: string }, Result>(
     "/api/search-flight-options",
   );
   const [sort, setSort] = useState<SortMode>("priceAsc");
   const [stopFilter, setStopFilter] = useState<StopFilter>("all");
-  const [appliedNumber, setAppliedNumber] = useState<string | null>(null);
   const canRun = input.originCity.trim() !== "" && input.destination.trim() !== "" && input.days >= 2;
 
   const search = () => {
-    setAppliedNumber(null);
     return run({ origin: input.originCity.trim(), destination: input.destination.trim(), days: input.days, departureDate: input.departureDate, currency: input.currency });
   };
 
-  const apply = (f: FlightOption) => {
-    onChange({ flightPricePerPerson: f.price, costStatus: { ...input.costStatus, flight: "estimated" } });
-    setAppliedNumber(f.flightNumber || f.airline);
+  const apply = (f: FlightOption) => onApplyFlight(f);
+
+  const appliedNumber = input.selectedFlight ? input.selectedFlight.flightNumber || input.selectedFlight.airline : null;
+  const returnCheck = input.selectedFlight ? checkReturnDate(input, input.selectedFlight) : null;
+
+  const applySuggestedDays = () => {
+    if (returnCheck?.suggestedDays) onChange({ days: returnCheck.suggestedDays });
   };
 
   const flights = useMemo(() => {
@@ -73,6 +76,40 @@ export function FlightOptionsPanel({ input, onChange }: SectionProps) {
 
   return (
     <div className="space-y-2 border-t border-slate-200 pt-2.5">
+      {input.selectedFlight && (
+        <div className="space-y-1.5 rounded-md bg-indigo-50 p-2.5 text-[11px] leading-4 text-indigo-900 ring-1 ring-indigo-200">
+          <p className="font-semibold">
+            선택한 항공편: {input.selectedFlight.airline || "항공사 미확인"} {input.selectedFlight.flightNumber}
+          </p>
+          <p>
+            가는 편 {input.selectedFlight.departAirport} {input.selectedFlight.departTime} → {input.selectedFlight.arriveAirport} {input.selectedFlight.arriveTime}
+          </p>
+          {input.selectedFlight.returnDepartTime && (
+            <p>
+              귀국편 {input.selectedFlight.returnFlightNumber} · {input.selectedFlight.returnDepartAirport} {input.selectedFlight.returnDepartTime} →{" "}
+              {input.selectedFlight.returnArriveAirport} {input.selectedFlight.returnArriveTime}
+              {input.selectedFlight.returnDepartDate ? ` (${input.selectedFlight.returnDepartDate})` : ""}
+            </p>
+          )}
+          {returnCheck?.mismatched && (
+            <div className="mt-1 flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-2 py-1.5 text-amber-800 ring-1 ring-amber-200">
+              <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>
+                귀국편은 {returnCheck.flightReturnDate} 출발인데, 지금 설정된 여행 일수로는 {returnCheck.expectedReturnDate}에 귀국합니다. 일정이 맞지 않으니 날짜를 조정하세요.
+              </span>
+              {returnCheck.suggestedDays && (
+                <button
+                  type="button"
+                  onClick={applySuggestedDays}
+                  className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300 bg-white px-2 py-1 font-semibold text-amber-800 hover:bg-amber-100"
+                >
+                  총 {returnCheck.suggestedDays}일로 맞추기
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -159,10 +196,18 @@ export function FlightOptionsPanel({ input, onChange }: SectionProps) {
                         <span className="ml-auto font-semibold tabular-nums text-slate-900">{f.price > 0 ? money(f.price) : "요금 확인 못함"}</span>
                       </div>
                       <p className="mt-1 tabular-nums text-slate-600">
-                        {f.departDate && `${f.departDate} · `}
+                        <span className="font-medium text-slate-500">가는 편</span> {f.departDate && `${f.departDate} · `}
                         {f.departAirport || "출발지"} {f.departTime || "--:--"} → {f.arriveAirport || "도착지"} {f.arriveTime || "--:--"}
                         {f.duration && ` · ${f.duration}`}
                       </p>
+                      {(f.returnDepartTime || f.returnFlightNumber) && (
+                        <p className="mt-0.5 tabular-nums text-slate-600">
+                          <span className="font-medium text-slate-500">귀국편</span> {f.returnFlightNumber && `${f.returnFlightNumber} · `}
+                          {f.returnDepartDate && `${f.returnDepartDate} · `}
+                          {f.returnDepartAirport || "출발지"} {f.returnDepartTime || "--:--"} → {f.returnArriveAirport || "도착지"} {f.returnArriveTime || "--:--"}
+                          {f.returnDuration && ` · ${f.returnDuration}`}
+                        </p>
+                      )}
                       {f.sourceName && <p className="mt-0.5 text-slate-400">확인 출처: {f.sourceName}</p>}
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         {f.price > 0 && (
@@ -172,7 +217,7 @@ export function FlightOptionsPanel({ input, onChange }: SectionProps) {
                             className="inline-flex items-center gap-1 rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 font-semibold text-indigo-700 hover:bg-indigo-100"
                           >
                             {applied ? <Check className="h-3 w-3" aria-hidden /> : null}
-                            {applied ? "적용됨" : "이 항공편 요금 적용"}
+                            {applied ? "적용됨" : "이 항공편 적용"}
                           </button>
                         )}
                         {f.link && (
@@ -202,7 +247,10 @@ export function FlightOptionsPanel({ input, onChange }: SectionProps) {
                   </ul>
                 </details>
               )}
-              <p className="text-slate-400">웹 검색 시점의 참고 정보입니다. 실제 예약 전 항공사·예약처에서 잔여 좌석과 정확한 시간을 다시 확인하세요.</p>
+              <p className="text-slate-400">
+                웹 검색 시점의 참고 정보입니다. 실제 예약 전 항공사·예약처에서 잔여 좌석과 정확한 시간을 다시 확인하세요. &quot;이 항공편 적용&quot;을 누르면 항공료가
+                반영되고, 항공 이동일이 포함된 일정이면 출발·도착 항목에 편명과 시간도 함께 표시됩니다.
+              </p>
             </>
           )}
         </div>

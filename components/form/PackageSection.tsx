@@ -1,6 +1,6 @@
 import { Boxes } from "lucide-react";
 import { SectionCard } from "@/components/ui/SectionCard";
-import type { PackageType } from "@/types";
+import type { FlightOption, PackageType } from "@/types";
 import { FlightFields } from "./FlightFields";
 import { HotelFinder } from "./HotelFinder";
 import { LodgingFields } from "./LodgingFields";
@@ -8,7 +8,12 @@ import { PackageTypeSwitch } from "./PackageTypeSwitch";
 import { TravelEstimatePanel } from "./TravelEstimatePanel";
 import type { SectionProps } from "./types";
 
-export function PackageSection({ input, onChange, stays }: SectionProps & { stays: { city: string; nights: number }[] }) {
+export function PackageSection({
+  input,
+  onChange,
+  stays,
+  onApplyFlight,
+}: SectionProps & { stays: { city: string; nights: number }[]; onApplyFlight: (flight: FlightOption) => void }) {
   // 항공까지 파는 풀패키지는 첫날/마지막 날이 이동일이므로 일정 구조도 함께 맞춘다
   const changePackage = (packageType: PackageType) =>
     onChange(packageType === "full" ? { packageType, includesFlights: true } : { packageType });
@@ -30,7 +35,7 @@ export function PackageSection({ input, onChange, stays }: SectionProps & { stay
           <>
             <LodgingFields input={input} onChange={onChange} stays={stays} />
             <HotelFinder input={input} onChange={onChange} stays={stays} />
-            <FlightFields input={input} onChange={onChange} />
+            <FlightFields input={input} onChange={onChange} onApplyFlight={onApplyFlight} />
             <TravelEstimatePanel input={input} onChange={onChange} />
           </>
         )}
