@@ -27,9 +27,21 @@ function legLine(leg: FlightLeg): string {
   return parts.join(" · ");
 }
 
-/** 모든 목록(하루 전체·오전·오후 A/B)을 통틀어 그 날짜의 항공(flight) 유형 항목만, 원래 순서대로 모은다 */
+/**
+ * "공항"과 "출발"/"도착"이 함께 있는 이름이면 항공편 항목으로 본다.
+ * 코스 붙여넣기 AI가 이런 항목을 flight 대신 transfer로 잘못 분류하는 경우가 있어서
+ * (예: "출발 국제공항 출발"을 단순 이동으로 착각), type이 명백히 다른 유형(관광·식사 등)이
+ * 아닌 한 이름으로도 한 번 더 확인한다.
+ */
+function looksLikeFlightItem(item: ItineraryItem): boolean {
+  if (item.type === "flight") return true;
+  if (item.type !== undefined && item.type !== "transfer") return false;
+  return item.name.includes("공항") && (item.name.includes("출발") || item.name.includes("도착"));
+}
+
+/** 모든 목록(하루 전체·오전·오후 A/B)을 통틀어 그 날짜의 항공편 항목만, 원래 순서대로 모은다 */
 function flightItemsOfDay(day: DayPlan): ItineraryItem[] {
-  return [...day.items, ...day.amGuided, ...day.pmFreeOptions.flatMap((o) => o.items)].filter((i) => i.type === "flight");
+  return [...day.items, ...day.amGuided, ...day.pmFreeOptions.flatMap((o) => o.items)].filter(looksLikeFlightItem);
 }
 
 interface FlightGroup {
