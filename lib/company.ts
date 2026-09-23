@@ -12,6 +12,10 @@ export const DEFAULT_COMPANY: CompanyProfile = {
   insurance: "",
   travelerInsurance: "",
   depositRate: 10,
+  balanceDueDaysBeforeDeparture: 7,
+  useInterimPayment: false,
+  interimPaymentRate: 0,
+  interimPaymentDaysBeforeDeparture: 30,
   bankAccount: "",
   emergencyContact: "",
 };
@@ -22,6 +26,9 @@ export function normalizeCompany(saved: unknown): CompanyProfile {
   const s = saved as Partial<CompanyProfile>;
   const text = (v: unknown, fallback: string) => (typeof v === "string" ? v.slice(0, 300) : fallback);
   const rate = Number(s.depositRate);
+  const balanceDueDays = Number(s.balanceDueDaysBeforeDeparture);
+  const interimRate = Number(s.interimPaymentRate);
+  const interimDays = Number(s.interimPaymentDaysBeforeDeparture);
   return {
     name: text(s.name, ""),
     registrationNumber: text(s.registrationNumber, ""),
@@ -35,6 +42,13 @@ export function normalizeCompany(saved: unknown): CompanyProfile {
     travelerInsurance: text(s.travelerInsurance, ""),
     // 표준약관상 계약금은 여행요금의 10%를 넘을 수 없다
     depositRate: Number.isFinite(rate) ? Math.min(10, Math.max(0, rate)) : DEFAULT_COMPANY.depositRate,
+    // 표준약관 기본값은 7일이지만, 전세기·그룹 항공권 상품 등은 특약으로 더 앞당기는 경우가 많아 조정할 수 있게 한다
+    balanceDueDaysBeforeDeparture: Number.isFinite(balanceDueDays) ? Math.min(180, Math.max(0, Math.round(balanceDueDays))) : DEFAULT_COMPANY.balanceDueDaysBeforeDeparture,
+    useInterimPayment: typeof s.useInterimPayment === "boolean" ? s.useInterimPayment : DEFAULT_COMPANY.useInterimPayment,
+    interimPaymentRate: Number.isFinite(interimRate) ? Math.min(90, Math.max(0, interimRate)) : DEFAULT_COMPANY.interimPaymentRate,
+    interimPaymentDaysBeforeDeparture: Number.isFinite(interimDays)
+      ? Math.min(365, Math.max(1, Math.round(interimDays)))
+      : DEFAULT_COMPANY.interimPaymentDaysBeforeDeparture,
     bankAccount: text(s.bankAccount, ""),
     emergencyContact: text(s.emergencyContact, ""),
   };

@@ -65,6 +65,8 @@ export interface FeeApplySummary {
   differs: number;
   /** 확인하지 못한 항목 수 */
   unverified: number;
+  /** 웹에서 확인한 체류 시간으로 반영한 항목 수 */
+  stayUpdated: number;
 }
 
 /** 직접 입력한 금액과 웹 확인 금액이 이 비율 이내로 같으면 "일치"로 본다 */
@@ -82,20 +84,30 @@ export function applyFeeResults(
   checkedAt: string,
 ): { days: DayPlan[]; summary: FeeApplySummary } {
   const byId = new Map(results.map((r) => [r.id, r]));
-  const summary: FeeApplySummary = { applied: 0, free: 0, differs: 0, unverified: 0 };
+  const summary: FeeApplySummary = { applied: 0, free: 0, differs: 0, unverified: 0, stayUpdated: 0 };
 
   const patchOf = (item: ItineraryItem, r: FeeCheckResult): ItineraryItem => {
     const base = { note: r.note, sourceName: r.sourceName, checkedAt };
     const local = r.localCurrency && r.localAmount > 0 ? { currency: r.localCurrency as CurrencyCode, amount: r.localAmount } : undefined;
 
+    // 체류 시간은 요금 확인 상태와 별개로 다룬다. AI 추정치였던 항목만 덮어쓴다(직접 수정한 값은 보호).
+    const stayFound = r.recommendedStayMinutes > 0 && item.isEstimated;
+    const stayPatch = stayFound ? { stayMinutes: r.recommendedStayMinutes } : {};
+    if (stayFound) summary.stayUpdated++;
+
     if (r.status === "unverified") {
       summary.unverified++;
-      return { ...item, feeCheck: { ...base, status: "unverified" } };
+      return { ...item, ...stayPatch, feeCheck: { ...base, status: "unverified", stayMinutesChecked: stayFound } };
     }
     if (r.amountInQuote === null) {
       // 현지 금액은 확인했지만 견적 통화로 환산하지 못한 경우: 금액은 그대로 두고 현지 금액만 보여 준다
       summary.unverified++;
-      return { ...item, local, feeCheck: { ...base, status: "unverified", note: `${r.note} (견적 통화로 환산하지 못해 금액은 그대로 두었습니다)`.trim() } };
+      return {
+        ...item,
+        ...stayPatch,
+        local,
+        feeCheck: { ...base, status: "unverified", stayMinutesChecked: stayFound, note: `${r.note} (견적 통화로 환산하지 못해 금액은 그대로 두었습니다)`.trim() },
+      };
     }
 
     const found = r.amountInQuote;
@@ -106,14 +118,15 @@ export function applyFeeResults(
       else summary.applied++;
       return {
         ...item,
+        ...stayPatch,
         entryFee: found,
         isEstimated: false,
         local,
-        feeCheck: { ...base, status: r.status === "free" ? "free" : "confirmed" },
+        feeCheck: { ...base, status: r.status === "free" ? "free" : "confirmed", stayMinutesChecked: stayFound },
       };
     }
     summary.differs++;
-    return { ...item, local, feeCheck: { ...base, status: "differs", foundAmount: found } };
+    return { ...item, ...stayPatch, local, feeCheck: { ...base, status: "differs", foundAmount: found, stayMinutesChecked: stayFound } };
   };
 
   const next = days.map((day) => mapDayItems(day, (item) => (byId.has(item.id) ? patchOf(item, byId.get(item.id)!) : item)));

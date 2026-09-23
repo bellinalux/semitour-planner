@@ -2,11 +2,14 @@
 
 import { AlertTriangle, Building2, Check, Cloud, HardDrive, Loader2, Save, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useCompanyProfile } from "@/hooks/useCompanyProfile";
+import type { CompanyStorage } from "@/hooks/useCompanyProfile";
 import { missingLegalFields } from "@/lib/company";
 import type { CompanyProfile } from "@/types";
 
-type FieldKey = Exclude<keyof CompanyProfile, "depositRate">;
+type FieldKey = Exclude<
+  keyof CompanyProfile,
+  "depositRate" | "balanceDueDaysBeforeDeparture" | "useInterimPayment" | "interimPaymentRate" | "interimPaymentDaysBeforeDeparture"
+>;
 
 interface FieldSpec {
   key: FieldKey;
@@ -64,9 +67,14 @@ const SECTIONS: { title: string; description: string; fields: FieldSpec[] }[] = 
 const inputClass =
   "w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30";
 
-export function CompanySettings() {
+interface Props {
+  company: CompanyProfile;
+  storage: CompanyStorage;
+  save: (next: CompanyProfile) => Promise<string | null>;
+}
+
+export function CompanySettings({ company, storage, save }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const { company, storage, save } = useCompanyProfile();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<CompanyProfile>(company);
   const [busy, setBusy] = useState(false);
@@ -201,31 +209,120 @@ export function CompanySettings() {
               </section>
             ))}
 
-            <section className="space-y-2">
+            <section className="space-y-3">
               <div>
                 <h3 className="text-xs font-semibold text-slate-800">거래 조건</h3>
-                <p className="mt-0.5 text-[11px] leading-4 text-slate-500">청구서의 계약금·잔금 계산에 쓰입니다.</p>
+                <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
+                  견적서·청구서·계약서의 계약금·중도금·잔금 계산에 쓰입니다. 표준약관 기본값은 계약금 10%·잔금 출발 7일전이지만,
+                  전세기·그룹 항공권처럼 여행사가 먼저 결제해야 하는 상품은 특약으로 더 앞당기는 경우가 많습니다.
+                </p>
               </div>
-              <div className="sm:w-48">
-                <label htmlFor="company-depositRate" className="mb-1 block text-[11px] font-medium text-slate-600">
-                  계약금 비율
-                </label>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    id="company-depositRate"
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    max={10}
-                    step="any"
-                    value={draft.depositRate}
-                    onChange={(e) => setDraft((prev) => ({ ...prev, depositRate: Number(e.target.value) }))}
-                    className={`${inputClass} text-right tabular-nums`}
-                  />
-                  <span className="text-xs text-slate-500">%</span>
+              <div className="flex flex-wrap gap-3">
+                <div className="w-32">
+                  <label htmlFor="company-depositRate" className="mb-1 block text-[11px] font-medium text-slate-600">
+                    계약금 비율
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      id="company-depositRate"
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      max={10}
+                      step="any"
+                      value={draft.depositRate}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, depositRate: Number(e.target.value) }))}
+                      className={`${inputClass} text-right tabular-nums`}
+                    />
+                    <span className="text-xs text-slate-500">%</span>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-4 text-slate-400">표준약관상 10% 이하</p>
                 </div>
-                <p className="mt-1 text-[11px] leading-4 text-slate-400">국외여행 표준약관상 계약금은 여행요금의 10%를 넘을 수 없습니다.</p>
+                <div className="w-40">
+                  <label htmlFor="company-balanceDueDays" className="mb-1 block text-[11px] font-medium text-slate-600">
+                    잔금 납부 기한
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-slate-500">출발</span>
+                    <input
+                      id="company-balanceDueDays"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={180}
+                      step={1}
+                      value={draft.balanceDueDaysBeforeDeparture}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, balanceDueDaysBeforeDeparture: Number(e.target.value) }))}
+                      className={`${inputClass} w-16 text-right tabular-nums`}
+                    />
+                    <span className="text-xs text-slate-500">일 전</span>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-4 text-slate-400">표준약관 기본값 7일</p>
+                </div>
               </div>
+
+              <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={draft.useInterimPayment}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, useInterimPayment: e.target.checked }))}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                중도금을 받습니다 (계약금·잔금 사이, 표준약관에는 없는 특약 항목)
+              </label>
+
+              {draft.useInterimPayment && (
+                <div className="flex flex-wrap gap-3 rounded-md border border-slate-200 bg-slate-50/60 p-2.5">
+                  <div className="w-32">
+                    <label htmlFor="company-interimRate" className="mb-1 block text-[11px] font-medium text-slate-600">
+                      중도금 비율
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        id="company-interimRate"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        max={90}
+                        step="any"
+                        value={draft.interimPaymentRate}
+                        onChange={(e) => setDraft((prev) => ({ ...prev, interimPaymentRate: Number(e.target.value) }))}
+                        className={`${inputClass} text-right tabular-nums`}
+                      />
+                      <span className="text-xs text-slate-500">%</span>
+                    </div>
+                  </div>
+                  <div className="w-40">
+                    <label htmlFor="company-interimDays" className="mb-1 block text-[11px] font-medium text-slate-600">
+                      중도금 납부 기한
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-500">출발</span>
+                      <input
+                        id="company-interimDays"
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={365}
+                        step={1}
+                        value={draft.interimPaymentDaysBeforeDeparture}
+                        onChange={(e) => setDraft((prev) => ({ ...prev, interimPaymentDaysBeforeDeparture: Number(e.target.value) }))}
+                        className={`${inputClass} w-16 text-right tabular-nums`}
+                      />
+                      <span className="text-xs text-slate-500">일 전</span>
+                    </div>
+                  </div>
+                  <p className="w-full text-[11px] leading-4 text-slate-400">
+                    잔금 기한보다 먼저(출발일에서 더 먼 날짜)여야 하며, 짧으면 자동으로 잔금 기한 다음날로 맞춰집니다.
+                  </p>
+                </div>
+              )}
+
+              {(draft.balanceDueDaysBeforeDeparture !== 7 || draft.useInterimPayment) && (
+                <p className="text-[11px] leading-4 text-amber-700">
+                  표준약관(계약금 10%이하·잔금 출발 7일전)과 다른 조건이라, 여행계약서에 특약(제6조) 고지 문구가 자동으로 추가됩니다.
+                </p>
+              )}
             </section>
 
             {notice && (

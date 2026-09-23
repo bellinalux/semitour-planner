@@ -135,25 +135,57 @@ export const CANCELLATION_TERMS: { when: string; fee: string }[] = [
 
 /** ---------- 대금 ---------- */
 
+export interface InterimPaymentPlan {
+  amount: number;
+  rate: number;
+  /** 중도금 납부 기한 (출발일이 있으면 그 날짜) */
+  due: string;
+}
+
 export interface PaymentPlan {
   total: number;
   deposit: number;
-  balance: number;
   depositRate: number;
-  /** 잔금 납부 기한 (출발일이 있으면 출발 7일 전 날짜) */
+  /** 중도금을 쓰지 않으면 undefined */
+  interim?: InterimPaymentPlan;
+  balance: number;
+  /** 잔금 납부 기한 (출발일이 있으면 그 날짜) */
   balanceDue: string;
+  /** 잔금 납부 기한이 표준약관 기본값(출발 7일 전)과 다르거나 중도금을 쓰면 true — 계약서에 특약 고지가 필요하다 */
+  isCustomSchedule: boolean;
 }
 
-export function paymentPlan(total: number, company: Pick<CompanyProfile, "depositRate">, input: Pick<TripInput, "departureDate">): PaymentPlan {
-  const rate = Math.min(10, Math.max(0, company.depositRate));
-  const deposit = Math.round((total * rate) / 100);
+export function paymentPlan(
+  total: number,
+  company: Pick<CompanyProfile, "depositRate" | "balanceDueDaysBeforeDeparture" | "useInterimPayment" | "interimPaymentRate" | "interimPaymentDaysBeforeDeparture">,
+  input: Pick<TripInput, "departureDate">,
+): PaymentPlan {
+  const depositRate = Math.min(10, Math.max(0, company.depositRate));
+  const deposit = Math.round((total * depositRate) / 100);
   const start = parseDate(input.departureDate);
+  const dueText = (daysBefore: number) => (start ? `${formatDate(addDays(start, -daysBefore))}까지` : `출발 ${daysBefore}일 전까지`);
+
+  const balanceDueDays = Math.max(0, Math.round(company.balanceDueDaysBeforeDeparture || 0)) || 7;
+
+  let interim: InterimPaymentPlan | undefined;
+  let balance = Math.max(0, total - deposit);
+  if (company.useInterimPayment && company.interimPaymentRate > 0) {
+    const interimRate = Math.min(100 - depositRate, Math.max(0, company.interimPaymentRate));
+    const interimAmount = Math.round((total * interimRate) / 100);
+    // 중도금은 잔금보다 출발일에서 더 먼 날짜(더 일찍)에 받아야 한다
+    const interimDays = Math.max(balanceDueDays + 1, Math.round(company.interimPaymentDaysBeforeDeparture || 0) || 30);
+    interim = { amount: interimAmount, rate: interimRate, due: dueText(interimDays) };
+    balance = Math.max(0, balance - interimAmount);
+  }
+
   return {
     total,
     deposit,
-    balance: Math.max(0, total - deposit),
-    depositRate: rate,
-    balanceDue: start ? `${formatDate(addDays(start, -7))}까지` : "출발 7일 전까지",
+    depositRate,
+    interim,
+    balance,
+    balanceDue: dueText(balanceDueDays),
+    isCustomSchedule: !!interim || balanceDueDays !== 7,
   };
 }
 

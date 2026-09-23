@@ -1,9 +1,22 @@
-import { BedDouble, BookmarkPlus, Plus, Sun, Sunset } from "lucide-react";
+import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Plus, Sun, Sunset } from "lucide-react";
+import { calcDayLoad, type DayLoadLevel } from "@/lib/dayLoad";
+import { formatDuration } from "@/lib/format";
 import type { SegmentKind } from "@/lib/segmentLibrary";
 import type { DayPlan, CurrencyCode, ItineraryItem, OptionSuggestion, PmFreeOption, TourSlot } from "@/types";
 import { PmOptionSwitch } from "./PmOptionSwitch";
 import { SessionBlock } from "./SessionBlock";
 import { TimelineItem, type ItemPatch } from "./TimelineItem";
+
+const LOAD_BADGE_TONE: Record<DayLoadLevel, string> = {
+  ok: "bg-white text-slate-600 ring-slate-200",
+  tight: "bg-amber-50 text-amber-800 ring-amber-200",
+  overloaded: "bg-rose-50 text-rose-700 ring-rose-200",
+};
+
+const LOAD_WARNING: Record<Exclude<DayLoadLevel, "ok">, string> = {
+  tight: "이동·체류 시간이 빠듯합니다. 코스를 줄이는 것을 검토하세요.",
+  overloaded: "이동·체류 시간을 다 더하면 하루에 소화하기 어렵습니다. 코스를 줄이거나 다른 날로 옮기세요.",
+};
 
 interface Props {
   plan: DayPlan;
@@ -41,6 +54,7 @@ export function DayCard({
   onSaveSegment,
 }: Props) {
   const selected = plan.pmFreeOptions.find((o) => o.id === selectedPmId) ?? plan.pmFreeOptions[0];
+  const load = calcDayLoad(plan, { [plan.day]: selectedPmId });
 
   return (
     <article className="rounded-lg border border-slate-200">
@@ -51,6 +65,14 @@ export function DayCard({
           <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
             <BedDouble className="h-3 w-3" aria-hidden />
             {plan.overnightCity} 숙박{hotelName ? ` · ${hotelName}` : ""}
+          </span>
+        )}
+        {load.totalMinutes > 0 && (
+          <span
+            title={`체류 ${formatDuration(load.stayMinutes)} + 이동 ${formatDuration(load.travelMinutes)}`}
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium ring-1 ${LOAD_BADGE_TONE[load.level]}`}
+          >
+            <Clock className="h-3 w-3" aria-hidden />총 {formatDuration(load.totalMinutes)}
           </span>
         )}
         {plan.kind === "linear" && plan.items.length > 0 && (
@@ -64,6 +86,12 @@ export function DayCard({
           </button>
         )}
       </header>
+      {load.level !== "ok" && (
+        <p className={`flex items-start gap-1.5 border-b border-slate-100 px-4 py-2 text-[11px] leading-4 ${load.level === "overloaded" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-800"}`}>
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          {LOAD_WARNING[load.level]}
+        </p>
+      )}
 
       <div className="space-y-5 p-4">
         {plan.kind === "linear" ? (

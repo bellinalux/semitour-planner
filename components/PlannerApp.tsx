@@ -57,7 +57,8 @@ export function PlannerApp() {
   const [accessibilitySummary, setAccessibilitySummary] = useState<AccessibilityApplySummary | null>(null);
   const segmentLibrary = useSegmentLibrary();
   const [courseFile, setCourseFile] = useState<CourseFile | null>(null);
-  const { company } = useCompanyProfile();
+  const companyProfile = useCompanyProfile();
+  const { company } = companyProfile;
   const { kind: printKind, print } = usePrintDocument();
 
   const { days, pmChoice, meta } = itinerary;
@@ -205,7 +206,7 @@ export function PlannerApp() {
       <Header
         actions={
           <>
-            <CompanySettings />
+            <CompanySettings {...companyProfile} />
             <SavedPlansMenu snapshot={snapshot} onLoad={handleLoadPlan} onImportDay={itinerary.appendDayFromSegment} />
           </>
         }

@@ -131,9 +131,9 @@ export function useItinerary() {
     [],
   );
 
-  /** 항목을 고친다. 금액을 직접 고친 항목은 추정치 표시를 해제한다. */
+  /** 항목을 고친다. 금액·체류 시간을 직접 고친 항목은 추정치 표시를 해제한다(웹 확인이 함부로 덮어쓰지 않도록). */
   const updateItem = useCallback((itemId: string, patch: Partial<ItineraryItem>) => {
-    const touchesCost = "entryFee" in patch || "mealCost" in patch;
+    const touchesCost = "entryFee" in patch || "mealCost" in patch || "stayMinutes" in patch;
     // 입장료를 직접 고치면 이전 웹 확인 결과와 현지 금액은 더 이상 맞지 않으므로 지운다 (이번 수정에서 새로 지정한 값은 유지)
     const staleFee = "entryFee" in patch && !("feeCheck" in patch);
     setDays((prev) =>

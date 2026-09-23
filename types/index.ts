@@ -227,6 +227,17 @@ export interface CompanyProfile {
   travelerInsurance: string;
   /** 계약금 비율 (%) — 표준약관상 여행요금의 10% 이하 */
   depositRate: number;
+  /**
+   * 잔금 납부 기한 (출발 며칠 전까지). 국외여행 표준약관 제10조④의 기본값은 7.
+   * 전세기·그룹 항공권처럼 여행사가 항공사에 먼저 결제해야 하는 상품은 관행상 이보다 앞당기는 경우가 많다.
+   */
+  balanceDueDaysBeforeDeparture: number;
+  /** 계약금·잔금 사이에 중도금을 받는지. 표준약관에는 없는 항목이라 특약으로 다룬다 */
+  useInterimPayment: boolean;
+  /** 중도금 비율 (%) — 여행요금 대비. useInterimPayment가 true일 때만 쓰인다 */
+  interimPaymentRate: number;
+  /** 중도금 납부 기한 (출발 며칠 전까지). 잔금 기한보다 더 일찍(출발일에서 먼 날짜)이어야 한다 */
+  interimPaymentDaysBeforeDeparture: number;
   /** 입금 계좌 (청구서용) */
   bankAccount: string;
   /** 현지 인솔자·긴급 비상연락처 */
@@ -343,6 +354,8 @@ export interface FeeCheck {
   checkedAt: string;
   /** differs일 때, 웹에서 확인한 금액 (견적 통화, 1인) */
   foundAmount?: number;
+  /** 같은 확인에서 체류 시간(stayMinutes)도 웹 검색으로 찾아 반영했는지 */
+  stayMinutesChecked?: boolean;
 }
 
 export interface PmFreeOption {

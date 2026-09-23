@@ -68,6 +68,13 @@ export function InvoiceDoc({ input, quote, meta, company }: DocProps) {
               <td className="px-2 py-1.5 tabular-nums">{money(payment.deposit)}</td>
               <td className="px-2 py-1.5">계약 시</td>
             </tr>
+            {payment.interim && (
+              <tr className="border-b border-slate-200">
+                <td className="px-2 py-1.5">중도금 ({payment.interim.rate}%)</td>
+                <td className="px-2 py-1.5 tabular-nums">{money(payment.interim.amount)}</td>
+                <td className="px-2 py-1.5">{payment.interim.due}</td>
+              </tr>
+            )}
             <tr className="border-b border-slate-200">
               <td className="px-2 py-1.5">잔금</td>
               <td className="px-2 py-1.5 tabular-nums">{money(payment.balance)}</td>

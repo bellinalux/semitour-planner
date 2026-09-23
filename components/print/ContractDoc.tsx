@@ -44,11 +44,21 @@ function OneCover({ recipient, breakBefore, data }: { recipient: DocRecipient; b
               { label: "여행경비 (1인)", value: money(recipient.pricePerPerson) },
               { label: "여행경비 (총액)", value: money(recipient.totalPrice) },
               { label: "계약금 (계약 체결 시)", value: `${money(payment.deposit)} (여행요금의 ${payment.depositRate}%)` },
+              ...(payment.interim
+                ? [{ label: "중도금 (납부 기한)", value: `${money(payment.interim.amount)} (여행요금의 ${payment.interim.rate}%) · ${payment.interim.due}` }]
+                : []),
               { label: "잔금 (납부 기한)", value: `${money(payment.balance)} · ${payment.balanceDue}` },
               ...(company.bankAccount.trim() ? [{ label: "입금 계좌", value: company.bankAccount.trim() }] : []),
               { label: "쇼핑 일정", value: policy.shopping === "some" ? `있음 (일정 중 ${policy.shoppingCount}곳)` : POLICY_LABELS[policy.shopping] },
             ]}
           />
+          {payment.isCustomSchedule && (
+            <p className="mt-1.5 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-slate-700">
+              <span className="font-semibold text-amber-800">특약(제6조)</span> — 이 계약은 붙임 표준약관 제10조③④항(계약금 10%이하, 잔금 출발 7일전 납부)과 달리{" "}
+              {payment.interim ? "중도금을 두고 " : ""}
+              잔금 납부 기한을 <strong>{payment.balanceDue}</strong>로 정하는 특약을 적용합니다. 여행사는 이 특약이 표준약관보다 우선 적용됨을 여행자에게 설명하고 서명 등으로 별도 확인을 받아야 합니다.
+            </p>
+          )}
           {localPay.rows.length > 0 && (
             <p className="mt-1.5 text-slate-600">
               현지에서 별도로 지불해야 하는 경비: {localPay.rows.map((r) => `${r.name}${r.amount > 0 ? ` ${money(r.amount)}` : ""}`).join(", ")}

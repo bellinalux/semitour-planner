@@ -1,12 +1,13 @@
 "use client";
 
-import { Accessibility, CalendarDays, Check, Hotel, Info, Loader2, MapPin, Pencil, PlaneLanding, PlaneTakeoff, RefreshCw, SearchCheck, Sparkles } from "lucide-react";
+import { Accessibility, CalendarDays, Check, Clock3, Hotel, Info, Loader2, MapPin, Pencil, PlaneLanding, PlaneTakeoff, RefreshCw, SearchCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { AccessibilityApplySummary } from "@/lib/accessibilityCheck";
+import { calcAllDayLoads } from "@/lib/dayLoad";
 import type { FeeApplySummary } from "@/lib/fees";
 import { groupDaysByCity } from "@/lib/itinerary";
 import type { OptionSuggestApplySummary } from "@/lib/optionSuggestions";
@@ -196,8 +197,9 @@ function FeeCheckNotice({ view }: { view: FeeCheckView }) {
     <div className="space-y-1.5 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-[11px] leading-4 text-slate-700">
       <p className="font-semibold text-emerald-800">
         웹 확인 결과: 반영 {summary.applied}개 · 무료 {summary.free}개 · 입력값과 다름 {summary.differs}개 · 확인 못함 {summary.unverified}개
+        {summary.stayUpdated > 0 ? ` · 체류 시간 반영 ${summary.stayUpdated}개` : ""}
       </p>
-      {!searched && <p className="text-amber-700">웹 검색 근거를 확보하지 못해 금액을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.</p>}
+      {!searched && <p className="text-amber-700">웹 검색 근거를 확보하지 못해 금액·체류 시간을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.</p>}
       {summary.differs > 0 && <p>&quot;입력값과 다름&quot; 항목은 직접 입력한 금액을 그대로 두었습니다. 항목의 &quot;확인가 적용&quot; 버튼으로 바꿀 수 있어요.</p>}
       {summary.unverified > 0 && <p>확인하지 못한 항목은 AI 추정 금액 그대로입니다. 판매 전에 예약처나 공식 사이트에서 직접 확인하세요.</p>}
       {sources.length > 0 && (
@@ -290,6 +292,27 @@ function AccessibilityCheckNotice({ view }: { view: AccessibilityCheckView }) {
   );
 }
 
+/** 이동·체류 시간을 더해 하루에 소화하기 빠듯하거나 넘치는 날짜를 한눈에 보여준다 (해당 날짜가 없으면 표시하지 않는다) */
+function DayLoadSummary({ days, pmChoice }: { days: DayPlan[]; pmChoice: Record<number, PmFreeOption["id"]> }) {
+  const loads = calcAllDayLoads(days, pmChoice);
+  const overloaded = loads.filter((l) => l.level === "overloaded");
+  const tight = loads.filter((l) => l.level === "tight");
+  if (overloaded.length === 0 && tight.length === 0) return null;
+
+  const tone = overloaded.length > 0 ? "border-rose-200 bg-rose-50 text-rose-800" : "border-amber-200 bg-amber-50 text-amber-800";
+  const label = (l: (typeof loads)[number]) => `DAY ${l.day}`;
+  return (
+    <p className={`flex items-start gap-1.5 rounded-md border px-3 py-2 text-[11px] leading-4 ${tone}`}>
+      <Clock3 className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+      <span>
+        이동·체류 시간을 더하면{" "}
+        {overloaded.length > 0 && <>하루에 소화하기 어려운 날짜: <strong>{overloaded.map(label).join(", ")}</strong>{tight.length > 0 && " · "}</>}
+        {tight.length > 0 && <>빠듯한 날짜: <strong>{tight.map(label).join(", ")}</strong></>}. 아래에서 코스를 조정하세요.
+      </span>
+    </p>
+  );
+}
+
 /** 연속된 같은 숙박 도시 구간의 헤더. 다지역 여행(2개 이상 도시)일 때만 표시된다. */
 function CityGroupHeader({
   city,
@@ -369,11 +392,11 @@ export function ItineraryPanel({
         type="button"
         onClick={feeCheck.onRun}
         disabled={feeCheck.state.status === "loading" || feeCheck.targetCount === 0}
-        title="입장료·체험료를 웹에서 검색해 현지 통화 금액으로 확인하고, 원화로 환산해 반영합니다"
+        title="입장료·체험료와 통상적인 체류 시간을 웹에서 검색해 확인하고 반영합니다"
         className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {feeCheck.state.status === "loading" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <SearchCheck className="h-3.5 w-3.5" aria-hidden />}
-        {feeCheck.state.status === "loading" ? "요금 확인 중..." : "입장료 웹 확인"}
+        {feeCheck.state.status === "loading" ? "요금 확인 중..." : "입장료·체류시간 웹 확인"}
       </button>
     ) : undefined;
 
@@ -460,8 +483,9 @@ export function ItineraryPanel({
           <TravelTypeBanner travelType={travelType} researchInfo={researchInfo} />
           <p className="flex items-start gap-1.5 rounded-md bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-500">
             <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-            입장료·식대·소요 시간은 AI 추정치입니다. &quot;입장료 웹 확인&quot;으로 현지 통화 금액을 확인하고, 각 항목의 &quot;현지 지불(불포함)&quot; 버튼으로 고객이 현지에서 직접 내는 항목을 표시하세요. 금액은 직접 수정할 수 있고, 수정하면 견적이 바로 다시 계산됩니다.
+            입장료·식대·체류 시간은 AI 추정치입니다. &quot;입장료·체류시간 웹 확인&quot;으로 현지 통화 금액과 통상적인 체류 시간을 확인하고, 각 항목의 &quot;현지 지불(불포함)&quot; 버튼으로 고객이 현지에서 직접 내는 항목을 표시하세요. 금액·시간은 직접 수정할 수 있고, 수정하면 견적과 아래 소요 시간이 바로 다시 계산됩니다.
           </p>
+          <DayLoadSummary days={days} pmChoice={pmChoice} />
           <FeeCheckNotice view={feeCheck} />
           <OptionSuggestNotice view={optionSuggest} />
           <AccessibilityCheckNotice view={accessibilityCheck} />

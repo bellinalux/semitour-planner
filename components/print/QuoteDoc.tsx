@@ -99,6 +99,9 @@ function OneQuote({ recipient, isGroup, breakBefore, data }: { recipient: DocRec
           <DocFacts
             rows={[
               { label: "계약금", value: `${money(payment.deposit)} (여행요금의 ${payment.depositRate}%)` },
+              ...(payment.interim
+                ? [{ label: "중도금", value: `${money(payment.interim.amount)} (여행요금의 ${payment.interim.rate}%) · ${payment.interim.due}` }]
+                : []),
               { label: "잔금", value: `${money(payment.balance)} · ${payment.balanceDue}` },
               ...(company.bankAccount.trim() ? [{ label: "입금 계좌", value: company.bankAccount.trim() }] : []),
             ]}

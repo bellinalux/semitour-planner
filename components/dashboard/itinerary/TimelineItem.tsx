@@ -236,9 +236,13 @@ export function TimelineItem({
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {(item.stayMinutes > 0 || item.timeNote) && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+            <span
+              className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600"
+              title={item.feeCheck?.stayMinutesChecked ? "웹 검색으로 확인한 통상적인 체류 시간" : undefined}
+            >
               <Clock className="h-3 w-3" aria-hidden />
               {item.timeNote ? item.timeNote : `${formatDuration(item.stayMinutes)} 체류`}
+              {item.feeCheck?.stayMinutesChecked && <Check className="h-3 w-3 text-emerald-600" aria-hidden />}
             </span>
           )}
           {item.fromCatalog && (

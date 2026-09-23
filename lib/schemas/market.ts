@@ -58,6 +58,8 @@ export interface FeeCheckResult {
   amountInQuote: number | null;
   sourceName: string;
   note: string;
+  /** 웹에서 확인한 통상적인 체류·관람 시간(분). 확인하지 못했으면 0 */
+  recommendedStayMinutes: number;
 }
 
 export interface VerifyFeesResponse {
