@@ -1,3 +1,4 @@
+import { isBreakfastItem } from "@/lib/documents";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import type { DayPlan } from "@/types";
 
@@ -27,11 +28,13 @@ export function dayLoadLevel(totalMinutes: number): DayLoadLevel {
 /**
  * 그날 실제로 진행되는 항목(세미투어는 오전 전체 + 선택된 오후 코스, 업체 코스는 전체)의
  * 체류 시간·이동 시간 합계를 계산한다. 항공 이동일처럼 항목이 없거나 시간이 0인 날은 자연히 "ok"가 된다.
+ * 호텔 조식은 오전 미팅(투어 시작) 전에 끝나는 것이라 이 합계에 넣지 않는다.
  */
 export function calcDayLoad(day: DayPlan, pmChoice: PmChoice): DayLoad {
   let stayMinutes = 0;
   let travelMinutes = 0;
   for (const item of dayItems(day, pmChoice)) {
+    if (isBreakfastItem(item)) continue;
     stayMinutes += Math.max(0, item.stayMinutes);
     travelMinutes += Math.max(0, item.travelMinutesToNext ?? 0);
   }

@@ -3,7 +3,7 @@ import { compareWithCompetitors } from "@/lib/cost";
 import { formatMoney } from "@/lib/currency";
 import { customerFeeNote, feeTag, itemFeeText, localPayRows, localPaySection, moneyWithKrw } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
-import { ITEM_TYPE_META } from "@/lib/itemTypes";
+import { ITEM_TYPE_META, stayTimeLabel } from "@/lib/itemTypes";
 import { pickPmOption, type PmChoice } from "@/lib/itinerary";
 import { simulateOptions } from "@/lib/options";
 import type {
@@ -134,7 +134,7 @@ export function buildInternalText(data: ExportData): string {
   const cost = (item: ItineraryItem) => {
     const parts: string[] = [];
     if (item.timeNote) parts.push(item.timeNote);
-    else if (item.stayMinutes > 0) parts.push(`체류 ${formatDuration(item.stayMinutes)}`);
+    else if (item.stayMinutes > 0) parts.push(`${stayTimeLabel(item.type)} ${formatDuration(item.stayMinutes)}`);
     if (item.admission === "view_only") parts.push("외부 조망");
     if (item.entryFee > 0) parts.push(`${item.type === "experience" || item.type === "massage" ? "체험비" : "입장료"} ${itemFeeText(item.entryFee, item, input)}`);
     if (item.mealCost > 0) parts.push(`식대 ${moneyWithKrw(item.mealCost, input.currency, input.exchangeRateToKrw)}`);

@@ -29,6 +29,11 @@ export function feeLabel(type: ItemType | undefined): string {
   return type === "experience" || type === "massage" ? "체험비" : "입장료";
 }
 
+/** stayMinutes를 "체류"로 부를지 "이동"으로 부를지. 항공·차량 이동 항목은 머무는 게 아니라 이동하는 시간이다. */
+export function stayTimeLabel(type: ItemType | undefined): "이동" | "체류" {
+  return type === "transfer" || type === "flight" ? "이동" : "체류";
+}
+
 export const HOTEL_GRADES: { id: HotelGrade; label: string }[] = [
   { id: "any", label: "전체" },
   { id: "3", label: "3성" },

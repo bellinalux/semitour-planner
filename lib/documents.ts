@@ -75,6 +75,14 @@ function slotOf(item: ItineraryItem): MealSlot {
 }
 
 /**
+ * 호텔 조식(아침 식사) 항목인가. 조식은 오전 미팅 시간(투어 시작) 전에 끝나는 것이므로,
+ * 하루 이동·체류 시간 합계(일정 과부하 판단)에는 넣지 않는다.
+ */
+export function isBreakfastItem(item: ItineraryItem): boolean {
+  return looksLikeMeal(item) && BREAKFAST.test(item.name);
+}
+
+/**
  * 하루의 조·중·석 표기를 만든다.
  * 조식은 전날 숙박이 있고 조식 포함 설정이 켜져 있으면 호텔식으로 본다. 중·석은 식사 항목
  * 이름으로 나누고, 이름으로 구분되지 않는 식사는 점심 → 저녁 순으로 채운다.

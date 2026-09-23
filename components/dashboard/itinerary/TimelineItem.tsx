@@ -1,10 +1,11 @@
 import { Accessibility, AlertCircle, AlertTriangle, ArrowRightLeft, BadgeCheck, BookmarkPlus, Bus, Check, ChevronDown, ChevronUp, Clock, Copy, ExternalLink, Eye, HelpCircle, Plus, Sparkles, Ticket, Trash2, Utensils, Wallet, X } from "lucide-react";
 import { useState } from "react";
+import { DurationInput } from "@/components/ui/DurationInput";
 import { MoneyInput } from "@/components/ui/MoneyInput";
 import { currencySymbol } from "@/lib/currency";
 import { feeHint, isLocalPay, itemFeeText } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
-import { feeLabel, ITEM_TYPE_META, ITEM_TYPES } from "@/lib/itemTypes";
+import { feeLabel, ITEM_TYPE_META, ITEM_TYPES, stayTimeLabel } from "@/lib/itemTypes";
 import { slotOptions } from "@/lib/tourItem";
 import type { SegmentKind } from "@/lib/segmentLibrary";
 import type { Admission, CurrencyCode, DayPlan, ItemType, ItineraryItem, OptionSuggestion, TourSlot } from "@/types";
@@ -235,14 +236,19 @@ export function TimelineItem({
         {item.description && <p className="mt-1 text-xs leading-5 text-slate-600">{item.description}</p>}
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {(item.stayMinutes > 0 || item.timeNote) && (
+          <DurationInput label={stayTimeLabel(item.type)} icon={Clock} value={item.stayMinutes} onChange={(stayMinutes) => onChangeItem(item.id, { stayMinutes })} />
+          {item.timeNote && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600" title="원문에 적힌 소요 시간 표기">
+              {item.timeNote}
+            </span>
+          )}
+          {item.feeCheck?.stayMinutesChecked && (
             <span
-              className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600"
-              title={item.feeCheck?.stayMinutesChecked ? "웹 검색으로 확인한 통상적인 체류 시간" : undefined}
+              className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
+              title={`웹 검색으로 확인한 통상적인 ${stayTimeLabel(item.type)} 시간`}
             >
-              <Clock className="h-3 w-3" aria-hidden />
-              {item.timeNote ? item.timeNote : `${formatDuration(item.stayMinutes)} 체류`}
-              {item.feeCheck?.stayMinutesChecked && <Check className="h-3 w-3 text-emerald-600" aria-hidden />}
+              <Check className="h-3 w-3" aria-hidden />
+              웹 확인
             </span>
           )}
           {item.fromCatalog && (
