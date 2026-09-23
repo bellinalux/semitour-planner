@@ -1,7 +1,14 @@
 import { FileText, Loader2, Paperclip, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { Field, inputClass } from "@/components/ui/Field";
-import { COURSE_FILE_TYPES, MAX_COURSE_FILE_BYTES, type CourseFile } from "@/lib/courseFile";
+import {
+  COURSE_FILE_ACCEPT,
+  COURSE_FILE_TYPES_LABEL,
+  MAX_COURSE_FILE_BYTES,
+  isSupportedCourseFile,
+  mimeTypeForCourseFile,
+  type CourseFile,
+} from "@/lib/courseFile";
 
 interface Props {
   value: string;
@@ -36,8 +43,8 @@ export function CoursePasteField({ value, onChange, file, onFileChange }: Props)
   const pickFile = async (picked: File | undefined) => {
     if (!picked) return;
     setError("");
-    if (!(COURSE_FILE_TYPES as readonly string[]).includes(picked.type)) {
-      setError("사진(PNG·JPG·WEBP) 또는 PDF 파일만 올릴 수 있습니다.");
+    if (!isSupportedCourseFile(picked.name)) {
+      setError(`${COURSE_FILE_TYPES_LABEL} 파일만 올릴 수 있습니다.`);
       return;
     }
     if (picked.size > MAX_COURSE_FILE_BYTES) {
@@ -47,7 +54,7 @@ export function CoursePasteField({ value, onChange, file, onFileChange }: Props)
     setLoading(true);
     try {
       const data = await readAsBase64(picked);
-      onFileChange({ name: picked.name, mimeType: picked.type, data });
+      onFileChange({ name: picked.name, mimeType: mimeTypeForCourseFile(picked.name, picked.type), data });
     } catch {
       setError("파일을 읽지 못했습니다. 다시 시도해 주세요.");
     } finally {
@@ -59,7 +66,7 @@ export function CoursePasteField({ value, onChange, file, onFileChange }: Props)
     <Field
       htmlFor="courseText"
       label="업체 코스 원문"
-      hint="DAY 1, DAY 2처럼 일차가 구분된 코스를 그대로 붙여넣거나, 코스표 사진·PDF 파일을 올리세요. 붙여넣은 뒤 결과 화면에서 AI가 잘못 읽은 항목을 고칠 수 있습니다."
+      hint="DAY 1, DAY 2처럼 일차가 구분된 코스를 그대로 붙여넣거나, 업체가 보내온 코스표 파일(사진·PDF·한글·엑셀·텍스트)을 올리세요. 붙여넣은 뒤 결과 화면에서 AI가 잘못 읽은 항목을 고칠 수 있습니다."
     >
       <textarea
         id="courseText"
@@ -82,9 +89,9 @@ export function CoursePasteField({ value, onChange, file, onFileChange }: Props)
         <input
           ref={inputRef}
           type="file"
-          accept={COURSE_FILE_TYPES.join(",")}
+          accept={COURSE_FILE_ACCEPT}
           className="hidden"
-          aria-label="코스표 사진·PDF 선택"
+          aria-label="코스표 파일 선택"
           onChange={(e) => {
             const picked = e.target.files?.[0];
             e.target.value = "";
@@ -107,10 +114,11 @@ export function CoursePasteField({ value, onChange, file, onFileChange }: Props)
             className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
           >
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Paperclip className="h-3.5 w-3.5" aria-hidden />}
-            {loading ? "읽는 중..." : "코스표 사진·PDF 올리기"}
+            {loading ? "읽는 중..." : "코스표 파일 올리기"}
           </button>
         )}
       </div>
+      {!file && <p className="mt-1 text-[11px] text-slate-400">{COURSE_FILE_TYPES_LABEL} 올릴 수 있습니다 (최대 {Math.floor(MAX_COURSE_FILE_BYTES / 1024 / 1024)}MB).</p>}
       {error && <p className="mt-1 text-[11px] text-red-600">{error}</p>}
     </Field>
   );

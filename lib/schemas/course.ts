@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ITEM_TYPES } from "@/lib/itemTypes";
-import { COURSE_FILE_TYPES, MAX_COURSE_FILE_BYTES } from "@/lib/courseFile";
+import { isSupportedCourseFile, MAX_COURSE_FILE_BYTES } from "@/lib/courseFile";
 import type { CourseMeta, DayPlan, ItineraryItem } from "@/types";
 
 /** ---------- 클라이언트 → 서버 요청 ---------- */
@@ -8,10 +8,14 @@ import type { CourseMeta, DayPlan, ItineraryItem } from "@/types";
 export const courseRequestSchema = z
   .object({
     text: z.string().trim().max(12000, "코스 내용이 너무 깁니다. (최대 12,000자)").default(""),
-    /** 업체가 사진이나 PDF로 준 코스표. text 대신(또는 함께) 쓸 수 있다 */
+    /** 업체가 사진·PDF·한글·엑셀·텍스트로 준 코스표. text 대신(또는 함께) 쓸 수 있다 */
     file: z
       .object({
-        mimeType: z.enum(COURSE_FILE_TYPES),
+        name: z.string().trim().min(1).max(200).refine(isSupportedCourseFile, {
+          message: "지원하지 않는 파일 형식입니다.",
+        }),
+        /** 브라우저가 보내는 MIME. 형식 판별에는 name의 확장자를 쓰므로 참고용이다 */
+        mimeType: z.string().max(200),
         /** base64로 인코딩한 파일 내용 */
         data: z.string().min(1).max(Math.ceil((MAX_COURSE_FILE_BYTES * 4) / 3) + 1000, "파일이 너무 큽니다. (최대 6MB)"),
       })
@@ -19,7 +23,7 @@ export const courseRequestSchema = z
     currency: z.enum(["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD", "AUD"]),
   })
   .refine((v) => v.text.trim().length >= 20 || v.file, {
-    message: "코스 내용을 20자 이상 붙여넣거나, 사진·PDF 파일을 첨부해 주세요.",
+    message: "코스 내용을 20자 이상 붙여넣거나, 파일을 첨부해 주세요.",
     path: ["text"],
   });
 

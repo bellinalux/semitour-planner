@@ -47,7 +47,7 @@ async function requestItinerary(
   if (input.mode === "paste") {
     const result = await postJson<{ days: DayPlan[]; meta: CourseMeta; nights: number; totalDays: number }>(
       "/api/parse-course",
-      { text: input.courseText, currency: input.currency, ...(courseFile ? { file: { mimeType: courseFile.mimeType, data: courseFile.data } } : {}) },
+      { text: input.courseText, currency: input.currency, ...(courseFile ? { file: { name: courseFile.name, mimeType: courseFile.mimeType, data: courseFile.data } } : {}) },
       signal,
     );
     return {
