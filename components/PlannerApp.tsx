@@ -16,6 +16,7 @@ import { usePlannerInput } from "@/hooks/usePlannerInput";
 import { useSegmentLibrary } from "@/hooks/useSegmentLibrary";
 import { useUsp } from "@/hooks/useUsp";
 import { useWorkPersistence } from "@/hooks/useWorkPersistence";
+import { useStudioProductReceive } from "@/hooks/useStudioProductReceive";
 import { missingLegalFields } from "@/lib/company";
 import { calculateQuote } from "@/lib/cost";
 import { applyFeeResults, feeCheckTargets, type FeeApplySummary } from "@/lib/fees";
@@ -42,6 +43,8 @@ export function PlannerApp() {
   const itinerary = useItinerary();
   const usp = useUsp();
   const [tab, setTab] = useState<PlannerTab>("input");
+  // 상세페이지 스튜디오 [세미투어로 보내기]로 받은 상품 → 입력칸 채우기
+  const [studioNotice, clearStudioNotice] = useStudioProductReceive(input, update, () => setTab("input"));
   const feeRequest = useRequest<
     { destination: string; currency: string; exchangeRateToKrw: number; items: { id: string; name: string; city?: string }[] },
     VerifyFeesResponse
@@ -226,6 +229,16 @@ export function PlannerApp() {
             tab === "input" ? "block" : "hidden"
           }`}
         >
+          {studioNotice && (
+            <div role="status" className="m-3 mb-0 flex items-start gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900">
+              <span className="flex-1">
+                상세페이지 스튜디오에서 <b>{studioNotice.title}</b>(코스 {studioNotice.courses}곳)을 받아 입력칸을 채웠습니다. 확인한 뒤 [생성]을 누르세요.
+              </span>
+              <button type="button" onClick={clearStudioNotice} className="text-indigo-500 hover:text-indigo-800" aria-label="닫기">
+                ✕
+              </button>
+            </div>
+          )}
           <TripInputForm
             input={input}
             onChange={update}
