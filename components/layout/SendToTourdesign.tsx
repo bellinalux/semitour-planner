@@ -95,7 +95,7 @@ export function SendToTourdesign({ getProduct }: { getProduct: () => StudioProdu
       }
       if (d.type === "tourdesign:received") {
         stop();
-        setMsg(d.ok ? { text: "✅ 상세페이지 스튜디오로 보냈습니다. 그 창에서 확인하세요.", tone: "ok" } : { text: `상세페이지 스튜디오가 받지 못했습니다: ${d.message ?? ""}`, tone: "err" });
+        setMsg(d.ok ? { text: "✅ 보냈습니다. 상세페이지 스튜디오 탭으로 가서 [채우기]를 누르세요.", tone: "ok" } : { text: `상세페이지 스튜디오가 받지 못했습니다: ${d.message ?? ""}`, tone: "err" });
       }
     };
     const timer = window.setTimeout(() => {

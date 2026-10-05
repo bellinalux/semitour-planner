@@ -260,7 +260,7 @@ export function PlannerApp() {
               {provide.state.status === "sent" && <p>보내는 중… 상세페이지 스튜디오 창을 확인하세요.</p>}
               {provide.state.status === "done" && (
                 <p>
-                  {provide.state.ok ? "✅ 상세페이지 스튜디오로 보냈습니다. 이 창은 닫아도 됩니다." : `상세페이지 스튜디오가 받지 못했습니다: ${provide.state.message ?? ""}`}{" "}
+                  {provide.state.ok ? "✅ 보냈습니다. 상세페이지 스튜디오 탭으로 가서 [채우기]를 누르세요 (이 창은 닫아도 됩니다)." : `상세페이지 스튜디오가 받지 못했습니다: ${provide.state.message ?? ""}`}{" "}
                   <button type="button" onClick={provide.dismiss} className="ml-1 underline">닫기</button>
                 </p>
               )}
