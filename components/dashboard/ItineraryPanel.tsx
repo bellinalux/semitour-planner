@@ -28,6 +28,7 @@ import type {
   TripScope,
 } from "@/types";
 import { DayCard } from "./itinerary/DayCard";
+import { CourseEnginePanel } from "./CourseEnginePanel";
 import { FxContext } from "./itinerary/FxContext";
 import type { ItemPatch } from "./itinerary/TimelineItem";
 
@@ -68,6 +69,8 @@ export interface AccessibilityCheckView {
 }
 
 interface Props {
+  /** 코스 엔진 점검 (출발일·일정 통째 바꾸기) */
+  engine?: { departureDate?: string; onReplaceDays: (days: DayPlan[]) => void };
   state: AsyncState;
   /** 1 견적통화 = ? 원 (항목별 원화 환산 표기에 쓴다) */
   krwRate: number;
@@ -380,6 +383,7 @@ export function ItineraryPanel({
   travelType,
   destination,
   tripScope,
+  engine,
   researchInfo,
   pickupNote,
   sendingNote,
@@ -503,6 +507,7 @@ export function ItineraryPanel({
             입장료·식대·체류 시간은 AI 추정치입니다. &quot;입장료·체류시간 웹 확인&quot;으로 현지 통화 금액과 통상적인 체류 시간을 확인하고, 각 항목의 &quot;현지 지불(불포함)&quot; 버튼으로 고객이 현지에서 직접 내는 항목을 표시하세요. 금액·시간은 직접 수정할 수 있고, 수정하면 견적과 아래 소요 시간이 바로 다시 계산됩니다.
           </p>
           <DayLoadSummary days={days} pmChoice={pmChoice} />
+          {engine && <CourseEnginePanel days={days} pmChoice={pmChoice} destination={destination} departureDate={engine.departureDate} travelType={travelType} onReplaceDays={engine.onReplaceDays} />}
           <FeeCheckNotice view={feeCheck} />
           <OptionSuggestNotice view={optionSuggest} />
           <AccessibilityCheckNotice view={accessibilityCheck} />

@@ -4,8 +4,13 @@ const DEFAULT_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/model
 const DEFAULT_MODEL = "gemini-3.8-flash";
 
 /** 기본은 구글 주소. Cloudflare AI Gateway 같은 중계 주소를 쓰려면 GEMINI_BASE_URL(.../models까지)로 바꾼다. */
-function endpoint(): string {
+export function endpoint(): string {
   return (process.env.GEMINI_BASE_URL?.trim() || DEFAULT_ENDPOINT).replace(/\/+$/, "");
+}
+
+/** 지금 쓰는 모델 이름 (환경변수 GEMINI_MODEL > 기본값) */
+export function modelName(): string {
+  return process.env.GEMINI_MODEL || DEFAULT_MODEL;
 }
 
 export type GeminiErrorCode = "NO_KEY" | "UPSTREAM" | "TIMEOUT" | "BAD_OUTPUT";

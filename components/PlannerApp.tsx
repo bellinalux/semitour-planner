@@ -267,6 +267,7 @@ export function PlannerApp() {
             generatedCurrency={itinerary.generatedCurrency}
             researchInfo={itinerary.researchInfo}
             onSelectPm={itinerary.selectPmOption}
+            onReplaceDays={itinerary.replaceDays}
             itemActions={{
               onChangeItem: itinerary.updateItem,
               onChangeDay: itinerary.updateDay,
