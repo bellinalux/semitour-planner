@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TripInputForm } from "@/components/form/TripInputForm";
 import { Header } from "@/components/layout/Header";
@@ -8,6 +8,7 @@ import { CompanySettings } from "@/components/layout/CompanySettings";
 import { PrintDocuments } from "@/components/print/PrintDocuments";
 import { SavedPlansMenu } from "@/components/layout/SavedPlansMenu";
 import { SendToTourdesign } from "@/components/layout/SendToTourdesign";
+import { ErrorLogMenu } from "@/components/layout/ErrorLogMenu";
 import { MobileTabs, type PlannerTab } from "@/components/layout/MobileTabs";
 import { useItinerary } from "@/hooks/useItinerary";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
@@ -20,6 +21,7 @@ import { useWorkPersistence } from "@/hooks/useWorkPersistence";
 import { useStudioProductReceive } from "@/hooks/useStudioProductReceive";
 import { useStudioProductProvide } from "@/hooks/useStudioProductProvide";
 import { planToProduct } from "@/lib/planToProduct";
+import { listenErrors } from "@/lib/errorReport";
 import { missingLegalFields } from "@/lib/company";
 import { calculateQuote } from "@/lib/cost";
 import { applyFeeResults, feeCheckTargets, type FeeApplySummary } from "@/lib/fees";
@@ -70,6 +72,8 @@ export function PlannerApp() {
 
   const { days, pmChoice, meta } = itinerary;
   const isReady = itinerary.state.status === "success";
+  // 화면 오류를 오류 기록(/api/errors)으로 보낸다
+  useEffect(() => listenErrors(), []);
   // 상세페이지 스튜디오로 보낼 상품 데이터 (원가·판매가는 넣지 않는다)
   const getProduct = () => (days.length ? planToProduct({ input, days, pmChoice, meta }) : null);
   // 상세페이지 스튜디오의 [세미투어에서 가져오기]로 열린 경우 → 화면 위에서 보낼지 묻는다
@@ -227,6 +231,7 @@ export function PlannerApp() {
             <CompanySettings {...companyProfile} />
             <SavedPlansMenu snapshot={snapshot} onLoad={handleLoadPlan} onImportDay={itinerary.appendDayFromSegment} />
             <SendToTourdesign getProduct={getProduct} />
+            <ErrorLogMenu />
           </>
         }
       />

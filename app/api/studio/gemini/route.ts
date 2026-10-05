@@ -4,6 +4,7 @@
  *   헤더: X-Studio-Code(접근 코드, 필수), X-Studio-Cache: 1 이면 같은 요청을 하루 동안 저장해 다시 씀
  * GET  /api/studio/gemini — 연결 확인 { ok, codeRequired, codeOk }
  */
+import { isRunaway } from "@/lib/aiRepeat";
 import { resolveKey } from "@/lib/server/gemini";
 import { allowAiCall } from "@/lib/server/rateLimit";
 import {
@@ -11,6 +12,17 @@ import {
 } from "@/lib/server/studio";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
+
+/** Gemini 응답 본문이 되풀이에 빠졌는가 */
+function runawayResponse(body: string): boolean {
+  try {
+    const c = (JSON.parse(body) as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[] }).candidates?.[0];
+    if (!c) return false;
+    return isRunaway((c.content?.parts ?? []).map((p) => p.text ?? "").join(""), c.finishReason === "MAX_TOKENS");
+  } catch {
+    return false;
+  }
+}
 
 function json(body: unknown, status: number, headers: Record<string, string>) {
   return Response.json(body, { status, headers });
@@ -81,7 +93,7 @@ export async function POST(request: Request) {
     return new Response(upstream.body, { status: upstream.status, headers: { ...cors, "Content-Type": upstream.headers.get("content-type") ?? "text/event-stream" } });
   }
   const text = await upstream.text();
-  if (cache && upstream.ok) {
+  if (cache && upstream.ok && !runawayResponse(text)) {   // 같은 글을 되풀이한 응답은 저장하지 않는다(다시 요청하면 새로 받게)
     try { await cache.put(ck, text, { expirationTtl: CACHE_TTL_SECONDS }); } catch (e) { console.warn("[studio/gemini] 캐시 저장 실패", e); }
   }
   return new Response(text, { status: upstream.status, headers: { ...cors, "Content-Type": "application/json", "X-Studio-Cache": cache ? "MISS" : "OFF" } });

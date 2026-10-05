@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { ANTI_REPEAT_NOTE, beforeRepeat, isRunaway, repeatedRun } from "@/lib/aiRepeat";
+import { recordServerEvent } from "@/lib/server/errorLog";
 
 const DEFAULT_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_MODEL = "gemini-3.8-flash";
@@ -147,15 +149,13 @@ function genericUpstreamError(failure: { status: number; message: string }): Gem
   return new GeminiError("UPSTREAM", hint, failure.status === 429 ? 429 : 502);
 }
 
-function extractText(data: GeminiResponse): string {
+/** 응답 글 + 길이 제한에 잘렸는지. 잘림은 여기서 오류로 만들지 않고 부르는 쪽이 판단한다(되풀이면 다시 받기) */
+function readCandidate(data: GeminiResponse): { text: string; truncated: boolean } {
   if (data.promptFeedback?.blockReason) {
     throw new GeminiError("BAD_OUTPUT", "요청이 안전 정책에 의해 차단되었습니다. 입력 내용을 바꿔 보세요.", 422);
   }
   const candidate = data.candidates?.[0];
-  if (candidate?.finishReason === "MAX_TOKENS") {
-    throw new GeminiError("BAD_OUTPUT", "AI 응답이 너무 길어 잘렸습니다. 여행 기간을 줄여 보세요.", 502);
-  }
-  return (candidate?.content?.parts ?? []).map((p) => p.text ?? "").join("");
+  return { text: (candidate?.content?.parts ?? []).map((p) => p.text ?? "").join(""), truncated: candidate?.finishReason === "MAX_TOKENS" };
 }
 
 /** 모델이 실제로 웹 검색을 실행했는지 (검색 도구를 켜도 모델이 검색하지 않고 기억으로 답할 수 있다) */
@@ -196,11 +196,13 @@ export async function generateJson<T extends z.ZodType>({
 
   let useSchema = true;
   let lastProblem = "";
+  let temp = temperature;
+  let lastTruncated = false;
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const generationConfig: Record<string, unknown> = {
       responseMimeType: "application/json",
-      temperature,
+      temperature: temp,
       maxOutputTokens: 32768,
     };
     if (useSchema) generationConfig.responseJsonSchema = toResponseSchema(schema);
@@ -231,7 +233,16 @@ export async function generateJson<T extends z.ZodType>({
       throw genericUpstreamError(result);
     }
 
-    const text = extractText(result.data);
+    const { text, truncated } = readCandidate(result.data);
+    lastTruncated = truncated;
+    // 같은 글을 끝없이 되풀이하다 잘린 응답 → 온도를 낮추고 되풀이 금지 안내를 붙여 한 번 더
+    if (isRunaway(text, truncated)) {
+      lastProblem = ANTI_REPEAT_NOTE;
+      temp = Math.min(temp, 0.3);
+      console.error(`[gemini] 같은 글 되풀이 (시도 ${attempt + 1}, 되풀이 ${repeatedRun(text)}자, 잘림 ${truncated})`);
+      void recordServerEvent("ai", `AI 응답 되풀이 (시도 ${attempt + 1}${truncated ? ", 길이 제한에 잘림" : ""})`, text.slice(-300));
+      continue;
+    }
     try {
       const parsed = schema.safeParse(JSON.parse(text));
       if (parsed.success) return parsed.data;
@@ -245,7 +256,11 @@ export async function generateJson<T extends z.ZodType>({
     console.error(`[gemini] 응답 검증 실패 (시도 ${attempt + 1}, 스키마 ${useSchema ? "사용" : "미사용"}): ${lastProblem}\n${text.slice(0, 400)}`);
   }
 
-  throw new GeminiError("BAD_OUTPUT", "AI 응답을 해석하지 못했습니다. 다시 시도해 주세요.", 502);
+  throw new GeminiError(
+    "BAD_OUTPUT",
+    lastTruncated ? "AI 응답이 같은 내용을 되풀이하다 잘렸습니다. 다시 시도해 주세요(계속되면 기간이나 요청을 줄여 보세요)." : "AI 응답을 해석하지 못했습니다. 다시 시도해 주세요.",
+    502,
+  );
 }
 
 /**
@@ -282,7 +297,10 @@ export async function generateGroundedText({
 
     if (!result.ok) throw upstreamError(result) ?? genericUpstreamError(result);
 
-    const text = extractText(result.data);
+    const { text: raw, truncated } = readCandidate(result.data);
+    // 조사 글이 되풀이에 빠졌으면 되풀이 앞까지만 쓴다(조사 내용은 앞부분에 있다)
+    const text = isRunaway(raw, truncated) ? beforeRepeat(raw) : raw;
+    if (text !== raw) void recordServerEvent("ai", "AI 검색 조사 응답 되풀이 — 앞부분만 사용", raw.slice(-300));
     last = { text, sources: extractSources(result.data), searched: didSearch(result.data) };
     if (last.searched && text.trim() !== "") return last;
     console.error(`[gemini] 검색 조사 응답에 검색 근거가 없음 (시도 ${attempt + 1})`);
