@@ -6,24 +6,12 @@
  *   1) 화면이 준비되면(접근 코드 통과 뒤) 연 창에 {type:'semitour:ready', nonce} 를 알리고
  *   2) {type:'studio:product', nonce, product} 를 받아 입력칸을 채운 뒤
  *   3) {type:'semitour:received', nonce, ok} 로 답한다.
- * 허용한 사이트(기본 + 상단 [스튜디오] 메뉴에 저장한 상세페이지 스튜디오 주소)에서 온 메시지만 받는다.
+ * 이 창을 연 창에서 온, 주소의 1회용 번호가 맞는 메시지만 받는다(상세페이지 스튜디오가 PC 파일로 열려도 동작).
  */
 import { useEffect, useRef, useState } from "react";
 import { parseStudioProduct, productToInputPatch } from "@/lib/studioProduct";
 import type { TripInput } from "@/types";
 
-const DEFAULT_ORIGINS = ["https://bellinalux.github.io", "http://localhost:3010", "http://127.0.0.1:3010"];
-
-function allowedOrigins(): string[] {
-  const list = [...DEFAULT_ORIGINS];
-  try {
-    const saved = localStorage.getItem("studio_url_tourdesign");
-    if (saved) list.push(new URL(saved).origin);
-  } catch {
-    /* 저장된 주소가 없거나 잘못됨 */
-  }
-  return list;
-}
 
 export interface StudioReceiveNotice {
   title: string;
@@ -46,16 +34,15 @@ export function useStudioProductReceive(
     const params = new URLSearchParams(window.location.search);
     const nonce = params.get("td");
     if (params.get("from") !== "tourdesign" || !nonce) return;   // 허용한 사이트 + 이 1회용 번호가 맞는 메시지만 받는다
-    const origins = allowedOrigins();
-
+    // 상세페이지 스튜디오는 PC 파일·여러 주소에서 열리므로 보낸 사이트 대신 1회용 번호(주소에만 있는 비밀)로 확인한다
     const onMessage = (e: MessageEvent) => {
-      if (!origins.includes(e.origin)) return;
+      if (e.source !== window.opener && window.opener) return;   // 이 창을 연 그 창에서 온 것만
       const d = e.data as { type?: string; nonce?: string; product?: unknown } | null;
       if (!d || d.type !== "studio:product" || d.nonce !== nonce) return;
       const product = parseStudioProduct(d.product);
       const reply = (ok: boolean, message?: string) => {
         try {
-          (e.source as Window | null)?.postMessage({ type: "semitour:received", nonce, ok, message }, e.origin);
+          (e.source as Window | null)?.postMessage({ type: "semitour:received", nonce, ok, message }, e.origin && e.origin !== "null" ? e.origin : "*");
         } catch {
           /* 보낸 창이 닫힘 */
         }
@@ -71,14 +58,12 @@ export function useStudioProductReceive(
       window.removeEventListener("message", onMessage);
     };
     window.addEventListener("message", onMessage);
-    // 준비됐다고 알린다 (허용한 사이트에만 — 다른 사이트면 브라우저가 전달하지 않는다)
-    origins.forEach((o) => {
-      try {
-        window.opener?.postMessage({ type: "semitour:ready", nonce }, o);
-      } catch {
-        /* 무시 */
-      }
-    });
+    // 준비됐다고 알린다 (내용은 1회용 번호뿐이라 연 창이 어느 주소든 보낸다)
+    try {
+      window.opener?.postMessage({ type: "semitour:ready", nonce }, "*");
+    } catch {
+      /* 무시 */
+    }
     return () => window.removeEventListener("message", onMessage);
   }, []);
 

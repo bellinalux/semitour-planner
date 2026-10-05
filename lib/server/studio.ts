@@ -9,18 +9,21 @@
 import { accessRequired, codeMatches } from "./access";
 import { workerEnv } from "./cfEnv";
 
-const DEFAULT_ORIGINS = ["https://bellinalux.github.io", "http://localhost:3010", "http://127.0.0.1:3010"];
-
-/** 요청을 허용할 사이트 목록 — 환경변수 STUDIO_ORIGINS(쉼표 구분)가 있으면 그것, 없으면 기본값 */
+/** 환경변수 STUDIO_ORIGINS(쉼표 구분) — 넣으면 그 사이트들만 허용하는 엄격 모드 */
 export function studioOrigins(): string[] {
-  const list = (process.env.STUDIO_ORIGINS ?? "").split(",").map((s) => s.trim().replace(/\/+$/, "")).filter(Boolean);
-  return list.length ? list : DEFAULT_ORIGINS;
+  return (process.env.STUDIO_ORIGINS ?? "").split(",").map((s) => s.trim().replace(/\/+$/, "")).filter(Boolean);
 }
 
-/** 요청한 사이트가 허용 목록에 있으면 그 주소, 아니면 null */
+/**
+ * 요청한 사이트를 허용하면 그 주소(브라우저에 돌려줄 Access-Control-Allow-Origin), 아니면 null.
+ * 상세페이지 스튜디오는 PC 파일(file:// → "null")·여러 주소에서 열리므로, STUDIO_ORIGINS를 정하지 않았으면 어느 사이트든 허용한다.
+ * 진짜 열쇠는 접근 코드(X-Studio-Code)다 — 코드가 없거나 틀리면 어떤 사이트에서 와도 막힌다.
+ */
 export function allowedOrigin(request: Request): string | null {
   const origin = request.headers.get("origin");
-  return origin && studioOrigins().includes(origin) ? origin : null;
+  if (!origin) return null;
+  const strict = studioOrigins();
+  return !strict.length || strict.includes(origin) ? origin : null;
 }
 
 export function corsHeaders(origin: string): Record<string, string> {
