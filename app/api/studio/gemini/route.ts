@@ -27,11 +27,12 @@ export async function OPTIONS(request: Request) {
 
 export async function GET(request: Request) {
   const origin = allowedOrigin(request);
-  const headers = origin ? corsHeaders(origin) : {};
+  // 연결 확인은 허용 목록 밖의 사이트에도 '허용 여부'만 알려 준다(키·데이터는 없음) → 화면이 원인을 정확히 안내할 수 있게
+  const headers = origin ? corsHeaders(origin) : { "Access-Control-Allow-Origin": "*" };
   const access = await studioAccess(request);
   let keyOk = true;
   try { resolveKey(); } catch { keyOk = false; }
-  return json({ ok: access === "ok" && keyOk, codeRequired: access !== "off", codeOk: access === "ok", keyOk, originOk: !!origin }, 200, headers);
+  return json({ ok: access === "ok" && keyOk && !!origin, codeRequired: access !== "off", codeOk: access === "ok", keyOk, originOk: !!origin, origin: request.headers.get("origin") ?? "" }, 200, headers);
 }
 
 export async function POST(request: Request) {
