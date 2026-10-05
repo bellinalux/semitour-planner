@@ -42,7 +42,6 @@ export function useStudioProductProvide(getProduct: () => StudioProduct | null):
     };
     window.addEventListener("message", onMessage);
     // 주소에서 번호를 읽은 뒤 한 번만 띄우는 알림이라 여기서 상태를 바꾼다
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (first) setState({ status: "asked" });
     return () => window.removeEventListener("message", onMessage);
   }, []);
