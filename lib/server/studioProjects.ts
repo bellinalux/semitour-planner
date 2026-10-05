@@ -24,12 +24,14 @@ export const saveSchema = z.object({
   baseVersion: z.number().int().nonnegative().optional(),
   force: z.boolean().optional(),
   data: z.record(z.string(), z.unknown()),
+  /** 세 스튜디오 공통 상품 데이터(studio-product) — 승인되면 회사 코스 템플릿으로 세미투어에서도 쓴다 */
+  product: z.record(z.string(), z.unknown()).optional(),
 });
 export type SaveRequest = z.infer<typeof saveSchema>;
 
 export interface HistoryItem { at: string; by: string; status: ProjectStatus; note: string; version: number }
-export interface ProjectEntry { id: string; title: string; country: string; region: string; status: ProjectStatus; savedAt: string; savedBy: string; version: number; lastNote: string }
-interface StoredProject extends ProjectEntry { history: HistoryItem[]; data: Record<string, unknown> }
+export interface ProjectEntry { id: string; title: string; country: string; region: string; status: ProjectStatus; savedAt: string; savedBy: string; version: number; lastNote: string; summary?: string; hasProduct?: boolean }
+interface StoredProject extends ProjectEntry { history: HistoryItem[]; data: Record<string, unknown>; product?: Record<string, unknown> }
 export interface VersionEntry { version: number; savedAt: string; savedBy: string; status: ProjectStatus; note: string }
 
 type Kv = NonNullable<Awaited<ReturnType<typeof getKv>>>["kv"];
@@ -38,8 +40,16 @@ const versionPrefix = (ws: string, id: string) => `tdpv:${ws}:${id}:`;
 const versionKey = (ws: string, id: string, v: number) => versionPrefix(ws, id) + String(v).padStart(6, "0");
 const short = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
+/** 목록에 보일 코스 요약 ("로마 · 4곳: 바티칸 → 콜로세움 → …") */
+function summaryOf(product?: Record<string, unknown>): string {
+  const days = (product?.days as { courses?: { name?: string }[] }[] | undefined) ?? [];
+  const names = days.flatMap(d => (d.courses ?? []).map(c => String(c.name ?? ""))).filter(Boolean);
+  if (!names.length) return "";
+  const head = [product?.region, product?.duration].filter(Boolean).join(" · ");
+  return short(`${head ? head + " · " : ""}${names.length}곳: ${names.slice(0, 4).join(" → ")}${names.length > 4 ? " …" : ""}`, 140);
+}
 function entryOf(p: StoredProject): ProjectEntry {
-  return { id: p.id, title: short(p.title, 80), country: p.country, region: p.region, status: p.status, savedAt: p.savedAt, savedBy: p.savedBy, version: p.version, lastNote: short(p.lastNote, 120) };
+  return { id: p.id, title: short(p.title, 80), country: p.country, region: p.region, status: p.status, savedAt: p.savedAt, savedBy: p.savedBy, version: p.version, lastNote: short(p.lastNote, 120), summary: summaryOf(p.product), hasProduct: !!p.product };
 }
 
 export async function listProjects(kv: Kv, ws: string): Promise<ProjectEntry[]> {
@@ -83,6 +93,7 @@ export async function saveProject(kv: Kv, ws: string, req: SaveRequest): Promise
   const stored: StoredProject = {
     id, title: req.title, country: req.country, region: req.region, status: req.status, savedAt, savedBy: req.by, version,
     lastNote: req.note || prev?.lastNote || "", history: history.slice(-100), data: req.data,
+    product: req.product ?? prev?.product,
   };
   const entry = entryOf(stored);
   await kv.put(latestKey(ws, id), JSON.stringify(stored), { metadata: entry });
