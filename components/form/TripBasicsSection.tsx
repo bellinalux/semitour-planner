@@ -9,6 +9,7 @@ import { tourDayCount } from "@/lib/itinerary";
 import type { CourseFile } from "@/lib/courseFile";
 import type { ThemeId, TravelType } from "@/types";
 import { CoursePasteField } from "./CoursePasteField";
+import { QuickStartPresets } from "./QuickStartPresets";
 import { ModeSwitch } from "./ModeSwitch";
 import { TripScopeSwitch } from "./TripScopeSwitch";
 import type { SectionProps } from "./types";
@@ -95,6 +96,7 @@ export function TripBasicsSection({ input, onChange, courseFile, onCourseFileCha
 
         {!isPaste && (
           <>
+            <QuickStartPresets input={input} onChange={onChange} />
             <Field htmlFor="travelType" label="여행 유형" hint="유형에 맞는 특징을 웹에서 조사해 일정에 반영합니다">
               <div id="travelType" role="radiogroup" aria-label="여행 유형" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 {TRAVEL_TYPES.map((t) => (
