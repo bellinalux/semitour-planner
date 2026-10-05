@@ -7,6 +7,7 @@ import { Header } from "@/components/layout/Header";
 import { CompanySettings } from "@/components/layout/CompanySettings";
 import { PrintDocuments } from "@/components/print/PrintDocuments";
 import { SavedPlansMenu } from "@/components/layout/SavedPlansMenu";
+import { SendToTourdesign } from "@/components/layout/SendToTourdesign";
 import { MobileTabs, type PlannerTab } from "@/components/layout/MobileTabs";
 import { useItinerary } from "@/hooks/useItinerary";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
@@ -17,6 +18,8 @@ import { useSegmentLibrary } from "@/hooks/useSegmentLibrary";
 import { useUsp } from "@/hooks/useUsp";
 import { useWorkPersistence } from "@/hooks/useWorkPersistence";
 import { useStudioProductReceive } from "@/hooks/useStudioProductReceive";
+import { useStudioProductProvide } from "@/hooks/useStudioProductProvide";
+import { planToProduct } from "@/lib/planToProduct";
 import { missingLegalFields } from "@/lib/company";
 import { calculateQuote } from "@/lib/cost";
 import { applyFeeResults, feeCheckTargets, type FeeApplySummary } from "@/lib/fees";
@@ -67,6 +70,11 @@ export function PlannerApp() {
 
   const { days, pmChoice, meta } = itinerary;
   const isReady = itinerary.state.status === "success";
+  // 상세페이지 스튜디오로 보낼 상품 데이터 (원가·판매가는 넣지 않는다)
+  const getProduct = () => (days.length ? planToProduct({ input, days, pmChoice, meta }) : null);
+  // 상세페이지 스튜디오의 [세미투어에서 가져오기]로 열린 경우 → 화면 위에서 보낼지 묻는다
+  const provide = useStudioProductProvide(getProduct);
+  const [provideErr, setProvideErr] = useState("");
 
   // 견적은 입력/일정/오후 코스 선택이 바뀔 때마다 다시 계산되어 모든 패널이 공유한다.
   const quote = useMemo(
@@ -218,6 +226,7 @@ export function PlannerApp() {
           <>
             <CompanySettings {...companyProfile} />
             <SavedPlansMenu snapshot={snapshot} onLoad={handleLoadPlan} onImportDay={itinerary.appendDayFromSegment} />
+            <SendToTourdesign getProduct={getProduct} />
           </>
         }
       />
@@ -229,6 +238,34 @@ export function PlannerApp() {
             tab === "input" ? "block" : "hidden"
           }`}
         >
+          {provide.state.status !== "idle" && (
+            <div role="status" className="m-3 mb-0 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900">
+              {provide.state.status === "asked" && (
+                <>
+                  <p>
+                    상세페이지 스튜디오가 일정을 기다립니다. 보낼 일정을 확인한 뒤(다른 일정은 [저장한 일정]에서 불러오기) 보내기를 누르세요.
+                    {days.length ? <> 지금 일정: <b>{getProduct()?.title}</b></> : " 지금은 일정이 없습니다."}
+                  </p>
+                  {provideErr && <p className="mt-1 text-rose-600">{provideErr}</p>}
+                  <div className="mt-2 flex gap-1.5">
+                    <button type="button" onClick={() => setProvideErr(provide.send() ?? "")} className="rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-700">
+                      상세페이지 스튜디오로 보내기
+                    </button>
+                    <button type="button" onClick={provide.dismiss} className="rounded-md px-3 py-1.5 text-indigo-700 hover:bg-indigo-100">
+                      닫기
+                    </button>
+                  </div>
+                </>
+              )}
+              {provide.state.status === "sent" && <p>보내는 중… 상세페이지 스튜디오 창을 확인하세요.</p>}
+              {provide.state.status === "done" && (
+                <p>
+                  {provide.state.ok ? "✅ 상세페이지 스튜디오로 보냈습니다. 이 창은 닫아도 됩니다." : `상세페이지 스튜디오가 받지 못했습니다: ${provide.state.message ?? ""}`}{" "}
+                  <button type="button" onClick={provide.dismiss} className="ml-1 underline">닫기</button>
+                </p>
+              )}
+            </div>
+          )}
           {studioNotice && (
             <div role="status" className="m-3 mb-0 flex items-start gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900">
               <span className="flex-1">
