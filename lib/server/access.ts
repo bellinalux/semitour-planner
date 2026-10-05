@@ -29,6 +29,12 @@ export async function workspaceId(): Promise<string | null> {
   return (await sha256Hex(`semitour-workspace:${configuredCode()}`)).slice(0, 32);
 }
 
+/** 입력한 코드가 서버의 접근 코드와 같은지 (스튜디오 AI 중계용 — 쿠키 대신 헤더로 받는다) */
+export async function codeMatches(code: string): Promise<boolean> {
+  if (!accessRequired() || !code.trim()) return false;
+  return safeEqual(await sha256Hex(configuredCode()), await sha256Hex(code.trim()));
+}
+
 /** 쿠키에 저장하는 값. 코드 자체가 아니라 코드로 만든 해시라서 쿠키가 노출돼도 코드를 알 수 없다. */
 async function expectedToken(): Promise<string> {
   return sha256Hex(`semitour-access:${configuredCode()}`);

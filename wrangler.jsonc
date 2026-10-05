@@ -24,7 +24,9 @@
   ],
   // 서버 저장(일정 보관함)용 KV. id를 적지 않으면 배포할 때 Cloudflare가 자동으로 만들어 연결한다.
   "kv_namespaces": [
-    { "binding": "PLANS" }
+    { "binding": "PLANS" },
+    // 스튜디오 AI 중계(/api/studio/gemini)의 같은 요청 하루 저장용. id를 적지 않으면 배포할 때 자동으로 만들어 연결한다.
+    { "binding": "AI_CACHE" }
   ],
   "assets": {
     "directory": "dist/client",

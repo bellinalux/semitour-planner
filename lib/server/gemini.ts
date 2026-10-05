@@ -78,7 +78,7 @@ function toResponseSchema(schema: z.ZodType) {
 }
 
 /** 환경변수의 API 키. 대시보드에 붙여넣다가 딸려 오기 쉬운 따옴표, 공백, 줄바꿈, "GEMINI_API_KEY=" 글자를 걷어낸다. */
-function resolveKey(): string {
+export function resolveKey(): string {
   const apiKey = process.env.GEMINI_API_KEY?.trim()
     .replace(/^GEMINI_API_KEY\s*=\s*/, "")
     .replace(/^["']+|["']+$/g, "")
