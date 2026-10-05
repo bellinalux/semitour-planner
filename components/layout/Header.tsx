@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { APP_VERSION } from "@/lib/version";
+import { StudioSwitcher } from "./StudioSwitcher";
 
 export function Header({ actions }: { actions?: React.ReactNode }) {
   return (
@@ -20,6 +21,8 @@ export function Header({ actions }: { actions?: React.ReactNode }) {
           </h1>
           <p className="hidden text-[11px] text-slate-500 sm:block">기획 · 견적 자동화</p>
         </div>
+        {/* 우리가 만든 다른 스튜디오(상세페이지·쇼츠)로 바로 가기 */}
+        <StudioSwitcher />
       </div>
       <div className="flex items-center gap-2">
         {actions}
