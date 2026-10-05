@@ -16,7 +16,13 @@ export interface EngineDayRequest {
 }
 
 const KIND: Record<string, EngineDayRequest["places"][number]["kind"]> = { meal: "meal", free_time: "free", transfer: "transfer", hotel: "end", massage: "sight", shopping: "sight", experience: "sight", sightseeing: "sight" };
-const AUD: Partial<Record<TravelType, EngineDayRequest["audience"]>> = { senior: "senior", honeymoon: "couple", package: "group", accessible: "senior" };
+/** 유형이 없는 항목(예전에 만든 AI 세미투어)은 식대·음식 종류·이름으로 식사를 알아본다 (문서의 조중석 표기와 같은 기준) */
+const MEAL_NAME = /점심|저녁|식사|중식|석식|런치|디너|lunch|dinner/i;
+function kindOf(i: ItineraryItem): EngineDayRequest["places"][number]["kind"] {
+  if (i.type) return KIND[i.type] ?? "sight";
+  return i.cuisine || i.mealCost > 0 || MEAL_NAME.test(i.name) ? "meal" : "sight";
+}
+const AUD:Partial<Record<TravelType, EngineDayRequest["audience"]>> = { senior: "senior", honeymoon: "couple", package: "group", accessible: "senior" };
 
 /** 엔진에 보낼 그날의 항목 (항공은 뺀다) */
 export function engineItems(day: DayPlan, pmChoice: PmChoice): ItineraryItem[] {
@@ -36,7 +42,7 @@ export function buildDayRequest(day: DayPlan, pmChoice: PmChoice, o: { destinati
   const city = day.overnightCity || parts[0] || o.destination;
   return {
     places: items.map(i => {
-      const kind = KIND[i.type ?? "sightseeing"] ?? "sight";
+      const kind = kindOf(i);
       return { id: i.id, name: i.name, stayMin: Math.max(0, Math.min(720, i.stayMinutes || 0)), kind, priority: kind === "sight" ? 2 : 1, ...(kind === "end" ? { fixedOrder: "last" as const } : {}) };
     }),
     city, country,

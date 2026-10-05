@@ -80,6 +80,8 @@ type RawItem = z.infer<typeof itemSchema>;
 function toItem(raw: RawItem, id: string, isLast: boolean): ItineraryItem {
   return {
     id,
+    // 음식 종류를 적은 항목은 식당 — 유형을 식사로 둔다(코스 엔진의 점심 판단·식대 입력칸·문서의 조중석 표기)
+    ...(raw.cuisine.trim() ? { type: "meal" as const } : {}),
     name: raw.name.trim(),
     description: raw.description.trim(),
     stayMinutes: roundMinutes(raw.stayMinutes),

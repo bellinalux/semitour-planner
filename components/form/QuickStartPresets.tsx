@@ -18,6 +18,7 @@ const PRESETS: Preset[] = [
   { id: "family", label: "가족·아이", hint: "체험·공원·짧은 이동", travelType: "package", themes: ["activity", "nature"], notes: "아이 동반 가족 — 체험형 장소, 화장실·휴식 공간 확인, 이동은 짧게, 점심은 11:30 이른 시간." },
   { id: "romance", label: "커플·허니문", hint: "로맨틱 스팟·야경", travelType: "honeymoon", themes: ["photo", "food"], notes: "커플 — 로맨틱한 명소, 일몰·야경 포인트, 분위기 좋은 레스토랑 1곳." },
 ];
+const PRESET_NOTES = new Set(PRESETS.map(p => p.notes));
 
 export function QuickStartPresets({ input, onChange }: { input: TripInput; onChange: (patch: Partial<TripInput>) => void }) {
   const [picked, setPicked] = useState<string>("");
@@ -25,7 +26,9 @@ export function QuickStartPresets({ input, onChange }: { input: TripInput; onCha
 
   const pick = (p: Preset) => {
     setPicked(p.id);
-    onChange({ travelType: p.travelType, themes: p.themes, notes: p.notes + (input.notes && !input.notes.startsWith("처음") ? `\n${input.notes}` : "") });
+    // 앞서 고른 카드의 문구는 빼고(카드를 바꿔 누르면 요청이 쌓이지 않게), 사용자가 직접 쓴 줄만 남긴다
+    const own = (input.notes ?? "").split("\n").filter(l => l.trim() && !PRESET_NOTES.has(l.trim()));
+    onChange({ travelType: p.travelType, themes: p.themes, notes: [p.notes, ...own].join("\n") });
   };
 
   const loadPatterns = async () => {
