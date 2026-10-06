@@ -5,6 +5,23 @@ import type { DayPlan, FlightOption, ItineraryItem, TripInput } from "@/types";
 
 const stopsText = (stops: number) => (stops === 0 ? "직항" : `경유 ${stops}회`);
 
+/** "23:45 (또는 익일 00:25)"처럼 설명이 붙어 오는 항공 시각에서 첫 HH:mm만 뽑는다. 없으면 빈 문자열 */
+function firstClock(text: string): string {
+  const m = /(\d{1,2}):(\d{2})/.exec(text);
+  return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
+}
+
+/** 도착 시각 표기에 "다음날·익일·+1"이 붙어 있으면 자정을 넘긴 도착이다 */
+const NEXT_DAY_HINT = /다음\s*날|익일|\+\s*1/;
+
+/** 출발→도착이 자정을 넘기는지 (도착 시각이 더 이르거나, 도착 표기에 다음날 표시가 있으면) */
+function crossesMidnight(departTime: string, arriveTime: string): boolean {
+  if (NEXT_DAY_HINT.test(arriveTime)) return true;
+  const f = clockMinutes(firstClock(departTime));
+  const t = clockMinutes(firstClock(arriveTime));
+  return f !== null && t !== null && t < f;
+}
+
 interface FlightLeg {
   airline: string;
   flightNumber: string;
@@ -101,9 +118,9 @@ export function applyFlightToDays(days: DayPlan[], flight: FlightOption): DayPla
     airline: flight.airline,
     flightNumber: flight.flightNumber,
     departAirport: flight.departAirport,
-    departTime: flight.departTime,
+    departTime: firstClock(flight.departTime),
     arriveAirport: flight.arriveAirport,
-    arriveTime: flight.arriveTime,
+    arriveTime: firstClock(flight.arriveTime),
     stops: flight.stops,
     duration: flight.duration,
   };
@@ -111,9 +128,9 @@ export function applyFlightToDays(days: DayPlan[], flight: FlightOption): DayPla
     airline: flight.airline,
     flightNumber: flight.returnFlightNumber,
     departAirport: flight.returnDepartAirport,
-    departTime: flight.returnDepartTime,
+    departTime: firstClock(flight.returnDepartTime),
     arriveAirport: flight.returnArriveAirport,
-    arriveTime: flight.returnArriveTime,
+    arriveTime: firstClock(flight.returnArriveTime),
     stops: flight.returnStops,
     duration: flight.returnDuration,
   };
@@ -152,6 +169,45 @@ export function applyFlightToDays(days: DayPlan[], flight: FlightOption): DayPla
   return next;
 }
 
+/** 이 시각 전에 도착·출발하는 항공편은 "새벽편"으로 보고 숙박을 하루 앞당기거나 뺀다 */
+const DAWN_LIMIT_MINUTES = 6 * 60;
+
+export interface TripSpan {
+  departureDate: string;
+  /** 출국일부터 한국 도착일까지 */
+  days: number;
+  /** 현지 숙박 수 */
+  nights: number;
+}
+
+/**
+ * 고른 왕복 항공편의 출국·귀국 날짜와 시각으로 실제 여행 일수와 숙박 수를 계산한다(일수 − 1로 단정하지 않는다).
+ *  - 일수: 출국일 ~ 한국 도착일(귀국편이 자정을 넘기면 다음날)
+ *  - 숙박: 현지 도착일 밤부터 귀국편 출발일 전날 밤까지. 가는 편이 새벽(06시 전)에 도착하면 전날 밤부터
+ *    숙소를 잡고, 귀국편이 새벽(06시 전)에 출발하면 전날 밤은 숙소 없이 공항으로 이동하는 것으로 본다.
+ * 날짜를 모르면 null.
+ */
+export function tripSpanFromFlight(flight: FlightOption): TripSpan | null {
+  const depart = parseDate(flight.departDate.trim());
+  const returnDepart = parseDate(flight.returnDepartDate.trim());
+  if (!depart || !returnDepart) return null;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const diff = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / dayMs);
+  const outboundNextDay = crossesMidnight(flight.departTime, flight.arriveTime);
+  const arrival = addDays(depart, outboundNextDay ? 1 : 0);
+  const arriveMinutes = clockMinutes(firstClock(flight.arriveTime));
+  const firstNight = outboundNextDay && arriveMinutes !== null && arriveMinutes < DAWN_LIMIT_MINUTES ? depart : arrival;
+
+  const homeArrival = addDays(returnDepart, crossesMidnight(flight.returnDepartTime, flight.returnArriveTime) ? 1 : 0);
+  const returnMinutes = clockMinutes(firstClock(flight.returnDepartTime));
+  const dawnReturn = returnMinutes !== null && returnMinutes < DAWN_LIMIT_MINUTES;
+
+  const days = diff(depart, homeArrival) + 1;
+  const nights = Math.max(0, diff(firstNight, returnDepart) - (dawnReturn ? 1 : 0));
+  if (days < 1) return null;
+  return { departureDate: flight.departDate.trim(), days, nights };
+}
+
 export interface ReturnDateCheck {
   /** 현재 입력된 여행 일수 기준 귀국일 (출발일+일수를 알 때만) */
   expectedReturnDate: string | null;
@@ -169,10 +225,7 @@ function toIsoDate(date: Date): string {
 
 /** 귀국편 출발 시각보다 도착 시각(표기 그대로)이 더 이르면, 자정을 넘겨 다음날 도착하는 심야편으로 본다. */
 function isOvernightReturn(flight: FlightOption): boolean {
-  const dep = clockMinutes(flight.returnDepartTime);
-  const arr = clockMinutes(flight.returnArriveTime);
-  if (dep === null || arr === null) return false;
-  return arr < dep;
+  return crossesMidnight(flight.returnDepartTime, flight.returnArriveTime);
 }
 
 /**

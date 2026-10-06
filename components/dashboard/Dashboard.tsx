@@ -100,6 +100,8 @@ interface Props {
   onInputChange: (patch: Partial<TripInput>) => void;
   /** 견적 경고에서 설정 패널의 해당 항목으로 이동한다 */
   onOpenSettings: (section: SettingsSection) => void;
+  /** 견적 경고에서 바로 실행하는 자동 견적 */
+  autoQuote: { running: boolean; run: () => void };
 }
 
 export function Dashboard({
@@ -126,6 +128,7 @@ export function Dashboard({
   documents,
   onInputChange,
   onOpenSettings,
+  autoQuote,
 }: Props) {
   const { onAddTour, ...panelActions } = itemActions;
 
@@ -189,6 +192,7 @@ export function Dashboard({
         generatedCurrency={generatedCurrency}
         onInputChange={onInputChange}
         onOpenSettings={onOpenSettings}
+        autoQuote={autoQuote}
       />
       <UspPanel {...usp} />
       <ExportBar {...exporter} />

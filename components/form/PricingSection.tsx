@@ -1,4 +1,5 @@
 import { Percent } from "lucide-react";
+import { Disclosure } from "@/components/ui/Disclosure";
 import { NumberField } from "@/components/ui/NumberField";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { currencySymbol } from "@/lib/currency";
@@ -104,8 +105,11 @@ export function PricingSection({ input, onChange, openSignal }: SectionProps) {
           />
         )}
 
-        <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
-          <p className="text-xs font-semibold text-slate-700">아동·유아 요금</p>
+        <Disclosure
+          label="아동·유아 요금"
+          summary={input.childCount + input.infantCount > 0 ? `아동 ${input.childCount}명 · 유아 ${input.infantCount}명` : "아동·유아가 있을 때만 펼쳐서 입력"}
+          defaultOpen={input.childCount + input.infantCount > 0}
+        >
           <p className="text-[11px] leading-4 text-slate-500">
             성인 요금 대비 비율입니다. 상품·항공사·숙소 정책에 따라 다르니 판매 조건에 맞게 고치세요. 인원을 넣으면 견적서에서 구성별 총액과 이익을 계산합니다.
           </p>
@@ -149,7 +153,7 @@ export function PricingSection({ input, onChange, openSignal }: SectionProps) {
               onChange={(infantCount) => onChange({ infantCount })}
             />
           </div>
-        </div>
+        </Disclosure>
       </div>
     </SectionCard>
   );

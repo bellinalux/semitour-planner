@@ -25,6 +25,8 @@ import { planToProduct } from "@/lib/planToProduct";
 import { listenErrors } from "@/lib/errorReport";
 import { missingLegalFields } from "@/lib/company";
 import { calculateQuote } from "@/lib/cost";
+import { rememberCosts } from "@/lib/costMemory";
+import { useAutoQuote } from "@/hooks/useAutoQuote";
 import { documentQuote } from "@/lib/pricing";
 import { applyFeeResults, feeCheckTargets, type FeeApplySummary } from "@/lib/fees";
 import { applyOptionSuggestions, optionSuggestTargets, suggestionToOption, type OptionSuggestApplySummary } from "@/lib/optionSuggestions";
@@ -33,7 +35,7 @@ import type { VerifyFeesResponse } from "@/lib/schemas/market";
 import type { SuggestOptionsResponse } from "@/lib/schemas/optionSuggest";
 import type { VerifyAccessibilityResponse } from "@/lib/schemas/accessibility";
 import { newSegmentId, type SegmentKind } from "@/lib/segmentLibrary";
-import { applyFlightToDays } from "@/lib/flightApply";
+import { applyFlightToDays, tripSpanFromFlight } from "@/lib/flightApply";
 import { overnightNights } from "@/lib/itinerary";
 import { buildEmojiCustomerText } from "@/lib/exportEmoji";
 import { buildCustomerText, buildInternalText } from "@/lib/exportText";
@@ -219,11 +221,28 @@ export function PlannerApp() {
     if (uspRequest) void usp.generate(uspRequest);
   };
 
-  /** 항공편 상세 검색에서 고른 항공편을 저장하고, 항공 이동일 항목(있으면)에 편명·시간을 반영한다 */
+  /**
+   * 고른 항공편을 저장하고, 항공 이동일 항목(있으면)에 편명·시간을 반영한다.
+   * 아직 코스를 만들기 전이면 출국·귀국 시각으로 출발일·일수·숙박 수도 맞춘다(일수 − 1로 단정하지 않음).
+   * 코스를 만든 뒤에는 일정을 바꾸지 않고, 귀국일이 다르면 항공편 패널이 일수 조정을 안내한다.
+   */
   const handleApplyFlight = (flight: FlightOption) => {
-    update({ selectedFlight: flight, flightPricePerPerson: flight.price, costStatus: { ...input.costStatus, flight: "estimated" } });
+    const span = days.length === 0 ? tripSpanFromFlight(flight) : null;
+    update({
+      selectedFlight: flight,
+      flightPricePerPerson: flight.price > 0 ? flight.price : input.flightPricePerPerson,
+      costStatus: { ...input.costStatus, flight: "estimated" },
+      ...(span ? { departureDate: span.departureDate, days: span.days, nights: span.nights, includesFlights: true } : {}),
+    });
     itinerary.replaceDays(applyFlightToDays(days, flight));
   };
+
+  // 견적에 넣은 원가를 여행지별로 기억해, 다음에 같은 여행지 견적을 만들 때 자동 견적이 불러온다
+  useEffect(() => {
+    if (quote?.ok) rememberCosts(input);
+  }, [quote, input]);
+
+  const autoQuote = useAutoQuote({ input, update, verifyFees: handleVerifyFees, hasItinerary: days.length > 0 });
 
   const exportData = () => {
     if (!quote?.ok) throw new Error("견적이 아직 준비되지 않았습니다.");
@@ -309,6 +328,7 @@ export function PlannerApp() {
             isGenerating={itinerary.state.status === "loading"}
             courseFile={courseFile}
             onCourseFileChange={setCourseFile}
+            onApplyFlight={handleApplyFlight}
           />
         </aside>
         <aside
@@ -324,6 +344,7 @@ export function PlannerApp() {
             onApplyFlight={handleApplyFlight}
             focus={settingsFocus}
             onFocus={openSettings}
+            auto={autoQuote}
           />
         </aside>
         </div>
@@ -346,6 +367,7 @@ export function PlannerApp() {
             onReplaceDays={itinerary.replaceDays}
             onInputChange={update}
             onOpenSettings={openSettings}
+            autoQuote={{ running: autoQuote.running, run: () => void autoQuote.run() }}
             itemActions={{
               onChangeItem: itinerary.updateItem,
               onChangeDay: itinerary.updateDay,

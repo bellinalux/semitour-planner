@@ -507,7 +507,7 @@ export function ItineraryPanel({
             입장료·식대·체류 시간은 AI 추정치입니다. &quot;입장료·체류시간 웹 확인&quot;으로 현지 통화 금액과 통상적인 체류 시간을 확인하고, 각 항목의 &quot;현지 지불(불포함)&quot; 버튼으로 고객이 현지에서 직접 내는 항목을 표시하세요. 금액·시간은 직접 수정할 수 있고, 수정하면 견적과 아래 소요 시간이 바로 다시 계산됩니다.
           </p>
           <DayLoadSummary days={days} pmChoice={pmChoice} />
-          {engine && <CourseEnginePanel days={days} pmChoice={pmChoice} destination={destination} departureDate={engine.departureDate} travelType={travelType} onReplaceDays={engine.onReplaceDays} />}
+          {engine && <CourseEnginePanel days={days} pmChoice={pmChoice} destination={destination} departureDate={engine.departureDate} travelType={travelType} currency={currency} tripScope={tripScope} onReplaceDays={engine.onReplaceDays} />}
           <FeeCheckNotice view={feeCheck} />
           <OptionSuggestNotice view={optionSuggest} />
           <AccessibilityCheckNotice view={accessibilityCheck} />

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { DEFAULT_INPUT } from "@/lib/defaults";
 import { normalizeInput } from "@/lib/inputStorage";
+import { loadPricingDefaults } from "@/lib/pricingDefaults";
 import type { TripInput } from "@/types";
 
 const STORAGE_KEY = "semitour-planner:input:v1";
@@ -45,6 +46,12 @@ function parse(raw: string | null): TripInput {
   }
 }
 
+/** 저장해 둔 회사 기본값을 얹은 새 입력 (없으면 null) */
+function freshInputRaw(): string | null {
+  const defaults = loadPricingDefaults();
+  return defaults ? JSON.stringify(normalizeInput({ ...DEFAULT_INPUT, ...defaults })) : null;
+}
+
 /**
  * 입력 폼 상태. localStorage에 자동 저장되며, 서버 렌더에서는 기본값을 사용해
  * 하이드레이션 불일치 없이 저장된 값으로 교체된다.
@@ -57,7 +64,16 @@ export function usePlannerInput() {
     writeRaw(JSON.stringify({ ...parse(readRaw()), ...patch }));
   }, []);
 
-  const reset = useCallback(() => writeRaw(null), []);
+  // 처음 쓰는 브라우저(저장된 입력 없음)에도 회사 기본값을 넣는다. 하이드레이션 뒤에 적용해 서버 렌더와 어긋나지 않게 한다.
+  useEffect(() => {
+    if (readRaw() === null) {
+      const fresh = freshInputRaw();
+      if (fresh) writeRaw(fresh);
+    }
+  }, []);
+
+  /** 초기화하면 회사 기본값을 얹은 새 입력으로 시작한다 */
+  const reset = useCallback(() => writeRaw(freshInputRaw()), []);
 
   /** 저장된 일정을 불러올 때처럼 입력 전체를 교체한다 */
   const replace = useCallback((next: TripInput) => writeRaw(JSON.stringify(next)), []);

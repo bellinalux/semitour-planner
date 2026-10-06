@@ -37,6 +37,7 @@ interface Props {
   onInputChange: (patch: Partial<TripInput>) => void;
   /** 경고에서 설정 패널의 해당 항목으로 이동한다 */
   onOpenSettings: (section: SettingsSection) => void;
+  autoQuote: { running: boolean; run: () => void };
 }
 
 /** 경고 문구가 가리키는 설정 항목. 없으면 바로 가기를 만들지 않는다 */
@@ -72,7 +73,7 @@ const PACKAGE_LABELS: Record<PackageType, string> = {
   full: "풀패키지 (항공 포함)",
 };
 
-function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
+function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
 
   const policy = ourPolicy(days, pmChoice, input, meta);
@@ -100,6 +101,19 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
 
   return (
     <div className="space-y-6">
+      {warnings.some((w) => settingsTargetFor(w) !== null) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] text-indigo-900">
+          <span className="flex-1">비어 있는 원가가 있습니다. 지난 견적 값이나 웹 검색 추정으로 한 번에 채울 수 있습니다.</span>
+          <button
+            type="button"
+            onClick={autoQuote.run}
+            disabled={autoQuote.running}
+            className="shrink-0 rounded-md bg-indigo-600 px-2.5 py-1 font-semibold text-white hover:bg-indigo-700 disabled:bg-indigo-300"
+          >
+            {autoQuote.running ? "자동 견적 중..." : "자동 견적"}
+          </button>
+        </div>
+      )}
       {warnings.length > 0 && (
         <ul className="space-y-1.5">
           {warnings.map((warning) => {
@@ -234,7 +248,7 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
   );
 }
 
-export function QuotePanel({ state, quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings }: Props) {
+export function QuotePanel({ state, quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote }: Props) {
   return (
     <SectionCard
       title="견적서"
@@ -252,6 +266,7 @@ export function QuotePanel({ state, quote, input, days, pmChoice, meta, generate
           generatedCurrency={generatedCurrency}
           onInputChange={onInputChange}
           onOpenSettings={onOpenSettings}
+          autoQuote={autoQuote}
         />
       )}
       {(state.status === "idle" || state.status === "error") && (

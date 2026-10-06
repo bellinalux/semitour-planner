@@ -101,3 +101,72 @@ export function applyDayResult(days: DayPlan[], dayNo: number, res: PlanResponse
     };
   });
 }
+
+/** 추천 변경안의 한 단계 (서버 lib/server/engineAlternatives의 AlternativeStep과 같은 형태) */
+export interface AlternativeStepLike {
+  id: string;
+  kept: boolean;
+  name: string;
+  type: "sightseeing" | "experience" | "meal" | "free_time" | "shopping" | "massage";
+  stayMinutes: number;
+  entryFee: number;
+  mealCost: number;
+  cuisine: string;
+  description: string;
+}
+
+/**
+ * 고른 추천 변경안으로 그날 일정을 바꾼다.
+ *  - 지금 있던 항목은 그대로(금액·메모 유지) 순서만 바꾸고, 새 장소는 새 항목(AI 추정 표시)으로 넣는다.
+ *  - 항공 항목은 엔진 대상이 아니라 원래 앞·뒤 자리에 그대로 둔다.
+ *  - 세미투어 날은 점심까지를 오전 가이드 일정, 그 뒤를 선택한 오후 코스로 나눈다.
+ *  - 마지막으로 엔진 결과의 이동 시간·장소 정보(영업시간 주의)를 채운다.
+ */
+export function applyAlternative(
+  days: DayPlan[],
+  dayNo: number,
+  alt: { steps: AlternativeStepLike[]; result: PlanResponse },
+  pmChoice: PmChoice,
+): DayPlan[] {
+  const day = days.find((d) => d.day === dayNo);
+  if (!day) return days;
+  const existing = new Map(engineItems(day, pmChoice).map((i) => [i.id, i]));
+  const list: ItineraryItem[] = alt.steps.map((s) => {
+    const kept = s.kept ? existing.get(s.id) : undefined;
+    if (kept) return s.stayMinutes > 0 && s.stayMinutes !== kept.stayMinutes ? { ...kept, stayMinutes: s.stayMinutes } : kept;
+    return {
+      id: s.id,
+      type: s.type,
+      admission: s.type === "meal" || s.type === "free_time" ? "none" : "unknown",
+      name: s.name,
+      description: s.description,
+      stayMinutes: s.stayMinutes,
+      travelMinutesToNext: null,
+      entryFee: s.entryFee,
+      mealCost: s.mealCost,
+      isEstimated: true,
+      ...(s.cuisine ? { cuisine: s.cuisine } : {}),
+    };
+  });
+
+  let next: DayPlan;
+  if (day.kind === "linear") {
+    const isFlight = (i: ItineraryItem) => i.type === "flight";
+    const firstNon = day.items.findIndex((i) => !isFlight(i));
+    const lastNon = day.items.length - 1 - [...day.items].reverse().findIndex((i) => !isFlight(i));
+    const leading = firstNon < 0 ? day.items : day.items.slice(0, firstNon).filter(isFlight);
+    const trailing = firstNon < 0 ? [] : day.items.slice(lastNon + 1).filter(isFlight);
+    next = { ...day, items: [...leading, ...list, ...trailing] };
+  } else {
+    const mealAt = list.findIndex((i) => i.type === "meal");
+    const cut = mealAt >= 0 ? mealAt + 1 : Math.min(list.length, day.amGuided.length);
+    const pmId = pmChoice[day.day] ?? day.pmFreeOptions[0]?.id;
+    next = {
+      ...day,
+      amGuided: list.slice(0, cut),
+      pmFreeOptions: day.pmFreeOptions.map((o) => (o.id === pmId ? { ...o, items: list.slice(cut) } : o)),
+    };
+  }
+  const replaced = days.map((d) => (d.day === dayNo ? next : d));
+  return applyDayResult(replaced, dayNo, alt.result, { useBest: false });
+}

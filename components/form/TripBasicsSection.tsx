@@ -6,6 +6,7 @@ import { NumberField } from "@/components/ui/NumberField";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { TextField } from "@/components/ui/TextField";
 import { THEMES, TRAVEL_TYPES } from "@/lib/defaults";
+import { isKoreanDestination } from "@/lib/korea";
 import { tourDayCount } from "@/lib/itinerary";
 import type { CourseFile } from "@/lib/courseFile";
 import type { ThemeId, TravelType } from "@/types";
@@ -28,6 +29,15 @@ export function TripBasicsSection({ input, onChange, courseFile, onCourseFileCha
   const detailSummary = [travelTypeLabel, input.themes.length > 0 ? `테마 ${input.themes.length}개` : "", input.regionPlan.trim() ? "지역 순서 지정" : "", input.notes.trim() ? "요청사항 있음" : ""]
     .filter(Boolean)
     .join(" · ");
+
+  // 여행지가 한국 지명이면 국내여행(항공 이동일 없음)으로, 한국 지명을 지우면 다시 해외여행으로 자동 전환한다
+  const changeDestination = (destination: string) => {
+    const nowKorean = isKoreanDestination(destination);
+    const wasKorean = isKoreanDestination(input.destination);
+    if (nowKorean && input.tripScope !== "domestic") onChange({ destination, tripScope: "domestic", includesFlights: false });
+    else if (!nowKorean && wasKorean && input.tripScope === "domestic") onChange({ destination, tripScope: "overseas" });
+    else onChange({ destination });
+  };
 
   const toggleTheme = (id: ThemeId) =>
     onChange({
@@ -63,7 +73,7 @@ export function TripBasicsSection({ input, onChange, courseFile, onCourseFileCha
           label={isPaste ? "여행지 (코스에서 자동 인식)" : "여행지"}
           value={input.destination}
           placeholder="예) 교토, 일본 / 리스본, 포르투갈"
-          onChange={(destination) => onChange({ destination })}
+          onChange={changeDestination}
         />
 
         <div className="grid grid-cols-3 gap-3">
@@ -123,17 +133,6 @@ export function TripBasicsSection({ input, onChange, courseFile, onCourseFileCha
                   </span>
                 </span>
               </label>
-              {input.includesFlights && input.packageType !== "full" && (
-                <div className="mt-3">
-                  <TextField
-                    id="originCity"
-                    label="출발지"
-                    value={input.originCity}
-                    placeholder="예) 인천"
-                    onChange={(originCity) => onChange({ originCity })}
-                  />
-                </div>
-              )}
             </div>
 
             <Disclosure label="상세 조건 (선택)" summary={detailSummary}>

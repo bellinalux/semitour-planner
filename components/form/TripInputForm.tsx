@@ -1,6 +1,7 @@
 import { RotateCcw, Sparkles } from "lucide-react";
 import type { CourseFile } from "@/lib/courseFile";
-import type { TripInput } from "@/types";
+import type { FlightOption, TripInput } from "@/types";
+import { OneLineRequest } from "./OneLineRequest";
 import { QuickSettingsSection } from "./QuickSettingsSection";
 import { TripBasicsSection } from "./TripBasicsSection";
 
@@ -12,10 +13,12 @@ interface Props {
   isGenerating: boolean;
   courseFile: CourseFile | null;
   onCourseFileChange: (file: CourseFile | null) => void;
+  /** 항공편을 고르면 일정·항공료·일수·숙박 수를 맞춘다 */
+  onApplyFlight: (flight: FlightOption) => void;
 }
 
 /** 레이아웃1: 코스를 만들 때 꼭 필요한 입력만 둔다. 원가·가격·채널·경쟁사·문서 설정은 코스를 만든 뒤 레이아웃3(설정)에서 한다. */
-export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerating, courseFile, onCourseFileChange }: Props) {
+export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerating, courseFile, onCourseFileChange, onApplyFlight }: Props) {
   const isPaste = input.mode === "paste";
   const canGenerate = isPaste
     ? input.courseText.trim().length >= 20 || courseFile !== null
@@ -32,8 +35,9 @@ export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerati
       }}
     >
       <div className="flex-1 space-y-4 p-4">
+        {!isPaste && <OneLineRequest input={input} onChange={onChange} />}
         <TripBasicsSection input={input} onChange={onChange} courseFile={courseFile} onCourseFileChange={onCourseFileChange} />
-        <QuickSettingsSection input={input} onChange={onChange} />
+        <QuickSettingsSection input={input} onChange={onChange} onApplyFlight={onApplyFlight} />
         <p className="rounded-lg bg-white px-3 py-2.5 text-[11px] leading-4 text-slate-500 ring-1 ring-slate-200">
           차량·가이드비, 숙박·항공 요금, 마진, 판매 채널, 경쟁사, 고객 문서 정보는 코스를 만든 뒤 <span className="font-medium text-slate-700">설정</span>에서 입력합니다.
         </p>
