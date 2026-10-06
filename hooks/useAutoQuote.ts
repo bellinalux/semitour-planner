@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
 import { candidateToCompetitor } from "@/lib/competitors";
 import { fillFromMemory } from "@/lib/costMemory";
@@ -36,6 +36,8 @@ interface Options {
   /** 일정의 입장료·체류시간을 웹에서 확인한다 (일정이 없으면 건너뛴다) */
   verifyFees: () => Promise<boolean>;
   hasItinerary: boolean;
+  /** 지금 일정 (새 일정이 들어온 것을 알아채는 데만 쓴다) */
+  itinerary: unknown;
 }
 
 /**
@@ -43,7 +45,7 @@ interface Options {
  * 지난 견적 값 → 환율을 먼저 채우고(저장값이 AI 추정보다 우선), 나머지 웹 조사 네 가지
  * (차량·가이드, 숙박·항공, 입장료·체류시간, 경쟁 상품)는 서로 기다리지 않고 동시에 돌린다.
  */
-export function useAutoQuote({ input, update, verifyFees, hasItinerary }: Options) {
+export function useAutoQuote({ input, update, verifyFees, hasItinerary, itinerary }: Options) {
   const [steps, setSteps] = useState<AutoStep[]>(initialSteps);
   const [running, setRunning] = useState(false);
   const [filledCount, setFilledCount] = useState<number | null>(null);
@@ -171,9 +173,10 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary }: Option
               delete values.cityTaxPerPersonPerNight;
             }
             const names = applied.filter((n) => (n === "항공료" ? needFlight : needLodging));
-            apply(values, status, "ai", "시세 추정");
+            const basis = estimate.searched ? "웹 검색 시세" : "AI 추정";
+            apply(values, status, estimate.searched ? "web" : "ai", "시세");
             filled += names.length;
-            set("travel", "done", names.length > 0 ? `${names.join(", ")} AI 추정` : "채울 값이 없었습니다");
+            set("travel", "done", names.length > 0 ? `${names.join(", ")} ${basis}` : "채울 값이 없었습니다");
           } catch (err) {
             set("travel", "error", err instanceof Error ? err.message : "추정하지 못했습니다");
           }
@@ -229,7 +232,19 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary }: Option
     }
   }, [running, input, update, verifyFees, hasItinerary]);
 
-  return { steps, running, filledCount, run, afterGenerate, setAfterGenerate };
+  // "코스를 만들면 자동 견적도 이어서" — 코스 생성이 끝나면 armAfterGenerate()로 걸어 두고,
+  // 새 일정이 화면에 들어온 다음(입장료 확인이 새 일정을 보도록) 한 번 실행한다
+  const armedRef = useRef(false);
+  const armAfterGenerate = useCallback(() => {
+    armedRef.current = true;
+  }, []);
+  useEffect(() => {
+    if (!armedRef.current || !hasItinerary) return;
+    armedRef.current = false;
+    void run();
+  }, [itinerary, hasItinerary, run]);
+
+  return { steps, running, filledCount, run, afterGenerate, setAfterGenerate, armAfterGenerate };
 }
 
 export type AutoQuote = ReturnType<typeof useAutoQuote>;

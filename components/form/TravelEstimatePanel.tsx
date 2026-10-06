@@ -44,7 +44,7 @@ export function TravelEstimatePanel({ input, onChange }: SectionProps) {
           className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {state.status === "loading" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Sparkles className="h-4 w-4" aria-hidden />}
-          {state.status === "loading" ? "시세 추정 중..." : "AI로 항공·숙박 시세 추정"}
+          {state.status === "loading" ? "시세 조사 중..." : "웹 검색으로 항공·숙박 시세 조사"}
         </button>
         {!canRun && <span className="text-[11px] text-slate-500">여행지{input.packageType === "full" ? "와 출발지" : ""}를 먼저 입력하세요.</span>}
       </div>
@@ -56,7 +56,8 @@ export function TravelEstimatePanel({ input, onChange }: SectionProps) {
       {state.status === "success" && estimate && (
         <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-[11px] leading-4 text-slate-700">
           <p className="font-semibold text-amber-800">
-            AI 추정 (실시간 요금이 아님){applied.length > 0 ? ` · 반영: ${applied.join(", ")}` : " · 이미 확정한 값은 덮어쓰지 않았습니다"}
+            {estimate.searched ? "웹 검색 시세 (통상 범위 · 실시간 요금이 아님)" : "AI 추정 (웹 검색 근거 없음)"}
+            {applied.length > 0 ? ` · 반영: ${applied.join(", ")}` : " · 이미 확정한 값은 덮어쓰지 않았습니다"}
           </p>
           {input.packageType === "full" && (
             <p>
@@ -73,7 +74,21 @@ export function TravelEstimatePanel({ input, onChange }: SectionProps) {
             {estimate.lodging.note ? ` · ${estimate.lodging.note}` : ""}
           </p>
           {estimate.seasonNote && <p>📅 {estimate.seasonNote}</p>}
-          <p className="text-slate-500">노선·직항 여부와 요금은 AI 추정이라 틀릴 수 있습니다. 판매 전에 항공 검색과 숙소 견적으로 확인하세요.</p>
+          {estimate.sources && estimate.sources.length > 0 && (
+            <details>
+              <summary className="cursor-pointer font-medium text-slate-600">참고한 출처 ({estimate.sources.length})</summary>
+              <ul className="mt-1 space-y-0.5">
+                {estimate.sources.map((src) => (
+                  <li key={src.url}>
+                    <a href={src.url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
+                      {src.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          <p className="text-slate-500">시세는 통상 범위라 날짜·좌석에 따라 다릅니다. 판매 전에 항공 검색과 숙소 견적으로 확인하세요.</p>
         </div>
       )}
     </div>

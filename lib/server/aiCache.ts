@@ -1,8 +1,9 @@
+import { workerEnv } from "./cfEnv";
 import { getKv } from "./planStore";
 
 /**
  * AI·웹 조사 결과 캐시 — 같은 요청(여행지·인원·통화 등)이 다시 오면 Gemini를 부르지 않고 바로 돌려준다.
- * 1) 같은 서버 안의 메모리(가장 빠름) → 2) KV(서버를 다시 켜도, 다른 서버에서도 공유) 순으로 찾는다.
+ * 1) 같은 서버 안의 메모리(가장 빠름) → 2) KV(AI_CACHE, 없으면 일정 보관함 KV — 서버를 다시 켜도, 다른 서버에서도 공유) 순으로 찾는다.
  * 검색 근거가 없는 결과처럼 믿기 어려운 값은 keep()으로 걸러 저장하지 않는다.
  */
 
@@ -39,7 +40,7 @@ export async function cached<T>(scope: string, request: unknown, ttlSeconds: num
   const hit = mem.get(key);
   if (hit && now - hit.at < ttlSeconds * 1000) return hit.value as T;
 
-  const store = (await getKv().catch(() => null))?.kv as Kv | undefined;
+  const store = (await workerEnv<Kv>("AI_CACHE")) ?? ((await getKv().catch(() => null))?.kv as Kv | undefined);
   if (store) {
     try {
       const raw = await store.get(key);

@@ -1,3 +1,5 @@
+import { hashStaffCode, listStaff, saveStaff, type StaffRole } from "./staff";
+
 /**
  * 접근 코드(공용 비밀번호) 확인.
  * 환경변수 APP_ACCESS_CODE가 설정되어 있으면 그 코드를 아는 사람만 AI 기능(API)을 쓸 수 있다.
@@ -58,20 +60,99 @@ function readCookie(request: Request, name: string): string | null {
   return null;
 }
 
-/** 잠금이 꺼져 있거나, 올바른 접근 쿠키가 있으면 true */
-export async function isAuthed(request: Request): Promise<boolean> {
-  if (!accessRequired()) return true;
-  const token = readCookie(request, COOKIE_NAME);
-  return token !== null && safeEqual(token, await expectedToken());
+/** 로그인한 사람. 관리자(공용 접속 코드)는 id "master" */
+export interface Session {
+  id: string;
+  name: string;
+  role: StaffRole;
 }
 
-/** 입력한 코드가 맞으면 로그인 쿠키(Set-Cookie 값)를, 틀리면 null을 돌려준다 */
-export async function loginCookie(request: Request, code: string): Promise<string | null> {
-  if (!accessRequired()) return null;
-  const expected = await sha256Hex(configuredCode());
-  const given = await sha256Hex(code.trim());
-  if (!safeEqual(expected, given)) return null;
+const MASTER: Session = { id: "master", name: "관리자", role: "admin" };
+/** 잠금이 꺼진 로컬 개발 환경 */
+const LOCAL: Session = { id: "local", name: "", role: "admin" };
 
+/** 로그인 쿠키 서명 키 — 접속 코드에서 만들어, 코드를 바꾸면 모든 로그인이 풀린다 */
+async function signingKey(): Promise<CryptoKey> {
+  const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`semitour-session:${configuredCode()}`));
+  return crypto.subtle.importKey("raw", raw, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+}
+
+async function sign(payload: string): Promise<string> {
+  const sig = await crypto.subtle.sign("HMAC", await signingKey(), new TextEncoder().encode(payload));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const b64url = (text: string) => btoa(String.fromCharCode(...new TextEncoder().encode(text))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const fromB64url = (text: string) => new TextDecoder().decode(Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)));
+
+/** 쿠키 값: "v2.<내용>.<서명>" — 내용은 직원 ID와 발급 시각뿐이고, 권한·이름은 매번 직원 목록에서 다시 읽는다 */
+async function sessionToken(staffId: string): Promise<string> {
+  const payload = b64url(JSON.stringify({ sid: staffId, iat: Date.now() }));
+  return `v2.${payload}.${await sign(payload)}`;
+}
+
+/** 로그인한 사람. 잠금이 꺼져 있으면 로컬 관리자, 쿠키가 없거나 틀렸거나 계정이 꺼졌으면 null */
+export async function getSession(request: Request): Promise<Session | null> {
+  if (!accessRequired()) return LOCAL;
+  const token = readCookie(request, COOKIE_NAME);
+  if (!token) return null;
+  // 예전 방식 쿠키(공용 코드 하나)는 관리자로 본다 — 이미 로그인한 사람이 다시 입력하지 않아도 되게
+  if (safeEqual(token, await expectedToken())) return MASTER;
+  const [version, payload, sig] = token.split(".");
+  if (version !== "v2" || !payload || !sig || !safeEqual(sig, await sign(payload))) return null;
+  let sid = "";
+  try {
+    sid = String((JSON.parse(fromB64url(payload)) as { sid?: unknown }).sid ?? "");
+  } catch {
+    return null;
+  }
+  if (sid === MASTER.id) return MASTER;
+  const ws = await workspaceId();
+  if (!ws) return null;
+  const member = (await listStaff(ws)).find((m) => m.id === sid && m.active);
+  return member ? { id: member.id, name: member.name, role: member.role } : null;
+}
+
+/** 잠금이 꺼져 있거나, 올바른 로그인 쿠키가 있으면 true */
+export async function isAuthed(request: Request): Promise<boolean> {
+  return (await getSession(request)) !== null;
+}
+
+/** 관리자만 할 수 있는 작업이면 거절 응답을, 통과하면 null */
+export async function requireAdmin(request: Request): Promise<Response | null> {
+  const session = await getSession(request);
+  if (!session) return Response.json({ error: { code: "UNAUTHORIZED", message: "접근 코드가 필요합니다." } }, { status: 401 });
+  if (session.role !== "admin") return Response.json({ error: { code: "FORBIDDEN", message: "관리자만 바꿀 수 있습니다." } }, { status: 403 });
+  return null;
+}
+
+function cookieHeader(request: Request, value: string, maxAge: number): string {
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
-  return `${COOKIE_NAME}=${await expectedToken()}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE_SECONDS}${secure}`;
+  return `${COOKIE_NAME}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+
+/** 로그아웃용 쿠키 (바로 만료) */
+export function logoutCookie(request: Request): string {
+  return cookieHeader(request, "", 0);
+}
+
+/**
+ * 입력한 코드가 관리자 코드이거나 켜져 있는 직원의 개인 코드면 로그인 쿠키(Set-Cookie 값)와 그 사람을, 아니면 null.
+ */
+export async function loginCookie(request: Request, code: string): Promise<{ cookie: string; session: Session } | null> {
+  if (!accessRequired() || !code.trim()) return null;
+  if (await codeMatches(code)) return { cookie: cookieHeader(request, await sessionToken(MASTER.id), COOKIE_MAX_AGE_SECONDS), session: MASTER };
+
+  const ws = await workspaceId();
+  if (!ws) return null;
+  const hash = await hashStaffCode(ws, code);
+  const list = await listStaff(ws, true);
+  const member = list.find((m) => m.active && safeEqual(m.codeHash, hash));
+  if (!member) return null;
+  // 마지막 접속 시각은 기록에 실패해도 로그인에는 영향이 없다
+  await saveStaff(
+    ws,
+    list.map((m) => (m.id === member.id ? { ...m, lastLoginAt: new Date().toISOString() } : m)),
+  ).catch(() => undefined);
+  return { cookie: cookieHeader(request, await sessionToken(member.id), COOKIE_MAX_AGE_SECONDS), session: { id: member.id, name: member.name, role: member.role } };
 }

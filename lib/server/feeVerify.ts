@@ -60,10 +60,21 @@ function roundFor(currency: string, value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-/** 일정 항목의 입장료·체험료를 웹 검색으로 확인하고, 견적 통화로 환산한 금액까지 돌려준다. */
-export async function verifyFees(req: VerifyFeesRequest): Promise<VerifyFeesResponse> {
-  // 1단계: 검색으로 조사, 2단계: 조사 메모를 JSON으로 정리
-  const research = await generateGroundedText({ user: researchPrompt(req) });
+type RawResult = z.infer<typeof resultSchema>["results"][number];
+
+interface ChunkResult {
+  byId: Map<string, RawResult>;
+  searched: boolean;
+  sources: { title: string; url: string }[];
+}
+
+/** 한 번에 조사할 항목 수와 동시에 돌릴 묶음 수 — 한꺼번에 40곳을 보내면 응답이 늦어 시간 초과가 잦다 */
+const CHUNK_SIZE = 10;
+const CHUNK_CONCURRENCY = 2;
+
+/** 항목 한 묶음: 1단계 검색으로 조사, 2단계 조사 메모를 JSON으로 정리 */
+async function researchChunk(req: VerifyFeesRequest, items: VerifyFeesRequest["items"]): Promise<ChunkResult> {
+  const research = await generateGroundedText({ user: researchPrompt({ ...req, items }) });
   const structured = await generateJson({
     system: SYSTEM,
     user: [
@@ -71,25 +82,71 @@ export async function verifyFees(req: VerifyFeesRequest): Promise<VerifyFeesResp
       research.text,
       "</research_memo>",
       "",
-      `요청 항목 ID: ${req.items.map((i) => i.id).join(", ")}`,
+      `요청 항목 ID: ${items.map((i) => i.id).join(", ")}`,
       "",
       "위 메모를 스키마에 맞게 정리해 주세요.",
     ].join("\n"),
     schema: resultSchema,
     temperature: 0,
   });
+  return { byId: new Map(structured.results.map((r) => [r.id, r])), searched: research.searched, sources: research.sources };
+}
 
-  const byId = new Map(structured.results.map((r) => [r.id, r]));
+/**
+ * 항목을 묶음으로 나눠 조사한다. 일부 묶음이 실패(시간 초과 등)해도 나머지 결과는 살리고,
+ * 실패한 묶음의 항목만 "확인 못함"으로 돌려준다. 모든 묶음이 실패하면 첫 오류를 그대로 던진다.
+ */
+async function researchInChunks(req: VerifyFeesRequest) {
+  const chunks: VerifyFeesRequest["items"][] = [];
+  for (let i = 0; i < req.items.length; i += CHUNK_SIZE) chunks.push(req.items.slice(i, i + CHUNK_SIZE));
+  const outcomes: (ChunkResult | { error: unknown })[] = new Array(chunks.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, async () => {
+      while (next < chunks.length) {
+        const i = next++;
+        try {
+          outcomes[i] = await researchChunk(req, chunks[i]);
+        } catch (error) {
+          outcomes[i] = { error };
+        }
+      }
+    }),
+  );
+  const ok = outcomes.filter((o): o is ChunkResult => !("error" in o));
+  if (ok.length === 0) throw (outcomes[0] as { error: unknown }).error;
+
+  const byId = new Map<string, RawResult>();
+  const searchedIds = new Set<string>();
+  const failedIds = new Set<string>();
+  chunks.forEach((chunk, i) => {
+    const o = outcomes[i];
+    if ("error" in o) chunk.forEach((item) => failedIds.add(item.id));
+    else {
+      o.byId.forEach((v, k) => byId.set(k, v));
+      if (o.searched) chunk.forEach((item) => searchedIds.add(item.id));
+    }
+  });
+  const seen = new Set<string>();
+  const sources = ok.flatMap((o) => o.sources).filter((src) => (seen.has(src.url) ? false : (seen.add(src.url), true)));
+  return { byId, searchedIds, failedIds, searched: ok.some((o) => o.searched), sources };
+}
+
+/** 일정 항목의 입장료·체험료를 웹 검색으로 확인하고, 견적 통화로 환산한 금액까지 돌려준다. */
+export async function verifyFees(req: VerifyFeesRequest): Promise<VerifyFeesResponse> {
+  const research = await researchInChunks(req);
+  const { byId } = research;
   const currencies = new Set<string>();
   const drafts = req.items.map((item) => {
     const raw = byId.get(item.id);
     const currency = raw?.localCurrency.trim().toUpperCase() ?? "";
     const validCurrency = /^[A-Z]{3}$/.test(currency);
+    const searched = research.searchedIds.has(item.id);
     // 검색 근거가 없으면 금액을 믿을 수 없다. confirmed는 유효한 금액과 통화가 있어야 한다.
-    let status: FeeCheckResult["status"] = !research.searched || !raw ? "unverified" : raw.status;
+    let status: FeeCheckResult["status"] = !searched || !raw ? "unverified" : raw.status;
     if (status === "confirmed" && !(validCurrency && Number.isFinite(raw?.localAmount) && (raw?.localAmount ?? 0) > 0)) status = "unverified";
     if (status === "confirmed") currencies.add(currency);
-    return { item, raw, currency, status };
+    return { item, raw, currency, status, searched };
   });
 
   // 환산: 현지 통화 → 원 → 견적 통화
@@ -104,12 +161,16 @@ export async function verifyFees(req: VerifyFeesRequest): Promise<VerifyFeesResp
   );
   const krwPerQuote = req.currency === "KRW" ? 1 : req.exchangeRateToKrw > 0 ? req.exchangeRateToKrw : (rates.get(req.currency)?.rate ?? 0);
 
-  const results: FeeCheckResult[] = drafts.map(({ raw, item, currency, status }) => {
-    const note = !research.searched ? "웹 검색 근거를 확보하지 못해 확인하지 못했습니다." : (raw?.note.trim() ?? "");
+  const results: FeeCheckResult[] = drafts.map(({ raw, item, currency, status, searched }) => {
+    const note = research.failedIds.has(item.id)
+      ? "응답이 늦어 이번에는 확인하지 못했습니다. 다시 확인해 주세요."
+      : !searched
+        ? "웹 검색 근거를 확보하지 못해 확인하지 못했습니다."
+        : (raw?.note.trim() ?? "");
     // 검색 근거가 없으면 체류 시간도 믿을 수 없으므로 0(확인 못함)으로 둔다
-    const recommendedStayMinutes = research.searched && raw ? roundMinutes(raw.recommendedStayMinutes) : 0;
+    const recommendedStayMinutes = searched && raw ? roundMinutes(raw.recommendedStayMinutes) : 0;
     // 검색 근거가 없으면 식당 여부도 믿을 수 없다
-    const shouldBeMeal = research.searched && (raw?.shouldBeMeal ?? false);
+    const shouldBeMeal = searched && (raw?.shouldBeMeal ?? false);
     if (status === "unverified") {
       return { id: item.id, status, localCurrency: "", localAmount: 0, amountInQuote: null, sourceName: "", note: note || "웹에서 확인하지 못했습니다.", recommendedStayMinutes, shouldBeMeal };
     }

@@ -1,5 +1,5 @@
 import { normalizeCompany } from "@/lib/company";
-import { isAuthed, workspaceId } from "@/lib/server/access";
+import { isAuthed, requireAdmin, workspaceId } from "@/lib/server/access";
 import { errorResponse } from "@/lib/server/external";
 import { getKv } from "@/lib/server/planStore";
 
@@ -41,6 +41,9 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const ctx = await open(request);
   if ("error" in ctx) return ctx.error;
+  // 고객 문서에 찍히는 회사 정보는 관리자만 바꾼다
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
 
   const text = await request.text();
   if (text.length > MAX_BYTES) return errorResponse("TOO_LARGE", "입력이 너무 깁니다.", 413);

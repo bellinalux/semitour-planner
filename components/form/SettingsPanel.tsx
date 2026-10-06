@@ -2,6 +2,7 @@
 
 import { Check, CircleAlert, Save } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useSession } from "@/components/SessionContext";
 import type { AutoQuote } from "@/hooks/useAutoQuote";
 import { fillFromMemory, recallCosts } from "@/lib/costMemory";
 import { clearPricingDefaults, DEFAULT_LABELS, pricingDefaultsSavedAt, savePricingDefaults } from "@/lib/pricingDefaults";
@@ -37,6 +38,8 @@ interface Props {
 
 /** 지금 가격 설정을 회사 기본값으로 저장해, 새 견적·초기화 때 자동으로 들어가게 한다 (이 브라우저에 저장) */
 function DefaultsBar({ input }: { input: TripInput }) {
+  // 회사 기본값(마진·수수료 등)은 관리자만 바꾼다
+  const { isAdmin } = useSession();
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
@@ -51,16 +54,18 @@ function DefaultsBar({ input }: { input: TripInput }) {
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
+          disabled={!isAdmin}
+          title={isAdmin ? undefined : "관리자만 회사 기본값을 바꿀 수 있습니다"}
           onClick={() => {
             savePricingDefaults(input);
             setSavedAt(new Date().toISOString());
           }}
-          className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+          className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Save className="h-3.5 w-3.5" aria-hidden />
           지금 설정을 회사 기본값으로 저장
         </button>
-        {loaded && savedAt && (
+        {loaded && savedAt && isAdmin && (
           <button
             type="button"
             onClick={() => {
@@ -75,7 +80,8 @@ function DefaultsBar({ input }: { input: TripInput }) {
       </div>
       <p className="text-[11px] leading-4 text-slate-500">
         {loaded && savedAt ? `기본값 저장됨 (${savedAt.slice(0, 10)}). ` : ""}
-        {DEFAULT_LABELS}을 새 견적과 초기화 때 자동으로 넣습니다 (이 브라우저에 저장).
+        {DEFAULT_LABELS}을 새 견적과 초기화 때 자동으로 넣습니다.
+        {!isAdmin && " 회사 기본값은 관리자만 바꿀 수 있습니다."}
       </p>
     </div>
   );
@@ -112,8 +118,31 @@ function MemoryHint({ input, onChange }: { input: TripInput; onChange: (patch: P
  * 레이아웃3: 코스를 만든 뒤 원가·가격·판매 채널·경쟁사·고객 문서를 설정하는 패널.
  * 길어지는 항목은 접고 펼 수 있고, 접어도 입력값은 그대로 남는다.
  */
+const ADVANCED_KEY = "semitour-planner:settings-advanced:v1";
+
 export function SettingsPanel({ input, onChange, stays, onApplyFlight, focus, onFocus, auto }: Props) {
   const signal = (section: SettingsSection) => (focus?.section === section ? focus.n : undefined);
+  // 판매 채널·경쟁사는 한 번 정하면 잘 안 바꾸고(채널) 자동 견적이 채워 주므로(경쟁사) "고급 설정"에 접어 둔다
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  useEffect(() => {
+    try {
+      // 브라우저 저장소 값이라 화면을 그린 뒤에 읽는다
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowAdvanced(localStorage.getItem(ADVANCED_KEY) === "1");
+    } catch {
+      // 무시
+    }
+  }, []);
+  const toggleAdvanced = () => {
+    const next = !showAdvanced;
+    setShowAdvanced(next);
+    try {
+      localStorage.setItem(ADVANCED_KEY, next ? "1" : "0");
+    } catch {
+      // 무시
+    }
+  };
+  const advancedOpen = showAdvanced || focus?.section === "channels" || focus?.section === "competitors";
 
   useEffect(() => {
     if (!focus) return;
@@ -160,9 +189,24 @@ export function SettingsPanel({ input, onChange, stays, onApplyFlight, focus, on
       <PackageSection input={input} onChange={onChange} stays={stays} onApplyFlight={onApplyFlight} openSignal={signal("package")} />
       <CostSection input={input} onChange={onChange} openSignal={signal("cost")} />
       <PricingSection input={input} onChange={onChange} openSignal={signal("pricing")} />
-      <ChannelSection input={input} onChange={onChange} openSignal={signal("channels")} />
-      <CompetitorSection input={input} onChange={onChange} openSignal={signal("competitors")} />
       <DocumentSection input={input} onChange={onChange} openSignal={signal("documents")} />
+      <button
+        type="button"
+        onClick={toggleAdvanced}
+        aria-expanded={advancedOpen}
+        className="flex w-full items-center justify-between rounded-lg border border-dashed border-slate-300 px-3 py-2 text-left text-xs text-slate-600 hover:bg-white"
+      >
+        <span className="font-semibold">{advancedOpen ? "고급 설정 접기" : "고급 설정 보기"}</span>
+        <span className="text-[11px] text-slate-500">
+          판매 채널 {input.channels.length}개 · 경쟁사 {input.competitors.length}곳
+        </span>
+      </button>
+      {advancedOpen && (
+        <>
+          <ChannelSection input={input} onChange={onChange} openSignal={signal("channels")} />
+          <CompetitorSection input={input} onChange={onChange} openSignal={signal("competitors")} />
+        </>
+      )}
     </div>
   );
 }

@@ -11,7 +11,8 @@
     "build:vinext": "vinext build",
     "start:vinext": "wrangler dev --config dist/server/wrangler.json",
     "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "hooks:install": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
     "hwp-convert": "^1.13.0",
@@ -25,6 +26,8 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.56.0",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -33,6 +36,7 @@
     "@vitejs/plugin-rsc": "^0.5.35",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
+    "jsdom": "^30.1.2",
     "react-server-dom-webpack": "^19.2.8",
     "tailwindcss": "^4",
     "typescript": "^5",

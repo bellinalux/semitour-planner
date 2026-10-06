@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Building2, Check, Cloud, HardDrive, Loader2, Save, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useSession } from "@/components/SessionContext";
 import type { CompanyStorage } from "@/hooks/useCompanyProfile";
 import { missingLegalFields } from "@/lib/company";
 import type { CompanyProfile } from "@/types";
@@ -95,8 +96,9 @@ export function CompanySettings({ company, storage, save }: Props) {
     setOpen(true);
   };
 
+  const { isAdmin } = useSession();
   const handleSave = async () => {
-    if (busy) return;
+    if (busy || !isAdmin) return;
     setBusy(true);
     const error = await save(draft);
     setBusy(false);
@@ -156,6 +158,7 @@ export function CompanySettings({ company, storage, save }: Props) {
                     이 브라우저에만 저장됩니다
                   </>
                 )}
+                {!isAdmin && <span className="ml-1 font-medium text-amber-700">· 관리자만 고칠 수 있습니다 (보기 전용)</span>}
               </p>
             </div>
             <button type="button" onClick={() => setOpen(false)} aria-label="닫기" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">

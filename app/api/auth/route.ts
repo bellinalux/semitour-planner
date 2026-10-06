@@ -1,12 +1,22 @@
-import { accessRequired, isAuthed, loginCookie } from "@/lib/server/access";
+import { accessRequired, getSession, loginCookie, logoutCookie, workspaceId } from "@/lib/server/access";
+import { getKv } from "@/lib/server/planStore";
 import { allowLoginAttempt } from "@/lib/server/rateLimit";
 
-/** 접근 잠금 상태 확인: { required: 잠금 여부, authed: 이 브라우저가 통과했는지 } */
+/**
+ * 로그인 상태: { required: 잠금 여부, authed: 이 브라우저가 통과했는지, user: 로그인한 사람, accounts: 직원 계정을 쓸 수 있는지 }
+ */
 export async function GET(request: Request) {
-  return Response.json({ required: accessRequired(), authed: await isAuthed(request) });
+  const session = await getSession(request);
+  const accounts = accessRequired() && (await workspaceId()) !== null && (await getKv()) !== null;
+  return Response.json({
+    required: accessRequired(),
+    authed: session !== null,
+    user: session && accessRequired() ? { name: session.name, role: session.role, isMaster: session.id === "master" } : null,
+    accounts,
+  });
 }
 
-/** 접근 코드 확인. 맞으면 로그인 쿠키를 내려준다. */
+/** 관리자 접속 코드 또는 직원 개인 코드 확인. 맞으면 로그인 쿠키를 내려준다. */
 export async function POST(request: Request) {
   if (!accessRequired()) return Response.json({ ok: true });
 
@@ -25,9 +35,14 @@ export async function POST(request: Request) {
     return Response.json({ error: { code: "BAD_REQUEST", message: "요청 형식이 올바르지 않습니다." } }, { status: 400 });
   }
 
-  const cookie = await loginCookie(request, code);
-  if (!cookie) {
+  const login = await loginCookie(request, code);
+  if (!login) {
     return Response.json({ error: { code: "WRONG_CODE", message: "접근 코드가 올바르지 않습니다." } }, { status: 401 });
   }
-  return Response.json({ ok: true }, { headers: { "Set-Cookie": cookie } });
+  return Response.json({ ok: true, user: { name: login.session.name, role: login.session.role } }, { headers: { "Set-Cookie": login.cookie } });
+}
+
+/** 로그아웃 (다른 직원으로 바꿔 들어갈 때) */
+export async function DELETE(request: Request) {
+  return Response.json({ ok: true }, { headers: { "Set-Cookie": logoutCookie(request) } });
 }

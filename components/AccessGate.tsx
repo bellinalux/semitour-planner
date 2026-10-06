@@ -2,6 +2,7 @@
 
 import { Loader2, Lock } from "lucide-react";
 import { useEffect, useState } from "react";
+import { SessionProvider, type SessionInfo, type SessionUser } from "@/components/SessionContext";
 import { inputClass } from "@/components/ui/Field";
 
 type GateState = "checking" | "open" | "locked";
@@ -9,10 +10,13 @@ type GateState = "checking" | "open" | "locked";
 interface AuthStatus {
   required: boolean;
   authed: boolean;
+  user?: SessionUser | null;
+  accounts?: boolean;
 }
 
 /**
  * 접근 코드가 설정된 배포에서 코드를 입력해야 화면을 볼 수 있게 한다.
+ * 관리자 접속 코드 또는 관리자가 만들어 준 직원 개인 코드로 들어오고, 들어온 사람·권한을 화면 전체에 알려 준다(useSession).
  * 서버가 잠금을 쓰지 않으면(코드 미설정) 그대로 통과한다.
  */
 export function AccessGate({ children }: { children: React.ReactNode }) {
@@ -20,13 +24,21 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<AuthStatus | null>(null);
+
+  const load = () =>
+    fetch("/api/auth")
+      .then((res) => res.json() as Promise<AuthStatus>)
+      .then((next) => {
+        setStatus(next);
+        return next;
+      });
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth")
-      .then((res) => res.json() as Promise<AuthStatus>)
-      .then((status) => {
-        if (!cancelled) setState(!status.required || status.authed ? "open" : "locked");
+    load()
+      .then((next) => {
+        if (!cancelled) setState(!next.required || next.authed ? "open" : "locked");
       })
       // 상태를 확인하지 못하면 화면은 열어 두고, 실제 보호는 서버 API가 한다
       .catch(() => {
@@ -48,6 +60,8 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ code }),
       });
       if (res.ok) {
+        setCode("");
+        await load().catch(() => null);
         setState("open");
       } else {
         const data = await res.json().catch(() => null);
@@ -60,7 +74,19 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
     }
   };
 
-  if (state === "open") return <>{children}</>;
+  if (state === "open") {
+    const user = status?.user ?? null;
+    const session: SessionInfo = {
+      user,
+      accounts: status?.accounts ?? false,
+      isAdmin: !user || user.role === "admin",
+      logout: async () => {
+        await fetch("/api/auth", { method: "DELETE" }).catch(() => null);
+        window.location.reload();
+      },
+    };
+    return <SessionProvider value={session}>{children}</SessionProvider>;
+  }
 
   if (state === "checking") {
     return (
@@ -79,7 +105,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
           </span>
           <div>
             <h1 className="text-sm font-semibold text-slate-900">세미투어 플래너</h1>
-            <p className="text-[11px] text-slate-500">접근 코드를 입력해 주세요</p>
+            <p className="text-[11px] text-slate-500">관리자 접속 코드 또는 개인 코드를 입력해 주세요</p>
           </div>
         </div>
 

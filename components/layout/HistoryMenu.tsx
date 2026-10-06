@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Cloud, Download, HardDrive, History, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
+import { useSession } from "@/components/SessionContext";
 import type { QuoteLog } from "@/hooks/useQuoteLog";
 import type { TeamSyncStatus } from "@/hooks/useTeamSync";
 import { backupFileName, collectBackup, parseBackup, restoreBackup } from "@/lib/backup";
@@ -24,6 +25,7 @@ function when(iso: string): string {
 
 /** 상단 [이력·백업] — 고객에게 나간 견적 이력(누가·언제·얼마), 작성자 이름, 이 브라우저 데이터 백업·복원 */
 export function HistoryMenu({ log, teamSync }: Props) {
+  const { user } = useSession();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -98,19 +100,25 @@ export function HistoryMenu({ log, teamSync }: Props) {
               {teamText}
             </p>
 
-            <section aria-label="작성자" className="space-y-1">
-              <label htmlFor="author-name" className="block text-xs font-semibold text-slate-700">
-                작성자 이름 (견적 이력에 남습니다)
-              </label>
-              <input
-                id="author-name"
-                value={log.author}
-                maxLength={40}
-                onChange={(e) => log.setAuthor(e.target.value)}
-                placeholder="예: 김세미"
-                className="w-48 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30"
-              />
-            </section>
+            {user ? (
+              <p className="text-xs text-slate-700">
+                작성자: <span className="font-semibold">{user.name}</span> <span className="text-slate-400">(로그인한 계정 이름으로 견적 이력에 남습니다)</span>
+              </p>
+            ) : (
+              <section aria-label="작성자" className="space-y-1">
+                <label htmlFor="author-name" className="block text-xs font-semibold text-slate-700">
+                  작성자 이름 (견적 이력에 남습니다)
+                </label>
+                <input
+                  id="author-name"
+                  value={log.author}
+                  maxLength={40}
+                  onChange={(e) => log.setAuthor(e.target.value)}
+                  placeholder="예: 김세미"
+                  className="w-48 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30"
+                />
+              </section>
+            )}
 
             <section aria-label="견적 이력" className="space-y-2">
               <h3 className="text-xs font-semibold text-slate-700">

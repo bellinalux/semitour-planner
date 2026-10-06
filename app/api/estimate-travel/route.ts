@@ -1,6 +1,6 @@
 import { travelRequestSchema, travelResponseSchema, toTravelEstimate } from "@/lib/schemas/travel";
-import { GeminiError, generateJson } from "@/lib/server/gemini";
-import { buildTravelUserPrompt, TRAVEL_SYSTEM_PROMPT } from "@/lib/server/travelPrompt";
+import { GeminiError, generateGroundedText, generateJson } from "@/lib/server/gemini";
+import { buildTravelResearchPrompt, buildTravelUserPrompt, TRAVEL_SYSTEM_PROMPT } from "@/lib/server/travelPrompt";
 import { guardRequest } from "@/lib/server/guard";
 import { cached, DAY } from "@/lib/server/aiCache";
 
@@ -25,17 +25,24 @@ export async function POST(request: Request) {
   }
 
   try {
-    // 같은 조건의 시세 추정은 하루 동안 다시 쓴다
-    const estimate = await cached("travel", parsed.data, DAY, async () =>
-      toTravelEstimate(
-        await generateJson({
+    // 1단계: 웹 검색으로 시세 조사 → 2단계: 조사 메모로 숫자 정리 (검색이 안 되면 AI 추정으로 표시)
+    // 같은 조건의 결과는 하루 동안 다시 쓴다 (검색 근거가 있는 결과만)
+    const estimate = await cached(
+      "travel",
+      parsed.data,
+      DAY,
+      async () => {
+        const research = await generateGroundedText({ user: buildTravelResearchPrompt(parsed.data) });
+        const structured = await generateJson({
           system: TRAVEL_SYSTEM_PROMPT,
-          user: buildTravelUserPrompt(parsed.data),
+          user: buildTravelUserPrompt(parsed.data, research.searched ? research.text : ""),
           schema: travelResponseSchema,
-          temperature: 0.3,
+          temperature: 0.2,
           timeoutMs: 60_000,
-        }),
-      ),
+        });
+        return { ...toTravelEstimate(structured), searched: research.searched, sources: research.sources.slice(0, 6) };
+      },
+      (r) => r.searched === true,
     );
     return Response.json({ estimate });
   } catch (err) {

@@ -1,0 +1,18 @@
+#!/bin/sh
+# 커밋 전 검사 — 저장소에 같이 커밋되는 원본. `npm run hooks:install`로 .git/hooks에 설치한다.
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# 1) 자동 테스트 — 실패하면 커밋을 멈춘다 (급할 때만 git commit --no-verify)
+if [ -f "$REPO_ROOT/package.json" ]; then
+  (cd "$REPO_ROOT" && npm test --silent >/tmp/semitour-precommit-test.log 2>&1) || {
+    tail -40 /tmp/semitour-precommit-test.log
+    echo "자동 테스트가 실패해 커밋을 멈췄습니다. npm test로 확인하세요."
+    exit 1
+  }
+fi
+
+# 2) 커밋 1회당 정확히 1번, lib/version.ts 의 APP_VERSION("YYYY.MM.DD-N")을 올린다.
+if [ -f "$REPO_ROOT/lib/version.ts" ] && [ -f "$REPO_ROOT/scripts/bump-version.mjs" ]; then
+  node "$REPO_ROOT/scripts/bump-version.mjs" "$REPO_ROOT/lib/version.ts"
+  git add "$REPO_ROOT/lib/version.ts"
+fi

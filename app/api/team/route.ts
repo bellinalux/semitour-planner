@@ -1,4 +1,4 @@
-import { isAuthed, workspaceId } from "@/lib/server/access";
+import { getSession, isAuthed, requireAdmin, workspaceId } from "@/lib/server/access";
 import { errorResponse } from "@/lib/server/external";
 import { getKv } from "@/lib/server/planStore";
 import { isQuoteLogEntry, MAX_QUOTE_LOG, type QuoteLogEntry } from "@/lib/quoteLog";
@@ -52,6 +52,11 @@ export async function PUT(request: Request) {
   const ctx = await open(request);
   if ("error" in ctx) return ctx.error;
   if (ctx.kind === "quote-log") return errorResponse("BAD_REQUEST", "견적 이력은 한 건씩 추가합니다.", 400);
+  // 회사 기본값(마진·수수료 등)은 관리자만 바꾼다. 원가 기억은 견적을 만드는 모두가 쌓는다
+  if (ctx.kind === "defaults") {
+    const denied = await requireAdmin(request);
+    if (denied) return denied;
+  }
   const body = await readBody(request);
   if (body instanceof Response) return body;
   if (body.data !== null && !isRecord(body.data)) return errorResponse("BAD_REQUEST", "저장할 내용의 형식이 올바르지 않습니다.", 400);
@@ -72,6 +77,9 @@ export async function POST(request: Request) {
   const body = await readBody(request);
   if (body instanceof Response) return body;
   if (!isQuoteLogEntry(body.data)) return errorResponse("BAD_REQUEST", "견적 이력 형식이 올바르지 않습니다.", 400);
+  // 작성자는 로그인한 사람 이름으로 남긴다 (직접 적은 이름보다 우선)
+  const session = await getSession(request);
+  if (session?.name) body.data = { ...body.data, author: session.name };
   try {
     const raw = await ctx.kv.get(ctx.key);
     const list = (raw ? (JSON.parse(raw) as unknown[]) : []).filter(isQuoteLogEntry) as QuoteLogEntry[];

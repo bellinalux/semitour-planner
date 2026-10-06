@@ -611,6 +611,10 @@ export interface TravelEstimate {
     note: string;
   };
   seasonNote: string;
+  /** 웹 검색 근거가 있는 추정인지 (없으면 AI가 아는 범위의 추정) */
+  searched?: boolean;
+  /** 참고한 출처 */
+  sources?: { title: string; url: string }[];
 }
 
 /** AI 웹 검색으로 찾은 개별 항공편 (편명·시간·공항까지 확인한 상세 목록용) */
