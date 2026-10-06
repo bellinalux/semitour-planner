@@ -1,10 +1,11 @@
+import { buildChannelResults, consumerPrices, DIRECT_CHANNEL_ID, feeRows, priceParamsOf, type FeeRow, type PriceParams } from "@/lib/channels";
 import { formatMoney } from "@/lib/currency";
 import { dayItems, groundDays, overnightNights, type PmChoice } from "@/lib/itinerary";
 import { lodgingCostPerUnit, lodgingSegments } from "@/lib/lodging";
+import { roundUpPrice } from "@/lib/priceRound";
 import type {
   CostKey,
   CostLine,
-  CurrencyCode,
   DayPlan,
   ItineraryItem,
   QuoteResult,
@@ -12,22 +13,11 @@ import type {
   TripInput,
 } from "@/types";
 
-/** 판매가를 올림할 단위 (통화별로 통용되는 가격 끊김) */
-const ROUND_UNIT: Partial<Record<CurrencyCode, number>> = {
-  KRW: 1000,
-  JPY: 100,
-  VND: 10000,
-  THB: 10,
-};
+export { roundUpPrice };
 
 const MATRIX_SIZES = [2, 4, 6, 8, 10];
 /** 손익분기 인원을 찾을 때 확인하는 최대 인원 */
 const MAX_SEARCH_TRAVELERS = 100;
-
-export function roundUpPrice(value: number, currency: CurrencyCode): number {
-  const unit = ROUND_UNIT[currency] ?? 1;
-  return Math.ceil(value / unit - 1e-9) * unit;
-}
 
 /** 실제로 진행되는 일정 항목: 세미투어는 오전 전체 + 선택한 오후 옵션, 업체 코스는 전체 */
 function activeItems(days: DayPlan[], pmChoice: PmChoice): ItineraryItem[] {
@@ -60,6 +50,9 @@ interface Context {
   contingency: number;
   cardFee: number;
   margin: number;
+  /** 직판을 맨 앞에 둔 판매 채널별 수수료 */
+  rows: FeeRow[];
+  priceParams: PriceParams;
 }
 
 /** 특정 인원에서의 비용 항목. 미정 항목은 excluded로 표시만 하고 금액은 그대로 둔다. */
@@ -165,6 +158,17 @@ function buildLines(n: number, ctx: Context): CostLine[] {
     },
   );
 
+  // 현지 통화 원가를 원화로 바꿔 파는 상품은 환율이 오르면 마진이 줄어든다. 그 위험을 원가에 미리 얹는다.
+  if (input.currency !== "KRW" && input.fxBufferRate > 0) {
+    const base = totalCost(lines, false);
+    lines.push({
+      key: "fx-buffer",
+      label: "환율 변동 버퍼",
+      amount: base * (input.fxBufferRate / 100),
+      note: `원가 합계의 ${input.fxBufferRate}%`,
+    });
+  }
+
   return lines;
 }
 
@@ -175,13 +179,12 @@ function totalCost(lines: CostLine[], includeUndecided: boolean): number {
 /**
  * 원가로 가격 시나리오를 만든다.
  *  - 목표 마진 모드: 판매가 × (1 − 마진율 − 카드수수료율) = 총 원가 로 역산해 통화 단위로 올림
+ *    (채널 가격을 "동일가"로 두면 수수료가 가장 큰 채널 기준 가격이 직판가가 된다)
  *  - 판매가 입력 모드: 입력한 1인 판매가 그대로, 실제 마진을 계산
  */
 function scenarioFor(n: number, cost: number, ctx: Context): QuoteScenario {
-  const pricePerPerson =
-    ctx.input.pricingMode === "fixed_price"
-      ? ctx.input.fixedPricePerPerson
-      : roundUpPrice(cost / (1 - ctx.margin - ctx.cardFee) / n, ctx.input.currency);
+  const prices = consumerPrices(ctx.rows, n, cost, ctx.priceParams);
+  const pricePerPerson = prices.get(DIRECT_CHANNEL_ID) ?? 0;
   const totalPrice = pricePerPerson * n;
   const cardFee = totalPrice * ctx.cardFee;
   const profit = totalPrice - cardFee - cost;
@@ -195,6 +198,7 @@ function scenarioFor(n: number, cost: number, ctx: Context): QuoteScenario {
     totalPrice,
     pricePerPerson,
     actualMarginRate: totalPrice > 0 ? (profit / totalPrice) * 100 : 0,
+    channelPrices: Object.fromEntries(prices),
   };
 }
 
@@ -245,10 +249,13 @@ export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmCh
     contingency,
     cardFee,
     margin,
+    rows: feeRows(input),
+    priceParams: priceParamsOf(input),
   };
 
   const lines = buildLines(travelers, ctx);
   const scenario = scenarioFor(travelers, totalCost(lines, false), ctx);
+  const channels = buildChannelResults(ctx.rows, travelers, (k) => totalCost(buildLines(k, ctx), false), ctx.priceParams);
 
   // 미정 항목(금액이 있는 것)을 포함했을 때의 가격 — 기본 가격과 함께 범위로 보여준다
   const undecidedLines = lines.filter((l) => l.excluded && l.amount > 0);
@@ -293,6 +300,14 @@ export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmCh
   if (input.currency !== "KRW" && input.exchangeRateToKrw <= 0) {
     warnings.push("원화 환율이 0이라 원화 환산 금액을 표시하지 않습니다.");
   }
+  for (const channel of channels) {
+    if (channel.isDirect) continue;
+    if (channel.requiredPrice === null) {
+      warnings.push(`'${channel.name}'은(는) 수수료와 목표 마진의 합이 100% 이상이라 목표 마진을 맞출 판매가가 없습니다.`);
+    } else if (channel.profit < 0) {
+      warnings.push(`'${channel.name}'에서 지금 가격으로 팔면 손실입니다. 수수료 ${channel.feeRate.toFixed(1)}%를 뺀 정산액이 원가보다 적습니다.`);
+    }
+  }
 
   return {
     ok: true,
@@ -316,6 +331,7 @@ export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmCh
       hotel: ctx.includeLodging,
       flight: ctx.includeFlight,
     },
+    channels,
     warnings,
   };
 }

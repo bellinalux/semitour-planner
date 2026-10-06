@@ -3,19 +3,26 @@ import { formatMoney } from "@/lib/currency";
 import { tripPeriod } from "@/lib/documents";
 import { localPayRows } from "@/lib/fees";
 import { simulateOptions } from "@/lib/options";
+import { buildPriceTiers, composition, fxSensitivity, singleSupplement } from "@/lib/pricing";
 import { DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
 
 /**
  * 내부용 원가·마진 검토서. 고객용 문서에는 넣지 않는 원가 내역, 마진, 경쟁사 분석을 모두 담는다.
  * 고객에게 전달하면 안 되는 문서라 머리말에 크게 표시한다.
  */
-export function InternalQuoteDoc({ input, days, pmChoice, quote, meta, company }: DocProps) {
+export function InternalQuoteDoc({ input, days, pmChoice, quote: documentQuote, rawQuote, meta, company }: DocProps) {
+  // 내부 검토서는 채널·수수료·마진이 모두 들어 있는 원래 견적으로 만든다
+  const quote = rawQuote ?? documentQuote;
   const money = (v: number) => formatMoney(v, input.currency);
   const s = quote.scenario;
   const title = meta?.packageName?.trim() || `${input.destination} ${input.nights}박 ${input.days}일`;
   const localPay = localPayRows(days, pmChoice);
   const policy = ourPolicy(days, pmChoice, input, meta);
   const sim = simulateOptions(input.options, quote.travelers, input.cardFeeRate);
+  const tiers = buildPriceTiers(quote, input, policy);
+  const single = singleSupplement(quote, input);
+  const comp = composition(quote, input);
+  const fx = fxSensitivity(quote, input);
   const diffs = analyzeCompetitors(
     input.competitors.filter((c) => c.price > 0),
     quote,
@@ -97,6 +104,87 @@ export function InternalQuoteDoc({ input, days, pmChoice, quote, meta, company }
           </p>
         )}
       </DocSection>
+
+      <DocSection title="추천 판매가 (최저 · 권장 · 경쟁력)">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-slate-300 bg-slate-50 text-left">
+              <th className="px-2 py-1.5 font-medium">구분</th>
+              <th className="px-2 py-1.5 text-right font-medium">1인 판매가</th>
+              <th className="px-2 py-1.5 text-right font-medium">이익률</th>
+              <th className="px-2 py-1.5 font-medium">기준</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tiers.tiers.map((t) => (
+              <tr key={t.key} className="border-b border-slate-200">
+                <td className="px-2 py-1">{t.label}</td>
+                <td className="px-2 py-1 text-right tabular-nums">{t.price === null ? "-" : money(t.price)}</td>
+                <td className="px-2 py-1 text-right tabular-nums">{t.marginRate === null ? "-" : `${t.marginRate.toFixed(1)}%`}</td>
+                <td className="px-2 py-1 text-slate-500">{t.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {tiers.position && <p className="mt-1 text-slate-600">{tiers.position}</p>}
+        <p className="mt-0.5 text-[10px] text-slate-500">계산 기준 채널: {tiers.basisName}</p>
+      </DocSection>
+
+      {quote.channels.length > 1 && (
+        <DocSection title="판매 채널별 정산">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-slate-300 bg-slate-50 text-left">
+                <th className="px-2 py-1.5 font-medium">채널</th>
+                <th className="px-2 py-1.5 text-right font-medium">고객가(1인)</th>
+                <th className="px-2 py-1.5 text-right font-medium">수수료</th>
+                <th className="px-2 py-1.5 text-right font-medium">정산액</th>
+                <th className="px-2 py-1.5 text-right font-medium">이익</th>
+                <th className="px-2 py-1.5 text-right font-medium">이익률</th>
+                <th className="px-2 py-1.5 text-right font-medium">손익분기</th>
+              </tr>
+            </thead>
+            <tbody>
+              {quote.channels.map((c) => (
+                <tr key={c.id} className="border-b border-slate-200">
+                  <td className="px-2 py-1">{c.name}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{money(c.pricePerPerson)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">
+                    {c.feeRate.toFixed(1)}%{c.fixedFeePerPerson > 0 ? ` + ${money(c.fixedFeePerPerson)}/인` : ""}
+                  </td>
+                  <td className="px-2 py-1 text-right tabular-nums">{money(c.settlement)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{money(c.profit)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{c.marginRate.toFixed(1)}%</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{c.breakEvenTravelers === null ? "불가" : `${c.breakEvenTravelers}명`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </DocSection>
+      )}
+
+      {(single || comp || fx) && (
+        <DocSection title="요금 구성 · 환율 민감도">
+          {single && (
+            <p>
+              1인실 사용 시 추가요금 권장 {money(single.price)} (한 방 {single.guestsPerUnit}명 기준, 원가 {money(single.cost)})
+            </p>
+          )}
+          {comp && (
+            <p>
+              성인 {comp.adults}명 {money(comp.adultPrice)}
+              {comp.children > 0 ? ` · 아동 ${comp.children}명 ${money(comp.childPrice)}` : ""}
+              {comp.infants > 0 ? ` · 유아 ${comp.infants}명 ${money(comp.infantPrice)}` : ""} → 총 {money(comp.revenue)}, 예상 이익 {money(comp.profit)} (
+              {comp.marginRate.toFixed(1)}%)
+            </p>
+          )}
+          {fx && (
+            <p>
+              환율 {fx.breakEvenShift.toFixed(1)}% 상승 시 이익 0, {fx.targetShift.toFixed(1)}% 상승 시 목표 마진 미달 (원화 판매가 고정 가정)
+            </p>
+          )}
+        </DocSection>
+      )}
 
       <DocSection title="인원별 단가">
         <table className="w-full border-collapse">
@@ -196,8 +284,17 @@ export function InternalQuoteDoc({ input, days, pmChoice, quote, meta, company }
                   </p>
                   {d.adjustments.length > 0 && (
                     <p className="text-slate-500">
-                      같은 조건으로 맞춤: {money(s.pricePerPerson)} + {d.adjustments.map((a) => `${a.label} ${money(a.amount)}`).join(" + ")} ={" "}
-                      {money(d.adjustedOurPrice)}
+                      같은 조건으로 맞춤({input.compareBasis === "land" ? "랜드 기준" : "총액 기준"}): 우리 {money(s.pricePerPerson)}
+                      {d.adjustments
+                        .filter((a) => a.side === "ours")
+                        .map((a) => ` ${a.amount >= 0 ? "+" : "-"} ${a.label} ${money(Math.abs(a.amount))}`)
+                        .join("")}{" "}
+                      = {money(d.adjustedOurPrice)} / 경쟁사 {money(d.competitor.price)}
+                      {d.adjustments
+                        .filter((a) => a.side === "theirs")
+                        .map((a) => ` ${a.amount >= 0 ? "+" : "-"} ${a.label} ${money(Math.abs(a.amount))}`)
+                        .join("")}{" "}
+                      = {money(d.adjustedCompetitorPrice)}
                     </p>
                   )}
                   <p className="text-slate-500">

@@ -1,4 +1,4 @@
-import type { Competitor, ThemeId, TravelType, TripInput, TripScope } from "@/types";
+import type { Competitor, DiscountScenario, SalesChannel, ThemeId, TravelType, TripInput, TripScope } from "@/types";
 
 export const THEMES: { id: ThemeId; label: string }[] = [
   { id: "history", label: "역사·문화" },
@@ -77,6 +77,20 @@ export const DEFAULT_INPUT: TripInput = {
   pricingMode: "target_margin",
   fixedPricePerPerson: 0,
 
+  channels: [],
+  channelPriceMode: "per_channel",
+  documentChannelId: "",
+  minMarginRate: 10,
+  discounts: [],
+  childPriceRate: 80,
+  infantPriceRate: 10,
+  childCount: 0,
+  infantCount: 0,
+  fxBufferRate: 0,
+  compareBasis: "total",
+  flightDeals: [],
+  priceScenarios: [],
+
   tipPerPerson: 0,
   insurancePerPerson: 0,
 
@@ -97,6 +111,18 @@ export const DEFAULT_INPUT: TripInput = {
   sendingNote: "",
   breakfastIncluded: true,
 };
+
+export function createChannel(): SalesChannel {
+  return { id: crypto.randomUUID(), name: "", commissionRate: 0, fixedFeePerPerson: 0, paymentFeeSeparate: false, share: 0 };
+}
+
+export function createDiscount(name = "", rate = 0): DiscountScenario {
+  return { id: crypto.randomUUID(), name, rate };
+}
+
+export const MAX_CHANNELS = 8;
+export const MAX_DISCOUNTS = 6;
+export const MAX_PRICE_SCENARIOS = 6;
 
 export function createCompetitor(): Competitor {
   return {

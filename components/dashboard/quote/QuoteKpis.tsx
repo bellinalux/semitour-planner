@@ -7,6 +7,8 @@ interface Props {
   currency: CurrencyCode;
   /** 1 견적통화 = ? KRW. 0이거나 KRW면 환산 금액을 숨긴다 */
   exchangeRateToKrw: number;
+  /** 판매가 카드 아래에 붙이는 설명 (예: 채널 동일가 기준) */
+  priceNote?: string;
 }
 
 function KrwHint({ amount, currency, rate }: { amount: number; currency: CurrencyCode; rate: number }) {
@@ -14,7 +16,7 @@ function KrwHint({ amount, currency, rate }: { amount: number; currency: Currenc
   return <p className="mt-0.5 text-[11px] tabular-nums opacity-70">≈ {formatMoney(amount * rate, "KRW")}</p>;
 }
 
-export function QuoteKpis({ scenario, pricingMode, currency, exchangeRateToKrw }: Props) {
+export function QuoteKpis({ scenario, pricingMode, currency, exchangeRateToKrw, priceNote }: Props) {
   const money = (v: number) => formatMoney(v, currency);
 
   return (
@@ -31,6 +33,7 @@ export function QuoteKpis({ scenario, pricingMode, currency, exchangeRateToKrw }
         <p className="mt-1 text-xl font-bold tabular-nums">{money(scenario.pricePerPerson)}</p>
         <p className="mt-0.5 text-[11px] tabular-nums text-indigo-100">총 {money(scenario.totalPrice)}</p>
         <KrwHint amount={scenario.pricePerPerson} currency={currency} rate={exchangeRateToKrw} />
+        {priceNote && <p className="mt-1 text-[10px] leading-3 text-indigo-100">{priceNote}</p>}
       </div>
 
       <div className="rounded-lg bg-emerald-50 p-3 ring-1 ring-emerald-200">

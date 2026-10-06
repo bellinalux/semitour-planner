@@ -95,6 +95,8 @@ interface Props {
   accessibilityCheck: AccessibilityCheckView;
   library: LibraryView;
   documents: React.ComponentProps<typeof DocumentBar>;
+  /** 견적 화면에서 입력값(할인 시나리오·가격안 등)을 바꾼다 */
+  onInputChange: (patch: Partial<TripInput>) => void;
 }
 
 export function Dashboard({
@@ -119,6 +121,7 @@ export function Dashboard({
   accessibilityCheck,
   library,
   documents,
+  onInputChange,
 }: Props) {
   const { onAddTour, ...panelActions } = itemActions;
 
@@ -180,6 +183,7 @@ export function Dashboard({
         pmChoice={pmChoice}
         meta={meta}
         generatedCurrency={generatedCurrency}
+        onInputChange={onInputChange}
       />
       <UspPanel {...usp} />
       <ExportBar {...exporter} />

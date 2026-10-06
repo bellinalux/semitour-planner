@@ -24,6 +24,7 @@ import { planToProduct } from "@/lib/planToProduct";
 import { listenErrors } from "@/lib/errorReport";
 import { missingLegalFields } from "@/lib/company";
 import { calculateQuote } from "@/lib/cost";
+import { documentQuote } from "@/lib/pricing";
 import { applyFeeResults, feeCheckTargets, type FeeApplySummary } from "@/lib/fees";
 import { applyOptionSuggestions, optionSuggestTargets, suggestionToOption, type OptionSuggestApplySummary } from "@/lib/optionSuggestions";
 import { accessibilityCheckTargets, applyAccessibilityResults, type AccessibilityApplySummary } from "@/lib/accessibilityCheck";
@@ -87,7 +88,8 @@ export function PlannerApp() {
   );
   // 인쇄 문서는 견적이 준비된 뒤에만 만들 수 있다
   const docData = useMemo(
-    () => (quote?.ok ? { input, days, pmChoice, quote, meta, company } : null),
+    // 고객 문서는 선택한 판매 채널의 소비자가를 쓰고, 내부 검토서는 원래 견적(rawQuote)으로 모든 채널을 본다
+    () => (quote?.ok ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company } : null),
     [quote, input, days, pmChoice, meta, company],
   );
 
@@ -220,6 +222,11 @@ export function PlannerApp() {
     if (!quote?.ok) throw new Error("견적이 아직 준비되지 않았습니다.");
     return { input, days, pmChoice, quote, meta, usps: usp.state.status === "success" ? usp.usps : [] };
   };
+  /** 고객에게 나가는 텍스트는 선택한 판매 채널의 소비자가로 만든다 */
+  const customerExportData = () => {
+    const data = exportData();
+    return { ...data, quote: documentQuote(data.quote, input) };
+  };
 
   return (
     <>
@@ -310,6 +317,7 @@ export function PlannerApp() {
             researchInfo={itinerary.researchInfo}
             onSelectPm={itinerary.selectPmOption}
             onReplaceDays={itinerary.replaceDays}
+            onInputChange={update}
             itemActions={{
               onChangeItem: itinerary.updateItem,
               onChangeDay: itinerary.updateDay,
@@ -373,8 +381,8 @@ export function PlannerApp() {
             exporter={{
               disabled: !quote?.ok,
               getInternalText: () => buildInternalText(exportData()),
-              getCustomerText: () => buildCustomerText(exportData()),
-              getEmojiText: () => buildEmojiCustomerText(exportData()),
+              getCustomerText: () => buildCustomerText(customerExportData()),
+              getEmojiText: () => buildEmojiCustomerText(customerExportData()),
             }}
             documents={{
               disabled: !quote?.ok,

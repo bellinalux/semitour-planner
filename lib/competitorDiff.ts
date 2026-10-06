@@ -1,3 +1,4 @@
+import { localPayRows } from "@/lib/fees";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import type { Competitor, CompetitorIncludes, CourseMeta, DayPlan, QuoteData, TourPolicy, TripInput } from "@/types";
 
@@ -22,6 +23,8 @@ export interface OurPolicy {
   /** 일정에 들어 있는 쇼핑 성격 항목 수 */
   shoppingCount: number;
   optionTour: TourPolicy;
+  /** 판매가에 포함되지 않고 현지에서 따로 내는 경비(현지 지불 항목) 1인 합계 */
+  localPayPerPerson: number;
 }
 
 /**
@@ -35,13 +38,17 @@ export function ourPolicy(days: DayPlan[], pmChoice: PmChoice, input: TripInput,
     shopping,
     shoppingCount: shoppingItems.length,
     optionTour: input.options.length > 0 ? "some" : "none",
+    localPayPerPerson: localPayRows(days, pmChoice).perPerson,
   };
 }
 
-/** 비교를 같은 조건으로 맞추기 위해 우리 가격에 더한 항목 */
+/** 비교를 같은 조건으로 맞추기 위해 한쪽 가격에 더하거나 뺀 항목 */
 export interface Adjustment {
   label: string;
+  /** 더하면 양수, 빼면 음수 */
   amount: number;
+  /** 어느 쪽 가격을 조정했는지 */
+  side: "ours" | "theirs";
 }
 
 export interface DiffReason {
@@ -54,8 +61,10 @@ export interface CompetitorDiff {
   competitor: Competitor;
   /** 경쟁사 가격 − 우리 가격. 양수면 우리가 저렴. 가격 미입력이면 null */
   rawDiff: number | null;
-  /** 경쟁사에만 포함된 항목의 우리 쪽 비용을 더한 1인 가격 */
+  /** 같은 조건으로 맞춘 우리 1인 가격 */
   adjustedOurPrice: number;
+  /** 같은 조건으로 맞춘 경쟁사 1인 가격 */
+  adjustedCompetitorPrice: number;
   adjustments: Adjustment[];
   /** 금액을 몰라 맞추지 못한 항목 이름 */
   unpriced: string[];
@@ -72,8 +81,11 @@ function lodgingPerPerson(quote: QuoteData): number {
 
 /**
  * 경쟁사 한 곳과의 차이를 분석한다.
- * 경쟁사에만 들어 있는 항목(항공·숙박)은 우리 쪽 추정 비용을 더해 같은 선에서 비교하고,
+ * 비교 기준(input.compareBasis)에 따라 항공·숙박을 같은 범위로 맞춘 뒤 차이를 다시 계산하고,
  * 그래도 우리가 비싸면 그 이유가 될 만한 항목을 모은다.
+ *  - total(총액): 한쪽에만 들어 있는 항공·숙박을 다른 쪽에도 더해 같은 범위로 맞춘다
+ *  - land(랜드): 항공·숙박은 들어 있는 쪽에서 빼서 지상 일정만 비교한다
+ * 표시 가격 밖에서 현지에 내는 경비(가이드 경비 등)는 양쪽 모두 실지출 기준으로 더한다.
  */
 export function analyzeCompetitor(
   competitor: Competitor,
@@ -86,20 +98,38 @@ export function analyzeCompetitor(
 
   const adjustments: Adjustment[] = [];
   const unpriced: string[] = [];
+  const basis = input.compareBasis;
 
-  // 경쟁사에만 포함된 항목을 우리 가격에 더해 조건을 맞춘다 (금액을 아는 항공·숙박만)
-  if (competitor.includes.flight && !quote.ourIncludes.flight) {
-    if (input.flightPricePerPerson > 0) adjustments.push({ label: "왕복 항공", amount: input.flightPricePerPerson });
-    else unpriced.push("왕복 항공");
-  }
-  if (competitor.includes.hotel && !quote.ourIncludes.hotel) {
-    const lodging = lodgingPerPerson(quote);
-    if (lodging > 0) adjustments.push({ label: "숙박", amount: lodging });
-    else unpriced.push("숙박");
+  // 항공·숙박은 우리 원가 기준 금액으로 더하거나 뺀다 (금액을 모르면 맞추지 못하고 참고로만 표시)
+  const parts: { key: "flight" | "hotel"; label: string; amount: number }[] = [
+    { key: "flight", label: "왕복 항공", amount: input.flightPricePerPerson },
+    { key: "hotel", label: "숙박", amount: lodgingPerPerson(quote) },
+  ];
+  for (const part of parts) {
+    const ourIn = quote.ourIncludes[part.key];
+    const theirIn = competitor.includes[part.key];
+    const push = (side: "ours" | "theirs", sign: 1 | -1) => {
+      if (part.amount > 0) adjustments.push({ label: part.label, amount: sign * part.amount, side });
+      else if (!unpriced.includes(part.label)) unpriced.push(part.label);
+    };
+    if (basis === "total") {
+      if (theirIn && !ourIn) push("ours", 1);
+      if (ourIn && !theirIn) push("theirs", 1);
+    } else {
+      if (ourIn) push("ours", -1);
+      if (theirIn) push("theirs", -1);
+    }
   }
 
-  const adjustedOurPrice = our + adjustments.reduce((sum, a) => sum + a.amount, 0);
-  const adjustedDiff = competitor.price > 0 ? competitor.price - adjustedOurPrice : null;
+  if (policy.localPayPerPerson > 0) adjustments.push({ label: "현지 지불(우리)", amount: policy.localPayPerPerson, side: "ours" });
+  if ((competitor.localPayPerPerson ?? 0) > 0) {
+    adjustments.push({ label: "현지 지불(경쟁사)", amount: competitor.localPayPerPerson ?? 0, side: "theirs" });
+  }
+
+  const sumFor = (side: "ours" | "theirs") => adjustments.filter((a) => a.side === side).reduce((sum, a) => sum + a.amount, 0);
+  const adjustedOurPrice = Math.max(0, our + sumFor("ours"));
+  const adjustedCompetitorPrice = Math.max(0, competitor.price + sumFor("theirs"));
+  const adjustedDiff = competitor.price > 0 ? adjustedCompetitorPrice - adjustedOurPrice : null;
 
   const reasons: DiffReason[] = [];
   const keys = Object.keys(INCLUDE_LABELS) as (keyof CompetitorIncludes)[];
@@ -131,6 +161,12 @@ export function analyzeCompetitor(
   if (competitor.shopping === "unknown" || competitor.optionTour === "unknown") {
     reasons.push({ kind: "info", text: "경쟁사의 쇼핑·선택관광 여부가 확인되지 않았습니다. 판매 페이지에서 확인해 주세요." });
   }
+  if (competitor.localPayPerPerson === undefined) {
+    reasons.push({
+      kind: "info",
+      text: "경쟁사 현지 지불 경비(가이드 경비·팁 등)는 입력되지 않아 0으로 계산했습니다. 상품 페이지에 따로 내는 경비가 있으면 경쟁사 카드에 입력하세요.",
+    });
+  }
 
   if (unpriced.length > 0) {
     reasons.push({ kind: "info", text: `${unpriced.join(", ")} 금액을 몰라 같은 조건으로 맞추지 못했습니다.` });
@@ -142,7 +178,7 @@ export function analyzeCompetitor(
     });
   }
 
-  return { competitor, rawDiff, adjustedOurPrice, adjustments, unpriced, adjustedDiff, reasons };
+  return { competitor, rawDiff, adjustedOurPrice, adjustedCompetitorPrice, adjustments, unpriced, adjustedDiff, reasons };
 }
 
 export function analyzeCompetitors(
@@ -152,6 +188,27 @@ export function analyzeCompetitors(
   policy: OurPolicy,
 ): CompetitorDiff[] {
   return competitors.map((c) => analyzeCompetitor(c, quote, input, policy));
+}
+
+/**
+ * 경쟁사 가격을 "우리 상품과 같은 범위(우리가 포함한 항목만)"로 환산한다. 추천 판매가(경쟁력 가격)를 정할 때 쓴다.
+ * 우리만 포함한 항공·숙박은 더하고 경쟁사만 포함한 것은 빼며, 현지 지불 경비 차이도 맞춘다. 가격이 없으면 null.
+ */
+export function competitorPriceInOurScope(competitor: Competitor, quote: QuoteData, input: TripInput, policy: OurPolicy): number | null {
+  if (competitor.price <= 0) return null;
+  let price = competitor.price;
+  const parts: { key: "flight" | "hotel"; amount: number }[] = [
+    { key: "flight", amount: input.flightPricePerPerson },
+    { key: "hotel", amount: lodgingPerPerson(quote) },
+  ];
+  for (const part of parts) {
+    const ourIn = quote.ourIncludes[part.key];
+    const theirIn = competitor.includes[part.key];
+    if (ourIn && !theirIn) price += part.amount;
+    if (theirIn && !ourIn) price -= part.amount;
+  }
+  price += (competitor.localPayPerPerson ?? 0) - policy.localPayPerPerson;
+  return Math.max(0, price);
 }
 
 /** 가격이 입력된 경쟁사 중 가장 싼 곳과의 조건 보정 차이 (요약 문구용) */

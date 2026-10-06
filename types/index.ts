@@ -54,6 +54,61 @@ export interface Competitor {
   note: string;
   /** 웹 검색으로 찾아 넣은 상품이면 그 근거 */
   source?: { agency: string; url: string; sourceName: string; basis: "searched" | "estimated"; foundAt: string };
+  /** 표시 가격 밖에서 현지에 따로 내는 경비(가이드 경비·팁 등) 1인 금액. 비교할 때 가격에 더한다 */
+  localPayPerPerson?: number;
+  /** 가격을 마지막으로 직접 입력·수정한 시각 (ISO). 검색으로 찾은 상품은 source.foundAt을 쓴다 */
+  priceCheckedAt?: string;
+}
+
+/**
+ * 판매 채널(자사몰 외 플랫폼). 수수료율은 판매가 기준이며 사용자가 직접 입력한다.
+ * 직판(자사 카드결제)은 항상 기본으로 계산되므로 여기에 넣지 않는다.
+ */
+export interface SalesChannel {
+  id: string;
+  name: string;
+  /** 판매가 대비 수수료율 (%) */
+  commissionRate: number;
+  /** 1인당 정액 수수료 (견적 통화). 없으면 0 */
+  fixedFeePerPerson: number;
+  /** true면 카드 결제 수수료를 따로 낸다(위 수수료율에 포함되지 않음). false면 수수료율에 결제 수수료가 포함돼 카드 수수료를 더 빼지 않는다 */
+  paymentFeeSeparate: boolean;
+  /** 예상 판매 비중 (%). 직판은 100에서 채널 비중 합계를 뺀 나머지 */
+  share: number;
+}
+
+/** 채널 가격 정책: 채널마다 목표 마진에 맞춘 가격 / 모든 채널 같은 가격(수수료가 가장 큰 채널 기준) */
+export type ChannelPriceMode = "per_channel" | "parity";
+
+/** 경쟁사와 가격을 비교하는 기준: total 항공·숙박까지 합친 총액(둘 중 하나라도 포함하면 맞춤) / land 항공·숙박을 뺀 랜드(지상) 기준 */
+export type CompareBasis = "total" | "land";
+
+/** 할인·쿠폰 시나리오 (이름과 할인율만) */
+export interface DiscountScenario {
+  id: string;
+  name: string;
+  /** 소비자 결제가에서 깎는 비율 (%) */
+  rate: number;
+}
+
+/** 저장해 둔 가격안. 입력 일부와 계산 결과 요약을 담는다 */
+export interface PriceScenarioSnapshot {
+  id: string;
+  name: string;
+  savedAt: string;
+  /** 복원할 때 되돌리는 입력값 */
+  inputs: Partial<TripInput>;
+  /** 저장 시점의 계산 결과 요약 */
+  summary: {
+    travelers: number;
+    pricePerPerson: number;
+    totalPrice: number;
+    costPerPerson: number;
+    profit: number;
+    marginRate: number;
+    breakEvenTravelers: number | null;
+    currency: CurrencyCode;
+  };
 }
 
 /** 웹 검색으로 찾은 대형 여행사 경쟁 상품 */
@@ -159,6 +214,33 @@ export interface TripInput {
   pricingMode: PricingMode;
   /** pricingMode === "fixed_price"일 때 1인 판매가 */
   fixedPricePerPerson: number;
+
+  /** ---- 판매 채널·가격 정책 ---- */
+  /** 직판 외에 파는 플랫폼(채널)과 수수료. 비어 있으면 직판만 계산한다 */
+  channels: SalesChannel[];
+  channelPriceMode: ChannelPriceMode;
+  /** 견적서·청구서 등 고객 문서에 넣을 채널의 id. 빈 문자열이면 직판 가격 */
+  documentChannelId: string;
+  /** 추천 판매가의 "최저 판매가"를 계산하는 최소 마진율 (%) */
+  minMarginRate: number;
+  /** 할인·쿠폰 시나리오 */
+  discounts: DiscountScenario[];
+  /** 아동 요금 비율 (성인 요금 대비 %). 0이면 아동 요금을 따로 두지 않는다 */
+  childPriceRate: number;
+  /** 유아 요금 비율 (성인 요금 대비 %) */
+  infantPriceRate: number;
+  /** 인원 중 아동 수 (travelers에 포함) */
+  childCount: number;
+  /** 유아 수 (travelers에 포함하지 않는 별도 인원, 좌석·식사·숙박 원가 없음으로 계산) */
+  infantCount: number;
+  /** 환율 변동에 대비해 원가에 더하는 버퍼 (%, 견적 통화가 원화가 아닐 때만 적용) */
+  fxBufferRate: number;
+  /** 경쟁사와 가격을 맞추는 기준 */
+  compareBasis: CompareBasis;
+  /** 항공 시세 조회로 찾은 출발일별 요금 (출발일별 권장가 계산용) */
+  flightDeals: FlightDeal[];
+  /** 저장해 둔 가격안 */
+  priceScenarios: PriceScenarioSnapshot[];
 
   /** 1인당 비용 */
   tipPerPerson: number;
@@ -434,6 +516,37 @@ export interface QuoteScenario {
   pricePerPerson: number;
   /** 가격 올림 후 실제 마진율 (%, 판매가 대비, 카드 수수료 차감 후) */
   actualMarginRate: number;
+  /** 판매 채널 id → 이 인원에서의 소비자가 (1인). 직판은 "direct" */
+  channelPrices?: Record<string, number>;
+}
+
+/** 판매 채널(직판 포함) 한 곳에서 팔았을 때의 정산·이익 */
+export interface ChannelResult {
+  /** 직판은 "direct" */
+  id: string;
+  name: string;
+  isDirect: boolean;
+  /** 판매가 대비 수수료율 (%, 결제 수수료 포함) */
+  feeRate: number;
+  fixedFeePerPerson: number;
+  /** 예상 판매 비중 (%) */
+  share: number;
+  /** 소비자가 (1인) */
+  pricePerPerson: number;
+  totalPrice: number;
+  /** 수수료(율 + 정액) 합계 */
+  feeAmount: number;
+  /** 정산액 = 판매 총액 − 수수료 */
+  settlement: number;
+  profit: number;
+  /** 이익률 (%, 소비자 결제가 대비) */
+  marginRate: number;
+  /** 목표 마진을 맞추는 이 채널의 1인 판매가. 수수료+마진이 100% 이상이면 null */
+  requiredPrice: number | null;
+  /** 손익분기(마진 0) 1인 판매가 */
+  breakEvenPrice: number | null;
+  breakEvenTravelers: number | null;
+  targetMarginTravelers: number | null;
 }
 
 export interface QuoteData {
@@ -457,6 +570,8 @@ export interface QuoteData {
   targetMarginTravelers: number | null;
   /** 우리 상품의 포함 항목 (입력 비용과 일정에서 유추) */
   ourIncludes: CompetitorIncludes;
+  /** 직판을 맨 앞에 둔 채널별 정산 결과 (현재 인원 기준) */
+  channels: ChannelResult[];
   warnings: string[];
 }
 

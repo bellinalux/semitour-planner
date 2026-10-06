@@ -3,6 +3,7 @@ import { NumberField } from "@/components/ui/NumberField";
 import { TextField } from "@/components/ui/TextField";
 import { currencySymbol } from "@/lib/currency";
 import { POLICY_LABELS } from "@/lib/competitorDiff";
+import { priceAgeDays, STALE_PRICE_DAYS } from "@/lib/competitors";
 import type { Competitor, CompetitorIncludes, CurrencyCode, TourPolicy } from "@/types";
 
 const POLICIES: TourPolicy[] = ["none", "some", "unknown"];
@@ -26,6 +27,7 @@ interface Props {
 
 export function CompetitorCard({ index, competitor, currency, onChange, onRemove }: Props) {
   const id = `competitor-${competitor.id}`;
+  const age = priceAgeDays(competitor);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
@@ -55,8 +57,31 @@ export function CompetitorCard({ index, competitor, currency, onChange, onRemove
             label="1인 판매가"
             value={competitor.price}
             prefix={currencySymbol(currency)}
-            onChange={(price) => onChange({ ...competitor, price })}
+            onChange={(price) =>
+              onChange({ ...competitor, price, ...(price !== competitor.price && !competitor.source ? { priceCheckedAt: new Date().toISOString() } : {}) })
+            }
           />
+        </div>
+        <div className="grid grid-cols-2 items-end gap-3">
+          <NumberField
+            id={`${id}-localpay`}
+            label="현지 지불 경비 (1인)"
+            value={competitor.localPayPerPerson ?? 0}
+            prefix={currencySymbol(currency)}
+            hint="가격 밖에서 현지에 따로 내는 가이드 경비·팁 등"
+            onChange={(localPayPerPerson) => onChange({ ...competitor, localPayPerPerson })}
+          />
+          <p
+            className={`pb-2 text-[11px] leading-4 ${age !== null && age > STALE_PRICE_DAYS ? "font-medium text-amber-700" : "text-slate-400"}`}
+          >
+            {age === null
+              ? "가격 확인 시점 미상"
+              : age > STALE_PRICE_DAYS
+                ? `가격 확인 ${age}일 지남 — 다시 확인하세요`
+                : age === 0
+                  ? "오늘 확인한 가격"
+                  : `${age}일 전 확인한 가격`}
+          </p>
         </div>
 
         <fieldset>

@@ -38,6 +38,18 @@ export function candidateToCompetitor(candidate: CompetitorCandidate, foundAt: s
   };
 }
 
+/** 경쟁사 가격이 이 일수보다 오래됐으면 "오래된 가격"으로 경고한다 (여행 상품 가격은 시즌·요일에 따라 자주 바뀐다) */
+export const STALE_PRICE_DAYS = 14;
+
+/** 경쟁사 가격을 확인한 지 며칠 됐는지. 검색으로 찾은 상품은 찾은 시각, 직접 입력한 상품은 마지막 수정 시각 기준. 알 수 없으면 null */
+export function priceAgeDays(competitor: Competitor, now = Date.now()): number | null {
+  const stamp = competitor.source?.foundAt || competitor.priceCheckedAt;
+  if (!stamp) return null;
+  const t = Date.parse(stamp);
+  if (!Number.isFinite(t)) return null;
+  return Math.max(0, Math.floor((now - t) / (24 * 60 * 60 * 1000)));
+}
+
 /** 이미 목록에 있는 상품인지 (같은 이름이면 같은 상품으로 본다) */
 export function isAlreadyAdded(competitors: Competitor[], candidate: CompetitorCandidate): boolean {
   const name = [candidate.agency, candidate.productName].filter(Boolean).join(" ").trim();

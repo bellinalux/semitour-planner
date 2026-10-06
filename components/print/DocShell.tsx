@@ -8,7 +8,10 @@ export interface DocProps {
   input: TripInput;
   days: DayPlan[];
   pmChoice: PmChoice;
+  /** 고객 문서에 쓰는 견적. 선택한 판매 채널의 소비자가로 가격만 바꾼 것일 수 있다 */
   quote: QuoteData;
+  /** 채널·수수료·마진을 모두 볼 수 있는 원래 견적 (내부 검토서용). 없으면 quote와 같다 */
+  rawQuote?: QuoteData;
   meta: CourseMeta | null;
   company: CompanyProfile;
 }

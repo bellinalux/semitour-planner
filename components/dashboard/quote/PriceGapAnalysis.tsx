@@ -30,7 +30,7 @@ export function PriceGapAnalysis({ competitors, quote, input, ourPolicy, currenc
 
   return (
     <div className="space-y-3">
-      {diffs.map(({ competitor, rawDiff, adjustedOurPrice, adjustments, adjustedDiff, reasons }) => {
+      {diffs.map(({ competitor, rawDiff, adjustedOurPrice, adjustedCompetitorPrice, adjustments, adjustedDiff, reasons }) => {
         const weAreExpensive = adjustedDiff !== null && adjustedDiff < 0;
         const gap = adjustedDiff === null ? 0 : Math.abs(adjustedDiff);
 
@@ -44,22 +44,30 @@ export function PriceGapAnalysis({ competitors, quote, input, ourPolicy, currenc
             </div>
 
             {adjustments.length > 0 && (
-              <div className="mt-2 rounded-md bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-600">
-                <p className="flex flex-wrap items-center gap-1">
-                  <span className="font-medium text-slate-700">같은 조건으로 맞춤</span>
-                  <span className="tabular-nums">{money(quote.scenario.pricePerPerson)}</span>
-                  {adjustments.map((a) => (
-                    <span key={a.label} className="inline-flex items-center gap-0.5 tabular-nums">
-                      <Plus className="h-3 w-3" aria-hidden />
-                      {a.label} {money(a.amount)}
-                    </span>
-                  ))}
-                  <ArrowRight className="h-3 w-3" aria-hidden />
-                  <span className="font-semibold tabular-nums text-slate-900">{money(adjustedOurPrice)}</span>
-                  <span className="text-slate-400">vs 경쟁사 {money(competitor.price)}</span>
-                </p>
+              <div className="mt-2 space-y-1 rounded-md bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-600">
+                <p className="font-medium text-slate-700">같은 조건으로 맞춤 ({input.compareBasis === "land" ? "랜드(지상) 기준" : "총액 기준"})</p>
+                {(["ours", "theirs"] as const).map((side) => {
+                  const list = adjustments.filter((a) => a.side === side);
+                  if (list.length === 0) return null;
+                  const base = side === "ours" ? quote.scenario.pricePerPerson : competitor.price;
+                  const after = side === "ours" ? adjustedOurPrice : adjustedCompetitorPrice;
+                  return (
+                    <p key={side} className="flex flex-wrap items-center gap-1">
+                      <span className="w-12 text-slate-500">{side === "ours" ? "우리" : "경쟁사"}</span>
+                      <span className="tabular-nums">{money(base)}</span>
+                      {list.map((a) => (
+                        <span key={a.label} className="inline-flex items-center gap-0.5 tabular-nums">
+                          {a.amount >= 0 ? <Plus className="h-3 w-3" aria-hidden /> : <Minus className="h-3 w-3" aria-hidden />}
+                          {a.label} {money(Math.abs(a.amount))}
+                        </span>
+                      ))}
+                      <ArrowRight className="h-3 w-3" aria-hidden />
+                      <span className="font-semibold tabular-nums text-slate-900">{money(after)}</span>
+                    </p>
+                  );
+                })}
                 {rawDiff !== null && (
-                  <p className="mt-0.5 text-slate-400">
+                  <p className="text-slate-400">
                     표시 가격만 비교하면 {rawDiff > 0 ? "우리가" : "경쟁사가"} {money(Math.abs(rawDiff))} 저렴합니다.
                   </p>
                 )}
@@ -89,7 +97,7 @@ export function PriceGapAnalysis({ competitors, quote, input, ourPolicy, currenc
       })}
 
       <p className="text-[11px] leading-4 text-slate-400">
-        경쟁사에만 포함된 항공·숙박은 우리 입력값(왕복 항공료, 1박 요금)으로 더해 비교합니다. 그 값이 0이면 맞추지 못하고 참고로 표시합니다.
+        항공·숙박은 우리 입력값(왕복 항공료, 1박 요금 원가)으로 더하거나 빼서 같은 범위로 맞춰 비교합니다. 그 값이 0이면 맞추지 못하고 참고로 표시합니다. 비교 기준은 왼쪽 &quot;경쟁사 정보&quot;에서 바꿀 수 있습니다.
       </p>
     </div>
   );

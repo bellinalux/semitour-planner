@@ -48,13 +48,21 @@ export function FlightPricePanel({ input, onChange }: SectionProps) {
 
   const search = async () => {
     setAppliedDate(null);
-    await run({
+    const response = await run({
       origin: originCode.trim() || input.originCity.trim(),
       destination: destCode.trim() || input.destination.trim(),
       days: input.days,
       currency: input.currency,
       months,
     });
+    if (response) {
+      // 출발일별 권장가 계산에 쓰도록 조회한 요금을 보관한다 (최저가 목록 + 월별 최저가, 출발일 중복 제거)
+      const byDate = new Map<string, FlightDeal>();
+      for (const deal of [...response.result.deals, ...response.result.byMonth.map((m) => m.deal)]) {
+        if (deal.departDate && deal.price > 0 && !byDate.has(deal.departDate)) byDate.set(deal.departDate, deal);
+      }
+      onChange({ flightDeals: [...byDate.values()] });
+    }
   };
 
   const apply = (deal: FlightDeal) => {

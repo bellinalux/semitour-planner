@@ -29,6 +29,32 @@ export function normalizeInput(saved: unknown): TripInput {
     travelAlert: typeof s.travelAlert === "object" && s.travelAlert !== null ? s.travelAlert : null,
     travelType: typeof s.travelType === "string" && TRAVEL_TYPE_IDS.has(s.travelType) ? s.travelType : DEFAULT_INPUT.travelType,
     tripScope: s.tripScope === "domestic" || s.tripScope === "overseas" ? s.tripScope : DEFAULT_INPUT.tripScope,
+    channels: Array.isArray(s.channels)
+      ? s.channels
+          .filter((c) => typeof c === "object" && c !== null)
+          .map((c) => ({
+            id: typeof c.id === "string" && c.id ? c.id : crypto.randomUUID(),
+            name: typeof c.name === "string" ? c.name : "",
+            commissionRate: Number.isFinite(c.commissionRate) ? c.commissionRate : 0,
+            fixedFeePerPerson: Number.isFinite(c.fixedFeePerPerson) ? c.fixedFeePerPerson : 0,
+            paymentFeeSeparate: c.paymentFeeSeparate === true,
+            share: Number.isFinite(c.share) ? c.share : 0,
+          }))
+      : DEFAULT_INPUT.channels,
+    channelPriceMode: s.channelPriceMode === "parity" ? "parity" : "per_channel",
+    documentChannelId: typeof s.documentChannelId === "string" ? s.documentChannelId : "",
+    discounts: Array.isArray(s.discounts)
+      ? s.discounts
+          .filter((d) => typeof d === "object" && d !== null)
+          .map((d) => ({
+            id: typeof d.id === "string" && d.id ? d.id : crypto.randomUUID(),
+            name: typeof d.name === "string" ? d.name : "",
+            rate: Number.isFinite(d.rate) ? d.rate : 0,
+          }))
+      : DEFAULT_INPUT.discounts,
+    compareBasis: s.compareBasis === "land" ? "land" : "total",
+    flightDeals: Array.isArray(s.flightDeals) ? s.flightDeals : DEFAULT_INPUT.flightDeals,
+    priceScenarios: Array.isArray(s.priceScenarios) ? s.priceScenarios : DEFAULT_INPUT.priceScenarios,
     regionPlan: typeof s.regionPlan === "string" ? s.regionPlan : DEFAULT_INPUT.regionPlan,
     pickupNote: typeof s.pickupNote === "string" ? s.pickupNote : DEFAULT_INPUT.pickupNote,
     sendingNote: typeof s.sendingNote === "string" ? s.sendingNote : DEFAULT_INPUT.sendingNote,

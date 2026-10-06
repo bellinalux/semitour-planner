@@ -5,13 +5,21 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ourPolicy } from "@/lib/competitorDiff";
 import { lodgingUnitsFor } from "@/lib/cost";
+import { bindingChannel, buildPriceTiers } from "@/lib/pricing";
 import type { PmChoice } from "@/lib/itinerary";
 import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PackageType, QuoteResult, TripInput } from "@/types";
+import { ChannelTable } from "./quote/ChannelTable";
 import { CompetitorTable } from "./quote/CompetitorTable";
 import { CostBreakdownTable } from "./quote/CostBreakdownTable";
+import { DeparturePricesPanel } from "./quote/DeparturePricesPanel";
+import { DiscountSimulator } from "./quote/DiscountSimulator";
+import { FxSensitivityPanel } from "./quote/FxSensitivityPanel";
 import { PerPersonMatrix } from "./quote/PerPersonMatrix";
 import { PriceGapAnalysis } from "./quote/PriceGapAnalysis";
+import { PriceTiersCard } from "./quote/PriceTiersCard";
 import { QuoteKpis } from "./quote/QuoteKpis";
+import { RateStructurePanel } from "./quote/RateStructurePanel";
+import { ScenarioCompare } from "./quote/ScenarioCompare";
 import { UndecidedRange } from "./quote/UndecidedRange";
 
 interface Props {
@@ -24,6 +32,8 @@ interface Props {
   pmChoice: PmChoice;
   meta: CourseMeta | null;
   generatedCurrency: CurrencyCode | null;
+  /** 할인 시나리오·가격안 저장처럼 견적 화면에서 입력값을 바꾸는 곳에서 쓴다 */
+  onInputChange: (patch: Partial<TripInput>) => void;
 }
 
 function QuoteSkeleton() {
@@ -51,10 +61,17 @@ const PACKAGE_LABELS: Record<PackageType, string> = {
   full: "풀패키지 (항공 포함)",
 };
 
-function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
+function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
 
   const policy = ourPolicy(days, pmChoice, input, meta);
+  const tiers = buildPriceTiers(quote, input, policy);
+  const binding = bindingChannel(quote, input);
+  const priceNote =
+    input.pricingMode !== "fixed_price" && input.channelPriceMode === "parity" && quote.channels.length > 1
+      ? `모든 채널 같은 가격 · '${binding.name}' 수수료 기준`
+      : undefined;
+  const hasFxData = input.currency !== "KRW" && input.exchangeRateToKrw > 0;
 
   // 일정을 만든 뒤 입력이 바뀌어 일정의 금액과 견적이 어긋나는 경우
   const staleWarnings: string[] = [];
@@ -106,7 +123,13 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency }:
         pricingMode={quote.pricingMode}
         currency={input.currency}
         exchangeRateToKrw={input.exchangeRateToKrw}
+        priceNote={priceNote}
       />
+
+      <section>
+        <SubHeading>추천 판매가 (최저 · 권장 · 경쟁력)</SubHeading>
+        <PriceTiersCard tiers={tiers} currency={input.currency} targetMarginRate={input.targetMarginRate} />
+      </section>
 
       {quote.withUndecided && (
         <UndecidedRange
@@ -140,6 +163,33 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency }:
       </section>
 
       <section>
+        <SubHeading>판매 채널별 가격 · 정산</SubHeading>
+        <ChannelTable quote={quote} input={input} currency={input.currency} />
+      </section>
+
+      <section>
+        <SubHeading>할인·쿠폰 시뮬레이션</SubHeading>
+        <DiscountSimulator quote={quote} input={input} currency={input.currency} onInputChange={onInputChange} />
+      </section>
+
+      <section>
+        <SubHeading>1인실 추가요금 · 아동·유아 요금</SubHeading>
+        <RateStructurePanel quote={quote} input={input} currency={input.currency} />
+      </section>
+
+      {hasFxData && (
+        <section>
+          <SubHeading>환율 민감도</SubHeading>
+          <FxSensitivityPanel quote={quote} input={input} />
+        </section>
+      )}
+
+      <section>
+        <SubHeading>출발일별 권장가</SubHeading>
+        <DeparturePricesPanel quote={quote} input={input} />
+      </section>
+
+      <section>
         <SubHeading>경쟁사 비교</SubHeading>
         <CompetitorTable
           competitors={input.competitors}
@@ -156,20 +206,33 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency }:
           <PriceGapAnalysis competitors={input.competitors} quote={quote} input={input} ourPolicy={policy} currency={input.currency} />
         </section>
       )}
+
+      <section>
+        <SubHeading>가격안 저장 · 비교</SubHeading>
+        <ScenarioCompare quote={quote} input={input} onInputChange={onInputChange} />
+      </section>
     </div>
   );
 }
 
-export function QuotePanel({ state, quote, input, days, pmChoice, meta, generatedCurrency }: Props) {
+export function QuotePanel({ state, quote, input, days, pmChoice, meta, generatedCurrency, onInputChange }: Props) {
   return (
     <SectionCard
       title="견적서"
-      description="원가 · 권장 판매가 · 인원별 1인 단가 · 경쟁사 비교"
+      description="원가 · 권장 판매가 · 채널별 정산 · 인원별 1인 단가 · 경쟁사 비교"
       icon={Calculator}
     >
       {state.status === "loading" && <QuoteSkeleton />}
       {state.status === "success" && quote && (
-        <QuoteContent quote={quote} input={input} days={days} pmChoice={pmChoice} meta={meta} generatedCurrency={generatedCurrency} />
+        <QuoteContent
+          quote={quote}
+          input={input}
+          days={days}
+          pmChoice={pmChoice}
+          meta={meta}
+          generatedCurrency={generatedCurrency}
+          onInputChange={onInputChange}
+        />
       )}
       {(state.status === "idle" || state.status === "error") && (
         <EmptyState

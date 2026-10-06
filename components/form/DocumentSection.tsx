@@ -90,6 +90,28 @@ export function DocumentSection({ input, onChange }: SectionProps) {
           )}
         </div>
 
+        {input.channels.length > 0 && (
+          <Field
+            htmlFor="documentChannelId"
+            label="견적서·청구서·계약서에 넣을 판매가"
+            hint="고객 문서에는 선택한 채널의 소비자가만 나가고, 채널 이름·수수료·마진은 들어가지 않습니다 (내부 검토서에서만 확인)"
+          >
+            <select
+              id="documentChannelId"
+              value={input.documentChannelId}
+              onChange={(e) => onChange({ documentChannelId: e.target.value })}
+              className={inputClass}
+            >
+              <option value="">직판 가격</option>
+              {input.channels.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name.trim() || "이름 없는 채널"} 가격
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <TextField
             id="pickupNote"

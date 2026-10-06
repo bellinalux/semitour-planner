@@ -1,6 +1,7 @@
 import { RotateCcw, Sparkles } from "lucide-react";
 import type { CourseFile } from "@/lib/courseFile";
 import type { FlightOption, TripInput } from "@/types";
+import { ChannelSection } from "./ChannelSection";
 import { CompetitorSection } from "./CompetitorSection";
 import { DocumentSection } from "./DocumentSection";
 import { CostSection } from "./CostSection";
@@ -43,6 +44,7 @@ export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerati
         <PackageSection input={input} onChange={onChange} stays={stays} onApplyFlight={onApplyFlight} />
         <CostSection input={input} onChange={onChange} />
         <PricingSection input={input} onChange={onChange} />
+        <ChannelSection input={input} onChange={onChange} />
         <CompetitorSection input={input} onChange={onChange} />
         <DocumentSection input={input} onChange={onChange} />
       </div>

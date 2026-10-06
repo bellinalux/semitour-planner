@@ -16,7 +16,11 @@ export function PricingSection({ input, onChange }: SectionProps) {
   return (
     <SectionCard
       title="가격 정책"
-      description={isFixed ? "입력한 판매가로 팔 때의 마진을 계산합니다" : "판매가 = 원가 ÷ (1 − 마진율 − 카드 수수료율)로 역산합니다"}
+      description={
+        isFixed
+          ? "입력한 판매가로 팔 때의 마진을 계산합니다"
+          : "판매가 = 원가 ÷ (1 − 마진율 − 수수료율)로 역산합니다 (채널 수수료는 아래 '판매 채널'에서)"
+      }
       icon={Percent}
     >
       <div className="space-y-4">
@@ -78,9 +82,68 @@ export function PricingSection({ input, onChange }: SectionProps) {
             value={input.cardFeeRate}
             suffix="%"
             max={20}
-            hint="판매가 대비"
+            hint="판매가 대비 (직판)"
             onChange={(cardFeeRate) => onChange({ cardFeeRate })}
           />
+        </div>
+
+        {input.currency !== "KRW" && (
+          <NumberField
+            id="fxBufferRate"
+            label="환율 변동 버퍼"
+            value={input.fxBufferRate}
+            suffix="%"
+            max={30}
+            hint="현지 통화 원가를 원화로 파는 상품은 환율이 오르면 마진이 줄어듭니다. 원가에 이 비율을 미리 더합니다 (0이면 반영 안 함)"
+            onChange={(fxBufferRate) => onChange({ fxBufferRate })}
+          />
+        )}
+
+        <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+          <p className="text-xs font-semibold text-slate-700">아동·유아 요금</p>
+          <p className="text-[11px] leading-4 text-slate-500">
+            성인 요금 대비 비율입니다. 상품·항공사·숙소 정책에 따라 다르니 판매 조건에 맞게 고치세요. 인원을 넣으면 견적서에서 구성별 총액과 이익을 계산합니다.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <NumberField
+              id="childPriceRate"
+              label="아동 요금"
+              value={input.childPriceRate}
+              suffix="%"
+              max={100}
+              hint="성인 요금 대비"
+              onChange={(childPriceRate) => onChange({ childPriceRate })}
+            />
+            <NumberField
+              id="infantPriceRate"
+              label="유아 요금"
+              value={input.infantPriceRate}
+              suffix="%"
+              max={100}
+              hint="성인 요금 대비"
+              onChange={(infantPriceRate) => onChange({ infantPriceRate })}
+            />
+            <NumberField
+              id="childCount"
+              label="아동 인원"
+              value={input.childCount}
+              suffix="명"
+              step={1}
+              max={Math.max(0, input.travelers)}
+              hint="예상 인원에 포함"
+              onChange={(childCount) => onChange({ childCount })}
+            />
+            <NumberField
+              id="infantCount"
+              label="유아 인원"
+              value={input.infantCount}
+              suffix="명"
+              step={1}
+              max={20}
+              hint="예상 인원과 별도 (좌석·식사·숙박 원가 없음으로 계산)"
+              onChange={(infantCount) => onChange({ infantCount })}
+            />
+          </div>
         </div>
       </div>
     </SectionCard>

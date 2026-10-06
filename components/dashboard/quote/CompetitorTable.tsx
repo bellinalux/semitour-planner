@@ -1,6 +1,7 @@
 import { Check, Minus, Swords } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { POLICY_LABELS, type OurPolicy } from "@/lib/competitorDiff";
+import { priceAgeDays, STALE_PRICE_DAYS } from "@/lib/competitors";
 import { compareWithCompetitors } from "@/lib/cost";
 import { formatMoney } from "@/lib/currency";
 import type { Competitor, CompetitorIncludes, CurrencyCode, TourPolicy } from "@/types";
@@ -35,6 +36,19 @@ function PolicyMark({ policy }: { policy: TourPolicy }) {
   const tone =
     policy === "none" ? "bg-emerald-50 text-emerald-700" : policy === "some" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500";
   return <span className={`mx-auto block w-fit rounded px-1.5 py-0.5 text-[10px] font-semibold ${tone}`}>{POLICY_LABELS[policy]}</span>;
+}
+
+/** 경쟁사 가격을 확인한 지 오래됐으면 경고를 붙인다 */
+function PriceAge({ competitor }: { competitor: Competitor }) {
+  if (competitor.price <= 0) return null;
+  const age = priceAgeDays(competitor);
+  if (age === null) return <span className="mt-0.5 block text-[10px] font-normal text-slate-400">확인 시점 미상</span>;
+  const stale = age > STALE_PRICE_DAYS;
+  return (
+    <span className={`mt-0.5 block text-[10px] font-normal ${stale ? "font-medium text-amber-700" : "text-slate-400"}`}>
+      {stale ? `가격 확인 ${age}일 지남 · 재확인 필요` : age === 0 ? "오늘 확인" : `${age}일 전 확인`}
+    </span>
+  );
 }
 
 function DiffCell({ diff, diffRate, currency }: { diff: number | null; diffRate: number | null; currency: CurrencyCode }) {
@@ -106,7 +120,10 @@ export function CompetitorTable({ competitors, ourPricePerPerson, ourIncludes, o
               const cmp = comparisons[index];
               return (
                 <tr key={competitor.id} className="text-slate-700">
-                  <td className="py-2.5 pr-3 font-medium">{competitor.name.trim() || `경쟁사 ${index + 1}`}</td>
+                  <td className="py-2.5 pr-3 font-medium">
+                    {competitor.name.trim() || `경쟁사 ${index + 1}`}
+                    <PriceAge competitor={competitor} />
+                  </td>
                   <td className="py-2.5 pr-3 text-right tabular-nums">
                     {competitor.price > 0 ? formatMoney(competitor.price, currency) : "—"}
                   </td>

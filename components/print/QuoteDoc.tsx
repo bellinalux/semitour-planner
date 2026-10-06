@@ -1,5 +1,6 @@
 import { CANCELLATION_TERMS, includeLists, paymentPlan, resolveRecipients, tripPeriod, type DocRecipient } from "@/lib/documents";
 import { localPayRows, moneyWithKrw } from "@/lib/fees";
+import { composition, singleSupplement } from "@/lib/pricing";
 import { formatMoney } from "@/lib/currency";
 import { DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
 
@@ -12,6 +13,13 @@ function OneQuote({ recipient, isGroup, breakBefore, data }: { recipient: DocRec
   const payment = paymentPlan(recipient.totalPrice, company, input);
   const title = meta?.packageName?.trim() || `${input.destination} ${input.nights}박 ${input.days}일`;
   const others = quote.matrix.filter((m) => m.travelers !== quote.travelers);
+  // 구성별 요금(아동·유아·1인실)은 합계를 바꾸지 않고 안내로만 적는다. 채널 이름·수수료·마진은 넣지 않는다.
+  const comp = composition(quote, input);
+  const single = singleSupplement(quote, input);
+  const rateNotes: string[] = [];
+  if (comp && comp.children > 0) rateNotes.push(`아동 1인 ${money(comp.childPrice)} (성인 요금의 ${input.childPriceRate}%)`);
+  if (comp && comp.infants > 0) rateNotes.push(`유아 1인 ${money(comp.infantPrice)} (성인 요금의 ${input.infantPriceRate}%)`);
+  if (single) rateNotes.push(`1인실 사용 시 추가요금 1인 ${money(single.price)}`);
 
   return (
     <div style={breakBefore ? { breakBefore: "page" } : undefined}>
@@ -76,8 +84,14 @@ function OneQuote({ recipient, isGroup, breakBefore, data }: { recipient: DocRec
           />
         </DocSection>
 
-        {(localPay.rows.length > 0 || input.options.length > 0) && (
+        {(localPay.rows.length > 0 || input.options.length > 0 || rateNotes.length > 0) && (
           <DocSection title="별도 비용 안내">
+            {rateNotes.length > 0 && (
+              <p className="mb-1">
+                <span className="font-medium">요금 구분</span> {rateNotes.join(" / ")}
+                <span className="text-slate-600"> — 위 합계에는 반영되지 않았으며 해당하는 경우에만 적용됩니다.</span>
+              </p>
+            )}
             {localPay.rows.length > 0 && (
               <p className="mb-1">
                 <span className="font-medium">현지 지불</span>{" "}
