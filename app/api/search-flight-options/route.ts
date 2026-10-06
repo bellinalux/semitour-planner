@@ -6,6 +6,7 @@ import {
 } from "@/lib/server/flightOptionsPrompt";
 import { GeminiError, generateGroundedText, generateJson } from "@/lib/server/gemini";
 import { guardRequest } from "@/lib/server/guard";
+import { cached, HOUR } from "@/lib/server/aiCache";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -32,19 +33,29 @@ export async function POST(request: Request) {
   }
 
   try {
-    // 1단계: Google 검색으로 조사 (출처 수집)
-    const research = await generateGroundedText({ user: buildFlightOptionsResearchPrompt(parsed.data) });
+    // 항공 요금은 자주 바뀌므로 같은 조건의 검색 결과만 3시간 동안 다시 쓴다
+    const result = await cached(
+      "flights",
+      parsed.data,
+      3 * HOUR,
+      async () => {
+        // 1단계: Google 검색으로 조사 (출처 수집)
+        const research = await generateGroundedText({ user: buildFlightOptionsResearchPrompt(parsed.data) });
 
-    // 2단계: 조사 메모를 JSON으로 정리 (메모에 없는 내용은 만들지 않는다)
-    const structured = await generateJson({
-      system: FLIGHT_OPTIONS_STRUCTURE_SYSTEM_PROMPT,
-      user: buildFlightOptionsStructurePrompt(parsed.data, research.text),
-      schema: flightOptionsResponseSchema,
-      temperature: 0.1,
-    });
+        // 2단계: 조사 메모를 JSON으로 정리 (메모에 없는 내용은 만들지 않는다)
+        const structured = await generateJson({
+          system: FLIGHT_OPTIONS_STRUCTURE_SYSTEM_PROMPT,
+          user: buildFlightOptionsStructurePrompt(parsed.data, research.text),
+          schema: flightOptionsResponseSchema,
+          temperature: 0.1,
+        });
 
-    const flights = toFlightOptions(structured, parsed.data, research.searched);
-    return Response.json({ flights, sources: research.sources, searched: research.searched, checkedAt: new Date().toISOString() });
+        const flights = toFlightOptions(structured, parsed.data, research.searched);
+        return { flights, sources: research.sources, searched: research.searched, checkedAt: new Date().toISOString() };
+      },
+      (r) => r.searched && r.flights.length > 0,
+    );
+    return Response.json(result);
   } catch (err) {
     if (err instanceof GeminiError) return errorResponse(err.code, err.message, err.status);
     console.error("[search-flight-options]", err);

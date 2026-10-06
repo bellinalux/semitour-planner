@@ -1,3 +1,4 @@
+import { roundMinutes } from "@/lib/format";
 /**
  * 코스 엔진 "추천 변경안" — 엔진 점검에서 나온 문제(식사 늦음, 명소 한 곳뿐, 이동 과다 등)를 고친 대안 일정을
  * AI가 여러 개(최대 3개) 제안하고, 각 대안을 엔진으로 다시 흘려 점수를 매겨 돌려준다. 사용자는 점수와 바뀐 점을 보고 고른다.
@@ -147,7 +148,7 @@ export async function suggestAlternatives(req: AlternativesRequest): Promise<{ a
       if (keep) {
         seen.add(keep.id);
         // 머무는 시간을 줄이거나 늘리는 것도 대안이 될 수 있어 AI가 준 값을 쓴다 (엉뚱한 값이면 원래 값)
-        const stay = s.stayMinutes >= 15 && s.stayMinutes <= 480 ? Math.round(s.stayMinutes / 5) * 5 : keep.stayMin;
+        const stay = s.stayMinutes >= 15 && s.stayMinutes <= 480 ? roundMinutes(s.stayMinutes) : keep.stayMin;
         steps.push({ id: keep.id, kept: true, name: keep.name, type: s.type, stayMinutes: keep.stayMin > 0 ? stay : keep.stayMin, entryFee: 0, mealCost: 0, cuisine: "", description: "" });
       } else if (!s.keepId && s.name.trim()) {
         steps.push({
@@ -155,7 +156,7 @@ export async function suggestAlternatives(req: AlternativesRequest): Promise<{ a
           kept: false,
           name: s.name.trim(),
           type: s.type,
-          stayMinutes: Math.max(15, Math.min(480, Math.round(s.stayMinutes / 5) * 5 || 60)),
+          stayMinutes: Math.max(15, Math.min(480, roundMinutes(s.stayMinutes) || 60)),
           entryFee: Math.max(0, s.entryFee),
           mealCost: s.type === "meal" ? Math.max(0, s.mealCost) : 0,
           cuisine: s.type === "meal" ? s.cuisine.trim() : "",

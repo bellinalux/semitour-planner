@@ -10,7 +10,8 @@
     "dev:vinext": "vinext dev --port 3001",
     "build:vinext": "vinext build",
     "start:vinext": "wrangler dev --config dist/server/wrangler.json",
-    "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json"
+    "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "hwp-convert": "^1.13.0",
@@ -37,6 +38,7 @@
     "typescript": "^5",
     "vinext": "^1.0.0-beta.10",
     "vite": "^8.3.0",
+    "vitest": "^4.1.11",
     "wrangler": "^4.135.0"
   },
   "type": "module"

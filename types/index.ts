@@ -145,6 +145,15 @@ export type PackageType = "land" | "land_hotel" | "full";
 export type Certainty = "confirmed" | "estimated" | "undecided";
 /** 확정도를 지정하는 비용 항목 */
 export type CostKey = "vehicle" | "guide" | "other" | "lodging" | "flight";
+/** 원가 값을 어디서 가져왔는지: 직접 입력 / 지난 견적 / 웹 검색 / AI 추정 / 고른 항공편 / 고른 숙소 */
+export type CostSourceKind = "manual" | "memory" | "web" | "ai" | "flight" | "hotel";
+export interface CostSource {
+  kind: CostSourceKind;
+  /** 값을 넣은 시각 (ISO) */
+  at: string;
+  /** 편명·숙소 이름 등 */
+  note?: string;
+}
 export type LodgingType = "hotel" | "bnb" | "resort";
 /** 호텔 등급: 전체(3~5성) / 3성 / 4성 / 5성 / 리조트 */
 export type HotelGrade = "any" | "3" | "4" | "5" | "resort";
@@ -210,6 +219,8 @@ export interface TripInput {
   /** 항공편 상세 검색에서 골라 적용한 항공편 (가는 편·귀국편 정보). 안 골랐으면 null */
   selectedFlight: FlightOption | null;
   costStatus: Record<CostKey, Certainty>;
+  /** 항목별 원가 출처 (모르면 없음) */
+  costSource: Partial<Record<CostKey, CostSource>>;
 
   pricingMode: PricingMode;
   /** pricingMode === "fixed_price"일 때 1인 판매가 */
@@ -500,6 +511,8 @@ export interface CostLine {
   status?: Certainty;
   /** 미정이라 기본 가격 계산에서 뺀 항목 */
   excluded?: boolean;
+  /** 값의 출처 (확정도 대상 항목만) */
+  source?: CostSource;
   /** 계산 근거 (예: "3일 × 300,000") */
   note?: string;
 }

@@ -2,6 +2,7 @@ import { travelRequestSchema, travelResponseSchema, toTravelEstimate } from "@/l
 import { GeminiError, generateJson } from "@/lib/server/gemini";
 import { buildTravelUserPrompt, TRAVEL_SYSTEM_PROMPT } from "@/lib/server/travelPrompt";
 import { guardRequest } from "@/lib/server/guard";
+import { cached, DAY } from "@/lib/server/aiCache";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -24,14 +25,19 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await generateJson({
-      system: TRAVEL_SYSTEM_PROMPT,
-      user: buildTravelUserPrompt(parsed.data),
-      schema: travelResponseSchema,
-      temperature: 0.3,
-      timeoutMs: 60_000,
-    });
-    return Response.json({ estimate: toTravelEstimate(result) });
+    // 같은 조건의 시세 추정은 하루 동안 다시 쓴다
+    const estimate = await cached("travel", parsed.data, DAY, async () =>
+      toTravelEstimate(
+        await generateJson({
+          system: TRAVEL_SYSTEM_PROMPT,
+          user: buildTravelUserPrompt(parsed.data),
+          schema: travelResponseSchema,
+          temperature: 0.3,
+          timeoutMs: 60_000,
+        }),
+      ),
+    );
+    return Response.json({ estimate });
   } catch (err) {
     if (err instanceof GeminiError) return errorResponse(err.code, err.message, err.status);
     console.error("[estimate-travel]", err);

@@ -1,4 +1,5 @@
 import { isBreakfastItem } from "@/lib/documents";
+import { TIME_STEP } from "@/lib/format";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import type { DayPlan, ItineraryItem } from "@/types";
 
@@ -65,24 +66,52 @@ export interface ItemTiming {
   end: string;
 }
 
-/**
- * 오전 미팅 시각부터 각 코스의 시작·종료 시각을 순서대로 계산한다.
- * 호텔 조식은 투어 시작 전이라 타임라인에서 제외한다(계산에도, 결과 맵에도 없음).
- */
-export function computeItemTimings(items: ItineraryItem[], meetingTime: string): Map<string, ItemTiming> {
-  const timings = new Map<string, ItemTiming>();
-  const start = parseClock(meetingTime);
-  if (start === null) return timings;
+/** 10분 단위로 올림 (08:45 → 08:50) */
+export const snapUp = (minutes: number) => Math.ceil(minutes / TIME_STEP) * TIME_STEP;
 
+export interface TimelineSlot {
+  item: ItineraryItem;
+  /** 자정 기준 분 */
+  start: number;
+  end: number;
+}
+
+/**
+ * 오전 미팅 시각부터 각 코스의 시작·종료 시각(분)을 순서대로 계산한다.
+ * 여행사 일정표처럼 시각은 10분 단위로 끊는다 — 앞 코스가 08:45에 끝나면 다음 코스는 08:50부터.
+ * 항공 항목만은 실제 출발·도착 시각이라 그대로 둔다. 호텔 조식은 투어 시작 전이라 제외한다.
+ */
+export function walkTimeline(items: ItineraryItem[], meetingTime: string): TimelineSlot[] {
+  const start = parseClock(meetingTime);
+  if (start === null) return [];
+  const slots: TimelineSlot[] = [];
   let clock = start;
   for (const item of items) {
     if (isBreakfastItem(item)) continue;
-    const itemStart = clock;
-    const itemEnd = clock + Math.max(0, item.stayMinutes);
-    timings.set(item.id, { start: formatClock(itemStart), end: formatClock(itemEnd) });
+    const flight = item.type === "flight";
+    const itemStart = flight ? clock : snapUp(clock);
+    const itemEnd = flight ? itemStart + Math.max(0, item.stayMinutes) : snapUp(itemStart + Math.max(0, item.stayMinutes));
+    slots.push({ item, start: itemStart, end: itemEnd });
     clock = itemEnd + Math.max(0, item.travelMinutesToNext ?? 0);
   }
-  return timings;
+  return slots;
+}
+
+/** 그날 마지막 코스가 끝나는 시각(분). 코스가 없으면 null */
+export function timelineEndMinutes(items: ItineraryItem[], meetingTime: string): number | null {
+  const slots = walkTimeline(items, meetingTime);
+  return slots.length > 0 ? slots[slots.length - 1].end : null;
+}
+
+/** 그날 마지막 코스가 끝나는 시각 "HH:mm". 코스가 없으면 null */
+export function timelineEndTime(items: ItineraryItem[], meetingTime: string): string | null {
+  const end = timelineEndMinutes(items, meetingTime);
+  return end === null ? null : formatClock(end);
+}
+
+/** 각 코스의 시작·종료 시각 "HH:mm" (조식 등 타임라인에서 빠진 항목은 맵에 없음) */
+export function computeItemTimings(items: ItineraryItem[], meetingTime: string): Map<string, ItemTiming> {
+  return new Map(walkTimeline(items, meetingTime).map((s) => [s.item.id, { start: formatClock(s.start), end: formatClock(s.end) }]));
 }
 
 /** 하루 소화 가능 시간 기준(분). 이 값을 넘으면 이동+체류 시간이 빠듯하거나 넘친다고 본다. */
@@ -149,10 +178,8 @@ export interface DayGap {
  */
 export function calcDayGap(day: DayPlan, pmChoice: PmChoice, isLastDay: boolean): DayGap | null {
   if (day.kind !== "linear" || isLastDay) return null;
-  const load = calcDayLoad(day, pmChoice);
-  const start = parseClock(dayMeetingTime(day));
-  if (start === null) return null;
-  const endMinutes = start + load.totalMinutes;
+  const endMinutes = timelineEndMinutes(dayItems(day, pmChoice), dayMeetingTime(day)) ?? parseClock(dayMeetingTime(day));
+  if (endMinutes === null) return null;
   const freeMinutes = DAY_FILL_TARGET_END_MINUTES - endMinutes;
   if (freeMinutes < DAY_FILL_MIN_GAP_MINUTES) return null;
   return { freeMinutes, fromTime: formatClock(endMinutes) };
@@ -181,7 +208,7 @@ export interface DayEndCheck {
 export function calcDayEnd(day: DayPlan, pmChoice: PmChoice): DayEndCheck | null {
   const load = calcDayLoad(day, pmChoice);
   if (load.totalMinutes === 0) return null;
-  const endTime = estimatedEndTime(dayMeetingTime(day), load.totalMinutes);
+  const endTime = timelineEndTime(dayItems(day, pmChoice), dayMeetingTime(day));
   if (!endTime) return null;
   const endMinutes = parseClock(endTime);
   const standardMinutes = parseClock(STANDARD_DAY_END);

@@ -1,4 +1,5 @@
 import { AlertTriangle, Calculator } from "lucide-react";
+import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import type { SettingsSection } from "@/components/form/SettingsPanel";
@@ -73,7 +74,34 @@ const PACKAGE_LABELS: Record<PackageType, string> = {
   full: "풀패키지 (항공 포함)",
 };
 
+const VIEW_KEY = "semitour-planner:quote-view:v1";
+type QuoteView = "summary" | "detail";
+
+/** 요약(판매가·추천가·원가·경쟁사)과 자세히(채널·할인·환율·출발일별 등) 중 고른 보기를 기억한다 */
+function useQuoteView(): [QuoteView, (v: QuoteView) => void] {
+  const [view, setView] = useState<QuoteView>("summary");
+  useEffect(() => {
+    try {
+      // 브라우저 저장소 값이라 화면을 그린 뒤에 읽는다
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (localStorage.getItem(VIEW_KEY) === "detail") setView("detail");
+    } catch {
+      // 무시
+    }
+  }, []);
+  const change = (v: QuoteView) => {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // 무시
+    }
+  };
+  return [view, change];
+}
+
 function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
+  const [view, setView] = useQuoteView();
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
 
   const policy = ourPolicy(days, pmChoice, input, meta);
@@ -98,9 +126,27 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
     );
   }
   const warnings = [...staleWarnings, ...quote.warnings];
+  const detail = view === "detail";
 
   return (
     <div className="space-y-6">
+      <div role="radiogroup" aria-label="견적 보기" className="flex items-center justify-end gap-2">
+        <span className="text-[11px] text-slate-500">{detail ? "모든 분석을 보여 줍니다" : "채널·할인·환율·출발일별 분석은 '자세히'에서"}</span>
+        <div className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white text-[11px] font-medium">
+          {(["summary", "detail"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="radio"
+              aria-checked={view === v}
+              onClick={() => setView(v)}
+              className={`px-2.5 py-1 ${view === v ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+            >
+              {v === "summary" ? "요약" : "자세히"}
+            </button>
+          ))}
+        </div>
+      </div>
       {warnings.some((w) => settingsTargetFor(w) !== null) && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] text-indigo-900">
           <span className="flex-1">비어 있는 원가가 있습니다. 지난 견적 값이나 웹 검색 추정으로 한 번에 채울 수 있습니다.</span>
@@ -184,43 +230,48 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
         />
       </section>
 
-      <section>
-        <SubHeading>인원별 견적 · 손익분기</SubHeading>
-        <PerPersonMatrix
-          quote={quote}
-          currency={input.currency}
-          targetMarginRate={input.targetMarginRate}
-          unitsFor={quote.lodgingUnits > 0 ? (n) => lodgingUnitsFor(n, input.guestsPerUnit) : null}
-          unitLabel={input.lodgingType === "bnb" ? "유닛" : "실"}
-        />
-      </section>
+      {detail && (
+        <>
+          <section>
+            <SubHeading>인원별 견적 · 손익분기</SubHeading>
+            <PerPersonMatrix
+              quote={quote}
+              currency={input.currency}
+              targetMarginRate={input.targetMarginRate}
+              unitsFor={quote.lodgingUnits > 0 ? (n) => lodgingUnitsFor(n, input.guestsPerUnit) : null}
+              unitLabel={input.lodgingType === "bnb" ? "유닛" : "실"}
+            />
+          </section>
 
-      <section>
-        <SubHeading>판매 채널별 가격 · 정산</SubHeading>
-        <ChannelTable quote={quote} input={input} currency={input.currency} />
-      </section>
+          <section>
+            <SubHeading>판매 채널별 가격 · 정산</SubHeading>
+            <ChannelTable quote={quote} input={input} currency={input.currency} />
+          </section>
 
-      <section>
-        <SubHeading>할인·쿠폰 시뮬레이션</SubHeading>
-        <DiscountSimulator quote={quote} input={input} currency={input.currency} onInputChange={onInputChange} />
-      </section>
+          <section>
+            <SubHeading>할인·쿠폰 시뮬레이션</SubHeading>
+            <DiscountSimulator quote={quote} input={input} currency={input.currency} onInputChange={onInputChange} />
+          </section>
 
-      <section>
-        <SubHeading>1인실 추가요금 · 아동·유아 요금</SubHeading>
-        <RateStructurePanel quote={quote} input={input} currency={input.currency} />
-      </section>
+          <section>
+            <SubHeading>1인실 추가요금 · 아동·유아 요금</SubHeading>
+            <RateStructurePanel quote={quote} input={input} currency={input.currency} />
+          </section>
 
-      {hasFxData && (
-        <section>
-          <SubHeading>환율 민감도</SubHeading>
-          <FxSensitivityPanel quote={quote} input={input} />
-        </section>
+          {hasFxData && (
+            <section>
+              <SubHeading>환율 민감도</SubHeading>
+              <FxSensitivityPanel quote={quote} input={input} />
+            </section>
+          )}
+
+          <section>
+            <SubHeading>출발일별 권장가</SubHeading>
+            <DeparturePricesPanel quote={quote} input={input} />
+          </section>
+
+        </>
       )}
-
-      <section>
-        <SubHeading>출발일별 권장가</SubHeading>
-        <DeparturePricesPanel quote={quote} input={input} />
-      </section>
 
       <section>
         <SubHeading>경쟁사 비교</SubHeading>
@@ -233,17 +284,19 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
         />
       </section>
 
-      {input.competitors.some((c) => c.price > 0) && (
+      {detail && input.competitors.some((c) => c.price > 0) && (
         <section>
           <SubHeading>가격 차이 분석</SubHeading>
           <PriceGapAnalysis competitors={input.competitors} quote={quote} input={input} ourPolicy={policy} currency={input.currency} />
         </section>
       )}
 
-      <section>
-        <SubHeading>가격안 저장 · 비교</SubHeading>
-        <ScenarioCompare quote={quote} input={input} onInputChange={onInputChange} />
-      </section>
+      {detail && (
+        <section>
+          <SubHeading>가격안 저장 · 비교</SubHeading>
+          <ScenarioCompare quote={quote} input={input} onInputChange={onInputChange} />
+        </section>
+      )}
     </div>
   );
 }

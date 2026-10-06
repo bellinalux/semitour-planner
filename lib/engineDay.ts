@@ -8,6 +8,7 @@ import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { hoursText } from "@/lib/courseEngine";
 import type { PlaceKnowledge, PlanResponse } from "@/lib/server/courseEngineServer";
 import type { DayPlan, ItineraryItem, TravelType } from "@/types";
+import { roundMinutes } from "@/lib/format";
 
 export interface EngineDayRequest {
   places: { id: string; name: string; stayMin: number; kind?: "sight" | "meal" | "free" | "transfer" | "end"; priority?: 1 | 2 | 3; fixedOrder?: "first" | "last" }[];
@@ -81,7 +82,7 @@ export function applyDayResult(days: DayPlan[], dayNo: number, res: PlanResponse
       return {
         ...it,
         stayMinutes: it.stayMinutes || stay.get(it.id) || it.stayMinutes,
-        travelMinutesToNext: nextTravel.has(it.id) ? nextTravel.get(it.id)! : it.travelMinutesToNext,
+        travelMinutesToNext: nextTravel.has(it.id) ? roundMinutes(nextTravel.get(it.id)!) : it.travelMinutesToNext,
         ...(c && !(it.caution ?? "").includes(c.slice(0, 12)) ? { caution: [it.caution, c].filter(Boolean).join(" / ") } : {}),
       };
     };

@@ -1,5 +1,6 @@
 import { DEFAULT_INPUT, TRAVEL_TYPES } from "@/lib/defaults";
 import type { TripInput } from "@/types";
+import { isCostSource } from "@/lib/costSource";
 
 const TRAVEL_TYPE_IDS: Set<string> = new Set(TRAVEL_TYPES.map((t) => t.id));
 
@@ -15,6 +16,10 @@ export function normalizeInput(saved: unknown): TripInput {
     ...s,
     // 중첩 객체는 이전에 저장된 값에 새 키가 없을 수 있어 기본값과 합친다
     costStatus: { ...DEFAULT_INPUT.costStatus, ...s.costStatus },
+    costSource:
+      typeof s.costSource === "object" && s.costSource !== null
+        ? Object.fromEntries(Object.entries(s.costSource).filter(([, v]) => isCostSource(v)))
+        : {},
     lodgingCityRates:
       typeof s.lodgingCityRates === "object" && s.lodgingCityRates !== null && !Array.isArray(s.lodgingCityRates)
         ? s.lodgingCityRates

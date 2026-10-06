@@ -1,4 +1,4 @@
-import { clockMinutes, DEFAULT_MEETING_TIME } from "@/lib/dayLoad";
+import { clockMinutes, DEFAULT_MEETING_TIME, snapUp } from "@/lib/dayLoad";
 import { isBreakfastItem } from "@/lib/documents";
 import type { ItineraryItem } from "@/types";
 
@@ -50,6 +50,8 @@ export function enforceMealWindows(items: ItineraryItem[], meetingTime: string =
       result.push(item);
       continue;
     }
+    // 시각 계산은 일정표와 같게 — 항공 외 항목은 10분 단위로 올려서 시작한다 (walkTimeline)
+    if (item.type !== "flight") clock = snapUp(clock);
     const windowStart = mealWindowStart(item);
     if (windowStart !== null) {
       const windowStartMinutes = clockMinutes(windowStart);
@@ -60,7 +62,8 @@ export function enforceMealWindows(items: ItineraryItem[], meetingTime: string =
       }
     }
     result.push(item);
-    clock += Math.max(0, item.stayMinutes) + Math.max(0, item.travelMinutesToNext ?? 0);
+    const end = clock + Math.max(0, item.stayMinutes);
+    clock = (item.type === "flight" ? end : snapUp(end)) + Math.max(0, item.travelMinutesToNext ?? 0);
   }
   return result;
 }

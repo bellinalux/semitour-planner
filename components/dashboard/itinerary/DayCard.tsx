@@ -1,5 +1,5 @@
 import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Flag, Plus, Sun, Sunset } from "lucide-react";
-import { calcDayEnd, calcDayGap, calcDayLoad, computeItemTimings, dayMeetingTime, estimatedEndTime, STANDARD_DAY_END, type DayLoadLevel } from "@/lib/dayLoad";
+import { calcDayEnd, calcDayGap, calcDayLoad, computeItemTimings, dayMeetingTime, STANDARD_DAY_END, timelineEndTime, type DayLoadLevel } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
 import { dayItems } from "@/lib/itinerary";
 import type { SegmentKind } from "@/lib/segmentLibrary";
@@ -73,7 +73,7 @@ export function DayCard({
   const pmChoiceForDay = { [plan.day]: selectedPmId };
   const load = calcDayLoad(plan, pmChoiceForDay);
   const meetingTime = dayMeetingTime(plan);
-  const endTime = load.totalMinutes > 0 ? estimatedEndTime(meetingTime, load.totalMinutes) : null;
+  const endTime = load.totalMinutes > 0 ? timelineEndTime(dayItems(plan, pmChoiceForDay), meetingTime) : null;
   const timings = computeItemTimings(dayItems(plan, pmChoiceForDay), meetingTime);
   const isLastDay = days.length > 0 && plan.day === Math.max(...days.map((d) => d.day));
   const gap = calcDayGap(plan, pmChoiceForDay, isLastDay);

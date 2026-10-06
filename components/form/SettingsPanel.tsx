@@ -13,9 +13,10 @@ import { CostSection } from "./CostSection";
 import { DocumentSection } from "./DocumentSection";
 import { PackageSection } from "./PackageSection";
 import { PricingSection } from "./PricingSection";
+import { setupChecklist, type SetupSection } from "@/lib/setupChecklist";
 
 /** 설정 패널의 항목. 견적 경고 등 다른 화면에서 이 항목으로 바로 이동시킬 때 쓴다 */
-export type SettingsSection = "package" | "cost" | "pricing" | "channels" | "competitors" | "documents";
+export type SettingsSection = SetupSection;
 
 export interface SettingsFocus {
   section: SettingsSection;
@@ -107,21 +108,6 @@ function MemoryHint({ input, onChange }: { input: TripInput; onChange: (patch: P
   );
 }
 
-interface CheckItem {
-  section: SettingsSection;
-  label: string;
-  done: boolean;
-}
-
-/** 코스를 만든 뒤 견적에 꼭 필요한 값들이 채워졌는지 */
-function checklist(input: TripInput): CheckItem[] {
-  const items: CheckItem[] = [{ section: "cost", label: "차량·가이드비", done: input.vehicleCostPerDay + input.guideCostPerDay > 0 }];
-  if (input.packageType !== "land") items.push({ section: "package", label: "숙박 요금", done: input.lodgingRatePerNight > 0 || Object.values(input.lodgingCityRates).some((v) => v > 0) });
-  if (input.packageType === "full") items.push({ section: "package", label: "항공료", done: input.flightPricePerPerson > 0 });
-  items.push({ section: "documents", label: "수신처", done: input.customerName.trim() !== "" });
-  return items;
-}
-
 /**
  * 레이아웃3: 코스를 만든 뒤 원가·가격·판매 채널·경쟁사·고객 문서를 설정하는 패널.
  * 길어지는 항목은 접고 펼 수 있고, 접어도 입력값은 그대로 남는다.
@@ -135,7 +121,7 @@ export function SettingsPanel({ input, onChange, stays, onApplyFlight, focus, on
     return () => window.clearTimeout(id);
   }, [focus]);
 
-  const items = checklist(input);
+  const items = setupChecklist(input);
 
   return (
     <div className="space-y-4 p-4">

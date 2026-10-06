@@ -7,6 +7,7 @@ import {
 import { errorResponse } from "@/lib/server/external";
 import { GeminiError, generateGroundedText, generateJson } from "@/lib/server/gemini";
 import { guardRequest } from "@/lib/server/guard";
+import { cached, DAY } from "@/lib/server/aiCache";
 
 export async function POST(request: Request) {
   const blocked = await guardRequest(request);
@@ -25,31 +26,35 @@ export async function POST(request: Request) {
   }
 
   try {
-    // 1단계: Google 검색으로 조사 (출처 수집)
-    const research = await generateGroundedText({ user: buildCompetitorResearchPrompt(parsed.data) });
+    // 같은 조건의 경쟁 상품 조사는 3일 동안 다시 쓴다 (검색 근거가 있고 상품을 찾은 결과만)
+    const result = await cached(
+      "competitors",
+      parsed.data,
+      3 * DAY,
+      async () => {
+        // 1단계: Google 검색으로 조사 (출처 수집)
+        const research = await generateGroundedText({ user: buildCompetitorResearchPrompt(parsed.data) });
 
-    // 2단계: 조사 메모를 JSON으로 정리 (메모에 없는 내용은 만들지 않는다)
-    const structured = await generateJson({
-      system: COMPETITOR_STRUCTURE_SYSTEM_PROMPT,
-      user: buildCompetitorStructurePrompt(parsed.data, research.text),
-      schema: competitorResponseSchema,
-      temperature: 0.1,
-    });
+        // 2단계: 조사 메모를 JSON으로 정리 (메모에 없는 내용은 만들지 않는다)
+        const structured = await generateJson({
+          system: COMPETITOR_STRUCTURE_SYSTEM_PROMPT,
+          user: buildCompetitorStructurePrompt(parsed.data, research.text),
+          schema: competitorResponseSchema,
+          temperature: 0.1,
+        });
 
-    const products = toCompetitorCandidates(structured).map((p) =>
-      // 검색 근거가 없으면 "확인" 표시를 믿을 수 없으므로 낮춘다
-      research.searched ? p : { ...p, basis: "estimated" as const, sourceName: "" },
+        const products = toCompetitorCandidates(structured).map((p) =>
+          // 검색 근거가 없으면 "확인" 표시를 믿을 수 없으므로 낮춘다
+          research.searched ? p : { ...p, basis: "estimated" as const, sourceName: "" },
+        );
+        return { products, sources: research.sources, searched: research.searched, searchedAt: new Date().toISOString() };
+      },
+      (r) => r.searched && r.products.length > 0,
     );
-    if (products.length === 0) {
+    if (result.products.length === 0) {
       return errorResponse("BAD_OUTPUT", "비슷한 경쟁 상품을 찾지 못했습니다. 여행지나 기간을 조정해 다시 시도해 주세요.", 422);
     }
-
-    return Response.json({
-      products,
-      sources: research.sources,
-      searched: research.searched,
-      searchedAt: new Date().toISOString(),
-    });
+    return Response.json(result);
   } catch (err) {
     if (err instanceof GeminiError) return errorResponse(err.code, err.message, err.status);
     console.error("[find-competitors]", err);

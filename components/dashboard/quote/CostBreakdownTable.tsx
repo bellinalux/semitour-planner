@@ -1,3 +1,4 @@
+import { costSourceLabel } from "@/lib/costSource";
 import { formatMoney } from "@/lib/currency";
 import type { CostLine, CurrencyCode, PricingMode, QuoteScenario } from "@/types";
 
@@ -41,7 +42,10 @@ export function CostBreakdownTable({ lines, scenario, currency, pricingMode, wit
                 {line.label}
                 <StatusChip line={line} />
               </td>
-              <td className="py-2 pr-3 text-slate-500">{line.note ?? ""}</td>
+              <td className="py-2 pr-3 text-slate-500">
+                {line.note ?? ""}
+                {line.source && line.amount > 0 && <span className="block text-[10px] text-slate-400">출처: {costSourceLabel(line.source)}</span>}
+              </td>
               <td className={`py-2 text-right tabular-nums ${line.excluded ? "line-through" : ""}`}>{money(line.amount)}</td>
             </tr>
           ))}

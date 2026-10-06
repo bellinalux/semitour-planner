@@ -7,6 +7,7 @@ import { useRequest } from "@/hooks/useRequest";
 import { formatMoney } from "@/lib/currency";
 import type { FlightDeal, FlightSearchResult } from "@/types";
 import type { SectionProps } from "./types";
+import { withSource } from "@/lib/costSource";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -66,7 +67,7 @@ export function FlightPricePanel({ input, onChange }: SectionProps) {
   };
 
   const apply = (deal: FlightDeal) => {
-    onChange({ flightPricePerPerson: deal.price, costStatus: { ...input.costStatus, flight: "estimated" } });
+    onChange({ flightPricePerPerson: deal.price, costStatus: { ...input.costStatus, flight: "estimated" }, ...withSource(input, "flight", "web", deal.airline) });
     setAppliedDate(deal.departDate);
   };
 

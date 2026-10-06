@@ -11,6 +11,7 @@ import { midpoint } from "@/lib/travelEstimate";
 import type { HotelCandidate, HotelPreference, LodgingType } from "@/types";
 import { HotelCard } from "./HotelCard";
 import type { SectionProps } from "./types";
+import { withSource } from "@/lib/costSource";
 
 interface Props extends SectionProps {
   /** 일정에서 센 도시별 숙박 수. 2곳 이상이면 지역을 도시별로 고를 수 있다 */
@@ -70,6 +71,7 @@ export function HotelFinder({ input, onChange, stays }: Props) {
       selectedHotels: { ...input.selectedHotels, [key]: toSelected(hotel) },
       ...(perCity ? { lodgingCityRates: { ...input.lodgingCityRates, [key]: rate } } : { lodgingRatePerNight: rate }),
       costStatus: { ...input.costStatus, lodging: "estimated" },
+      ...withSource(input, "lodging", "hotel", hotel.name),
     });
   };
 

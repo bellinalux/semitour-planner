@@ -26,6 +26,10 @@ export function AutoQuotePanel({ auto }: { auto: AutoQuote }) {
         {auto.running ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Sparkles className="h-4 w-4" aria-hidden />}
         {auto.running ? "자동 견적 중... (1~2분)" : "자동 견적 — 빈 값 한 번에 채우기"}
       </button>
+      <label className="flex items-center gap-1.5 text-[11px] font-medium text-slate-700">
+        <input type="checkbox" checked={auto.afterGenerate} onChange={(e) => auto.setAfterGenerate(e.target.checked)} />
+        코스를 만들면 자동 견적도 바로 이어서 실행
+      </label>
       <p className="text-[11px] leading-4 text-slate-500">
         이미 입력한 값은 그대로 두고 비어 있는 것만 채웁니다. 지난 견적 값이 있으면 그것을 먼저 쓰고, 없으면 웹 검색으로 추정합니다. 채운 값은 모두 &quot;추정&quot;으로 표시됩니다.
       </p>

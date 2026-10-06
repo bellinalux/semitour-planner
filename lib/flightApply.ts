@@ -1,5 +1,6 @@
-import { clockDiffMinutes, clockMinutes, shiftClock } from "@/lib/dayLoad";
-import { addDays, parseDate } from "@/lib/documents";
+import { clockDiffMinutes, clockMinutes, shiftClock, walkTimeline } from "@/lib/dayLoad";
+import { TIME_STEP } from "@/lib/format";
+import { addDays, isBreakfastItem, parseDate } from "@/lib/documents";
 import { mapDayItems } from "@/lib/itinerary";
 import type { DayPlan, FlightOption, ItineraryItem, TripInput } from "@/types";
 
@@ -84,9 +85,33 @@ function precedingMinutes(items: ItineraryItem[], targetId: string): number {
 function anchorMeetingTime(days: DayPlan[], dayIndex: number, itemId: string, anchorTime: string): DayPlan[] {
   const day = days[dayIndex];
   const items = day.kind === "linear" ? day.items : day.amGuided;
-  const meetingTime = shiftClock(anchorTime, -precedingMinutes(items, itemId));
-  if (!meetingTime) return days;
-  return days.map((d, i) => (i === dayIndex ? { ...d, meetingTime } : d));
+  const index = items.findIndex((i) => i.id === itemId);
+  const before = items.slice(0, Math.max(0, index)).filter((i) => !isBreakfastItem(i));
+  const target = clockMinutes(anchorTime);
+  // 항공이 그날 첫 일정이면 미팅 시각 = 실제 출발 시각
+  if (before.length === 0 || target === null) {
+    const meetingTime = shiftClock(anchorTime, -precedingMinutes(items, itemId));
+    return meetingTime ? days.map((d, i) => (i === dayIndex ? { ...d, meetingTime } : d)) : days;
+  }
+
+  // 앞선 일정(체크아웃·공항 이동)은 10분 단위 시각으로 시작하도록 미팅 시각을 10분 단위로 내리고,
+  // 남는 몇 분은 항공 바로 앞 항목의 이동 시간에 더해 항공 항목이 실제 출발 시각에 정확히 오게 한다
+  let meeting = Math.floor((target - precedingMinutes(items, itemId)) / TIME_STEP) * TIME_STEP;
+  let delta = 0;
+  for (let tries = 0; tries < 12; tries++) {
+    const slot = walkTimeline(items, shiftClock("00:00", meeting) ?? "00:00").find((s) => s.item.id === itemId);
+    if (!slot) return days;
+    delta = target - slot.start;
+    if (delta > 720) delta -= 1440; // 자정을 넘나드는 경우
+    if (delta < -720) delta += 1440;
+    if (delta >= 0) break;
+    meeting -= TIME_STEP;
+  }
+  const meetingTime = shiftClock("00:00", meeting);
+  if (!meetingTime || delta < 0) return days;
+  const last = before[before.length - 1];
+  const nextItems = items.map((i) => (i.id === last.id && delta > 0 ? { ...i, travelMinutesToNext: (i.travelMinutesToNext ?? 0) + delta } : i));
+  return days.map((d, i) => (i !== dayIndex ? d : d.kind === "linear" ? { ...d, meetingTime, items: nextItems } : { ...d, meetingTime, amGuided: nextItems }));
 }
 
 /**

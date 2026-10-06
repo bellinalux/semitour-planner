@@ -1,23 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TripInputForm } from "@/components/form/TripInputForm";
 import { Header } from "@/components/layout/Header";
 import { CompanySettings } from "@/components/layout/CompanySettings";
-import { PrintDocuments } from "@/components/print/PrintDocuments";
+import { DOC_LABELS, PrintDocuments, type DocKind } from "@/components/print/PrintDocuments";
 import { SavedPlansMenu } from "@/components/layout/SavedPlansMenu";
 import { SendToTourdesign } from "@/components/layout/SendToTourdesign";
 import { ErrorLogMenu } from "@/components/layout/ErrorLogMenu";
+import { HistoryMenu } from "@/components/layout/HistoryMenu";
+import { StepGuide, type GuideStep } from "@/components/layout/StepGuide";
 import { MobileTabs, type PlannerTab } from "@/components/layout/MobileTabs";
 import { SettingsPanel, type SettingsFocus, type SettingsSection } from "@/components/form/SettingsPanel";
 import { useItinerary } from "@/hooks/useItinerary";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { usePrintDocument } from "@/hooks/usePrintDocument";
-import { useRequest } from "@/hooks/useRequest";
 import { usePlannerInput } from "@/hooks/usePlannerInput";
 import { useSegmentLibrary } from "@/hooks/useSegmentLibrary";
 import { useUsp } from "@/hooks/useUsp";
+import { useWebChecks } from "@/hooks/useWebChecks";
+import { useQuoteLog } from "@/hooks/useQuoteLog";
+import { useTeamSync } from "@/hooks/useTeamSync";
+import { buildQuoteLogEntry, type QuoteLogAction } from "@/lib/quoteLog";
 import { useWorkPersistence } from "@/hooks/useWorkPersistence";
 import { useStudioProductReceive } from "@/hooks/useStudioProductReceive";
 import { useStudioProductProvide } from "@/hooks/useStudioProductProvide";
@@ -28,12 +33,11 @@ import { calculateQuote } from "@/lib/cost";
 import { rememberCosts } from "@/lib/costMemory";
 import { useAutoQuote } from "@/hooks/useAutoQuote";
 import { documentQuote } from "@/lib/pricing";
-import { applyFeeResults, feeCheckTargets, type FeeApplySummary } from "@/lib/fees";
-import { applyOptionSuggestions, optionSuggestTargets, suggestionToOption, type OptionSuggestApplySummary } from "@/lib/optionSuggestions";
-import { accessibilityCheckTargets, applyAccessibilityResults, type AccessibilityApplySummary } from "@/lib/accessibilityCheck";
-import type { VerifyFeesResponse } from "@/lib/schemas/market";
-import type { SuggestOptionsResponse } from "@/lib/schemas/optionSuggest";
-import type { VerifyAccessibilityResponse } from "@/lib/schemas/accessibility";
+import { withSource } from "@/lib/costSource";
+import { unconfirmedValues } from "@/lib/printChecks";
+import { setupChecklist } from "@/lib/setupChecklist";
+import { formatMoney } from "@/lib/currency";
+import { suggestionToOption } from "@/lib/optionSuggestions";
 import { newSegmentId, type SegmentKind } from "@/lib/segmentLibrary";
 import { applyFlightToDays, tripSpanFromFlight } from "@/lib/flightApply";
 import { overnightNights } from "@/lib/itinerary";
@@ -60,27 +64,17 @@ export function PlannerApp() {
   };
   // 상세페이지 스튜디오 [세미투어로 보내기]로 받은 상품 → 입력칸 채우기
   const [studioNotice, clearStudioNotice] = useStudioProductReceive(input, update, () => setTab("input"));
-  const feeRequest = useRequest<
-    { destination: string; currency: string; exchangeRateToKrw: number; items: { id: string; name: string; city?: string }[] },
-    VerifyFeesResponse
-  >("/api/verify-fees");
-  const [feeSummary, setFeeSummary] = useState<FeeApplySummary | null>(null);
-  const optionSuggestRequest = useRequest<
-    { destination: string; currency: string; exchangeRateToKrw: number; items: { id: string; name: string; description?: string; city?: string }[] },
-    SuggestOptionsResponse
-  >("/api/suggest-options");
-  const [optionSuggestSummary, setOptionSuggestSummary] = useState<OptionSuggestApplySummary | null>(null);
-  const accessibilityRequest = useRequest<{ destination: string; items: { id: string; name: string; city?: string }[] }, VerifyAccessibilityResponse>(
-    "/api/verify-accessibility",
-  );
-  const [accessibilitySummary, setAccessibilitySummary] = useState<AccessibilityApplySummary | null>(null);
   const segmentLibrary = useSegmentLibrary();
   const [courseFile, setCourseFile] = useState<CourseFile | null>(null);
   const companyProfile = useCompanyProfile();
   const { company } = companyProfile;
   const { kind: printKind, print } = usePrintDocument();
+  // 회사 기본값·원가 기억을 팀(같은 접속 코드)과 맞추고, 고객에게 나간 견적을 이력으로 남긴다
+  const teamSync = useTeamSync();
+  const quoteLog = useQuoteLog();
 
   const { days, pmChoice, meta } = itinerary;
+  const webChecks = useWebChecks({ input, days, meta, replaceDays: itinerary.replaceDays });
   const isReady = itinerary.state.status === "success";
   // 화면 오류를 오류 기록(/api/errors)으로 보낸다
   useEffect(() => listenErrors(), []);
@@ -131,12 +125,11 @@ export function PlannerApp() {
 
   const handleGenerate = async () => {
     setTab("result");
-    setFeeSummary(null);
-    setOptionSuggestSummary(null);
-    setAccessibilitySummary(null);
+    webChecks.clear();
     usp.reset();
     const result = await itinerary.generate(input, courseFile);
     if (!result) return;
+    if (autoQuote.afterGenerate) autoAfterGenerateRef.current = true;
 
     // 붙여넣은 코스에서 읽은 기간/도시를 입력 폼에 반영한다 (박수는 코스 원문이 기준이다)
     let nextInput: TripInput = input;
@@ -155,52 +148,6 @@ export function PlannerApp() {
     if (firstQuote.ok) {
       void usp.generate(buildUspRequest(nextInput, result.days, result.pmChoice, firstQuote, result.meta));
     }
-  };
-
-  /** 입장료·체험료를 웹에서 확인해 일정 항목에 반영한다 */
-  const handleVerifyFees = async () => {
-    const items = feeCheckTargets(days).slice(0, 40);
-    if (items.length === 0) return;
-    const response = await feeRequest.run({
-      destination: input.destination.trim() || meta?.cities.join(", ") || "",
-      currency: input.currency,
-      exchangeRateToKrw: input.exchangeRateToKrw,
-      items,
-    });
-    if (!response) return;
-    const { days: next, summary } = applyFeeResults(days, response.results, response.checkedAt);
-    itinerary.replaceDays(next);
-    setFeeSummary(summary);
-  };
-
-  /** 코스마다 팔 만한 선택 옵션(바나나보트, 제트스키 등)을 웹에서 찾아 일정 항목에 반영한다 */
-  const handleSuggestOptions = async () => {
-    const items = optionSuggestTargets(days).slice(0, 30);
-    if (items.length === 0) return;
-    const response = await optionSuggestRequest.run({
-      destination: input.destination.trim() || meta?.cities.join(", ") || "",
-      currency: input.currency,
-      exchangeRateToKrw: input.exchangeRateToKrw,
-      items,
-    });
-    if (!response) return;
-    const { days: next, summary } = applyOptionSuggestions(days, response.results, input.currency);
-    itinerary.replaceDays(next);
-    setOptionSuggestSummary(summary);
-  };
-
-  /** "확인 못함"으로 남은 이용 편의시설을 웹에서 다시 검색해 반영한다 */
-  const handleVerifyAccessibility = async () => {
-    const items = accessibilityCheckTargets(days).slice(0, 30);
-    if (items.length === 0) return;
-    const response = await accessibilityRequest.run({
-      destination: input.destination.trim() || meta?.cities.join(", ") || "",
-      items,
-    });
-    if (!response) return;
-    const { days: next, summary } = applyAccessibilityResults(days, response.results);
-    itinerary.replaceDays(next);
-    setAccessibilitySummary(summary);
   };
 
   /** 오전·오후·하루 일정이나 장소 하나를 라이브러리에 즐겨찾기로 저장한다 */
@@ -232,6 +179,7 @@ export function PlannerApp() {
       selectedFlight: flight,
       flightPricePerPerson: flight.price > 0 ? flight.price : input.flightPricePerPerson,
       costStatus: { ...input.costStatus, flight: "estimated" },
+      ...withSource(input, "flight", "flight", [flight.airline, flight.flightNumber].filter(Boolean).join(" ")),
       ...(span ? { departureDate: span.departureDate, days: span.days, nights: span.nights, includesFlights: true } : {}),
     });
     itinerary.replaceDays(applyFlightToDays(days, flight));
@@ -242,7 +190,15 @@ export function PlannerApp() {
     if (quote?.ok) rememberCosts(input);
   }, [quote, input]);
 
-  const autoQuote = useAutoQuote({ input, update, verifyFees: handleVerifyFees, hasItinerary: days.length > 0 });
+  const autoQuote = useAutoQuote({ input, update, verifyFees: webChecks.verifyFees, hasItinerary: days.length > 0 });
+  // "코스를 만들면 자동 견적도 이어서" — 새 일정이 화면에 들어온 다음(입장료 확인이 새 일정을 보도록) 실행한다
+  const autoAfterGenerateRef = useRef(false);
+  const runAutoQuote = autoQuote.run;
+  useEffect(() => {
+    if (!autoAfterGenerateRef.current || days.length === 0) return;
+    autoAfterGenerateRef.current = false;
+    void runAutoQuote();
+  }, [days, runAutoQuote]);
 
   const exportData = () => {
     if (!quote?.ok) throw new Error("견적이 아직 준비되지 않았습니다.");
@@ -254,6 +210,70 @@ export function PlannerApp() {
     return { ...data, quote: documentQuote(data.quote, input) };
   };
 
+  /** 고객에게 나간 견적(인쇄·문구 복사)을 이력으로 남긴다 */
+  const logIssued = (action: QuoteLogAction, document: string) => {
+    if (quote?.ok) quoteLog.record(buildQuoteLogEntry(input, documentQuote(quote, input), quote, action, document, quoteLog.author));
+  };
+  const printDocument = (kind: DocKind) => {
+    print(kind);
+    if (kind !== "internal") logIssued("print", DOC_LABELS[kind]);
+  };
+
+  // 화면 위 진행 안내 (① 입력 → ② 코스 → ③ 견적 → ④ 문서)
+  const unconfirmed = quote?.ok ? unconfirmedValues(input, days, pmChoice, quote) : [];
+  const inputDone = input.destination.trim() !== "" && input.travelers > 0 && input.days > 0;
+  const generating = itinerary.state.status === "loading";
+  const missingCosts = setupChecklist(input).filter((c) => c.section !== "documents" && !c.done);
+  const customerPrice = quote?.ok ? documentQuote(quote, input).scenario.pricePerPerson : 0;
+  const lastIssued = quoteLog.entries[0];
+  const issued = !!quote?.ok && !!lastIssued && lastIssued.destination === input.destination.trim() && lastIssued.pricePerPerson === customerPrice;
+  const guideSteps: GuideStep[] = [
+    {
+      label: "입력",
+      status: inputDone ? "done" : "current",
+      detail: inputDone ? `${input.destination.trim()} ${input.nights}박${input.days}일 · ${input.travelers}명` : "여행지·기간·인원",
+      onClick: () => {
+        setTab("input");
+        document.getElementById("planner-input")?.scrollIntoView({ block: "start", behavior: "smooth" });
+      },
+    },
+    {
+      label: "코스",
+      status: generating ? "running" : days.length > 0 ? "done" : inputDone ? "current" : "todo",
+      detail: generating ? "만드는 중..." : days.length > 0 ? `${days.length}일 일정` : "누르면 코스 만들기",
+      onClick: () => {
+        if (days.length === 0 && inputDone && !generating) void handleGenerate();
+        else setTab("result");
+      },
+    },
+    {
+      label: "견적",
+      status: autoQuote.running ? "running" : days.length === 0 ? "todo" : missingCosts.length > 0 ? "current" : unconfirmed.length > 0 ? "warn" : "done",
+      detail: autoQuote.running
+        ? "자동 견적 중..."
+        : days.length === 0
+          ? "원가·판매가"
+          : missingCosts.length > 0
+            ? `빈 값: ${missingCosts.map((c) => c.label).join(", ")} — 누르면 자동 견적`
+            : unconfirmed.length > 0
+              ? `확인할 추정값 ${unconfirmed.length}건`
+              : `1인 ${formatMoney(customerPrice, input.currency)}`,
+      onClick: () => {
+        openSettings(missingCosts[0]?.section ?? "cost");
+        if (missingCosts.length > 0 && !autoQuote.running) void autoQuote.run();
+      },
+    },
+    {
+      label: "문서",
+      status: issued ? "done" : quote?.ok && missingCosts.length === 0 ? "current" : "todo",
+      detail: issued ? `${lastIssued.document} 발행` : "견적서·일정표 인쇄",
+      onClick: () => {
+        setTab("result");
+        window.setTimeout(() => document.getElementById("documents")?.scrollIntoView({ block: "center", behavior: "smooth" }), 60);
+      },
+    },
+  ];
+
   return (
     <>
     <PrintDocuments kind={printKind} data={docData} />
@@ -263,11 +283,13 @@ export function PlannerApp() {
           <>
             <CompanySettings {...companyProfile} />
             <SavedPlansMenu snapshot={snapshot} onLoad={handleLoadPlan} onImportDay={itinerary.appendDayFromSegment} />
+            <HistoryMenu log={quoteLog} teamSync={teamSync} />
             <SendToTourdesign getProduct={getProduct} />
             <ErrorLogMenu />
           </>
         }
       />
+      <StepGuide steps={guideSteps} />
       <MobileTabs active={tab} onChange={setTab} />
       {/* 좁은 화면: 탭 하나씩 / lg: 왼쪽에 입력+설정을 쌓고 오른쪽에 결과 / 넓은 화면(1400px~): 입력 | 결과 | 설정 3열 고정 */}
       <main className="grid min-h-0 flex-1 lg:grid-cols-[400px_minmax(0,1fr)] wide:grid-cols-[380px_minmax(0,1fr)_420px]">
@@ -320,6 +342,7 @@ export function PlannerApp() {
               </button>
             </div>
           )}
+          <span id="planner-input" className="block scroll-mt-2" aria-hidden />
           <TripInputForm
             input={input}
             onChange={update}
@@ -390,31 +413,9 @@ export function PlannerApp() {
               onChangeOptions: (options) => update({ options }),
             }}
             onRetryItinerary={handleGenerate}
-            feeCheck={{
-              state: feeRequest.state,
-              targetCount: Math.min(40, feeCheckTargets(days).length),
-              summary: feeSummary,
-              sources: feeRequest.data?.sources ?? [],
-              searched: feeRequest.data?.searched ?? true,
-              fxUpdatedAt: feeRequest.data?.fx[0]?.updatedAt ?? "",
-              onRun: () => void handleVerifyFees(),
-            }}
-            optionSuggest={{
-              state: optionSuggestRequest.state,
-              targetCount: Math.min(30, optionSuggestTargets(days).length),
-              summary: optionSuggestSummary,
-              sources: optionSuggestRequest.data?.sources ?? [],
-              searched: optionSuggestRequest.data?.searched ?? true,
-              onRun: () => void handleSuggestOptions(),
-            }}
-            accessibilityCheck={{
-              state: accessibilityRequest.state,
-              targetCount: Math.min(30, accessibilityCheckTargets(days).length),
-              summary: accessibilitySummary,
-              sources: accessibilityRequest.data?.sources ?? [],
-              searched: accessibilityRequest.data?.searched ?? true,
-              onRun: () => void handleVerifyAccessibility(),
-            }}
+            feeCheck={webChecks.feeCheck}
+            optionSuggest={webChecks.optionSuggest}
+            accessibilityCheck={webChecks.accessibilityCheck}
             library={{
               segments: segmentLibrary.segments,
               onInsert: itinerary.insertSegment,
@@ -431,13 +432,22 @@ export function PlannerApp() {
             exporter={{
               disabled: !quote?.ok,
               getInternalText: () => buildInternalText(exportData()),
-              getCustomerText: () => buildCustomerText(customerExportData()),
-              getEmojiText: () => buildEmojiCustomerText(customerExportData()),
+              getCustomerText: () => {
+                const text = buildCustomerText(customerExportData());
+                logIssued("copy", "고객용 문구");
+                return text;
+              },
+              getEmojiText: () => {
+                const text = buildEmojiCustomerText(customerExportData());
+                logIssued("copy", "이모지 고객용 문구");
+                return text;
+              },
             }}
             documents={{
               disabled: !quote?.ok,
               missingLegal: missingLegalFields(company),
-              onPrint: print,
+              unconfirmed,
+              onPrint: printDocument,
             }}
           />
         </section>

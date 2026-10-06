@@ -7,6 +7,7 @@ import { useRequest } from "@/hooks/useRequest";
 import { formatMoney } from "@/lib/currency";
 import type { FlightWebEstimate, SearchSource } from "@/types";
 import type { SectionProps } from "./types";
+import { withSource } from "@/lib/costSource";
 
 interface Result {
   estimate: FlightWebEstimate;
@@ -32,7 +33,7 @@ export function FlightWebSearchPanel({ input, onChange }: SectionProps) {
 
   const apply = () => {
     if (!data) return;
-    onChange({ flightPricePerPerson: data.estimate.roundTripLow, costStatus: { ...input.costStatus, flight: "estimated" } });
+    onChange({ flightPricePerPerson: data.estimate.roundTripLow, costStatus: { ...input.costStatus, flight: "estimated" }, ...withSource(input, "flight", "web", "최저 시세") });
     setApplied(true);
   };
 

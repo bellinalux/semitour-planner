@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { postJson } from "@/lib/api";
 import { candidateToCompetitor } from "@/lib/competitors";
 import { fillFromMemory } from "@/lib/costMemory";
 import { estimateToPatch } from "@/lib/travelEstimate";
 import type { GroundCostResponse } from "@/lib/schemas/groundCost";
-import type { CompetitorCandidate, TravelEstimate, TripInput } from "@/types";
+import type { CompetitorCandidate, CostKey, CostSourceKind, TravelEstimate, TripInput } from "@/types";
 
 export type AutoStepStatus = "pending" | "running" | "done" | "skipped" | "error";
 
@@ -26,25 +26,46 @@ const STEPS: Pick<AutoStep, "key" | "label">[] = [
   { key: "competitors", label: "대형 여행사 경쟁 상품" },
 ];
 
+const AFTER_GENERATE_KEY = "semitour-planner:auto-after-generate:v1";
+
 const initialSteps = (): AutoStep[] => STEPS.map((s) => ({ ...s, status: "pending", message: "" }));
 
 interface Options {
   input: TripInput;
   update: (patch: Partial<TripInput>) => void;
   /** 일정의 입장료·체류시간을 웹에서 확인한다 (일정이 없으면 건너뛴다) */
-  verifyFees: () => Promise<void>;
+  verifyFees: () => Promise<boolean>;
   hasItinerary: boolean;
 }
 
 /**
- * "자동 견적": 비어 있는 값만 순서대로 채운다. 이미 입력한 값은 덮어쓰지 않고, 채운 값은 모두 "추정"으로 표시한다.
- * 순서: 지난 견적 값 → 환율 → 차량·가이드 → 숙박·항공 → 입장료·체류시간 → 경쟁 상품.
- * 앞 단계에서 채운 값이 있으면 뒤 단계(AI 추정)는 건너뛴다(저장값이 AI 추정보다 우선).
+ * "자동 견적": 비어 있는 값만 채운다. 이미 입력한 값은 덮어쓰지 않고, 채운 값은 모두 "추정"으로 표시한다.
+ * 지난 견적 값 → 환율을 먼저 채우고(저장값이 AI 추정보다 우선), 나머지 웹 조사 네 가지
+ * (차량·가이드, 숙박·항공, 입장료·체류시간, 경쟁 상품)는 서로 기다리지 않고 동시에 돌린다.
  */
 export function useAutoQuote({ input, update, verifyFees, hasItinerary }: Options) {
   const [steps, setSteps] = useState<AutoStep[]>(initialSteps);
   const [running, setRunning] = useState(false);
   const [filledCount, setFilledCount] = useState<number | null>(null);
+  /** 코스를 만들면 자동 견적까지 이어서 돌릴지 (브라우저에 기억) */
+  const [afterGenerate, setAfterGenerateState] = useState(false);
+  useEffect(() => {
+    try {
+      // 브라우저 저장소 값이라 화면을 그린 뒤에 읽는다
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAfterGenerateState(localStorage.getItem(AFTER_GENERATE_KEY) === "1");
+    } catch {
+      // 무시
+    }
+  }, []);
+  const setAfterGenerate = (on: boolean) => {
+    setAfterGenerateState(on);
+    try {
+      localStorage.setItem(AFTER_GENERATE_KEY, on ? "1" : "0");
+    } catch {
+      // 무시
+    }
+  };
 
   const run = useCallback(async () => {
     if (running) return;
@@ -55,9 +76,19 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary }: Option
     let filled = 0;
     const set = (key: AutoStep["key"], status: AutoStepStatus, message = "") =>
       setSteps((prev) => prev.map((s) => (s.key === key ? { ...s, status, message } : s)));
-    const apply = (patch: Partial<TripInput>) => {
-      working = { ...working, ...patch };
-      update(patch);
+    /** 동시에 도는 단계가 서로의 "추정"·출처 표시를 지우지 않도록 원가 상태와 출처는 항목별로 합친다 */
+    const apply = (patch: Partial<TripInput>, status?: Partial<TripInput["costStatus"]>, source?: CostSourceKind, note?: string) => {
+      const keys = Object.keys(status ?? {}) as CostKey[];
+      const at = new Date().toISOString();
+      const full: Partial<TripInput> = status
+        ? {
+            ...patch,
+            costStatus: { ...working.costStatus, ...status },
+            ...(source ? { costSource: { ...working.costSource, ...Object.fromEntries(keys.map((k) => [k, { kind: source, at, ...(note ? { note } : {}) }])) } } : {}),
+          }
+        : patch;
+      working = { ...working, ...full };
+      update(full);
     };
     const destination = working.destination.trim();
 
@@ -88,109 +119,117 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary }: Option
         }
       }
 
-      // 3. 차량·가이드
-      if (!destination) set("ground", "skipped", "여행지가 없습니다");
-      else if (working.vehicleCostPerDay + working.guideCostPerDay > 0) set("ground", "skipped", "이미 입력되어 있습니다");
-      else {
-        set("ground", "running");
-        try {
-          const r = await postJson<GroundCostResponse>("/api/estimate-ground", {
-            destination,
-            travelers: Math.min(60, Math.max(1, working.travelers)),
-            currency: working.currency,
-            tripScope: working.tripScope,
-          });
-          if (r.searched && (r.vehicleCostPerDay > 0 || r.guideCostPerDay > 0)) {
-            apply({
-              vehicleCostPerDay: r.vehicleCostPerDay,
-              guideCostPerDay: r.guideCostPerDay,
-              costStatus: { ...working.costStatus, vehicle: "estimated", guide: "estimated" },
+      // 3~6. 웹 조사 — 동시에 진행
+      const ground = async () => {
+        if (!destination) set("ground", "skipped", "여행지가 없습니다");
+        else if (working.vehicleCostPerDay + working.guideCostPerDay > 0) set("ground", "skipped", "이미 입력되어 있습니다");
+        else {
+          set("ground", "running");
+          try {
+            const r = await postJson<GroundCostResponse>("/api/estimate-ground", {
+              destination,
+              travelers: Math.min(60, Math.max(1, working.travelers)),
+              currency: working.currency,
+              tripScope: working.tripScope,
             });
-            filled += (r.vehicleCostPerDay > 0 ? 1 : 0) + (r.guideCostPerDay > 0 ? 1 : 0);
-            set("ground", "done", [r.vehicleNote, r.guideNote].filter(Boolean).join(" · ") || "웹 검색으로 추정");
-          } else set("ground", "error", "웹 검색 근거를 찾지 못했습니다. 직접 입력해 주세요");
-        } catch (err) {
-          set("ground", "error", err instanceof Error ? err.message : "추정하지 못했습니다");
-        }
-      }
-
-      // 4. 숙박·항공 시세
-      const needLodging = working.packageType !== "land" && working.lodgingRatePerNight === 0 && !Object.values(working.lodgingCityRates).some((v) => v > 0);
-      const needFlight = working.packageType === "full" && working.flightPricePerPerson === 0;
-      if (!destination) set("travel", "skipped", "여행지가 없습니다");
-      else if (!needLodging && !needFlight) set("travel", "skipped", working.packageType === "land" ? "랜드만 판매" : "이미 입력되어 있습니다");
-      else {
-        set("travel", "running");
-        try {
-          const { estimate } = await postJson<{ estimate: TravelEstimate }>("/api/estimate-travel", {
-            origin: working.originCity.trim() || "인천",
-            destination,
-            currency: working.currency,
-            nights: working.nights,
-            hotelGrade: working.hotelGrade,
-          });
-          const { patch, applied } = estimateToPatch(working, estimate);
-          // 이미 넣은(항공편을 골랐거나 직접 입력한) 금액은 AI 추정으로 덮어쓰지 않는다
-          if (!needFlight) {
-            delete patch.flightPricePerPerson;
-            if (patch.costStatus) patch.costStatus = { ...patch.costStatus, flight: working.costStatus.flight };
+            if (r.searched && (r.vehicleCostPerDay > 0 || r.guideCostPerDay > 0)) {
+              apply({ vehicleCostPerDay: r.vehicleCostPerDay, guideCostPerDay: r.guideCostPerDay }, { vehicle: "estimated", guide: "estimated" }, "web");
+              filled += (r.vehicleCostPerDay > 0 ? 1 : 0) + (r.guideCostPerDay > 0 ? 1 : 0);
+              set("ground", "done", [r.vehicleNote, r.guideNote].filter(Boolean).join(" · ") || "웹 검색으로 추정");
+            } else set("ground", "error", "웹 검색 근거를 찾지 못했습니다. 직접 입력해 주세요");
+          } catch (err) {
+            set("ground", "error", err instanceof Error ? err.message : "추정하지 못했습니다");
           }
-          if (!needLodging) {
-            delete patch.lodgingRatePerNight;
-            delete patch.cityTaxPerPersonPerNight;
-            if (patch.costStatus) patch.costStatus = { ...patch.costStatus, lodging: working.costStatus.lodging };
+        }
+
+      };
+
+      const travel = async () => {
+        const needLodging = working.packageType !== "land" && working.lodgingRatePerNight === 0 && !Object.values(working.lodgingCityRates).some((v) => v > 0);
+        const needFlight = working.packageType === "full" && working.flightPricePerPerson === 0;
+        if (!destination) set("travel", "skipped", "여행지가 없습니다");
+        else if (!needLodging && !needFlight) set("travel", "skipped", working.packageType === "land" ? "랜드만 판매" : "이미 입력되어 있습니다");
+        else {
+          set("travel", "running");
+          try {
+            const { estimate } = await postJson<{ estimate: TravelEstimate }>("/api/estimate-travel", {
+              origin: working.originCity.trim() || "인천",
+              destination,
+              currency: working.currency,
+              nights: working.nights,
+              hotelGrade: working.hotelGrade,
+            });
+            const { patch, applied } = estimateToPatch(working, estimate);
+            const { costStatus, ...values } = patch;
+            const status: Partial<TripInput["costStatus"]> = {};
+            // 이미 넣은(항공편을 골랐거나 직접 입력한) 금액은 AI 추정으로 덮어쓰지 않는다
+            if (needFlight && costStatus) status.flight = costStatus.flight;
+            else delete values.flightPricePerPerson;
+            if (needLodging && costStatus) status.lodging = costStatus.lodging;
+            else {
+              delete values.lodgingRatePerNight;
+              delete values.cityTaxPerPersonPerNight;
+            }
+            const names = applied.filter((n) => (n === "항공료" ? needFlight : needLodging));
+            apply(values, status, "ai", "시세 추정");
+            filled += names.length;
+            set("travel", "done", names.length > 0 ? `${names.join(", ")} AI 추정` : "채울 값이 없었습니다");
+          } catch (err) {
+            set("travel", "error", err instanceof Error ? err.message : "추정하지 못했습니다");
           }
-          const names = applied.filter((n) => (n === "항공료" ? needFlight : needLodging));
-          apply(patch);
-          filled += names.length;
-          set("travel", "done", names.length > 0 ? `${names.join(", ")} AI 추정` : "채울 값이 없었습니다");
-        } catch (err) {
-          set("travel", "error", err instanceof Error ? err.message : "추정하지 못했습니다");
         }
-      }
 
-      // 5. 입장료·체류시간
-      if (!hasItinerary) set("fees", "skipped", "코스를 먼저 만드세요");
-      else {
-        set("fees", "running");
-        try {
-          await verifyFees();
-          set("fees", "done", "일정표에 반영했습니다");
-        } catch {
-          set("fees", "error", "확인하지 못했습니다");
-        }
-      }
+      };
 
-      // 6. 경쟁 상품
-      if (!destination) set("competitors", "skipped", "여행지가 없습니다");
-      else if (working.competitors.length > 0) set("competitors", "skipped", "이미 등록되어 있습니다");
-      else {
-        set("competitors", "running");
-        try {
-          const r = await postJson<{ products: CompetitorCandidate[]; searchedAt: string }>("/api/find-competitors", {
-            destination,
-            nights: working.nights,
-            days: working.days,
-            currency: working.currency,
-            packageType: working.packageType,
-            originCity: working.originCity.trim(),
-          });
-          const picked = r.products.filter((p) => p.pricePerPerson > 0).slice(0, 3);
-          if (picked.length > 0) {
-            apply({ competitors: picked.map((p) => candidateToCompetitor(p, r.searchedAt)) });
-            set("competitors", "done", `${picked.map((p) => p.agency || p.productName).join(", ")} 추가`);
-          } else set("competitors", "error", "가격이 확인된 상품을 찾지 못했습니다");
-        } catch (err) {
-          set("competitors", "error", err instanceof Error ? err.message : "찾지 못했습니다");
+      const fees = async () => {
+        if (!hasItinerary) set("fees", "skipped", "코스를 먼저 만드세요");
+        else {
+          set("fees", "running");
+          try {
+            // 한 번 실패(시간 초과 등)하면 한 번 더 시도한다
+            const ok = (await verifyFees()) || (await verifyFees());
+            if (ok) set("fees", "done", "일정표에 반영했습니다");
+            else set("fees", "error", "확인하지 못했습니다. 일정표의 \"다시 시도\"로 다시 확인하세요");
+          } catch {
+            set("fees", "error", "확인하지 못했습니다");
+          }
         }
-      }
+
+      };
+
+      const competitors = async () => {
+        if (!destination) set("competitors", "skipped", "여행지가 없습니다");
+        else if (working.competitors.length > 0) set("competitors", "skipped", "이미 등록되어 있습니다");
+        else {
+          set("competitors", "running");
+          try {
+            const r = await postJson<{ products: CompetitorCandidate[]; searchedAt: string }>("/api/find-competitors", {
+              destination,
+              nights: working.nights,
+              days: working.days,
+              currency: working.currency,
+              packageType: working.packageType,
+              originCity: working.originCity.trim(),
+            });
+            const picked = r.products.filter((p) => p.pricePerPerson > 0).slice(0, 3);
+            if (picked.length > 0) {
+              apply({ competitors: picked.map((p) => candidateToCompetitor(p, r.searchedAt)) });
+              set("competitors", "done", `${picked.map((p) => p.agency || p.productName).join(", ")} 추가`);
+            } else set("competitors", "error", "가격이 확인된 상품을 찾지 못했습니다");
+          } catch (err) {
+            set("competitors", "error", err instanceof Error ? err.message : "찾지 못했습니다");
+          }
+        }
+      };
+
+      await Promise.all([ground(), travel(), fees(), competitors()]);
     } finally {
       setFilledCount(filled);
       setRunning(false);
     }
   }, [running, input, update, verifyFees, hasItinerary]);
 
-  return { steps, running, filledCount, run };
+  return { steps, running, filledCount, run, afterGenerate, setAfterGenerate };
 }
 
 export type AutoQuote = ReturnType<typeof useAutoQuote>;

@@ -64,6 +64,7 @@ function buildLines(n: number, ctx: Context): CostLine[] {
     ...line,
     status: statusOf(key),
     excluded: statusOf(key) === "undecided",
+    source: input.costSource?.[key],
   });
 
   const variablePerPerson =

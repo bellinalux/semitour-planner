@@ -7,6 +7,7 @@ import { useRequest } from "@/hooks/useRequest";
 import { formatMoney } from "@/lib/currency";
 import type { LodgingWebEstimate, SearchSource } from "@/types";
 import type { SectionProps } from "./types";
+import { withSource } from "@/lib/costSource";
 
 interface Result {
   estimate: LodgingWebEstimate;
@@ -35,7 +36,7 @@ export function HotelWebSearchPanel({ input, onChange }: SectionProps) {
 
   const apply = () => {
     if (!data) return;
-    const patch: Partial<typeof input> = { lodgingRatePerNight: data.estimate.rateLow, costStatus: { ...input.costStatus, lodging: "estimated" } };
+    const patch: Partial<typeof input> = { lodgingRatePerNight: data.estimate.rateLow, costStatus: { ...input.costStatus, lodging: "estimated" }, ...withSource(input, "lodging", "web", "최저 시세") };
     if (data.estimate.cityTaxPerPersonPerNight > 0 && input.cityTaxPerPersonPerNight === 0) {
       patch.cityTaxPerPersonPerNight = data.estimate.cityTaxPerPersonPerNight;
     }

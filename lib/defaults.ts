@@ -73,6 +73,7 @@ export const DEFAULT_INPUT: TripInput = {
     lodging: "confirmed",
     flight: "confirmed",
   },
+  costSource: {},
 
   pricingMode: "target_margin",
   fixedPricePerPerson: 0,

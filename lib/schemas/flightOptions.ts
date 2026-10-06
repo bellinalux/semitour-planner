@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { fillFlightDates, normalizeClock } from "@/lib/flightNormalize";
 import type { FlightOption } from "@/types";
 
 const CURRENCIES = ["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD", "AUD"] as const;
@@ -58,32 +59,52 @@ function fallbackLink(origin: string, destination: string): string {
   return `https://www.google.com/travel/flights?q=${encodeURIComponent(`Flights from ${origin} to ${destination}`)}`;
 }
 
-/** 검증된 LLM 응답을 앱 내부 타입으로 다듬는다 */
+/** 도착 시각이 출발보다 이르면(자정을 넘긴 비행) 다음날 표시를 붙인다 */
+function arrival(departTime: string, arriveText: string): string {
+  const arrive = normalizeClock(arriveText);
+  if (!arrive || arrive.endsWith("(+1)") || !departTime) return arrive;
+  return arrive < departTime.slice(0, 5) ? `${arrive} (+1)` : arrive;
+}
+
+/** 모델이 만든 링크는 http(s)만 쓴다 (그 밖의 형식은 검색 링크로 대신) */
+const safeLink = (link: string) => (/^https?:\/\//i.test(link.trim()) ? link.trim() : "");
+
+/** 검증된 LLM 응답을 앱 내부 타입으로 다듬는다 — 시각·날짜 형식을 맞추고, 같은 항공편이 두 번 오면 하나만 남긴다 */
 export function toFlightOptions(parsed: Parsed, req: FlightOptionsRequest, searched: boolean): FlightOption[] {
-  return parsed.flights.map((f) => {
+  const seen = new Set<string>();
+  const out: FlightOption[] = [];
+  for (const f of parsed.flights) {
     const basis = searched ? f.basis : "estimated";
-    return {
+    const departTime = normalizeClock(f.departTime).slice(0, 5);
+    const returnDepartTime = normalizeClock(f.returnDepartTime).slice(0, 5);
+    const dates = fillFlightDates(f.departDate, f.returnDepartDate, req);
+    const option: FlightOption = {
       airline: f.airline.trim(),
-      flightNumber: f.flightNumber.trim(),
-      departDate: f.departDate.trim(),
+      flightNumber: f.flightNumber.trim().toUpperCase(),
+      departDate: dates.departDate,
       departAirport: f.departAirport.trim(),
-      departTime: f.departTime.trim(),
+      departTime,
       arriveAirport: f.arriveAirport.trim(),
-      arriveTime: f.arriveTime.trim(),
+      arriveTime: arrival(departTime, f.arriveTime),
       stops: Math.max(0, Math.round(f.stops)),
       duration: f.duration.trim(),
-      price: basis === "searched" ? Math.max(0, Math.round(f.price)) : Math.max(0, Math.round(f.price)),
+      price: Math.max(0, Math.round(f.price)),
       basis,
       sourceName: basis === "searched" ? f.sourceName.trim() : "",
-      link: f.link.trim() || fallbackLink(req.origin.trim(), req.destination.trim()),
-      returnFlightNumber: f.returnFlightNumber.trim(),
-      returnDepartDate: f.returnDepartDate.trim(),
+      link: safeLink(f.link) || fallbackLink(req.origin.trim(), req.destination.trim()),
+      returnFlightNumber: f.returnFlightNumber.trim().toUpperCase(),
+      returnDepartDate: dates.returnDepartDate,
       returnDepartAirport: f.returnDepartAirport.trim(),
-      returnDepartTime: f.returnDepartTime.trim(),
+      returnDepartTime,
       returnArriveAirport: f.returnArriveAirport.trim(),
-      returnArriveTime: f.returnArriveTime.trim(),
+      returnArriveTime: arrival(returnDepartTime, f.returnArriveTime),
       returnStops: Math.max(0, Math.round(f.returnStops)),
       returnDuration: f.returnDuration.trim(),
     };
-  });
+    const key = [option.flightNumber || option.airline, option.departDate, option.departTime, option.returnFlightNumber, option.returnDepartTime].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(option);
+  }
+  return out;
 }

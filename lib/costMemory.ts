@@ -1,6 +1,7 @@
+import { notifyTeamChange, TEAM_KEYS } from "@/lib/teamSync";
 import type { CostKey, CurrencyCode, TripInput } from "@/types";
 
-const KEY = "semitour-planner:cost-memory:v1";
+const KEY = TEAM_KEYS["cost-memory"];
 const MAX_ENTRIES = 40;
 
 /** 여행지별로 기억해 두는 원가 */
@@ -61,6 +62,7 @@ export function rememberCosts(input: TripInput): void {
   const entries = Object.entries(all).sort((a, b) => b[1].savedAt.localeCompare(a[1].savedAt)).slice(0, MAX_ENTRIES);
   try {
     localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(entries)));
+    notifyTeamChange("cost-memory");
   } catch {
     // 무시
   }
@@ -81,14 +83,18 @@ export function fillFromMemory(input: TripInput): { patch: Partial<TripInput>; a
   const patch: Partial<TripInput> = {};
   const applied: string[] = [];
   const costStatus = { ...input.costStatus };
+  const costSource = { ...input.costSource };
   for (const field of MEMORY_FIELDS) {
     const value = entry.values[field];
     if (!value || input[field] > 0) continue;
     patch[field] = value;
     applied.push(FIELD_LABELS[field]);
     const statusKey = FIELD_STATUS[field];
-    if (statusKey) costStatus[statusKey] = "estimated";
+    if (statusKey) {
+      costStatus[statusKey] = "estimated";
+      costSource[statusKey] = { kind: "memory", at: entry.savedAt };
+    }
   }
   if (applied.length === 0) return null;
-  return { patch: { ...patch, costStatus }, applied, savedAt: entry.savedAt };
+  return { patch: { ...patch, costStatus, costSource }, applied, savedAt: entry.savedAt };
 }
