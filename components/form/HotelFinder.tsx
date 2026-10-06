@@ -83,7 +83,6 @@ export function HotelFinder({ input, onChange, stays }: Props) {
 
   return (
     <div className="space-y-3 rounded-lg border border-indigo-200 bg-indigo-50/30 p-3">
-      <p className="text-xs font-semibold text-slate-800">{isBnb ? "숙소 찾기 (웹 검색)" : `${word} 찾기 (웹 검색)`}</p>
 
       {selectedEntries.length > 0 && (
         <ul className="space-y-1.5">

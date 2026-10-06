@@ -10,6 +10,7 @@ import { SavedPlansMenu } from "@/components/layout/SavedPlansMenu";
 import { SendToTourdesign } from "@/components/layout/SendToTourdesign";
 import { ErrorLogMenu } from "@/components/layout/ErrorLogMenu";
 import { MobileTabs, type PlannerTab } from "@/components/layout/MobileTabs";
+import { SettingsPanel, type SettingsFocus, type SettingsSection } from "@/components/form/SettingsPanel";
 import { useItinerary } from "@/hooks/useItinerary";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { usePrintDocument } from "@/hooks/usePrintDocument";
@@ -49,6 +50,12 @@ export function PlannerApp() {
   const itinerary = useItinerary();
   const usp = useUsp();
   const [tab, setTab] = useState<PlannerTab>("input");
+  const [settingsFocus, setSettingsFocus] = useState<SettingsFocus | null>(null);
+  /** 설정 패널의 해당 항목을 펼치고 그곳으로 이동한다 (좁은 화면에서는 설정 탭으로 전환) */
+  const openSettings = (section: SettingsSection) => {
+    setTab("settings");
+    setSettingsFocus({ section, n: Date.now() });
+  };
   // 상세페이지 스튜디오 [세미투어로 보내기]로 받은 상품 → 입력칸 채우기
   const [studioNotice, clearStudioNotice] = useStudioProductReceive(input, update, () => setTab("input"));
   const feeRequest = useRequest<
@@ -243,10 +250,16 @@ export function PlannerApp() {
         }
       />
       <MobileTabs active={tab} onChange={setTab} />
-      <main className="grid min-h-0 flex-1 lg:grid-cols-[440px_1fr]">
+      {/* 좁은 화면: 탭 하나씩 / lg: 왼쪽에 입력+설정을 쌓고 오른쪽에 결과 / 넓은 화면(1400px~): 입력 | 결과 | 설정 3열 고정 */}
+      <main className="grid min-h-0 flex-1 lg:grid-cols-[400px_minmax(0,1fr)] wide:grid-cols-[380px_minmax(0,1fr)_420px]">
+        <div
+          className={`min-h-0 overflow-y-auto border-slate-200 bg-slate-50 lg:block lg:border-r wide:contents ${
+            tab === "result" ? "hidden" : "block"
+          }`}
+        >
         <aside
           aria-label="입력"
-          className={`min-h-0 overflow-y-auto border-slate-200 bg-slate-50 lg:block lg:border-r ${
+          className={`bg-slate-50 lg:block wide:order-1 wide:min-h-0 wide:overflow-y-auto wide:border-r wide:border-slate-200 ${
             tab === "input" ? "block" : "hidden"
           }`}
         >
@@ -294,15 +307,29 @@ export function PlannerApp() {
             onReset={reset}
             onGenerate={handleGenerate}
             isGenerating={itinerary.state.status === "loading"}
-            stays={stays}
             courseFile={courseFile}
             onCourseFileChange={setCourseFile}
-            onApplyFlight={handleApplyFlight}
           />
         </aside>
+        <aside
+          aria-label="설정"
+          className={`border-t border-slate-200 bg-slate-50 lg:block wide:order-3 wide:min-h-0 wide:overflow-y-auto wide:border-l wide:border-t-0 ${
+            tab === "settings" ? "block" : "hidden"
+          }`}
+        >
+          <SettingsPanel
+            input={input}
+            onChange={update}
+            stays={stays}
+            onApplyFlight={handleApplyFlight}
+            focus={settingsFocus}
+            onFocus={openSettings}
+          />
+        </aside>
+        </div>
         <section
           aria-label="결과"
-          className={`min-h-0 overflow-y-auto bg-slate-100/60 lg:block ${
+          className={`min-h-0 overflow-y-auto bg-slate-100/60 lg:block wide:order-2 ${
             tab === "result" ? "block" : "hidden"
           }`}
         >
@@ -318,6 +345,7 @@ export function PlannerApp() {
             onSelectPm={itinerary.selectPmOption}
             onReplaceDays={itinerary.replaceDays}
             onInputChange={update}
+            onOpenSettings={openSettings}
             itemActions={{
               onChangeItem: itinerary.updateItem,
               onChangeDay: itinerary.updateDay,

@@ -1,5 +1,6 @@
 import { MapPin } from "lucide-react";
 import { ChipToggle } from "@/components/ui/ChipToggle";
+import { Disclosure } from "@/components/ui/Disclosure";
 import { Field } from "@/components/ui/Field";
 import { NumberField } from "@/components/ui/NumberField";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -22,6 +23,11 @@ interface Props extends SectionProps {
 
 export function TripBasicsSection({ input, onChange, courseFile, onCourseFileChange }: Props) {
   const isPaste = input.mode === "paste";
+
+  const travelTypeLabel = TRAVEL_TYPES.find((t) => t.id === input.travelType)?.label ?? "";
+  const detailSummary = [travelTypeLabel, input.themes.length > 0 ? `테마 ${input.themes.length}개` : "", input.regionPlan.trim() ? "지역 순서 지정" : "", input.notes.trim() ? "요청사항 있음" : ""]
+    .filter(Boolean)
+    .join(" · ");
 
   const toggleTheme = (id: ThemeId) =>
     onChange({
@@ -99,37 +105,6 @@ export function TripBasicsSection({ input, onChange, courseFile, onCourseFileCha
         {!isPaste && (
           <>
             <QuickStartPresets input={input} onChange={onChange} />
-            <Field htmlFor="travelType" label="여행 유형" hint="유형에 맞는 특징을 웹에서 조사해 일정에 반영합니다">
-              <div id="travelType" role="radiogroup" aria-label="여행 유형" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                {TRAVEL_TYPES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={input.travelType === t.id}
-                    onClick={() => onChange({ travelType: t.id as TravelType })}
-                    className={`rounded-md border px-2.5 py-1.5 text-left transition-colors ${
-                      input.travelType === t.id
-                        ? "border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600"
-                        : "border-slate-200 bg-white hover:border-indigo-300"
-                    }`}
-                  >
-                    <span className="block text-xs font-semibold text-slate-800">{t.label}</span>
-                    <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{t.hint}</span>
-                  </button>
-                ))}
-              </div>
-            </Field>
-
-            <TextField
-              id="regionPlan"
-              label="방문 지역 순서 (선택)"
-              multiline
-              value={input.regionPlan}
-              placeholder="예) 로마 2일, 피렌체 2일, 베니스 2일 (비워두면 AI가 알아서 도시를 구성합니다)"
-              onChange={(regionPlan) => onChange({ regionPlan })}
-            />
-
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
               <label className="flex cursor-pointer items-start gap-2">
                 <input
@@ -161,26 +136,59 @@ export function TripBasicsSection({ input, onChange, courseFile, onCourseFileCha
               )}
             </div>
 
-            <Field htmlFor="themes" label="선호 테마" hint="여러 개 선택할 수 있습니다">
-              <div id="themes" className="flex flex-wrap gap-1.5">
-                {THEMES.map((theme) => (
-                  <ChipToggle
-                    key={theme.id}
-                    label={theme.label}
-                    selected={input.themes.includes(theme.id)}
-                    onToggle={() => toggleTheme(theme.id)}
-                  />
-                ))}
-              </div>
-            </Field>
-            <TextField
-              id="notes"
-              label="추가 요청사항"
-              multiline
-              value={input.notes}
-              placeholder="예) 시니어 고객 위주, 도보 이동 최소화, 채식 옵션 필요"
-              onChange={(notes) => onChange({ notes })}
-            />
+            <Disclosure label="상세 조건 (선택)" summary={detailSummary}>
+              <Field htmlFor="travelType" label="여행 유형" hint="유형에 맞는 특징을 웹에서 조사해 일정에 반영합니다">
+                <div id="travelType" role="radiogroup" aria-label="여행 유형" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {TRAVEL_TYPES.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={input.travelType === t.id}
+                      onClick={() => onChange({ travelType: t.id as TravelType })}
+                      className={`rounded-md border px-2.5 py-1.5 text-left transition-colors ${
+                        input.travelType === t.id
+                          ? "border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600"
+                          : "border-slate-200 bg-white hover:border-indigo-300"
+                      }`}
+                    >
+                      <span className="block text-xs font-semibold text-slate-800">{t.label}</span>
+                      <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{t.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
+              <TextField
+                id="regionPlan"
+                label="방문 지역 순서 (선택)"
+                multiline
+                value={input.regionPlan}
+                placeholder="예) 로마 2일, 피렌체 2일, 베니스 2일 (비워두면 AI가 알아서 도시를 구성합니다)"
+                onChange={(regionPlan) => onChange({ regionPlan })}
+              />
+
+              <Field htmlFor="themes" label="선호 테마" hint="여러 개 선택할 수 있습니다">
+                <div id="themes" className="flex flex-wrap gap-1.5">
+                  {THEMES.map((theme) => (
+                    <ChipToggle
+                      key={theme.id}
+                      label={theme.label}
+                      selected={input.themes.includes(theme.id)}
+                      onToggle={() => toggleTheme(theme.id)}
+                    />
+                  ))}
+                </div>
+              </Field>
+              <TextField
+                id="notes"
+                label="추가 요청사항"
+                multiline
+                value={input.notes}
+                placeholder="예) 시니어 고객 위주, 도보 이동 최소화, 채식 옵션 필요"
+                onChange={(notes) => onChange({ notes })}
+              />
+            </Disclosure>
           </>
         )}
       </div>

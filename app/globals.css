@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@theme {
+  --breakpoint-wide: 87.5rem;
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans), var(--font-noto-kr), "Malgun Gothic", system-ui, sans-serif;
 }

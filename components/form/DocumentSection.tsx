@@ -13,7 +13,7 @@ import type { SectionProps } from "./types";
 /** 여행경보 직접 입력 선택지 */
 const LEVELS = [0, 1, 2, 3, 4];
 
-export function DocumentSection({ input, onChange }: SectionProps) {
+export function DocumentSection({ input, onChange, openSignal }: SectionProps) {
   const { state, run } = useRequest<{ destination: string }, { alert: TravelAlert }>("/api/travel-alert");
   const alert = input.travelAlert;
 
@@ -35,7 +35,16 @@ export function DocumentSection({ input, onChange }: SectionProps) {
     });
 
   return (
-    <SectionCard title="고객 문서 정보" description="일정표·견적서·청구서를 인쇄할 때 쓰는 값입니다" icon={FileText}>
+    <SectionCard
+      title="고객 문서 정보"
+      description="일정표·견적서·청구서를 인쇄할 때 쓰는 값입니다"
+      icon={FileText}
+      collapsible
+      defaultOpen={false}
+      anchorId="settings-documents"
+      openSignal={openSignal}
+      summary={input.customerName.trim() ? `수신처 ${input.customerName.trim()}` : "수신처 미입력"}
+    >
       <div className="space-y-4">
         <TextField
           id="customerName"
@@ -131,15 +140,6 @@ export function DocumentSection({ input, onChange }: SectionProps) {
         <p className="-mt-2 text-[11px] leading-4 text-slate-500">비워 두면 일정표에 표시하지 않습니다. 일정 속 이동 항목과 별개로, 픽업·샌딩 담당·장소·시간 등을 안내 문구로 적는 곳입니다.</p>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field htmlFor="departureDate" label="출발일" hint="비우면 문서에 '미정'으로 표시됩니다">
-            <input
-              id="departureDate"
-              type="date"
-              value={input.departureDate}
-              onChange={(e) => onChange({ departureDate: e.target.value })}
-              className={inputClass}
-            />
-          </Field>
           <NumberField
             id="minTravelers"
             label="최저 행사인원"

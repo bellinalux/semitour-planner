@@ -15,6 +15,7 @@ import type {
   UspItem,
 } from "@/types";
 import type { CourseSegment, SegmentKind } from "@/lib/segmentLibrary";
+import type { SettingsSection } from "@/components/form/SettingsPanel";
 import { ExportBar } from "./ExportBar";
 import { DocumentBar } from "./DocumentBar";
 import { ItineraryPanel, type AccessibilityCheckView, type FeeCheckView, type OptionSuggestView } from "./ItineraryPanel";
@@ -97,6 +98,8 @@ interface Props {
   documents: React.ComponentProps<typeof DocumentBar>;
   /** 견적 화면에서 입력값(할인 시나리오·가격안 등)을 바꾼다 */
   onInputChange: (patch: Partial<TripInput>) => void;
+  /** 견적 경고에서 설정 패널의 해당 항목으로 이동한다 */
+  onOpenSettings: (section: SettingsSection) => void;
 }
 
 export function Dashboard({
@@ -122,6 +125,7 @@ export function Dashboard({
   library,
   documents,
   onInputChange,
+  onOpenSettings,
 }: Props) {
   const { onAddTour, ...panelActions } = itemActions;
 
@@ -184,6 +188,7 @@ export function Dashboard({
         meta={meta}
         generatedCurrency={generatedCurrency}
         onInputChange={onInputChange}
+        onOpenSettings={onOpenSettings}
       />
       <UspPanel {...usp} />
       <ExportBar {...exporter} />

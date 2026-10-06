@@ -1,6 +1,7 @@
 import { AlertTriangle, Calculator } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import type { SettingsSection } from "@/components/form/SettingsPanel";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ourPolicy } from "@/lib/competitorDiff";
@@ -34,6 +35,16 @@ interface Props {
   generatedCurrency: CurrencyCode | null;
   /** 할인 시나리오·가격안 저장처럼 견적 화면에서 입력값을 바꾸는 곳에서 쓴다 */
   onInputChange: (patch: Partial<TripInput>) => void;
+  /** 경고에서 설정 패널의 해당 항목으로 이동한다 */
+  onOpenSettings: (section: SettingsSection) => void;
+}
+
+/** 경고 문구가 가리키는 설정 항목. 없으면 바로 가기를 만들지 않는다 */
+function settingsTargetFor(warning: string): SettingsSection | null {
+  if (/차량|가이드/.test(warning)) return "cost";
+  if (/숙박|항공료|풀패키지/.test(warning)) return "package";
+  if (/마진|수수료|채널/.test(warning)) return "pricing";
+  return null;
 }
 
 function QuoteSkeleton() {
@@ -61,7 +72,7 @@ const PACKAGE_LABELS: Record<PackageType, string> = {
   full: "풀패키지 (항공 포함)",
 };
 
-function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
+function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
 
   const policy = ourPolicy(days, pmChoice, input, meta);
@@ -91,15 +102,23 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
     <div className="space-y-6">
       {warnings.length > 0 && (
         <ul className="space-y-1.5">
-          {warnings.map((warning) => (
-            <li
-              key={warning}
-              className="flex items-start gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-800"
-            >
-              <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-              {warning}
-            </li>
-          ))}
+          {warnings.map((warning) => {
+            const target = settingsTargetFor(warning);
+            return (
+              <li
+                key={warning}
+                className="flex items-start gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-800"
+              >
+                <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="flex-1">{warning}</span>
+                {target && (
+                  <button type="button" onClick={() => onOpenSettings(target)} className="shrink-0 font-semibold underline underline-offset-2 hover:text-amber-950">
+                    설정에서 수정
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -215,7 +234,7 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
   );
 }
 
-export function QuotePanel({ state, quote, input, days, pmChoice, meta, generatedCurrency, onInputChange }: Props) {
+export function QuotePanel({ state, quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings }: Props) {
   return (
     <SectionCard
       title="견적서"
@@ -232,6 +251,7 @@ export function QuotePanel({ state, quote, input, days, pmChoice, meta, generate
           meta={meta}
           generatedCurrency={generatedCurrency}
           onInputChange={onInputChange}
+          onOpenSettings={onOpenSettings}
         />
       )}
       {(state.status === "idle" || state.status === "error") && (

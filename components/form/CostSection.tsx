@@ -1,14 +1,11 @@
 import { Wallet } from "lucide-react";
-import { Field, inputClass } from "@/components/ui/Field";
 import { NumberField } from "@/components/ui/NumberField";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { CURRENCIES, currencySymbol, formatMoney } from "@/lib/currency";
-import type { CurrencyCode } from "@/types";
+import { currencySymbol, formatMoney } from "@/lib/currency";
 import { CostField } from "./CostField";
-import { FxRateButton } from "./FxRateButton";
 import type { SectionProps } from "./types";
 
-export function CostSection({ input, onChange }: SectionProps) {
+export function CostSection({ input, onChange, openSignal }: SectionProps) {
   const symbol = currencySymbol(input.currency);
   // 일정 생성 전에는 총 일수로 예상하고, 생성 뒤에는 견적이 항공 이동만 있는 날을 빼고 정확히 계산한다
   const groundDays = input.groundDaysOverride > 0 ? input.groundDaysOverride : input.days;
@@ -19,42 +16,13 @@ export function CostSection({ input, onChange }: SectionProps) {
       title="고정비용"
       description="각 비용은 확정 · 추정 · 미정으로 표시할 수 있습니다"
       icon={Wallet}
+      collapsible
+      defaultOpen={false}
+      anchorId="settings-cost"
+      openSignal={openSignal}
+      summary={`고정비 합계 ${formatMoney(fixedTotal, input.currency)} (${groundDays}일 기준)`}
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <Field htmlFor="currency" label="견적 통화">
-            <select
-              id="currency"
-              value={input.currency}
-              onChange={(e) => onChange({ currency: e.target.value as CurrencyCode })}
-              className={inputClass}
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.code} · {c.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {input.currency !== "KRW" && (
-            <NumberField
-              id="exchangeRate"
-              label="원화 환율"
-              value={input.exchangeRateToKrw}
-              prefix="₩"
-              hint={`1 ${input.currency} 당`}
-              onChange={(exchangeRateToKrw) => onChange({ exchangeRateToKrw })}
-            />
-          )}
-        </div>
-        {input.currency !== "KRW" ? (
-          <FxRateButton currency={input.currency} onRate={(exchangeRateToKrw) => onChange({ exchangeRateToKrw })} />
-        ) : (
-          <p className="text-[11px] leading-4 text-slate-500">
-            견적 통화가 원화이면 현지 통화 금액은 &quot;입장료 웹 확인&quot;으로 확인한 항목에만 함께 표시됩니다. 현지 통화(예: THB)로 견적하면 모든 금액에 원화 환산이 붙습니다.
-          </p>
-        )}
-
         <div className="grid grid-cols-2 gap-3">
           <CostField
             id="vehicleCostPerDay"

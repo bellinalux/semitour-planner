@@ -18,7 +18,7 @@ const PRICE_MODES: { id: ChannelPriceMode; label: string; hint: string }[] = [
  * 직판 외에 파는 플랫폼의 수수료를 직접 입력한다. 수수료율은 업체와 계약한 값으로 입력하세요
  * (공개 요율이 없거나 협상으로 달라지는 채널이 많아 기본값을 넣어 두지 않습니다).
  */
-export function ChannelSection({ input, onChange }: SectionProps) {
+export function ChannelSection({ input, onChange, openSignal }: SectionProps) {
   const { channels } = input;
   const canAdd = channels.length < MAX_CHANNELS;
   const channelShare = channels.reduce((sum, c) => sum + Math.max(0, c.share), 0);
@@ -37,6 +37,11 @@ export function ChannelSection({ input, onChange }: SectionProps) {
       title="판매 채널·수수료"
       description="플랫폼 수수료까지 반영해 채널별 판매가와 정산액을 계산합니다"
       icon={Store}
+      collapsible
+      defaultOpen={false}
+      anchorId="settings-channels"
+      openSignal={openSignal}
+      summary={channels.length === 0 ? "직판만 계산 (채널 없음)" : `직판 + 채널 ${channels.length}개`}
       action={
         <button
           type="button"

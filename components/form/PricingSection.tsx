@@ -10,7 +10,7 @@ const MODES: { id: PricingMode; label: string; hint: string }[] = [
   { id: "fixed_price", label: "판매가 직접 입력", hint: "판매가 → 실제 마진 확인" },
 ];
 
-export function PricingSection({ input, onChange }: SectionProps) {
+export function PricingSection({ input, onChange, openSignal }: SectionProps) {
   const isFixed = input.pricingMode === "fixed_price";
 
   return (
@@ -22,6 +22,11 @@ export function PricingSection({ input, onChange }: SectionProps) {
           : "판매가 = 원가 ÷ (1 − 마진율 − 수수료율)로 역산합니다 (채널 수수료는 아래 '판매 채널'에서)"
       }
       icon={Percent}
+      collapsible
+      defaultOpen={false}
+      anchorId="settings-pricing"
+      openSignal={openSignal}
+      summary={`목표 마진 ${input.targetMarginRate}% · 예비비 ${input.contingencyRate}% · 카드 수수료 ${input.cardFeeRate}%`}
     >
       <div className="space-y-4">
         <div role="radiogroup" aria-label="가격 계산 방식" className="grid grid-cols-2 gap-2">

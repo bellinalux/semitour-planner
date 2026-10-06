@@ -12,7 +12,7 @@ const COMPARE_BASES: { id: CompareBasis; label: string; hint: string }[] = [
   { id: "land", label: "랜드(지상) 기준", hint: "항공·숙박을 뺀 지상 일정 가격으로 맞춤" },
 ];
 
-export function CompetitorSection({ input, onChange }: SectionProps) {
+export function CompetitorSection({ input, onChange, openSignal }: SectionProps) {
   const { competitors } = input;
   const canAdd = competitors.length < MAX_COMPETITORS;
 
@@ -26,6 +26,11 @@ export function CompetitorSection({ input, onChange }: SectionProps) {
       title="경쟁사 정보"
       description="가격 비교와 세일즈 포인트(USP) 생성에 사용합니다"
       icon={Swords}
+      collapsible
+      defaultOpen={false}
+      anchorId="settings-competitors"
+      openSignal={openSignal}
+      summary={competitors.length === 0 ? "등록된 경쟁사 없음" : `경쟁사 ${competitors.length}곳`}
       action={
         <button
           type="button"
