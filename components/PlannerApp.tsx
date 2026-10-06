@@ -12,6 +12,9 @@ import { ErrorLogMenu } from "@/components/layout/ErrorLogMenu";
 import { HistoryMenu } from "@/components/layout/HistoryMenu";
 import { AccountMenu } from "@/components/layout/AccountMenu";
 import { FeedbackButton } from "@/components/layout/FeedbackButton";
+import { BookingsMenu } from "@/components/layout/BookingsMenu";
+import { MoreMenu } from "@/components/layout/MoreMenu";
+import { bookingFromQuote } from "@/lib/bookings";
 import { useSession } from "@/components/SessionContext";
 import { StepGuide } from "@/components/layout/StepGuide";
 import { StudioNotices } from "@/components/layout/StudioNotices";
@@ -39,6 +42,7 @@ import { useAutoQuote } from "@/hooks/useAutoQuote";
 import { documentQuote } from "@/lib/pricing";
 import { withSource } from "@/lib/costSource";
 import { plannerGuide } from "@/lib/plannerGuide";
+import { prewarmEstimates } from "@/lib/autoQuoteRequests";
 import { suggestionToOption } from "@/lib/optionSuggestions";
 import { newSegmentId, type SegmentKind } from "@/lib/segmentLibrary";
 import { applyFlightToDays, tripSpanFromFlight } from "@/lib/flightApply";
@@ -47,7 +51,7 @@ import { buildEmojiCustomerText } from "@/lib/exportEmoji";
 import { buildCustomerText, buildInternalText } from "@/lib/exportText";
 import { tourToOption } from "@/lib/options";
 import { buildUspRequest } from "@/lib/uspRequest";
-import type { PlanSnapshot, ResultSnapshot } from "@/lib/workspace";
+import { suggestPlanName, type PlanSnapshot, type ResultSnapshot } from "@/lib/workspace";
 import type { CourseFile } from "@/lib/courseFile";
 import type { FlightOption, ItineraryItem, TripInput } from "@/types";
 
@@ -129,6 +133,8 @@ export function PlannerApp() {
     setTab("result");
     webChecks.clear();
     usp.reset();
+    // 코스를 만드는 동안 비어 있는 차량·가이드·숙박·항공 시세를 미리 조회해 둔다 (자동 견적이 캐시에서 바로 받는다)
+    prewarmEstimates(input);
     const result = await itinerary.generate(input, courseFile);
     if (!result) return;
     if (autoQuote.afterGenerate) autoQuote.armAfterGenerate();
@@ -245,13 +251,20 @@ export function PlannerApp() {
       <Header
         actions={
           <>
-            <AccountMenu />
-            <CompanySettings {...companyProfile} />
             <SavedPlansMenu snapshot={snapshot} onLoad={handleLoadPlan} onImportDay={itinerary.appendDayFromSegment} />
-            <HistoryMenu log={quoteLog} teamSync={teamSync} />
-            <SendToTourdesign getProduct={getProduct} />
-            <FeedbackButton where={`${feedbackStage} 단계 · ${tab} 탭`} />
-            <ErrorLogMenu />
+            <BookingsMenu
+              author={session.user?.name || quoteLog.author}
+              draftFromQuote={() => (quote?.ok ? { ...bookingFromQuote(input, documentQuote(quote, input)), planName: suggestPlanName(input, meta) } : null)}
+              buttonClassName="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 [&>span]:hidden sm:[&>span]:inline"
+            />
+            <AccountMenu />
+            <MoreMenu attention={missingLegalFields(company).length > 0}>
+              <CompanySettings {...companyProfile} />
+              <HistoryMenu log={quoteLog} teamSync={teamSync} />
+              <SendToTourdesign getProduct={getProduct} />
+              <FeedbackButton where={`${feedbackStage} 단계 · ${tab} 탭`} />
+              <ErrorLogMenu />
+            </MoreMenu>
           </>
         }
       />

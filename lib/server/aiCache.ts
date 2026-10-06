@@ -19,6 +19,12 @@ type Kv = NonNullable<Awaited<ReturnType<typeof getKv>>>["kv"] & {
 const MEMORY_LIMIT = 200;
 const KV_MIN_TTL = 60; // KV는 60초보다 짧은 만료를 받지 않는다
 
+/** 같은 요청이 계산 중이면(예: 미리 조회 중에 자동 견적이 같은 요청을 보냄) 새로 부르지 않고 그 결과를 기다린다 */
+function inflight(): Map<string, Promise<unknown>> {
+  const g = globalThis as unknown as { __semitourAiInflight?: Map<string, Promise<unknown>> };
+  return (g.__semitourAiInflight ??= new Map());
+}
+
 function memory(): Map<string, Entry> {
   const g = globalThis as unknown as { __semitourAiCache?: Map<string, Entry> };
   return (g.__semitourAiCache ??= new Map());
@@ -56,7 +62,16 @@ export async function cached<T>(scope: string, request: unknown, ttlSeconds: num
     }
   }
 
-  const value = await compute();
+  const pending = inflight().get(key);
+  if (pending) return pending as Promise<T>;
+  const running = compute();
+  inflight().set(key, running);
+  let value: T;
+  try {
+    value = await running;
+  } finally {
+    inflight().delete(key);
+  }
   if (keep(value)) {
     const entry: Entry = { at: now, value };
     if (mem.size >= MEMORY_LIMIT) mem.delete(mem.keys().next().value as string);

@@ -94,8 +94,8 @@ export function AccountMenu() {
     <>
       <button type="button" onClick={open} className={buttonClass} aria-haspopup="dialog" title="로그인한 계정">
         <UserRound className="h-3.5 w-3.5" aria-hidden />
-        <span>{user.name}</span>
-        <span className={`rounded px-1 text-[10px] font-semibold ${user.role === "admin" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-600"}`}>{ROLE_LABEL[user.role]}</span>
+        <span className="hidden sm:inline">{user.name}</span>
+        <span className={`whitespace-nowrap rounded px-1 text-[10px] font-semibold ${user.role === "admin" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-600"}`}>{ROLE_LABEL[user.role]}</span>
       </button>
 
       <dialog

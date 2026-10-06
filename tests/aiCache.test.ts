@@ -17,6 +17,17 @@ describe("AI 결과 캐시", () => {
     expect(compute).toHaveBeenCalledTimes(2);
   });
 
+  it("같은 요청이 계산 중이면 기다렸다가 같은 결과를 받는다 (미리 조회 + 자동 견적)", async () => {
+    let resolve!: (v: number) => void;
+    const compute = vi.fn(() => new Promise<number>((r) => (resolve = r)));
+    const a = cached("t4", { x: 1 }, 60, compute);
+    const b = cached("t4", { x: 1 }, 60, compute);
+    await vi.waitFor(() => expect(compute).toHaveBeenCalled());
+    resolve(7);
+    expect(await Promise.all([a, b])).toEqual([7, 7]);
+    expect(compute).toHaveBeenCalledTimes(1);
+  });
+
   it("요청이 다르면 따로 계산한다", async () => {
     const compute = vi.fn(async () => 1);
     await cached("t3", { x: 1 }, 60, compute);

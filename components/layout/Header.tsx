@@ -4,13 +4,14 @@ import { StudioSwitcher } from "./StudioSwitcher";
 
 export function Header({ actions }: { actions?: React.ReactNode }) {
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6">
-      <div className="flex items-center gap-2.5">
+    <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 sm:px-6">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg">
           <Image src="/logo-mark.png" alt="스케치북트래블 로고" width={32} height={32} className="h-8 w-8 object-contain" priority />
         </span>
-        <div className="leading-tight">
-          <h1 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+        {/* 좁은 화면(휴대폰)에서는 제목·버전을 숨기고 로고만 둔다 — 오른쪽 메뉴 자리를 위해 */}
+        <div className="hidden leading-tight sm:block">
+          <h1 className="flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-slate-900">
             세미투어 플래너
             <span
               className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-indigo-700 tabular-nums"
@@ -24,7 +25,7 @@ export function Header({ actions }: { actions?: React.ReactNode }) {
         {/* 우리가 만든 다른 스튜디오(상세페이지·쇼츠)로 바로 가기 */}
         <StudioSwitcher />
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {actions}
         <span className="hidden rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-medium text-indigo-700 sm:inline">MVP</span>
       </div>

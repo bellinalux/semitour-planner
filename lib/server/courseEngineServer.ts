@@ -11,6 +11,7 @@ import {
   type Audience, type DayKey, type EngineOptions, type EnginePlace, type MoveMode, type PlanResult,
 } from "@/lib/courseEngine";
 import { endpoint, modelName, resolveKey } from "./gemini";
+import { cached, DAY } from "./aiCache";
 import { getKv } from "./planStore";
 
 /* ── 요청 형식 ── */
@@ -149,6 +150,12 @@ async function travelMatrix(places: EnginePlace[], mode: MoveMode): Promise<{ M:
   const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
   const pts = places.map(p => (p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : null));
   if (!key || pts.filter(Boolean).length < 2) return { M: est, source: "estimate" };
+  // Google Routes는 호출마다 요금이 나가므로, 같은 좌표·이동수단 조합은 7일 동안 다시 쓴다(성공한 결과만)
+  const rounded = pts.map(p => (p ? [Math.round(p.lat * 1e5) / 1e5, Math.round(p.lng * 1e5) / 1e5] : null));
+  return cached("routes", { rounded, mode }, 7 * DAY, () => googleMatrix(key, pts, est, mode), r => r.source === "google");
+}
+
+async function googleMatrix(key: string, pts: ({ lat: number; lng: number } | null)[], est: number[][], mode: MoveMode): Promise<{ M: number[][]; source: "google" | "estimate" }> {
   try {
     const ok = pts.map((p, i) => (p ? i : -1)).filter(i => i >= 0);
     const wp = (i: number) => ({ waypoint: { location: { latLng: { latitude: pts[i]!.lat, longitude: pts[i]!.lng } } } });

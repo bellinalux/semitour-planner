@@ -80,8 +80,14 @@ export async function planExists(kv: KvNamespace, ws: string, id: string): Promi
   return (await kv.get(keyOf(ws, id))) !== null;
 }
 
-export async function putPlan(kv: KvNamespace, ws: string, plan: SavedPlan): Promise<PlanIndexEntry> {
-  const entry: PlanIndexEntry = { id: plan.id, name: plan.name, savedAt: plan.savedAt, summary: planSummary(plan).slice(0, 200) };
+export async function putPlan(kv: KvNamespace, ws: string, plan: SavedPlan, author?: { id: string; name: string }): Promise<PlanIndexEntry> {
+  const entry: PlanIndexEntry = {
+    id: plan.id,
+    name: plan.name,
+    savedAt: plan.savedAt,
+    summary: planSummary(plan).slice(0, 200),
+    ...(author ? { author: author.name, authorId: author.id } : {}),
+  };
   await kv.put(keyOf(ws, plan.id), JSON.stringify(plan), { metadata: entry });
   return entry;
 }

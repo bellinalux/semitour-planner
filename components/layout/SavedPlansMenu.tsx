@@ -264,7 +264,7 @@ export function SavedPlansMenu({ snapshot, onLoad, onImportDay }: Props) {
     <>
       <button type="button" onClick={openDialog} className={buttonClass} aria-haspopup="dialog">
         <FolderOpen className="h-3.5 w-3.5" aria-hidden />
-        <span>저장·불러오기</span>
+        <span className="hidden sm:inline">저장·불러오기</span>
         {dirty && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" title="저장하지 않은 변경이 있습니다" aria-label="저장하지 않은 변경 있음" />}
       </button>
 

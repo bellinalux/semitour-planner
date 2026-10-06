@@ -38,20 +38,25 @@ export function SavedPlanEntry({ entry, confirming, busy, dirty, isCloud, import
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-slate-900">{entry.name}</p>
           <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{entry.summary}</p>
-          <p className="text-[11px] text-slate-400">저장 {formatSavedAt(entry.savedAt)}</p>
+          <p className="text-[11px] text-slate-400">
+            저장 {formatSavedAt(entry.savedAt)}
+            {entry.author ? ` · ${entry.author}` : ""}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button type="button" onClick={() => onDownload()} aria-label={`${entry.name} 파일로 내려받기`} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
             <Download className="h-4 w-4" aria-hidden />
           </button>
-          <button
-            type="button"
-            onClick={() => onAsk("delete")}
-            aria-label={`${entry.name} 삭제`}
-            className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
-          >
-            <Trash2 className="h-4 w-4" aria-hidden />
-          </button>
+          {entry.canDelete !== false && (
+            <button
+              type="button"
+              onClick={() => onAsk("delete")}
+              aria-label={`${entry.name} 삭제`}
+              className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+            </button>
+          )}
         </div>
       </div>
 

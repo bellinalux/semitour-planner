@@ -1,4 +1,4 @@
-import { isAuthed, workspaceId } from "@/lib/server/access";
+import { getSession, workspaceId, type Session } from "@/lib/server/access";
 import { errorResponse } from "@/lib/server/external";
 import {
   getKv,
@@ -18,8 +18,11 @@ import { MAX_NAME_LENGTH, parseSnapshot, type SavedPlan } from "@/lib/workspace"
  *  GET    /api/plans          목록
  *  GET    /api/plans?id=...   한 건 (일정 전체)
  *  PUT    /api/plans          저장 { id, name, snapshot }
- *  DELETE /api/plans?id=...   삭제
+ *  DELETE /api/plans?id=...   삭제 (본인이 저장한 일정 또는 관리자)
  */
+
+/** 본인이 마지막으로 저장했거나 관리자면 지울 수 있다. 작성자 기록이 없는 예전 저장본은 관리자만 */
+const canDelete = (session: Session, authorId?: string) => session.role === "admin" || (!!authorId && authorId === session.id);
 
 async function open(request: Request) {
   const ws = await workspaceId();
@@ -28,14 +31,15 @@ async function open(request: Request) {
       error: errorResponse("CLOUD_DISABLED", "서버 저장은 접속 코드(APP_ACCESS_CODE)를 등록해야 쓸 수 있습니다.", 403),
     } as const;
   }
-  if (!(await isAuthed(request))) {
+  const session = await getSession(request);
+  if (!session) {
     return { error: errorResponse("UNAUTHORIZED", "접근 코드가 필요합니다. 화면을 새로고침해 접근 코드를 입력해 주세요.", 401) } as const;
   }
   const store = await getKv();
   if (!store) {
     return { error: errorResponse("NO_STORE", "서버 저장소(KV)가 아직 연결되지 않았습니다. 배포 설정을 확인해 주세요.", 503) } as const;
   }
-  return { ws, kv: store.kv, kind: store.kind } as const;
+  return { ws, kv: store.kv, kind: store.kind, session } as const;
 }
 
 export async function GET(request: Request) {
@@ -44,7 +48,10 @@ export async function GET(request: Request) {
 
   try {
     const id = new URL(request.url).searchParams.get("id");
-    if (id === null) return Response.json({ plans: await listPlans(ctx.kv, ctx.ws), storage: ctx.kind, max: MAX_CLOUD_PLANS });
+    if (id === null) {
+      const plans = (await listPlans(ctx.kv, ctx.ws)).map((p) => ({ ...p, canDelete: canDelete(ctx.session, p.authorId) }));
+      return Response.json({ plans, storage: ctx.kind, max: MAX_CLOUD_PLANS });
+    }
     if (!PLAN_ID_PATTERN.test(id)) return errorResponse("BAD_REQUEST", "저장 번호 형식이 올바르지 않습니다.", 400);
     const plan = await getPlan(ctx.kv, ctx.ws, id);
     return plan ? Response.json({ plan }) : errorResponse("NOT_FOUND", "저장된 일정을 찾지 못했습니다. 삭제되었을 수 있어요.", 404);
@@ -83,7 +90,9 @@ export async function PUT(request: Request) {
       }
     }
     const plan: SavedPlan = { id, name, savedAt: new Date().toISOString(), snapshot };
-    return Response.json({ entry: await putPlan(ctx.kv, ctx.ws, plan) });
+    const author = ctx.session.name ? { id: ctx.session.id, name: ctx.session.name } : undefined;
+    const entry = await putPlan(ctx.kv, ctx.ws, plan, author);
+    return Response.json({ entry: { ...entry, canDelete: canDelete(ctx.session, entry.authorId) } });
   } catch (err) {
     console.error("[plans:put]", err);
     return errorResponse("INTERNAL", "서버에 저장하는 중 오류가 발생했습니다.", 500);
@@ -97,6 +106,10 @@ export async function DELETE(request: Request) {
   const id = new URL(request.url).searchParams.get("id") ?? "";
   if (!PLAN_ID_PATTERN.test(id)) return errorResponse("BAD_REQUEST", "저장 번호 형식이 올바르지 않습니다.", 400);
   try {
+    const entry = (await listPlans(ctx.kv, ctx.ws)).find((p) => p.id === id);
+    if (entry && !canDelete(ctx.session, entry.authorId)) {
+      return errorResponse("FORBIDDEN", "본인이 저장한 일정이나 관리자만 삭제할 수 있습니다.", 403);
+    }
     await removePlan(ctx.kv, ctx.ws, id);
     return Response.json({ ok: true });
   } catch (err) {

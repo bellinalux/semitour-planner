@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
+import { groundRequest, needsFlight, needsGround, needsLodging, travelRequest } from "@/lib/autoQuoteRequests";
 import { candidateToCompetitor } from "@/lib/competitors";
 import { fillFromMemory } from "@/lib/costMemory";
 import { estimateToPatch } from "@/lib/travelEstimate";
@@ -124,16 +125,11 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary, itinerar
       // 3~6. 웹 조사 — 동시에 진행
       const ground = async () => {
         if (!destination) set("ground", "skipped", "여행지가 없습니다");
-        else if (working.vehicleCostPerDay + working.guideCostPerDay > 0) set("ground", "skipped", "이미 입력되어 있습니다");
+        else if (!needsGround(working)) set("ground", "skipped", "이미 입력되어 있습니다");
         else {
           set("ground", "running");
           try {
-            const r = await postJson<GroundCostResponse>("/api/estimate-ground", {
-              destination,
-              travelers: Math.min(60, Math.max(1, working.travelers)),
-              currency: working.currency,
-              tripScope: working.tripScope,
-            });
+            const r = await postJson<GroundCostResponse>("/api/estimate-ground", groundRequest(working));
             if (r.searched && (r.vehicleCostPerDay > 0 || r.guideCostPerDay > 0)) {
               apply({ vehicleCostPerDay: r.vehicleCostPerDay, guideCostPerDay: r.guideCostPerDay }, { vehicle: "estimated", guide: "estimated" }, "web");
               filled += (r.vehicleCostPerDay > 0 ? 1 : 0) + (r.guideCostPerDay > 0 ? 1 : 0);
@@ -147,20 +143,14 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary, itinerar
       };
 
       const travel = async () => {
-        const needLodging = working.packageType !== "land" && working.lodgingRatePerNight === 0 && !Object.values(working.lodgingCityRates).some((v) => v > 0);
-        const needFlight = working.packageType === "full" && working.flightPricePerPerson === 0;
+        const needLodging = needsLodging(working);
+        const needFlight = needsFlight(working);
         if (!destination) set("travel", "skipped", "여행지가 없습니다");
         else if (!needLodging && !needFlight) set("travel", "skipped", working.packageType === "land" ? "랜드만 판매" : "이미 입력되어 있습니다");
         else {
           set("travel", "running");
           try {
-            const { estimate } = await postJson<{ estimate: TravelEstimate }>("/api/estimate-travel", {
-              origin: working.originCity.trim() || "인천",
-              destination,
-              currency: working.currency,
-              nights: working.nights,
-              hotelGrade: working.hotelGrade,
-            });
+            const { estimate } = await postJson<{ estimate: TravelEstimate }>("/api/estimate-travel", travelRequest(working));
             const { patch, applied } = estimateToPatch(working, estimate);
             const { costStatus, ...values } = patch;
             const status: Partial<TripInput["costStatus"]> = {};

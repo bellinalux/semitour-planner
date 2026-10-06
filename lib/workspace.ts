@@ -31,6 +31,11 @@ export interface PlanIndexEntry {
   name: string;
   savedAt: string;
   summary: string;
+  /** 서버 저장: 마지막으로 저장한 사람 이름과 계정 ID */
+  author?: string;
+  authorId?: string;
+  /** 서버 저장 목록에서만: 지금 로그인한 사람이 지울 수 있는지 (본인이 저장했거나 관리자) */
+  canDelete?: boolean;
 }
 
 export function indexEntryOf(plan: SavedPlan): PlanIndexEntry {

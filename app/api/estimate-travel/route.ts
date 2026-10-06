@@ -4,6 +4,8 @@ import { buildTravelResearchPrompt, buildTravelUserPrompt, TRAVEL_SYSTEM_PROMPT 
 import { guardRequest } from "@/lib/server/guard";
 import { cached, DAY } from "@/lib/server/aiCache";
 
+const RESEARCH_TIMEOUT_MS = 40_000;
+
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
 }
@@ -32,7 +34,11 @@ export async function POST(request: Request) {
       parsed.data,
       DAY,
       async () => {
-        const research = await generateGroundedText({ user: buildTravelResearchPrompt(parsed.data) });
+        // 웹 조사는 최대 40초만 기다린다 — 넘으면 AI 추정으로 먼저 답하고(저장하지 않음), 다음 조회 때 다시 조사한다
+        const research = await generateGroundedText({ user: buildTravelResearchPrompt(parsed.data), timeoutMs: RESEARCH_TIMEOUT_MS }).catch((err: unknown) => {
+          if (err instanceof GeminiError && err.code === "TIMEOUT") return { text: "", sources: [], searched: false };
+          throw err;
+        });
         const structured = await generateJson({
           system: TRAVEL_SYSTEM_PROMPT,
           user: buildTravelUserPrompt(parsed.data, research.searched ? research.text : ""),
