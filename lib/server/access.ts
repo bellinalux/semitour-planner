@@ -28,7 +28,22 @@ async function sha256Hex(text: string): Promise<string> {
  */
 export async function workspaceId(): Promise<string | null> {
   if (!accessRequired()) return null;
-  return (await sha256Hex(`semitour-workspace:${configuredCode()}`)).slice(0, 32);
+  return pinnedWorkspace() ?? (await sha256Hex(`semitour-workspace:${configuredCode()}`)).slice(0, 32);
+}
+
+/**
+ * 작업공간 ID를 환경변수(APP_WORKSPACE_ID)로 고정했으면 그 값.
+ * 고정하지 않으면 ID가 관리자 코드에서 만들어져, 코드를 바꾸는 순간 저장한 일정·예약·직원 계정이 안 보이게 된다.
+ */
+function pinnedWorkspace(): string | null {
+  const pinned = process.env.APP_WORKSPACE_ID?.trim() ?? "";
+  return /^[a-z0-9]{8,64}$/i.test(pinned) ? pinned : null;
+}
+
+/** 관리자 화면용: 지금 작업공간 ID와 고정 여부 (관리자 코드 교체 안내에 쓴다) */
+export async function workspaceInfo(): Promise<{ id: string; pinned: boolean } | null> {
+  const id = await workspaceId();
+  return id ? { id, pinned: pinnedWorkspace() !== null } : null;
 }
 
 /** 입력한 코드가 서버의 접근 코드와 같은지 (스튜디오 AI 중계용 — 쿠키 대신 헤더로 받는다) */

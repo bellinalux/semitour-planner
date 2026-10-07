@@ -55,3 +55,14 @@ export function isAlreadyAdded(competitors: Competitor[], candidate: CompetitorC
   const name = [candidate.agency, candidate.productName].filter(Boolean).join(" ").trim();
   return competitors.some((c) => c.name.trim() === name);
 }
+
+/**
+ * 자동 견적에 넣을 경쟁 상품을 고른다 — 가격이 확인된 것 중, 다른 상품들 가운데값의 30%도 안 되는 것은
+ * 일일 투어·입장권처럼 비교 대상이 아닌 상품일 가능성이 커서 뺀다.
+ */
+export function pickComparableCompetitors(products: CompetitorCandidate[], max = 3): CompetitorCandidate[] {
+  const priced = products.filter((p) => p.pricePerPerson > 0);
+  const sorted = priced.map((p) => p.pricePerPerson).sort((a, b) => a - b);
+  const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+  return priced.filter((p) => p.pricePerPerson >= median * 0.3).slice(0, max);
+}

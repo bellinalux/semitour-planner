@@ -1,4 +1,5 @@
-import { codeMatches, requireAdmin, workspaceId } from "@/lib/server/access";
+import { codeMatches, getSession, requireAdmin, workspaceId, workspaceInfo } from "@/lib/server/access";
+import { audit } from "@/lib/server/audit";
 import { errorResponse } from "@/lib/server/external";
 import { hashStaffCode, listStaff, MAX_STAFF, MIN_CODE_LENGTH, newStaffId, saveStaff, toView, type StaffMember, type StaffRole } from "@/lib/server/staff";
 
@@ -14,7 +15,7 @@ async function open(request: Request) {
   if (denied) return { error: denied } as const;
   const ws = await workspaceId();
   if (!ws) return { error: errorResponse("CLOUD_DISABLED", "직원 계정은 접속 코드(APP_ACCESS_CODE)를 등록해야 쓸 수 있습니다.", 403) } as const;
-  return { ws } as const;
+  return { ws, session: await getSession(request) } as const;
 }
 
 const ROLES: StaffRole[] = ["admin", "staff"];
@@ -41,7 +42,7 @@ async function readJson(request: Request): Promise<Record<string, unknown> | nul
 export async function GET(request: Request) {
   const ctx = await open(request);
   if ("error" in ctx) return ctx.error;
-  return Response.json({ staff: (await listStaff(ctx.ws, true)).map(toView) });
+  return Response.json({ staff: (await listStaff(ctx.ws, true)).map(toView), workspace: await workspaceInfo() });
 }
 
 export async function POST(request: Request) {
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
   } catch {
     return errorResponse("NO_STORE", "서버 저장소(KV)가 연결되지 않았습니다.", 503);
   }
+  await audit(ctx.ws, ctx.session, "직원 추가", `${member.name} (${member.role === "admin" ? "관리자" : "직원"})`);
   return Response.json({ member: toView(member) });
 }
 
@@ -105,6 +107,8 @@ export async function PATCH(request: Request) {
   } catch {
     return errorResponse("NO_STORE", "서버 저장소(KV)가 연결되지 않았습니다.", 503);
   }
+  const changes = [body.role !== undefined ? `권한 ${next.role === "admin" ? "관리자" : "직원"}` : "", body.active !== undefined ? (next.active ? "접속 허용" : "접속 막기") : "", body.code !== undefined ? "코드 변경" : "", body.name !== undefined ? "이름 변경" : ""].filter(Boolean).join(", ");
+  await audit(ctx.ws, ctx.session, "직원 수정", `${next.name}: ${changes}`);
   return Response.json({ member: toView(next) });
 }
 
@@ -122,5 +126,6 @@ export async function DELETE(request: Request) {
   } catch {
     return errorResponse("NO_STORE", "서버 저장소(KV)가 연결되지 않았습니다.", 503);
   }
+  await audit(ctx.ws, ctx.session, "직원 삭제", list.find((m) => m.id === id)?.name ?? id);
   return Response.json({ ok: true });
 }

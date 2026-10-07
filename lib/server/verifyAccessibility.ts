@@ -6,8 +6,9 @@ import { generateGroundedText, generateJson } from "./gemini";
 /** "확인 못함"으로 남아 있던 이용 편의시설 정보를 웹 검색으로 다시 조사한다. */
 export async function verifyAccessibility(req: VerifyAccessibilityRequest): Promise<VerifyAccessibilityResponse> {
   // 1단계: 검색으로 조사, 2단계: 조사 메모를 JSON으로 정리
-  const research = await generateGroundedText({ user: buildAccessibilityResearchPrompt(req) });
+  const research = await generateGroundedText({ user: buildAccessibilityResearchPrompt(req), fast: true });
   const structured = await generateJson({
+    fast: true,
     system: ACCESSIBILITY_STRUCTURE_SYSTEM_PROMPT,
     user: buildAccessibilityStructurePrompt(req, research.text),
     schema: accessibilityResultSchema,

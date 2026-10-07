@@ -22,11 +22,12 @@ const SYSTEM = `당신은 여행사 지상비(차량·가이드) 조사 메모�
 
 /** 현지 차량·가이드 1일 요금을 웹 검색으로 추정한다. 검색 근거가 없으면 0으로 돌려 함부로 채우지 않는다. */
 export async function estimateGroundCost(req: GroundCostRequest): Promise<GroundCostResponse> {
-  const research = await generateGroundedText({ user: researchPrompt(req) });
+  const research = await generateGroundedText({ user: researchPrompt(req), fast: true });
   if (!research.searched) {
     return { vehicleCostPerDay: 0, guideCostPerDay: 0, vehicleNote: "", guideNote: "", searched: false, sources: [] };
   }
   const result = await generateJson({
+    fast: true,
     system: SYSTEM,
     user: ["<research_memo>", research.text, "</research_memo>", "", `요청 통화: ${req.currency}`, `인원: ${req.travelers}명`, "", "위 메모를 스키마에 맞게 정리해 주세요."].join("\n"),
     schema: groundCostResultSchema,

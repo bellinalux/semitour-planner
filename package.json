@@ -12,7 +12,8 @@
     "start:vinext": "wrangler dev --config dist/server/wrangler.json",
     "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json",
     "test": "vitest run",
-    "hooks:install": "node scripts/install-hooks.mjs"
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "hwp-convert": "^1.13.0",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.56.0",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",

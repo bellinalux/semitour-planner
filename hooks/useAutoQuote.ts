@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
 import { groundRequest, needsFlight, needsGround, needsLodging, travelRequest } from "@/lib/autoQuoteRequests";
-import { candidateToCompetitor } from "@/lib/competitors";
+import { candidateToCompetitor, pickComparableCompetitors } from "@/lib/competitors";
+import { reportPerf } from "@/lib/perf";
 import { fillFromMemory } from "@/lib/costMemory";
 import { estimateToPatch } from "@/lib/travelEstimate";
 import type { GroundCostResponse } from "@/lib/schemas/groundCost";
@@ -16,6 +17,8 @@ export interface AutoStep {
   label: string;
   status: AutoStepStatus;
   message: string;
+  /** 걸린 시간(ms). 끝난 단계만 */
+  ms?: number;
 }
 
 const STEPS: Pick<AutoStep, "key" | "label">[] = [
@@ -26,6 +29,9 @@ const STEPS: Pick<AutoStep, "key" | "label">[] = [
   { key: "fees", label: "입장료·체류시간 웹 확인" },
   { key: "competitors", label: "대형 여행사 경쟁 상품" },
 ];
+
+/** 단계 이름 (속도 기록 표에서 쓴다) */
+export const AUTO_STEP_LABELS: Record<string, string> = Object.fromEntries(STEPS.map((s) => [s.key, s.label]));
 
 const AFTER_GENERATE_KEY = "semitour-planner:auto-after-generate:v1";
 
@@ -77,8 +83,17 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary, itinerar
     setSteps(initialSteps());
     let working: TripInput = { ...input };
     let filled = 0;
-    const set = (key: AutoStep["key"], status: AutoStepStatus, message = "") =>
-      setSteps((prev) => prev.map((s) => (s.key === key ? { ...s, status, message } : s)));
+    // 단계마다 걸린 시간을 재서 화면에 보여 주고, 끝나면 속도 기록으로 보낸다 (실서버 속도 측정용)
+    const startedAt = performance.now();
+    const stepStart = new Map<AutoStep["key"], number>();
+    const durations: Partial<Record<AutoStep["key"], number>> = {};
+    const set = (key: AutoStep["key"], status: AutoStepStatus, message = "") => {
+      if (status === "running") stepStart.set(key, performance.now());
+      const begun = stepStart.get(key);
+      const ms = status !== "running" && begun !== undefined ? Math.round(performance.now() - begun) : undefined;
+      if (ms !== undefined) durations[key] = ms;
+      setSteps((prev) => prev.map((s) => (s.key === key ? { ...s, status, message, ms } : s)));
+    };
     /** 동시에 도는 단계가 서로의 "추정"·출처 표시를 지우지 않도록 원가 상태와 출처는 항목별로 합친다 */
     const apply = (patch: Partial<TripInput>, status?: Partial<TripInput["costStatus"]>, source?: CostSourceKind, note?: string) => {
       const keys = Object.keys(status ?? {}) as CostKey[];
@@ -204,7 +219,7 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary, itinerar
               packageType: working.packageType,
               originCity: working.originCity.trim(),
             });
-            const picked = r.products.filter((p) => p.pricePerPerson > 0).slice(0, 3);
+            const picked = pickComparableCompetitors(r.products);
             if (picked.length > 0) {
               apply({ competitors: picked.map((p) => candidateToCompetitor(p, r.searchedAt)) });
               set("competitors", "done", `${picked.map((p) => p.agency || p.productName).join(", ")} 추가`);
@@ -219,6 +234,7 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary, itinerar
     } finally {
       setFilledCount(filled);
       setRunning(false);
+      reportPerf("auto-quote", Math.round(performance.now() - startedAt), durations, destination);
     }
   }, [running, input, update, verifyFees, hasItinerary]);
 

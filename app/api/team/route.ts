@@ -1,4 +1,5 @@
 import { getSession, isAuthed, requireAdmin, workspaceId } from "@/lib/server/access";
+import { audit } from "@/lib/server/audit";
 import { errorResponse } from "@/lib/server/external";
 import { getKv } from "@/lib/server/planStore";
 import { isQuoteLogEntry, MAX_QUOTE_LOG, type QuoteLogEntry } from "@/lib/quoteLog";
@@ -63,6 +64,7 @@ export async function PUT(request: Request) {
   try {
     if (body.data === null) await ctx.kv.delete(ctx.key);
     else await ctx.kv.put(ctx.key, JSON.stringify(body.data));
+    if (ctx.kind === "defaults") await audit(await workspaceId(), await getSession(request), body.data === null ? "회사 기본값 지움" : "회사 기본값 변경");
     return Response.json({ ok: true });
   } catch (err) {
     console.error("[team:put]", err);

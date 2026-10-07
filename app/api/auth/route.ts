@@ -1,6 +1,7 @@
 import { accessRequired, getSession, loginCookie, logoutCookie, workspaceId } from "@/lib/server/access";
 import { getKv } from "@/lib/server/planStore";
 import { allowLoginAttempt } from "@/lib/server/rateLimit";
+import { audit } from "@/lib/server/audit";
 
 /**
  * 로그인 상태: { required: 잠금 여부, authed: 이 브라우저가 통과했는지, user: 로그인한 사람, accounts: 직원 계정을 쓸 수 있는지 }
@@ -37,8 +38,10 @@ export async function POST(request: Request) {
 
   const login = await loginCookie(request, code);
   if (!login) {
+    await audit(await workspaceId(), null, "로그인 실패", "틀린 코드");
     return Response.json({ error: { code: "WRONG_CODE", message: "접근 코드가 올바르지 않습니다." } }, { status: 401 });
   }
+  await audit(await workspaceId(), login.session, "로그인");
   return Response.json({ ok: true, user: { name: login.session.name, role: login.session.role } }, { headers: { "Set-Cookie": login.cookie } });
 }
 

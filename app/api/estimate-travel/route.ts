@@ -35,11 +35,12 @@ export async function POST(request: Request) {
       DAY,
       async () => {
         // 웹 조사는 최대 40초만 기다린다 — 넘으면 AI 추정으로 먼저 답하고(저장하지 않음), 다음 조회 때 다시 조사한다
-        const research = await generateGroundedText({ user: buildTravelResearchPrompt(parsed.data), timeoutMs: RESEARCH_TIMEOUT_MS }).catch((err: unknown) => {
+        const research = await generateGroundedText({ user: buildTravelResearchPrompt(parsed.data), timeoutMs: RESEARCH_TIMEOUT_MS, fast: true }).catch((err: unknown) => {
           if (err instanceof GeminiError && err.code === "TIMEOUT") return { text: "", sources: [], searched: false };
           throw err;
         });
         const structured = await generateJson({
+          fast: true,
           system: TRAVEL_SYSTEM_PROMPT,
           user: buildTravelUserPrompt(parsed.data, research.searched ? research.text : ""),
           schema: travelResponseSchema,

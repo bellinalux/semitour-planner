@@ -69,13 +69,14 @@ interface ChunkResult {
 }
 
 /** 한 번에 조사할 항목 수와 동시에 돌릴 묶음 수 — 한꺼번에 40곳을 보내면 응답이 늦어 시간 초과가 잦다 */
-const CHUNK_SIZE = 10;
-const CHUNK_CONCURRENCY = 2;
+const CHUNK_SIZE = 8;
+const CHUNK_CONCURRENCY = 3;
 
 /** 항목 한 묶음: 1단계 검색으로 조사, 2단계 조사 메모를 JSON으로 정리 */
 async function researchChunk(req: VerifyFeesRequest, items: VerifyFeesRequest["items"]): Promise<ChunkResult> {
-  const research = await generateGroundedText({ user: researchPrompt({ ...req, items }) });
+  const research = await generateGroundedText({ user: researchPrompt({ ...req, items }), fast: true });
   const structured = await generateJson({
+    fast: true,
     system: SYSTEM,
     user: [
       "<research_memo>",

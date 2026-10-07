@@ -2,6 +2,7 @@ import { MAX_BOOKINGS, parseBooking, withHistory, type Booking } from "@/lib/boo
 import { getSession, workspaceId, type Session } from "@/lib/server/access";
 import { errorResponse } from "@/lib/server/external";
 import { getKv } from "@/lib/server/planStore";
+import { audit } from "@/lib/server/audit";
 
 /**
  * 예약 관리 (팀 공용)
@@ -16,7 +17,7 @@ async function open(request: Request) {
   if (!session) return { error: errorResponse("UNAUTHORIZED", "접근 코드가 필요합니다.", 401) } as const;
   const store = await getKv();
   if (!store) return { error: errorResponse("NO_STORE", "서버 저장소(KV)가 아직 연결되지 않았습니다.", 503) } as const;
-  return { kv: store.kv, key: `bookings:${ws}`, session } as const;
+  return { kv: store.kv, key: `bookings:${ws}`, session, ws } as const;
 }
 
 type Ctx = Exclude<Awaited<ReturnType<typeof open>>, { error: Response }>;
@@ -37,6 +38,8 @@ const view = (session: Session, list: Booking[]) => list.map((b) => ({ ...b, can
 export async function GET(request: Request) {
   const ctx = await open(request);
   if ("error" in ctx) return ctx.error;
+  // 고객 연락처가 들어 있는 목록이라 누가 열어 봤는지 남긴다 (같은 사람은 10분에 한 번)
+  await audit(ctx.ws, ctx.session, "예약 목록 열람", "", { view: true });
   return Response.json({ bookings: view(ctx.session, await readAll(ctx)) });
 }
 
@@ -65,6 +68,7 @@ export async function PUT(request: Request) {
   } catch {
     return errorResponse("INTERNAL", "예약을 저장하지 못했습니다.", 500);
   }
+  await audit(ctx.ws, ctx.session, prev ? "예약 수정" : "예약 등록", saved.customerName);
   return Response.json({ booking: { ...saved, canDelete: canDelete(ctx.session, saved) } });
 }
 
@@ -84,5 +88,6 @@ export async function DELETE(request: Request) {
   } catch {
     return errorResponse("INTERNAL", "예약을 삭제하지 못했습니다.", 500);
   }
+  await audit(ctx.ws, ctx.session, "예약 삭제", target.customerName);
   return Response.json({ ok: true });
 }

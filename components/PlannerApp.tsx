@@ -5,7 +5,7 @@ import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TripInputForm } from "@/components/form/TripInputForm";
 import { Header } from "@/components/layout/Header";
 import { CompanySettings } from "@/components/layout/CompanySettings";
-import { DOC_LABELS, PrintDocuments, type DocKind } from "@/components/print/PrintDocuments";
+import { PrintDocuments } from "@/components/print/PrintDocuments";
 import { SavedPlansMenu } from "@/components/layout/SavedPlansMenu";
 import { SendToTourdesign } from "@/components/layout/SendToTourdesign";
 import { ErrorLogMenu } from "@/components/layout/ErrorLogMenu";
@@ -28,8 +28,8 @@ import { useSegmentLibrary } from "@/hooks/useSegmentLibrary";
 import { useUsp } from "@/hooks/useUsp";
 import { useWebChecks } from "@/hooks/useWebChecks";
 import { useQuoteLog } from "@/hooks/useQuoteLog";
+import { useQuoteOutputs } from "@/hooks/useQuoteOutputs";
 import { useTeamSync } from "@/hooks/useTeamSync";
-import { buildQuoteLogEntry, type QuoteLogAction } from "@/lib/quoteLog";
 import { useWorkPersistence } from "@/hooks/useWorkPersistence";
 import { useStudioProductReceive } from "@/hooks/useStudioProductReceive";
 import { useStudioProductProvide } from "@/hooks/useStudioProductProvide";
@@ -43,12 +43,11 @@ import { documentQuote } from "@/lib/pricing";
 import { withSource } from "@/lib/costSource";
 import { plannerGuide } from "@/lib/plannerGuide";
 import { prewarmEstimates } from "@/lib/autoQuoteRequests";
+import { timed } from "@/lib/perf";
 import { suggestionToOption } from "@/lib/optionSuggestions";
 import { newSegmentId, type SegmentKind } from "@/lib/segmentLibrary";
 import { applyFlightToDays, tripSpanFromFlight } from "@/lib/flightApply";
 import { overnightNights } from "@/lib/itinerary";
-import { buildEmojiCustomerText } from "@/lib/exportEmoji";
-import { buildCustomerText, buildInternalText } from "@/lib/exportText";
 import { tourToOption } from "@/lib/options";
 import { buildUspRequest } from "@/lib/uspRequest";
 import { suggestPlanName, type PlanSnapshot, type ResultSnapshot } from "@/lib/workspace";
@@ -135,7 +134,7 @@ export function PlannerApp() {
     usp.reset();
     // 코스를 만드는 동안 비어 있는 차량·가이드·숙박·항공 시세를 미리 조회해 둔다 (자동 견적이 캐시에서 바로 받는다)
     prewarmEstimates(input);
-    const result = await itinerary.generate(input, courseFile);
+    const result = await timed("generate", input.destination.trim(), () => itinerary.generate(input, courseFile));
     if (!result) return;
     if (autoQuote.afterGenerate) autoQuote.armAfterGenerate();
 
@@ -200,24 +199,7 @@ export function PlannerApp() {
 
   const autoQuote = useAutoQuote({ input, update, verifyFees: webChecks.verifyFees, hasItinerary: days.length > 0, itinerary: days });
 
-  const exportData = () => {
-    if (!quote?.ok) throw new Error("견적이 아직 준비되지 않았습니다.");
-    return { input, days, pmChoice, quote, meta, usps: usp.state.status === "success" ? usp.usps : [] };
-  };
-  /** 고객에게 나가는 텍스트는 선택한 판매 채널의 소비자가로 만든다 */
-  const customerExportData = () => {
-    const data = exportData();
-    return { ...data, quote: documentQuote(data.quote, input) };
-  };
-
-  /** 고객에게 나간 견적(인쇄·문구 복사)을 이력으로 남긴다 */
-  const logIssued = (action: QuoteLogAction, document: string) => {
-    if (quote?.ok) quoteLog.record(buildQuoteLogEntry(input, documentQuote(quote, input), quote, action, document, session.user?.name || quoteLog.author));
-  };
-  const printDocument = (kind: DocKind) => {
-    print(kind);
-    if (kind !== "internal") logIssued("print", DOC_LABELS[kind]);
-  };
+  const { exporter, printDocument } = useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quoteLog, author: session.user?.name || quoteLog.author, print });
 
   // 화면 위 진행 안내 (① 입력 → ② 코스 → ③ 견적 → ④ 문서)
   const { steps: guideSteps, unconfirmed, stage: feedbackStage } = plannerGuide({
@@ -371,20 +353,7 @@ export function PlannerApp() {
               canGenerate: uspRequest !== null,
               onGenerate: handleGenerateUsp,
             }}
-            exporter={{
-              disabled: !quote?.ok,
-              getInternalText: () => buildInternalText(exportData()),
-              getCustomerText: () => {
-                const text = buildCustomerText(customerExportData());
-                logIssued("copy", "고객용 문구");
-                return text;
-              },
-              getEmojiText: () => {
-                const text = buildEmojiCustomerText(customerExportData());
-                logIssued("copy", "이모지 고객용 문구");
-                return text;
-              },
-            }}
+            exporter={exporter}
             documents={{
               disabled: !quote?.ok,
               missingLegal: missingLegalFields(company),

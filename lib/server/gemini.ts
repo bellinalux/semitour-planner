@@ -42,6 +42,33 @@ interface GenerateJsonOptions<T extends z.ZodType> {
   timeoutMs?: number;
   /** user 텍스트와 함께 보낼 파일 (사진·PDF 등) */
   files?: InlineFilePart[];
+  /** 빠른 모드: AI의 생각 단계를 줄인다(thinkingLevel low). 조사 메모 정리처럼 단순한 작업에 쓴다 */
+  fast?: boolean;
+}
+
+/**
+ * 빠른 모드 — 시세·요금 조회처럼 결과가 짧은 작업은 AI가 오래 "생각"할 필요가 없다.
+ * 같은 검색 조사가 37초 → 8초로 줄었다(2026-10-07 측정, 생각 단계 low + 짧은 메모).
+ * 모델이 생각 단계 설정을 받지 않으면(400) 한 번 알아 두고 그 뒤로는 설정 없이 보낸다.
+ */
+let thinkingUnsupported = false;
+const FAST_MEMO_NOTE = "\n\n[메모 형식] 항목마다 1~2줄로 짧게, 금액·조건·확인한 사이트 이름 위주로 적으세요. 인사말·배경 설명은 쓰지 마세요.";
+
+function withThinking(generationConfig: Record<string, unknown>, fast: boolean): Record<string, unknown> {
+  return fast && !thinkingUnsupported ? { ...generationConfig, thinkingConfig: { thinkingLevel: "low" } } : generationConfig;
+}
+
+/** 생각 단계 설정이 거절되면 설정을 빼고 한 번 더 보낸다 */
+async function callWithThinkingFallback(body: Record<string, unknown>, timeoutMs: number): Promise<CallResult> {
+  const result = await callGemini(body, timeoutMs);
+  const config = body.generationConfig as Record<string, unknown> | undefined;
+  if (!result.ok && result.status === 400 && config?.thinkingConfig && /thinking/i.test(result.message)) {
+    thinkingUnsupported = true;
+    const { thinkingConfig: _drop, ...rest } = config;
+    void _drop;
+    return callGemini({ ...body, generationConfig: rest }, timeoutMs);
+  }
+  return result;
 }
 
 /** 검색 근거로 참고한 웹 출처 */
@@ -101,6 +128,7 @@ async function callGemini(body: Record<string, unknown>, timeoutMs: number): Pro
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
 
   let res: Response;
+  const __t0 = performance.now();
   try {
     res = await fetch(`${endpoint()}/${model}:generateContent`, {
       method: "POST",
@@ -116,6 +144,10 @@ async function callGemini(body: Record<string, unknown>, timeoutMs: number): Pro
   }
 
   const data = (await res.json().catch(() => ({}))) as GeminiResponse;
+  if (process.env.GEMINI_TIMING === "1") {
+    const u = (data as { usageMetadata?: Record<string, number> }).usageMetadata ?? {};
+    console.log(`[gemini-timing] ${Math.round(performance.now() - __t0)}ms search=${Boolean((body as { tools?: unknown }).tools)} think=${u.thoughtsTokenCount ?? 0} out=${u.candidatesTokenCount ?? 0} in=${u.promptTokenCount ?? 0}`);
+  }
   if (!res.ok) return { ok: false, status: res.status, message: data.error?.message ?? res.statusText };
   return { ok: true, data };
 }
@@ -190,6 +222,7 @@ export async function generateJson<T extends z.ZodType>({
   temperature = 0.7,
   timeoutMs = 90_000,
   files = [],
+  fast = false,
 }: GenerateJsonOptions<T>): Promise<z.output<T>> {
   resolveKey();
   const fileParts = files.map((f) => ({ inlineData: { mimeType: f.mimeType, data: f.data } }));
@@ -211,11 +244,11 @@ export async function generateJson<T extends z.ZodType>({
       ? `\n\n[이전 응답 문제] ${lastProblem}\n문제를 고쳐서 지정된 스키마의 JSON만 다시 출력하세요.`
       : "";
 
-    const result = await callGemini(
+    const result = await callWithThinkingFallback(
       {
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: user + retryNote }, ...fileParts] }],
-        generationConfig,
+        generationConfig: withThinking(generationConfig, fast),
       },
       timeoutMs,
     );
@@ -272,10 +305,13 @@ export async function generateGroundedText({
   user,
   temperature = 0.2,
   timeoutMs = 100_000,
+  fast = false,
 }: {
   user: string;
   temperature?: number;
   timeoutMs?: number;
+  /** 빠른 모드: 생각 단계 low + 짧은 메모 (시세·요금 조회용) */
+  fast?: boolean;
 }): Promise<{ text: string; sources: GroundingSource[]; searched: boolean }> {
   resolveKey();
   let last: { text: string; sources: GroundingSource[]; searched: boolean } | null = null;
@@ -283,14 +319,14 @@ export async function generateGroundedText({
   for (let attempt = 0; attempt < 2; attempt++) {
     const prompt =
       attempt === 0
-        ? user
-        : `${user}\n\n[이전 응답 문제] Google 검색을 실행하지 않았습니다. 반드시 Google 검색 도구를 여러 번 사용해 확인한 뒤 답하세요.`;
+        ? user + (fast ? FAST_MEMO_NOTE : "")
+        : `${user}${fast ? FAST_MEMO_NOTE : ""}\n\n[이전 응답 문제] Google 검색을 실행하지 않았습니다. 반드시 Google 검색 도구를 여러 번 사용해 확인한 뒤 답하세요.`;
 
-    const result = await callGemini(
+    const result = await callWithThinkingFallback(
       {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         tools: [{ googleSearch: {} }],
-        generationConfig: { temperature, maxOutputTokens: 32768 },
+        generationConfig: withThinking({ temperature, maxOutputTokens: 32768 }, fast),
       },
       timeoutMs,
     );

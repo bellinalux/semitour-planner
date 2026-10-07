@@ -1,5 +1,6 @@
 import { getSession, workspaceId, type Session } from "@/lib/server/access";
 import { errorResponse } from "@/lib/server/external";
+import { audit } from "@/lib/server/audit";
 import {
   getKv,
   getPlan,
@@ -111,6 +112,7 @@ export async function DELETE(request: Request) {
       return errorResponse("FORBIDDEN", "본인이 저장한 일정이나 관리자만 삭제할 수 있습니다.", 403);
     }
     await removePlan(ctx.kv, ctx.ws, id);
+    await audit(ctx.ws, ctx.session, "저장 일정 삭제", entry?.name ?? id);
     return Response.json({ ok: true });
   } catch (err) {
     console.error("[plans:delete]", err);

@@ -1,5 +1,6 @@
 import { normalizeCompany } from "@/lib/company";
-import { isAuthed, requireAdmin, workspaceId } from "@/lib/server/access";
+import { getSession, isAuthed, requireAdmin, workspaceId } from "@/lib/server/access";
+import { audit } from "@/lib/server/audit";
 import { errorResponse } from "@/lib/server/external";
 import { getKv } from "@/lib/server/planStore";
 
@@ -57,6 +58,7 @@ export async function PUT(request: Request) {
   const company = normalizeCompany((body as { company?: unknown })?.company);
   try {
     await ctx.kv.put(ctx.key, JSON.stringify(company));
+    await audit(await workspaceId(), await getSession(request), "회사 정보 변경");
     return Response.json({ company });
   } catch (err) {
     console.error("[company:put]", err);

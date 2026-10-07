@@ -33,8 +33,9 @@ function roundFor(currency: string, value: number): number {
 /** 일정의 코스마다 팔 만한 선택 옵션을 웹 검색으로 찾고, 견적 통화로 환산한 금액까지 돌려준다. */
 export async function suggestOptions(req: SuggestOptionsRequest): Promise<SuggestOptionsResponse> {
   // 1단계: 검색으로 조사, 2단계: 조사 메모를 JSON으로 정리
-  const research = await generateGroundedText({ user: buildOptionSuggestResearchPrompt(req) });
+  const research = await generateGroundedText({ user: buildOptionSuggestResearchPrompt(req), fast: true });
   const structured = await generateJson({
+    fast: true,
     system: OPTION_SUGGEST_STRUCTURE_SYSTEM_PROMPT,
     user: buildOptionSuggestStructurePrompt(req, research.text),
     schema: resultSchema,

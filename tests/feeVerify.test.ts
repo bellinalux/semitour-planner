@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-// 2번째 묶음(항목 11~20)만 시간 초과로 실패하는 상황
+// p11이 든 묶음만 시간 초과로 실패하는 상황
 vi.mock("@/lib/server/gemini", () => ({
   generateGroundedText: vi.fn(async ({ user }: { user: string }) => {
     if (user.includes("[p11]")) throw new Error("TIMEOUT");
@@ -31,6 +31,6 @@ describe("입장료 확인 — 묶음으로 나눠 조사", () => {
   });
 
   it("모든 묶음이 실패하면 오류를 그대로 알린다", async () => {
-    await expect(verifyFees({ destination: "서울", currency: "KRW", exchangeRateToKrw: 0, items: items.slice(10, 20) })).rejects.toThrow("TIMEOUT");
+    await expect(verifyFees({ destination: "서울", currency: "KRW", exchangeRateToKrw: 0, items: items.slice(10, 16) })).rejects.toThrow("TIMEOUT");
   });
 });

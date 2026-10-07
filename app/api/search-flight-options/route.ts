@@ -40,10 +40,11 @@ export async function POST(request: Request) {
       3 * HOUR,
       async () => {
         // 1단계: Google 검색으로 조사 (출처 수집)
-        const research = await generateGroundedText({ user: buildFlightOptionsResearchPrompt(parsed.data) });
+        const research = await generateGroundedText({ user: buildFlightOptionsResearchPrompt(parsed.data), fast: true });
 
         // 2단계: 조사 메모를 JSON으로 정리 (메모에 없는 내용은 만들지 않는다)
         const structured = await generateJson({
+          fast: true,
           system: FLIGHT_OPTIONS_STRUCTURE_SYSTEM_PROMPT,
           user: buildFlightOptionsStructurePrompt(parsed.data, research.text),
           schema: flightOptionsResponseSchema,

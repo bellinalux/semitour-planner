@@ -40,6 +40,7 @@ export function AutoQuotePanel({ auto }: { auto: AutoQuote }) {
               <span className="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center">{STATUS_ICON[step.status]}</span>
               <span className="font-medium text-slate-700">{step.label}</span>
               {step.message && <span className={step.status === "error" ? "text-amber-700" : "text-slate-500"}>{step.message}</span>}
+              {step.ms !== undefined && step.ms >= 1000 && <span className="ml-auto shrink-0 tabular-nums text-slate-400">{Math.round(step.ms / 1000)}초</span>}
             </li>
           ))}
           {auto.filledCount !== null && !auto.running && (
