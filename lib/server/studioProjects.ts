@@ -18,7 +18,8 @@ export const saveSchema = z.object({
   title: z.string().max(200),
   country: z.string().max(60).default(""),
   region: z.string().max(60).default(""),
-  status: z.enum(STATUSES).default("draft"),
+  /** 빼면 지금 상태를 그대로 둔다 — 상세페이지 [저장] 때마다 하는 자동 백업이 승인 상태를 되돌리지 않게 (2026-10-08) */
+  status: z.enum(STATUSES).optional(),
   note: z.string().max(1000).default(""),
   by: z.string().max(40).default(""),
   baseVersion: z.number().int().nonnegative().optional(),
@@ -86,18 +87,19 @@ export async function saveProject(kv: Kv, ws: string, req: SaveRequest): Promise
   const prev = req.id ? await getProject(kv, ws, id) : null;
   if (prev && req.baseVersion !== undefined && req.baseVersion !== prev.version && !req.force) return { ok: false, conflict: entryOf(prev) };
   const version = (prev?.version ?? 0) + 1;
+  const status: ProjectStatus = req.status ?? prev?.status ?? "draft";
   const savedAt = new Date().toISOString();
-  const statusChanged = !prev || prev.status !== req.status;
+  const statusChanged = !prev || prev.status !== status;
   const history = [...(prev?.history ?? [])];
-  if (statusChanged || req.note) history.push({ at: savedAt, by: req.by, status: req.status, note: req.note, version });
+  if (statusChanged || req.note) history.push({ at: savedAt, by: req.by, status, note: req.note, version });
   const stored: StoredProject = {
-    id, title: req.title, country: req.country, region: req.region, status: req.status, savedAt, savedBy: req.by, version,
+    id, title: req.title, country: req.country, region: req.region, status, savedAt, savedBy: req.by, version,
     lastNote: req.note || prev?.lastNote || "", history: history.slice(-100), data: req.data,
     product: req.product ?? prev?.product,
   };
   const entry = entryOf(stored);
   await kv.put(latestKey(ws, id), JSON.stringify(stored), { metadata: entry });
-  const vmeta: VersionEntry = { version, savedAt, savedBy: req.by, status: req.status, note: short(req.note, 100) };
+  const vmeta: VersionEntry = { version, savedAt, savedBy: req.by, status, note: short(req.note, 100) };
   await kv.put(versionKey(ws, id, version), JSON.stringify({ meta: vmeta, data: req.data }), { metadata: vmeta });
   // 오래된 버전 정리
   const versions = await listVersions(kv, ws, id);
