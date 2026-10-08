@@ -19,7 +19,11 @@ export const studioProductSchema = z.object({
   title: str, subtitle: str, intro: str,
   country: str, region: str,
   operatingDays: str, duration: str, minPax: str, maxPax: str, tourType: str, language: str,
-  meeting: z.object({ time: str, place: str, address: str, note: str }).partial().optional(),
+  meeting: z.object({
+    time: str, place: str, address: str, note: str,
+    // 오전·오후·야경 투어 출발 시간 (상세페이지 스튜디오 2026-10-08~) — 없으면 time 한 줄만 온다
+    times: z.object({ am: str, pm: str, night: str }).partial().optional(),
+  }).partial().optional(),
   included: z.array(z.string().max(500)).max(60).optional(),
   excluded: z.array(z.string().max(500)).max(60).optional(),
   notices: z.array(z.string().max(1000)).max(80).optional(),
@@ -35,6 +39,22 @@ export function parseStudioProduct(raw: unknown): StudioProduct | null {
 const firstNumber = (s?: string) => { const m = /(\d+)/.exec(s ?? ""); return m ? Number(m[1]) : null; };
 const MAX_COURSE_TEXT = 12000;
 
+const START_LABEL = { am: "오전 투어", pm: "오후 투어", night: "야경 투어" } as const;
+type StartKey = keyof typeof START_LABEL;
+
+/** 상품의 출발 시간들 — times가 있으면 그대로, 없으면 '오전 투어 09:00 · 오후 투어 14:00' 같은 한 줄에서 찾는다 */
+export function meetingStarts(p: StudioProduct): { key: StartKey; label: string; time: string }[] {
+  const m = p.meeting ?? {};
+  const raw = m.time ?? "";
+  const keys: StartKey[] = ["am", "pm", "night"];
+  const fromText = (k: StartKey) => new RegExp(`${START_LABEL[k].replace(" ", "\\s*")}\\s*([0-2]?\\d:[0-5]\\d)`).exec(raw)?.[1] ?? "";
+  const out = keys
+    .map((k) => ({ key: k, label: START_LABEL[k], time: (m.times?.[k] ?? "").trim() || fromText(k) }))
+    .filter((x) => x.time);
+  if (!out.length && raw.trim()) return [{ key: "am", label: START_LABEL.am, time: raw.trim() }];
+  return out;
+}
+
 /** 상품 → 붙여넣기용 코스 원문 */
 export function productCourseText(p: StudioProduct): string {
   const L: string[] = [];
@@ -44,7 +64,11 @@ export function productCourseText(p: StudioProduct): string {
   const info = [p.duration && `소요 ${p.duration}`, p.tourType, p.minPax && `최소 ${p.minPax}`, p.maxPax && `최대 ${p.maxPax}`, p.language && `${p.language} 진행`, p.operatingDays && `운영 ${p.operatingDays}`].filter(Boolean);
   if (info.length) L.push(info.join(" · "));
   const m = p.meeting ?? {};
-  if (m.time || m.place) L.push(`미팅: ${[m.time, m.place, m.address].filter(Boolean).join(" ")}`);
+  const starts = meetingStarts(p);
+  // 일정은 첫 출발(보통 오전 투어) 기준으로 짜고, 다른 출발 시간은 따로 적어 둔다
+  const first = starts[0]?.time ?? m.time;
+  if (first || m.place) L.push(`미팅: ${[first, m.place, m.address].filter(Boolean).join(" ")}`);
+  if (starts.length > 1) L.push(`출발 시간: ${starts.map((x) => `${x.label} ${x.time}`).join(" · ")} (같은 코스, 첫 출발 기준으로 일정 작성)`);
   L.push("");
   const days = p.days ?? [];
   days.forEach((d, i) => {
