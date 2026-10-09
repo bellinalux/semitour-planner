@@ -3,7 +3,7 @@ import { ITEM_TYPES } from "@/lib/itemTypes";
 import { isSupportedCourseFile, MAX_COURSE_FILE_BYTES } from "@/lib/courseFile";
 import { roundMinutes } from "@/lib/format";
 import { applyFlightWithMeals } from "@/lib/flightApply";
-import { enforceMealWindows } from "@/lib/mealTiming";
+import { clampMealStay, enforceMealWindows } from "@/lib/mealTiming";
 import type { CourseMeta, DayPlan, FlightOption, ItineraryItem } from "@/types";
 
 /** ---------- 클라이언트 → 서버 요청 ---------- */
@@ -44,11 +44,15 @@ const itemSchema = z.object({
     .describe(
       "입장 여부. 원문이 입장하지 않고 조망/외관만이라고 명시할 때만 view_only. 입장 개념이 없으면 none, 불확실하면 unknown",
     ),
-  stayMinutes: z.number().describe("소요 시간(분). 원문에 있으면 그 값, 없으면 통상 소요 시간 추정. 모르면 0"),
+  stayMinutes: z
+    .number()
+    .describe(
+      "그 장소에서 실제로 머무는 시간(분). 원문에 있으면 그 값. 없으면 추정하되, 한 구역을 걸어서 도는 장소들은 구역 전체 시간을 나눈 정도로 짧게. 식사 50~90, 카페 20~40. 모르면 0",
+    ),
   travelMinutesToNext: z
     .number()
     .describe(
-      "다음 항목까지 이동 시간(분). 원문에 이동 수단·소요시간이 적혀 있으면 그 값, 없으면 실제 동선(도보/차량)을 고려한 현실적인 값으로 추정. 그날의 마지막 항목이면 0",
+      "다음 항목까지 이동 시간(분). 원문에 있으면 그 값. 없으면 실제 거리로: 같은 구역 도보 3~10분, 다른 구역 차량 15~40분. 모든 이동을 똑같이 채우지 않는다. 그날의 마지막 항목이면 0",
     ),
   entryFee: z
     .number()
@@ -145,7 +149,7 @@ function toItem(raw: ParsedCourse["days"][number]["items"][number], id: string):
     timeNote: raw.timeNote.trim() || undefined,
     name: raw.name.trim(),
     description: raw.description.trim(),
-    stayMinutes: roundMinutes(raw.stayMinutes),
+    stayMinutes: clampMealStay(raw.type, `${raw.name} ${raw.description}`, roundMinutes(raw.stayMinutes)),
     travelMinutesToNext: roundMinutes(raw.travelMinutesToNext),
     // 입장 개념이 없어도(마사지, 체험) 요금은 있을 수 있다. 외부 조망이나 요금이 없는 유형만 0으로 둔다.
     entryFee: raw.admission === "view_only" || NO_FEE_TYPES.has(raw.type) ? 0 : Math.max(0, raw.entryFee),

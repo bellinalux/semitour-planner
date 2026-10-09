@@ -154,6 +154,9 @@ export function useItinerary() {
                 ...patch,
                 ...(touchesCost ? { isEstimated: false } : {}),
                 ...(staleFee ? { feeCheck: undefined, local: "local" in patch ? patch.local : undefined } : {}),
+                // 체류·이동 시간을 직접 고치면 웹 확인(구역·장소) 표시는 더 이상 맞지 않고, 이후 웹 확인이 덮어쓰지 않게 표시한다
+                ...(("stayMinutes" in patch || "travelMinutesToNext" in patch) && !("timeCheck" in patch) ? { timeCheck: undefined } : {}),
+                ...("stayMinutes" in patch && !("timeCheck" in patch) ? { stayEdited: true } : {}),
               }
             : item,
         ),

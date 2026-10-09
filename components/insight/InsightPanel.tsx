@@ -7,6 +7,7 @@ import type { SettingsSection } from "@/components/form/settingsFocus";
 import type { AutoBuild } from "@/hooks/useAutoBuild";
 import type { AutoQuote } from "@/hooks/useAutoQuote";
 import type { BudgetFitView } from "@/hooks/useBudgetFit";
+import type { DayTimeCheckView } from "@/hooks/useDayTimeCheck";
 import type { Insight, InsightAction, KeyNumbers } from "@/lib/insights";
 import type { TourCandidate, TripInput } from "@/types";
 
@@ -25,6 +26,8 @@ interface Props {
   onInsertTour: (tour: TourCandidate) => void;
   /** 확인된 항공편 시각으로 일정표의 항공 시각을 다시 맞춘다 */
   onFixFlight: () => void;
+  /** 하루 일정 시간 검증 (구역 단위) */
+  dayTime: DayTimeCheckView;
 }
 
 /** 한 번에 보여 줄 추천 수 — 처음 쓰는 사람이 부담스럽지 않게 */
@@ -80,7 +83,7 @@ function NumbersCard({ numbers, money }: { numbers: KeyNumbers; money: (v: numbe
  * 레이아웃3 — 요약·추천. 지금 견적의 핵심 숫자(판매가·원가·수익)를 위에 두고, 고치면 좋은 것을 중요한 순서로 보여 주며
  * 버튼으로 바로 적용한다(예산 맞추기·올리기·입력 폴더 열기·질문 복사). 자동 구성 진행도 여기서 본다.
  */
-export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight }: Props) {
+export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight, dayTime }: Props) {
   const [showAll, setShowAll] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const visible = showAll ? insights : insights.slice(0, SHOW);
@@ -95,6 +98,9 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
         break;
       case "fix-flight":
         onFixFlight();
+        break;
+      case "fix-day-time":
+        dayTime.run(action.days);
         break;
       case "budget-apply":
         budgetFit?.apply();
@@ -132,6 +138,21 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
           <Lightbulb className="size-3.5 text-indigo-600" aria-hidden />
           추천 · 할 일 {insights.length > 0 && <span className="tabular-nums text-slate-400">{insights.length}</span>}
         </h2>
+        {(dayTime.running || dayTime.message || dayTime.error) && (
+          <p
+            role={dayTime.error ? "alert" : "status"}
+            className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-[11px] leading-4 ${dayTime.error ? "border-red-200 bg-red-50 text-red-700" : "border-indigo-200 bg-indigo-50 text-indigo-900"}`}
+          >
+            <span className="min-w-0 flex-1 text-pretty">
+              {dayTime.running ? `DAY ${dayTime.running.join(", ")} 일정 시간을 웹에서 확인하는 중... (1분 안팎)` : (dayTime.error ?? dayTime.message)}
+            </span>
+            {dayTime.canUndo && !dayTime.running && (
+              <button type="button" onClick={dayTime.undo} className="shrink-0 font-semibold underline underline-offset-2">
+                되돌리기
+              </button>
+            )}
+          </p>
+        )}
         {insights.length === 0 ? (
           <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
             {numbers ? "지금은 고칠 것이 없습니다." : "견적이 만들어지면 고칠 것을 알려 드립니다."}
@@ -152,6 +173,7 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
                     <button
                       type="button"
                       onClick={() => void run(insight, insight.action!)}
+                      disabled={insight.action.kind === "fix-day-time" && dayTime.running !== null}
                       className={`mt-2 inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-semibold ${tone.button}`}
                     >
                       {insight.action.kind === "copy" && <ClipboardCopy className="size-3.5" aria-hidden />}

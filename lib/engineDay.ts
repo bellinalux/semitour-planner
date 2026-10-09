@@ -82,7 +82,13 @@ export function applyDayResult(days: DayPlan[], dayNo: number, res: PlanResponse
       return {
         ...it,
         stayMinutes: it.stayMinutes || stay.get(it.id) || it.stayMinutes,
-        travelMinutesToNext: nextTravel.has(it.id) ? roundMinutes(nextTravel.get(it.id)!) : it.travelMinutesToNext,
+        // 순서를 그대로 두면, 하루 일정 시간 검증(구역 단위)으로 맞춘 이동 시간은 유지한다 — 엔진은 좌표를 모르는 식사·카페 앞뒤를 일괄 15분으로 본다
+        travelMinutesToNext:
+          !o.useBest && it.timeCheck?.basis === "area"
+            ? it.travelMinutesToNext
+            : nextTravel.has(it.id)
+              ? roundMinutes(nextTravel.get(it.id)!)
+              : it.travelMinutesToNext,
         ...(c && !(it.caution ?? "").includes(c.slice(0, 12)) ? { caution: [it.caution, c].filter(Boolean).join(" / ") } : {}),
       };
     };

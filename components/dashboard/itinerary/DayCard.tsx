@@ -1,4 +1,6 @@
-import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Flag, Plus, Sun, Sunset } from "lucide-react";
+import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Flag, Plus, Sun, Sunset, Timer } from "lucide-react";
+import { useContext } from "react";
+import { DayTimeCheckContext } from "@/hooks/useDayTimeCheck";
 import { calcDayEnd, calcDayGap, calcDayLoad, computeItemTimings, dayMeetingTime, STANDARD_DAY_END, timelineEndTime, type DayLoadLevel } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
 import { dayItems } from "@/lib/itinerary";
@@ -72,6 +74,9 @@ export function DayCard({
   const selected = plan.pmFreeOptions.find((o) => o.id === selectedPmId) ?? plan.pmFreeOptions[0];
   const pmChoiceForDay = { [plan.day]: selectedPmId };
   const load = calcDayLoad(plan, pmChoiceForDay);
+  // 하루 일정 시간 검증 (방문 장소가 2곳 이상인 날)
+  const dayTime = useContext(DayTimeCheckContext);
+  const placeCount = dayItems(plan, pmChoiceForDay).filter((i) => !["flight", "transfer", "hotel", "free_time"].includes(i.type ?? "")).length;
   const meetingTime = dayMeetingTime(plan);
   const endTime = load.totalMinutes > 0 ? timelineEndTime(dayItems(plan, pmChoiceForDay), meetingTime) : null;
   const timings = computeItemTimings(dayItems(plan, pmChoiceForDay), meetingTime);
@@ -112,6 +117,20 @@ export function DayCard({
             <Clock className="h-3 w-3" aria-hidden />총 {formatDuration(load.totalMinutes)}
             {endTime ? ` (~${endTime} 종료)` : ""}
           </span>
+        )}
+        {dayTime && placeCount >= 2 && (
+          <button
+            type="button"
+            onClick={() => dayTime.run([plan.day])}
+            disabled={dayTime.running !== null}
+            title="하루 방문 순서를 웹에서 구역 단위(걸어서 함께 도는 장소 묶음)로 확인해 체류·이동 시간을 맞춥니다"
+            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium disabled:opacity-60 ${
+              load.level === "overloaded" ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <Timer className="size-3.5" aria-hidden />
+            {dayTime.running?.includes(plan.day) ? "시간 확인 중..." : "시간 검증"}
+          </button>
         )}
         {plan.kind === "linear" && plan.items.length > 0 && (
           <button

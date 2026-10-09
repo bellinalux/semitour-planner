@@ -181,14 +181,31 @@ export function TimelineItem({
               {item.timeNote}
             </span>
           )}
-          {item.feeCheck?.stayMinutesChecked && (
+          {/* 체류 시간을 어디서 확인했는지: 구역 확인(하루 순서 통째로) / 장소 확인(장소 하나만) / AI 추정 */}
+          {item.timeCheck?.basis === "area" ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700"
+              title={`하루 방문 순서를 웹에서 확인해 구역 단위(걸어서 함께 도는 장소 묶음)로 맞춘 시간${item.timeCheck.sourceName ? ` · 출처: ${item.timeCheck.sourceName}` : ""}`}
+            >
+              <Check className="size-3" aria-hidden />
+              구역 확인{item.timeCheck.area ? ` · ${item.timeCheck.area}` : ""}
+            </span>
+          ) : item.timeCheck?.basis === "place" || item.feeCheck?.stayMinutesChecked ? (
             <span
               className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
-              title={`웹 검색으로 확인한 통상적인 ${stayTimeLabel(item.type)} 시간`}
+              title={`이 장소 하나만 웹에서 확인한 통상적인 ${stayTimeLabel(item.type)} 시간 — 걸어서 함께 도는 장소들이면 일정 카드의 '시간 검증'으로 구역 단위로 맞추세요`}
             >
-              <Check className="h-3 w-3" aria-hidden />
-              웹 확인
+              <Check className="size-3" aria-hidden />
+              장소 확인
             </span>
+          ) : (
+            item.isEstimated &&
+            item.stayMinutes > 0 &&
+            !["flight", "transfer", "hotel"].includes(item.type ?? "") && (
+              <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500" title="AI가 추정한 시간 — 일정 카드의 '시간 검증'으로 확인할 수 있습니다">
+                AI 추정
+              </span>
+            )
           )}
           {item.fromCatalog && (
             <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">투어 카탈로그</span>

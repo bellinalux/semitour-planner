@@ -83,3 +83,16 @@ export function refitMealWindows(items: ItineraryItem[], meetingTime: string): I
     meetingTime,
   );
 }
+
+/** 점심·저녁 식사인지 (이름·설명으로) — 아니면 카페·디저트·간식으로 본다 */
+export const isMainMeal = (text: string) => /중식|점심|런치|lunch|석식|저녁|디너|dinner|식사/i.test(text);
+
+/**
+ * 식사 항목 체류시간의 현실적인 범위 — 점심·저녁 40~90분, 카페·디저트 20~60분.
+ * AI가 문화공간 같은 곳을 카페로 분류해 90분 넘게 잡는 일을 막는다. 0(모름)은 그대로 둔다.
+ */
+export function clampMealStay(type: string | undefined, text: string, minutes: number): number {
+  if (type !== "meal" || minutes <= 0) return minutes;
+  const [min, max] = isMainMeal(text) ? [40, 90] : [20, 60];
+  return Math.min(max, Math.max(min, minutes));
+}

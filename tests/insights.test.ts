@@ -43,11 +43,11 @@ describe("요약 · 추천", () => {
     expect(done.find((i) => i.id === "budget-applied")).toMatchObject({ tone: "good", action: { kind: "budget-undo" } });
   });
 
-  it("일정이 너무 긴 날은 그 날로 이동, 경고가 먼저 온다", () => {
+  it("일정이 너무 긴 날은 일정 시간 검증으로 맞추기, 경고가 먼저 온다", () => {
     const long = [linearDay(1, [item("x", { name: "긴 일정", stayMinutes: 900, travelMinutesToNext: 60 }), item("y", { name: "또", stayMinutes: 60 })])];
     const i = input({ customerName: "" });
     const list = buildInsights({ input: i, days: long, pmChoice: {}, meta: null, quote: calculateQuote(i, long, {}), budgetFit: null, money });
-    expect(list.find((x) => x.id === "day-1")).toMatchObject({ tone: "warn", action: { kind: "scroll", target: "day-1" } });
+    expect(list.find((x) => x.id === "day-1")).toMatchObject({ tone: "warn", action: { kind: "fix-day-time", days: [1], label: "일정 시간 검증으로 맞추기" } });
     expect(list.findIndex((x) => x.tone === "info")).toBeGreaterThan(list.findIndex((x) => x.id === "day-1"));
   });
 });

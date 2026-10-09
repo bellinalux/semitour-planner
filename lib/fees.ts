@@ -93,8 +93,9 @@ export function applyFeeResults(
     const local = r.localCurrency && r.localAmount > 0 ? { currency: r.localCurrency as CurrencyCode, amount: r.localAmount } : undefined;
 
     // 체류 시간은 요금 확인 상태와 별개로 다룬다. AI 추정치였던 항목만 덮어쓴다(직접 수정한 값은 보호).
-    const stayFound = r.recommendedStayMinutes > 0 && item.isEstimated;
-    const stayPatch = stayFound ? { stayMinutes: r.recommendedStayMinutes } : {};
+    // 하루 일정 시간 검증(구역 단위)으로 맞춘 시간은 장소 하나만 본 값으로 덮어쓰지 않는다 — 구역으로 걸어서 도는 시간이 더 정확하다.
+    const stayFound = r.recommendedStayMinutes > 0 && item.isEstimated && !item.stayEdited && item.timeCheck?.basis !== "area";
+    const stayPatch = stayFound ? { stayMinutes: r.recommendedStayMinutes, timeCheck: { basis: "place" as const, sourceName: r.sourceName || undefined, checkedAt } } : {};
     if (stayFound) summary.stayUpdated++;
 
     // 조사 결과 실제로는 식당·카페인데 다른 유형(관광 등)으로 분류돼 있으면 식사(meal)로 바로잡는다

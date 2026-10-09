@@ -447,6 +447,13 @@ export interface ItineraryItem {
   cuisine?: string;
   /** 이 코스에서 팔 만한 선택 옵션(웹 조사 결과). "코스별 옵션 추천"을 실행하면 채워진다 */
   suggestedOptions?: OptionSuggestion[];
+  /**
+   * 체류·이동 시간을 어디서 확인했는지. area: 하루 일정 시간 검증(구역 단위, 걸어서 함께 도는 장소 묶음) /
+   * place: 장소별 웹 확인. 없으면 AI 추정.
+   */
+  timeCheck?: { basis: "area" | "place"; area?: string; sourceName?: string; checkedAt: string };
+  /** 체류 시간을 사람이 직접 고쳤으면 true — 웹 시간 확인이 덮어쓰지 않는다 */
+  stayEdited?: boolean;
 }
 
 /** 코스별로 추천된 선택 옵션 (대형 여행사·현지 판매처 웹 조사 결과) */

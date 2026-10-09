@@ -35,7 +35,8 @@ export type InsightAction =
   | { kind: "budget-undo"; label: string }
   | { kind: "upgrade"; upgrade: Upgrade; label: string }
   | { kind: "copy"; text: string; label: string }
-  | { kind: "fix-flight"; label: string };
+  | { kind: "fix-flight"; label: string }
+  | { kind: "fix-day-time"; days: number[]; label: string };
 
 export interface Insight {
   id: string;
@@ -188,12 +189,16 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
   for (const day of days) {
     const load = calcDayLoad(day, pmChoice);
     if (load.level !== "overloaded") continue;
+    // 구역 단위로 이미 확인한 날이면 시간이 아니라 일정 자체가 많은 것 → 항목을 줄이도록 안내
+    const checked = dayItems(day, pmChoice).some((i) => i.timeCheck?.basis === "area");
     out.push({
       id: `day-${day.day}`,
       tone: "warn",
-      title: `DAY ${day.day} 일정이 너무 깁니다`,
-      detail: `체류 ${formatDuration(load.stayMinutes)} + 이동 ${formatDuration(load.travelMinutes)} — 항목을 줄이거나 코스 엔진 점검으로 순서를 고치세요`,
-      action: { kind: "scroll", target: `day-${day.day}`, label: "일정 보기" },
+      title: `DAY ${day.day} 일정이 너무 깁니다 (체류+이동 ${formatDuration(load.totalMinutes)})`,
+      detail: checked
+        ? `웹에서 확인한 시간으로도 ${formatDuration(load.totalMinutes)}입니다 — 항목을 다른 날로 옮기거나 선택 옵션으로 빼세요`
+        : `체류 ${formatDuration(load.stayMinutes)} + 이동 ${formatDuration(load.travelMinutes)} — 장소마다 따로 잡은 시간이라 부풀었을 수 있습니다. 하루 순서를 웹에서 구역 단위로 확인해 맞춥니다`,
+      action: checked ? { kind: "scroll", target: `day-${day.day}`, label: "일정 보기" } : { kind: "fix-day-time", days: [day.day], label: "일정 시간 검증으로 맞추기" },
     });
   }
 

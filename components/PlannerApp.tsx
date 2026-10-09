@@ -62,6 +62,7 @@ import { suggestPlanName, type PlanSnapshot, type ResultSnapshot } from "@/lib/w
 import type { CourseFile } from "@/lib/courseFile";
 import { supplierQuotePatch } from "@/lib/supplierQuote";
 import { repairFlightTimes } from "@/lib/flightRepair";
+import { DayTimeCheckContext, useDayTimeCheck } from "@/hooks/useDayTimeCheck";
 import type { DayPlan, FlightOption, ItineraryItem, TourCandidate, TripInput } from "@/types";
 
 const NO_USPS: never[] = [];
@@ -245,6 +246,9 @@ export function PlannerApp() {
     onHotelRestore: autoBuild.restoreHotelPicks,
   });
 
+  // 하루 일정 시간 검증 (구역 단위 웹 확인) — 요약·추천과 일정 카드의 '시간 검증'에서 쓴다
+  const dayTimeCheck = useDayTimeCheck({ input, days, pmChoice, replaceDays: itinerary.replaceDays });
+
   // 레이아웃3(요약·추천): 핵심 숫자와 고치면 좋은 것
   const money = (v: number) => formatMoney(Math.round(v), input.currency);
   const insightArgs = { input, days, pmChoice, meta, quote, budgetFit, money };
@@ -273,6 +277,7 @@ export function PlannerApp() {
       onScrollTo={scrollToResult}
       onAddTourOption={(tour) => update({ options: [...input.options, tourToOption(tour, 0, input)] })}
       onInsertTour={insertTour}
+      dayTime={dayTimeCheck}
       onFixFlight={() => {
         const fixed = repairFlightTimes(days, input, meta);
         if (fixed) itinerary.replaceDays(fixed);
@@ -377,6 +382,7 @@ export function PlannerApp() {
             </SectionCard>
           </div>
           )}
+          <DayTimeCheckContext.Provider value={dayTimeCheck}>
           <Dashboard
             itinerary={itinerary.state}
             days={days}
@@ -438,6 +444,7 @@ export function PlannerApp() {
               onPrint: printDocument,
             }}
           />
+          </DayTimeCheckContext.Provider>
         </section>
         <aside
           aria-label="요약 · 추천"
