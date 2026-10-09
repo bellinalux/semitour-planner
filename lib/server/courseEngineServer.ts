@@ -145,17 +145,21 @@ export async function holidays(country: string, year: number): Promise<{ date: s
 }
 
 /* ── 이동 시간표 ── */
-async function travelMatrix(places: EnginePlace[], mode: MoveMode): Promise<{ M: number[][]; source: "google" | "estimate" }> {
+/** 구글 지도를 못 쓴 이유 (화면에 "거리 어림 — 이유"로 보여 준다). 구글 지도를 썼으면 빈 문자열 */
+type MatrixResult = { M: number[][]; source: "google" | "estimate"; note: string };
+
+export async function travelMatrix(places: EnginePlace[], mode: MoveMode): Promise<MatrixResult> {
   const est = estimateMatrix(places, mode);
   const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
   const pts = places.map(p => (p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : null));
-  if (!key || pts.filter(Boolean).length < 2) return { M: est, source: "estimate" };
+  if (!key) return { M: est, source: "estimate", note: "서버에 GOOGLE_MAPS_API_KEY가 없습니다" };
+  if (pts.filter(Boolean).length < 2) return { M: est, source: "estimate", note: "좌표를 찾은 장소가 2곳 미만입니다" };
   // Google Routes는 호출마다 요금이 나가므로, 같은 좌표·이동수단 조합은 7일 동안 다시 쓴다(성공한 결과만)
   const rounded = pts.map(p => (p ? [Math.round(p.lat * 1e5) / 1e5, Math.round(p.lng * 1e5) / 1e5] : null));
   return cached("routes", { rounded, mode }, 7 * DAY, () => googleMatrix(key, pts, est, mode), r => r.source === "google");
 }
 
-async function googleMatrix(key: string, pts: ({ lat: number; lng: number } | null)[], est: number[][], mode: MoveMode): Promise<{ M: number[][]; source: "google" | "estimate" }> {
+async function googleMatrix(key: string, pts: ({ lat: number; lng: number } | null)[], est: number[][], mode: MoveMode): Promise<MatrixResult> {
   try {
     const ok = pts.map((p, i) => (p ? i : -1)).filter(i => i >= 0);
     const wp = (i: number) => ({ waypoint: { location: { latLng: { latitude: pts[i]!.lat, longitude: pts[i]!.lng } } } });
@@ -165,7 +169,12 @@ async function googleMatrix(key: string, pts: ({ lat: number; lng: number } | nu
       body: JSON.stringify({ origins: ok.map(wp), destinations: ok.map(wp), travelMode: mode === "walk" ? "WALK" : mode === "public" ? "TRANSIT" : "DRIVE" }),
       signal: AbortSignal.timeout(20_000),
     });
-    if (!r.ok) return { M: est, source: "estimate" };
+    if (!r.ok) {
+      // 키는 있는데 구글이 거절한 경우 — Routes API 미사용·결제 미연결·키 제한 등. 원인을 짧게 보여 준다
+      const body = (await r.json().catch(() => null)) as { error?: { status?: string; message?: string } } | null;
+      const why = body?.error?.message?.slice(0, 120) ?? "";
+      return { M: est, source: "estimate", note: `구글 지도 응답 오류 ${r.status}${body?.error?.status ? ` ${body.error.status}` : ""}${why ? ` — ${why}` : ""}` };
+    }
     const rows = (await r.json()) as { originIndex?: number; destinationIndex?: number; duration?: string; condition?: string }[];
     const M = est.map(row => row.slice());
     rows.forEach(e => {
@@ -173,14 +182,14 @@ async function googleMatrix(key: string, pts: ({ lat: number; lng: number } | nu
       const a = ok[e.originIndex ?? 0], b = ok[e.destinationIndex ?? 0];
       if (a !== b) M[a][b] = Math.round(parseFloat(e.duration) / 60);
     });
-    return { M, source: "google" };
-  } catch { return { M: est, source: "estimate" }; }
+    return { M, source: "google", note: "" };
+  } catch { return { M: est, source: "estimate", note: "구글 지도에 연결하지 못했습니다 (시간 초과·네트워크)" }; }
 }
 
 /* ── 전체 ── */
 export interface PlanResponse extends PlanResult {
   places: (EnginePlace & { knowledge?: PlaceKnowledge })[];
-  context: { weekday: number | null; holiday: string | null; sunset: string | null; sunrise: string | null; matrix: "google" | "estimate"; looked: number; known: number };
+  context: { weekday: number | null; holiday: string | null; sunset: string | null; sunrise: string | null; matrix: "google" | "estimate"; matrixNote?: string; looked: number; known: number };
 }
 
 export async function planCourse(req: PlanRequest): Promise<PlanResponse> {
@@ -216,7 +225,7 @@ export async function planCourse(req: PlanRequest): Promise<PlanResponse> {
     const anchor = places.find(p => p.lat != null && p.lng != null);
     if (anchor) sun = sunTimes(anchor.lat!, anchor.lng!, d, timeZoneForCountry(req.country));
   }
-  const { M, source } = await travelMatrix(places, req.mode);
+  const { M, source, note: matrixNote } = await travelMatrix(places, req.mode);
   const o: EngineOptions = {
     start: req.start, weekday: weekday ?? undefined, maxEnd: req.maxEnd, mode: req.mode, audience: req.audience as Audience,
     lunch: { from: "11:30", to: "14:00" }, sunset: sun?.sunset, bufferMin: 5,
@@ -226,5 +235,5 @@ export async function planCourse(req: PlanRequest): Promise<PlanResponse> {
     const note = `${req.date}은 공휴일(${holiday})입니다 — 휴관·단축 운영을 확인하세요`;
     r.current.violations.unshift(note); r.best.violations.unshift(note);
   }
-  return { ...r, places, context: { weekday, holiday, sunset: sun?.sunset ?? null, sunrise: sun?.sunrise ?? null, matrix: source, looked, known: Object.keys(know).length } };
+  return { ...r, places, context: { weekday, holiday, sunset: sun?.sunset ?? null, sunrise: sun?.sunrise ?? null, matrix: source, matrixNote, looked, known: Object.keys(know).length } };
 }
