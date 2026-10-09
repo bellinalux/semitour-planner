@@ -145,12 +145,21 @@ export async function holidays(country: string, year: number): Promise<{ date: s
 }
 
 /* ── 이동 시간표 ── */
+/** 서버의 구글 지도 키. 대시보드에 붙여넣다 딸려 오기 쉬운 따옴표·공백·줄바꿈·"GOOGLE_MAPS_API_KEY=" 글자를 걷어낸다 (Gemini 키와 같은 방식) */
+export function mapsKey(): string {
+  return (process.env.GOOGLE_MAPS_API_KEY ?? "")
+    .trim()
+    .replace(/^GOOGLE_MAPS_API_KEY\s*=\s*/, "")
+    .replace(/^["']+|["']+$/g, "")
+    .replace(/\s+/g, "");
+}
+
 /** 구글 지도를 못 쓴 이유 (화면에 "거리 어림 — 이유"로 보여 준다). 구글 지도를 썼으면 빈 문자열 */
 type MatrixResult = { M: number[][]; source: "google" | "estimate"; note: string };
 
 export async function travelMatrix(places: EnginePlace[], mode: MoveMode): Promise<MatrixResult> {
   const est = estimateMatrix(places, mode);
-  const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
+  const key = mapsKey();
   const pts = places.map(p => (p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : null));
   if (!key) return { M: est, source: "estimate", note: "서버에 GOOGLE_MAPS_API_KEY가 없습니다" };
   if (pts.filter(Boolean).length < 2) return { M: est, source: "estimate", note: "좌표를 찾은 장소가 2곳 미만입니다" };

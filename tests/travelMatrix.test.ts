@@ -45,3 +45,13 @@ describe("코스 엔진 이동 시간표 — 구글 지도를 못 쓰면 이유�
     expect(r.M[0][1]).toBe(18);
   });
 });
+
+describe("구글 지도 키 정리", () => {
+  it("붙여넣다 딸려 온 따옴표·공백·줄바꿈·'GOOGLE_MAPS_API_KEY=' 글자를 걷어낸다", async () => {
+    const { mapsKey } = await import("@/lib/server/courseEngineServer");
+    vi.stubEnv("GOOGLE_MAPS_API_KEY", ' GOOGLE_MAPS_API_KEY = "AIzaSyTEST123"\n');
+    expect(mapsKey()).toBe("AIzaSyTEST123");
+    vi.stubEnv("GOOGLE_MAPS_API_KEY", "'AIzaSy ABC'");
+    expect(mapsKey()).toBe("AIzaSyABC");
+  });
+});
