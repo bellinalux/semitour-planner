@@ -9,6 +9,7 @@ import { hoursText } from "@/lib/courseEngine";
 import type { PlaceKnowledge, PlanResponse } from "@/lib/server/courseEngineServer";
 import type { DayPlan, ItineraryItem, TravelType } from "@/types";
 import { roundMinutes } from "@/lib/format";
+import { refitMealWindows } from "@/lib/mealTiming";
 
 export interface EngineDayRequest {
   places: { id: string; name: string; stayMin: number; kind?: "sight" | "meal" | "free" | "transfer" | "end"; priority?: 1 | 2 | 3; fixedOrder?: "first" | "last" }[];
@@ -23,6 +24,8 @@ function kindOf(i: ItineraryItem): EngineDayRequest["places"][number]["kind"] {
   if (i.type) return KIND[i.type] ?? "sight";
   return i.cuisine || i.mealCost > 0 || MEAL_NAME.test(i.name) ? "meal" : "sight";
 }
+/** 저녁에 하는 일정 (이런 일정이 있으면 하루 끝을 늦게 본다) */
+const EVENING = /야경|야시장|야간|분수쇼|나이트|night|저녁|석식|디너|dinner/i;
 const AUD:Partial<Record<TravelType, EngineDayRequest["audience"]>> = { senior: "senior", honeymoon: "couple", package: "group", accessible: "senior" };
 
 /** 엔진에 보낼 그날의 항목 (항공은 뺀다) */
@@ -48,7 +51,8 @@ export function buildDayRequest(day: DayPlan, pmChoice: PmChoice, o: { destinati
     }),
     city, country,
     ...(o.departureDate && /^\d{4}-\d{2}-\d{2}$/.test(o.departureDate) ? { date: addDays(o.departureDate, day.day - 1) } : {}),
-    start: dayMeetingTime(day), maxEnd: "19:00",
+    // 야경·분수쇼·저녁 식사 같은 저녁 일정이 있는 날은 19시에 끊으면 엔진이 그 일정을 빼 버린다
+    start: dayMeetingTime(day), maxEnd: items.some((i) => EVENING.test(`${i.name} ${i.description}`)) ? "22:30" : "19:00",
     mode: "car", audience: AUD[o.travelType] ?? "any",
     reorder: day.kind === "linear", lookup: true,
   };
@@ -65,44 +69,68 @@ export function cautionFrom(k?: PlaceKnowledge): string {
  *  useBest: 엔진 추천 순서·시간 / 아니면 지금 순서에 이동 시간·주의만
  *  drop: 뺄 항목 id
  */
+/** 순서를 바꾸지 않는 항목 — 항공·이동·숙소·식사·자유시간은 제자리(시간대가 정해진 일정)에 두고 관광지만 바꾼다 */
+const ANCHOR_TYPES = new Set(["flight", "transfer", "hotel", "meal", "free_time"]);
+// 야경·분수쇼 같은 저녁 일정도 시간대가 정해져 있어 옮기지 않는다
+const isAnchor = (it: ItineraryItem) => ANCHOR_TYPES.has(it.type ?? "sightseeing") || kindOf(it) === "meal" || EVENING.test(it.name);
+
+/**
+ * 엔진 추천 순서를 하루 목록에 넣는다 — 엔진이 순서를 정한 관광지들만 자기들 자리 안에서 추천 순서대로 바꾸고,
+ * 나머지(항공·식사·숙소·자유시간·저녁 일정)와 엔진이 시간 안에 못 넣어 뺀 관광지는 원래 자리에 그대로 둔다(빼기는 따로 버튼으로).
+ */
+export function reorderByEngine(list: ItineraryItem[], order: string[]): ItineraryItem[] {
+  const inOrder = new Set(order);
+  const slots = list.map((it, i) => (!isAnchor(it) && inOrder.has(it.id) ? i : -1)).filter((i) => i >= 0);
+  const byId = new Map(slots.map((i) => [list[i].id, list[i]]));
+  const sequence = order.map((id) => byId.get(id)).filter((s): s is ItineraryItem => s !== undefined);
+  const next = list.slice();
+  slots.forEach((slot, k) => (next[slot] = sequence[k]));
+  return next;
+}
+
 export function applyDayResult(days: DayPlan[], dayNo: number, res: PlanResponse, o: { useBest: boolean; drop?: string[]; meetingTime?: string }): DayPlan[] {
   return days.map(d => {
     if (d.day !== dayNo) return d;
     const plan = o.useBest ? res.best : res.current;
     const tl = plan.timeline;
-    const nextTravel = new Map<string, number>();
-    tl.forEach((s, i) => { const nx = tl[i + 1]; if (nx) nextTravel.set(s.id, nx.travelFromPrev); });
+    // 엔진이 계산한 "이 장소 → 바로 다음 장소" 이동 시간. 순서를 바꾼 뒤에도 실제로 이어지는 짝에만 쓴다
+    const pairTravel = new Map<string, number>();
+    tl.forEach((s, i) => { const nx = tl[i + 1]; if (nx) pairTravel.set(`${s.id}>${nx.id}`, nx.travelFromPrev); });
     const know = new Map(res.places.map(p => [p.id, p.knowledge]));
     const stay = new Map(res.places.map(p => [p.id, p.stayMin]));
     const drop = new Set(o.drop ?? []);
-    const patch = (it: ItineraryItem): ItineraryItem | null => {
+    const patch = (it: ItineraryItem, nextId: string | undefined, moved: boolean): ItineraryItem | null => {
       if (drop.has(it.id)) return null;
       if (!stay.has(it.id)) return it;
       const c = cautionFrom(know.get(it.id));
+      const engineTravel = nextId ? pairTravel.get(`${it.id}>${nextId}`) : undefined;
       return {
         ...it,
         stayMinutes: it.stayMinutes || stay.get(it.id) || it.stayMinutes,
-        // 순서를 그대로 두면, 하루 일정 시간 검증(구역 단위)으로 맞춘 이동 시간은 유지한다 — 엔진은 좌표를 모르는 식사·카페 앞뒤를 일괄 15분으로 본다
+        // 하루 일정 시간 검증(구역 단위)으로 맞춘 이동은, 순서가 그대로인 항목이면 유지한다 — 엔진은 좌표를 모르는 식사·카페 앞뒤를 일괄 15분으로 본다
         travelMinutesToNext:
-          !o.useBest && it.timeCheck?.basis === "area"
+          !moved && it.timeCheck?.basis === "area"
             ? it.travelMinutesToNext
-            : nextTravel.has(it.id)
-              ? roundMinutes(nextTravel.get(it.id)!)
+            : engineTravel !== undefined
+              ? roundMinutes(engineTravel)
               : it.travelMinutesToNext,
         ...(c && !(it.caution ?? "").includes(c.slice(0, 12)) ? { caution: [it.caution, c].filter(Boolean).join(" / ") } : {}),
       };
     };
-    const order = o.useBest ? plan.order : null;
-    const reorder = (list: ItineraryItem[]) => {
-      if (!order) return list;
-      const rank = new Map(order.map((id, i) => [id, i]));
-      return list.slice().sort((a, b) => (rank.get(a.id) ?? 999) - (rank.get(b.id) ?? 999));
+    const fix = (list: ItineraryItem[], canReorder: boolean) => {
+      const ordered = canReorder && o.useBest ? reorderByEngine(list, plan.order) : list;
+      const kept = ordered.filter((it) => !drop.has(it.id));
+      return kept.flatMap((it, i) => patch(it, kept[i + 1]?.id, list.indexOf(it) !== ordered.indexOf(it)) ?? []);
     };
-    const fix = (list: ItineraryItem[], canReorder: boolean) => (canReorder ? reorder(list) : list).flatMap(it => patch(it) ?? []);
+    const items = fix(d.items, d.kind === "linear");
+    // 순서·시작 시각이 바뀌면 식사 맞춤 자유시간을 다시 계산한다 (중간·끝에 항공이 있는 날은 출발 시각이 어긋나지 않게 그대로)
+    const flightLater = items.some((it, i) => it.type === "flight" && items.slice(0, i).some((p) => p.type !== "flight"));
+    const meeting = o.meetingTime ?? dayMeetingTime(d);
+    const refit = d.kind === "linear" && (o.useBest || o.meetingTime) && !flightLater;
     return {
       ...d,
       ...(o.meetingTime ? { meetingTime: o.meetingTime } : {}),
-      items: fix(d.items, d.kind === "linear"),
+      items: refit ? refitMealWindows(items, meeting) : items,
       amGuided: fix(d.amGuided, false),
       pmFreeOptions: d.pmFreeOptions.map(p => ({ ...p, items: fix(p.items, false) })),
     };

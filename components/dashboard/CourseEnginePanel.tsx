@@ -7,7 +7,7 @@
 import { Compass, Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { fmt } from "@/lib/courseEngine";
-import { applyAlternative, applyDayResult, buildDayRequest } from "@/lib/engineDay";
+import { applyAlternative, applyDayResult, buildDayRequest, reorderByEngine } from "@/lib/engineDay";
 import type { Alternative } from "@/lib/server/engineAlternatives";
 import type { PmChoice } from "@/lib/itinerary";
 import type { PlanResponse } from "@/lib/server/courseEngineServer";
@@ -112,7 +112,12 @@ export function CourseEnginePanel({ days, pmChoice, destination, departureDate, 
             if (st.status === "loading") return <div key={k} className="rounded-md bg-white p-2 text-xs text-slate-500">DAY {dayNo} 확인 중… (장소 정보 찾기 포함 10~40초)</div>;
             if (st.status === "error") return <div key={k} className="rounded-md bg-white p-2 text-xs text-rose-700">DAY {dayNo}: {st.message}</div>;
             const { res } = st, q = res.quality, bq = res.bestQuality, c = res.context;
-            const reorderFix = q.fixes.find(f => f.type === "reorder");
+            // 추천 순서를 실제로 적용했을 때 관광지 순서가 바뀌는지 (항공·식사·숙소·저녁 일정은 제자리에 두므로, 그것만 옮기라는 추천이면 바뀔 게 없다)
+            const dayPlan = days.find((d) => d.day === dayNo);
+            const engineFix = q.fixes.find(f => f.type === "reorder");
+            const changesOrder =
+              !!engineFix && !!dayPlan && dayPlan.kind === "linear" && reorderByEngine(dayPlan.items, res.best.order).some((it, i) => it.id !== dayPlan.items[i]?.id);
+            const reorderFix = changesOrder ? engineFix : undefined;
             const startFix = q.fixes.find(f => f.type === "shiftStart");
             const dropFixes = res.best.dropped;
             return (
@@ -136,6 +141,12 @@ export function CourseEnginePanel({ days, pmChoice, destination, departureDate, 
                 {reorderFix && (
                   <p className="mt-2 text-slate-500">
                     추천 순서: {res.best.timeline.map(s => `${fmt(s.start)} ${s.name}`).join(" → ")}
+                    <span className="block text-slate-400">항공·식사·숙소·자유시간·저녁 일정은 제자리에 두고 관광지 순서만 바꿉니다.</span>
+                  </p>
+                )}
+                {engineFix && !reorderFix && (
+                  <p className="mt-2 text-pretty text-slate-500">
+                    엔진은 식사·항공·저녁 일정의 시간을 옮기라고 제안했지만, 이런 항목은 정해진 시간대라 그대로 둡니다 — 바꿀 관광지 순서는 없습니다.
                   </p>
                 )}
                 <div className="mt-2 flex flex-wrap gap-1.5">
