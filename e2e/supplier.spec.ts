@@ -68,7 +68,7 @@ test("업체 견적서: 요금을 읽어 공급가로 넣고, 목표 판매가�
 
   await page.getByRole("button", { name: "코스 분석" }).click();
   await expect(page.getByText("업체 견적 검증 · 목표 원가")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/400 USD/)).toBeVisible();
+  await expect(page.getByText("400 USD", { exact: true })).toBeVisible();
   await expect(page.getByText(/≈ ₩560,000/)).toBeVisible();
   // 목표 700,000 − 회사 수익 105,000 = 상한 595,000 → 지금 공급가 560,000은 상한 안
   const calc = page.getByLabel("업체 공급가 상한 계산");
@@ -78,10 +78,15 @@ test("업체 견적서: 요금을 읽어 공급가로 넣고, 목표 판매가�
   // 검증표: 우리 시세와 비교하고, 견적서에 안 적힌 것·불포함 팁을 업체에 물어볼 질문으로
   await expect(page.locator("table", { has: page.locator("caption", { hasText: "업체 견적 시세 비교" }) })).toBeVisible();
   await expect(page.getByText(/업체에 물어볼 것/)).toBeVisible();
-  await expect(page.getByText("가이드·기사 팁(경비)은 1인 얼마이고, 고객이 현지에서 내는 건가요?")).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: "가이드·기사 팁(경비)은 1인 얼마이고, 고객이 현지에서 내는 건가요?" })).toBeVisible();
 
   // 우리 시세를 조회하면 1인 공급가 전체를 시세 원가와 비교한다
   await page.getByRole("button", { name: "시세 조회" }).click();
   const verifyTable = page.locator("table", { has: page.locator("caption", { hasText: "업체 견적 시세 비교" }) });
   await expect(verifyTable.getByRole("row", { name: /1인 공급가 전체/ })).not.toContainText("모름", { timeout: 30_000 });
+
+  // 업체 수정 요청서: 질문을 묶은 문구와 검증표 엑셀
+  await expect(page.getByLabel("업체 수정 요청 문구")).toHaveValue(/■ 확인 부탁드립니다/);
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "검증표 엑셀" }).click()]);
+  expect(download.suggestedFilename()).toContain("업체견적검증");
 });

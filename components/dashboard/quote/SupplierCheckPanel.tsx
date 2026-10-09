@@ -8,6 +8,7 @@ import { supplierAfterCuts, supplierCuts, supplierTarget } from "@/lib/supplierC
 import { quotePriceFor } from "@/lib/supplierQuote";
 import { verifySupplierQuote } from "@/lib/supplierVerify";
 import { SupplierVerifyTable } from "./SupplierVerifyTable";
+import { SupplierRequestBox } from "./SupplierRequestBox";
 import type { CourseMeta, DayPlan, QuoteData, SupplierQuote, TripInput } from "@/types";
 
 interface Props {
@@ -115,6 +116,7 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
   const cuts = target ? supplierCuts(input, days, pmChoice, meta, target.over) : [];
   const selected = new Set(input.supplierCutIds ?? cuts.filter((c) => c.recommended).map((c) => c.id));
   const after = target ? supplierAfterCuts(target, cuts, selected) : null;
+  const chosen = target && target.over > 0 ? cuts.filter((c) => selected.has(c.id)) : [];
   const toggle = (id: string) => {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
@@ -233,7 +235,7 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
               )}
               {after && cuts.length > 0 && (
                 <p className={`mt-2 text-pretty text-[11px] ${after.reaches ? "text-emerald-700" : "text-amber-700"}`} role="status">
-                  고른 {selected.size}개를 빼면 예상 공급가 1인 {money(after.after)} (−{money(after.saving)}) —{" "}
+                  고른 {chosen.length}개를 빼면 예상 공급가 1인 {money(after.after)} (−{money(after.saving)}) —{" "}
                   {after.reaches
                     ? "상한 안으로 들어옵니다."
                     : `상한까지 아직 ${money(after.after - target.maxSupplierPerPerson)} 남습니다. 공급가 조정도 함께 요청하세요.`}
@@ -245,6 +247,8 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
       ) : (
         <p className="text-[11px] text-slate-500">목표 판매가를 넣거나 경쟁 상품을 찾으면 업체 공급가 상한을 계산합니다.</p>
       )}
+
+      <SupplierRequestBox ctx={{ input, meta, target, cuts: chosen, verify, money }} />
     </div>
   );
 }
