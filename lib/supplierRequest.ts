@@ -1,4 +1,4 @@
-import type { SupplierCut, SupplierTarget } from "@/lib/supplierCheck";
+import type { CompetitorCap, SupplierCut, SupplierTarget } from "@/lib/supplierCheck";
 import type { SupplierVerify } from "@/lib/supplierVerify";
 import type { CourseMeta, TripInput } from "@/types";
 
@@ -15,6 +15,8 @@ export interface RequestContext {
   cuts: SupplierCut[];
   verify: SupplierVerify;
   money: (v: number) => string;
+  /** 경쟁 상품별 공급가 기준 (내부용 엑셀에만) */
+  caps?: CompetitorCap[];
 }
 
 /** 앱 통화 금액을 견적서 통화로도 함께 (예: ₩560,000 (약 400 USD)) */
@@ -25,7 +27,19 @@ function withOriginal(v: number, ctx: RequestContext): string {
   return `${base} (약 ${Math.round(v / q.rate).toLocaleString("ko-KR")} ${q.originalCurrency})`;
 }
 
-const cutText = (c: SupplierCut) => (c.kind === "meal-down" ? `DAY ${c.dayNo} ${c.name} → 일반 식사로 변경` : `DAY ${c.dayNo} ${c.name} 제외`);
+/** 업체에 보내는 문구의 조정 표현 */
+function cutText(c: SupplierCut): string {
+  switch (c.kind) {
+    case "meal-down":
+      return `DAY ${c.dayNo} ${c.name} → 일반 식사로 변경`;
+    case "ground-day":
+      return `DAY ${c.dayNo} 차량·가이드 제외 (자유일정)`;
+    case "hotel-down":
+      return c.name;
+    default:
+      return `DAY ${c.dayNo} ${c.name} 제외`;
+  }
+}
 
 export function supplierRequestText(ctx: RequestContext): string {
   const { input, meta, target, cuts, verify } = ctx;
@@ -90,11 +104,31 @@ export function supplierWorkbook(ctx: RequestContext): { name: string; rows: (st
       [`회사 수익 (${Math.round(target.marginRate * 100)}%)`, -Math.round(target.profitPerPerson)],
       ["공급가 밖의 원가", -Math.round(target.otherPerPerson)],
       ["업체 공급가 상한", Math.round(target.maxSupplierPerPerson)],
+      ["손익분기 공급가 (회사 수익 0)", Math.round(target.breakEvenSupplierPerPerson)],
+      ["지금 공급가로 팔 때 회사 수익률 (%)", Math.round(target.marginAtCurrent * 10) / 10],
       ["상한과 차이 (+면 낮춰야 함)", Math.round(target.over)],
     );
   }
   sheets.push({ name: "요약", rows: summary });
 
+  if (ctx.caps && ctx.caps.length > 0) {
+    const level = { high: "경쟁사보다 비쌈", ok: "비슷", low: "경쟁사보다 쌈" } as const;
+    sheets.push({
+      name: "경쟁 상품별",
+      rows: [
+        [`경쟁사 수수료·마진 추정 ${input.competitorMarginRate}%`],
+        ["경쟁 상품", "같은 조건 가격", "공급가 상한", "손익분기 공급가", "경쟁사 원가 추정", "우리 업체 견적"],
+        ...ctx.caps.map((c) => [
+          c.name,
+          Math.round(c.scopedPrice),
+          Math.round(c.maxSupplier),
+          Math.round(c.breakEven),
+          Math.round(c.estimatedCost),
+          level[c.level],
+        ]),
+      ],
+    });
+  }
   sheets.push({
     name: "시세 비교",
     rows: [

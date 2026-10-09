@@ -9,11 +9,11 @@
 export const COURSE_VISUAL_EXTENSIONS = ["pdf", "png", "jpg", "jpeg", "webp"] as const;
 
 /** 서버에서 먼저 텍스트를 뽑아낸 뒤, 그 텍스트를 코스 원문처럼 쓰는 형식 */
-export const COURSE_TEXT_EXTRACT_EXTENSIONS = ["txt", "xlsx", "xls", "hwp", "hwpx"] as const;
+export const COURSE_TEXT_EXTRACT_EXTENSIONS = ["txt", "xlsx", "xls", "hwp", "hwpx", "docx", "doc"] as const;
 
 export const COURSE_FILE_ACCEPT = [...COURSE_VISUAL_EXTENSIONS, ...COURSE_TEXT_EXTRACT_EXTENSIONS].map((e) => `.${e}`).join(",");
 
-export const COURSE_FILE_TYPES_LABEL = "사진(PNG·JPG·WEBP), PDF, 한글(HWP·HWPX), 엑셀(XLSX·XLS), 텍스트(TXT)";
+export const COURSE_FILE_TYPES_LABEL = "사진(PNG·JPG·WEBP), PDF, 한글(HWP·HWPX), 워드(DOCX·DOC), 엑셀(XLSX·XLS), 텍스트(TXT)";
 
 /** 업로드 파일 원본 크기 상한 (base64로 인코딩하면 약 4/3배가 된다) */
 export const MAX_COURSE_FILE_BYTES = 6 * 1024 * 1024;
@@ -36,6 +36,8 @@ const EXT_MIME: Record<string, string> = {
   xls: "application/vnd.ms-excel",
   hwp: "application/x-hwp",
   hwpx: "application/vnd.hancom.hwpx",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  doc: "application/msword",
 };
 
 export function courseFileExt(name: string): string {

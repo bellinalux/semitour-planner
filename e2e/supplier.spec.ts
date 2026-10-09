@@ -85,6 +85,11 @@ test("업체 견적서: 요금을 읽어 공급가로 넣고, 목표 판매가�
   const verifyTable = page.locator("table", { has: page.locator("caption", { hasText: "업체 견적 시세 비교" }) });
   await expect(verifyTable.getByRole("row", { name: /1인 공급가 전체/ })).not.toContainText("모름", { timeout: 30_000 });
 
+  // 수익선 두 줄과, 시세 조회 때 찾은 경쟁 상품별 공급가 기준
+  await expect(page.getByText("손익분기 공급가 (회사 수익 0)")).toBeVisible();
+  const caps = page.locator("table", { has: page.locator("caption", { hasText: "경쟁 상품별 공급가 기준" }) });
+  await expect(caps.getByRole("row", { name: /하나투어/ })).toBeVisible({ timeout: 30_000 });
+
   // 업체 수정 요청서: 질문을 묶은 문구와 검증표 엑셀
   await expect(page.getByLabel("업체 수정 요청 문구")).toHaveValue(/■ 확인 부탁드립니다/);
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "검증표 엑셀" }).click()]);

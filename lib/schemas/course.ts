@@ -10,7 +10,7 @@ import type { CourseMeta, DayPlan, ItineraryItem } from "@/types";
 export const courseRequestSchema = z
   .object({
     text: z.string().trim().max(12000, "코스 내용이 너무 깁니다. (최대 12,000자)").default(""),
-    /** 업체가 사진·PDF·한글·엑셀·텍스트로 준 코스표. text 대신(또는 함께) 쓸 수 있다 */
+    /** 업체가 사진·PDF·한글·워드·엑셀·텍스트로 준 코스표. text 대신(또는 함께) 쓸 수 있다 */
     file: z
       .object({
         name: z.string().trim().min(1).max(200).refine(isSupportedCourseFile, {

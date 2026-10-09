@@ -260,6 +260,8 @@ export interface TripInput {
   supplierTargetPrice: number;
   /** 업체에 빼 달라고 요청할 일정 항목 id. null이면 추천대로 */
   supplierCutIds: string[] | null;
+  /** 경쟁사가 표시 가격에서 남기는 수수료·마진 합계 추정 (%) — 경쟁사 원가를 추정할 때 쓴다 */
+  competitorMarginRate: number;
 
   /** ---- 판매 채널·가격 정책 ---- */
   /** 직판 외에 파는 플랫폼(채널)과 수수료. 비어 있으면 직판만 계산한다 */

@@ -1,6 +1,7 @@
 import { HwpEncryptedError, HwpUnsupportedError, HwpInvalidFormatError, HwpxReader, hwpToMarkdown } from "hwp-convert";
 import * as XLSX from "xlsx";
 import { courseFileExt } from "@/lib/courseFile";
+import { extractDocText, extractDocxText, WordEncryptedError } from "@/lib/server/wordExtract";
 
 /** 서버에서 텍스트를 뽑아낸 결과. text가 비어 있으면(표·내용을 못 찾음) 상위에서 에러로 처리한다. */
 export interface ExtractedCourseText {
@@ -35,7 +36,7 @@ async function extractHwpText(buf: Uint8Array, ext: string): Promise<string> {
 }
 
 /**
- * 업로드한 파일(엑셀·한글·텍스트)에서 코스 원문으로 쓸 텍스트를 뽑아낸다.
+ * 업로드한 파일(엑셀·한글·워드·텍스트)에서 코스 원문으로 쓸 텍스트를 뽑아낸다.
  * PDF·이미지는 Gemini가 직접 읽으므로 이 함수를 거치지 않는다 (isVisualCourseFile로 분기).
  */
 export async function extractCourseFileText(file: { name: string; data: string }): Promise<ExtractedCourseText> {
@@ -52,7 +53,16 @@ export async function extractCourseFileText(file: { name: string; data: string }
     if (ext === "hwp" || ext === "hwpx") {
       return { text: await extractHwpText(buf, ext) };
     }
+    if (ext === "docx") {
+      return { text: extractDocxText(buf) };
+    }
+    if (ext === "doc") {
+      return { text: extractDocText(buf) };
+    }
   } catch (err) {
+    if (err instanceof WordEncryptedError) {
+      throw new Error("암호가 걸린 워드 파일은 열 수 없습니다. 암호를 풀고 다시 올려주세요.");
+    }
     if (err instanceof HwpEncryptedError) {
       throw new Error("암호가 걸린 한글(HWP) 파일은 열 수 없습니다. 암호를 풀고 다시 올려주세요.");
     }

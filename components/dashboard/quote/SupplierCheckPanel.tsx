@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { NumberField } from "@/components/ui/NumberField";
 import { currencySymbol, formatMoney } from "@/lib/currency";
 import type { PmChoice } from "@/lib/itinerary";
-import { supplierAfterCuts, supplierCuts, supplierTarget } from "@/lib/supplierCheck";
+import { competitorCaps, cutLabel, supplierAfterCuts, supplierCuts, supplierTarget, type CompetitorCap } from "@/lib/supplierCheck";
 import { quotePriceFor } from "@/lib/supplierQuote";
 import { verifySupplierQuote } from "@/lib/supplierVerify";
 import { SupplierVerifyTable } from "./SupplierVerifyTable";
@@ -24,6 +24,12 @@ interface Props {
   /** 우리 시세 조회 (자동 견적) */
   market: { run: () => void; running: boolean };
 }
+
+const CAP_LEVEL: Record<CompetitorCap["level"], { label: string; tone: string }> = {
+  high: { label: "경쟁사보다 비쌈", tone: "bg-red-50 text-red-700" },
+  ok: { label: "비슷", tone: "bg-emerald-50 text-emerald-700" },
+  low: { label: "경쟁사보다 쌈", tone: "bg-indigo-50 text-indigo-700" },
+};
 
 const ROOM_LABELS: Record<SupplierQuote["roomBasis"], string> = { twin: "2인 1실", single: "1인 1실", triple: "3인 1실", unknown: "객실 기준 안 적힘" };
 const UNIT_LABELS: Record<SupplierQuote["lines"][number]["unit"], string> = {
@@ -113,6 +119,7 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
   const money = (v: number) => formatMoney(Math.round(v), input.currency);
   const symbol = currencySymbol(input.currency);
   const target = supplierTarget(input, quote, competitorP25);
+  const caps = target ? competitorCaps(input, days, pmChoice, meta, quote) : [];
   const cuts = target ? supplierCuts(input, days, pmChoice, meta, target.over) : [];
   const selected = new Set(input.supplierCutIds ?? cuts.filter((c) => c.recommended).map((c) => c.id));
   const after = target ? supplierAfterCuts(target, cuts, selected) : null;
@@ -191,27 +198,109 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
               </div>
             )}
             <div className="flex justify-between border-t border-slate-700 pt-1 font-semibold">
-              <span>업체 공급가 상한 (1인, 2인 1실)</span>
+              <span>업체 공급가 상한 (수익 {Math.round(target.marginRate * 100)}% 지키는 선)</span>
               <span className="tabular-nums">{money(target.maxSupplierPerPerson)}</span>
+            </div>
+            <div className="flex justify-between text-slate-300">
+              <span>손익분기 공급가 (회사 수익 0)</span>
+              <span className="tabular-nums">{money(target.breakEvenSupplierPerPerson)}</span>
             </div>
           </div>
 
           {target.over <= 0 ? (
             <p className="flex items-start gap-1.5 rounded-md bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800 ring-1 ring-emerald-200">
               <CheckCircle2 className="mt-px size-3.5 shrink-0" aria-hidden />
-              지금 공급가 {money(target.supplierPerPerson)}는 상한 안입니다. 1인 {money(-target.over)}만큼 여유가 있습니다.
+              지금 공급가 {money(target.supplierPerPerson)}는 상한 안입니다. 목표 판매가에 팔면 회사 수익률 약 {target.marginAtCurrent.toFixed(1)}% (1인{" "}
+              {money(-target.over)} 여유).
+            </p>
+          ) : target.supplierPerPerson <= target.breakEvenSupplierPerPerson ? (
+            <p className="flex items-start gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-800 ring-1 ring-amber-200">
+              <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
+              지금 공급가 {money(target.supplierPerPerson)}로 목표 판매가에 팔면 수익은 나지만 수익률 약 {target.marginAtCurrent.toFixed(1)}%로 목표보다
+              낮습니다 — 상한까지 1인 <span className="font-semibold">{money(target.over)}</span> 낮춰 달라고 요청하세요.
             </p>
           ) : (
             <p className="flex items-start gap-1.5 rounded-md bg-red-50 px-3 py-2 text-[11px] text-red-800 ring-1 ring-red-200">
               <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
-              지금 공급가 {money(target.supplierPerPerson)}는 상한보다 1인 <span className="font-semibold">{money(target.over)}</span> 높습니다 — 업체에
-              공급가를 낮추거나 아래 일정을 빼 달라고 요청하세요.
+              지금 공급가 {money(target.supplierPerPerson)}로 목표 판매가에 팔면 <span className="font-semibold">적자</span>입니다 (수익률 약{" "}
+              {target.marginAtCurrent.toFixed(1)}%). 상한보다 1인 <span className="font-semibold">{money(target.over)}</span> 높습니다 — 업체에 공급가를
+              낮추거나 아래 조정을 요청하세요.
             </p>
+          )}
+
+          {caps.length > 0 && (
+            <section aria-label="경쟁 상품별 공급가 기준" className="space-y-1">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <p className="text-[11px] font-semibold text-slate-700">경쟁 상품별 공급가 기준 (1인, 2인 1실)</p>
+                <label className="flex items-center gap-1 text-[11px] text-slate-500">
+                  경쟁사 수수료·마진 추정
+                  <input
+                    type="number"
+                    min={0}
+                    max={60}
+                    value={input.competitorMarginRate}
+                    onChange={(e) => onInputChange({ competitorMarginRate: Math.max(0, Math.min(60, Number(e.target.value) || 0)) })}
+                    className="w-14 rounded-md border border-slate-300 px-1.5 py-0.5 text-right tabular-nums text-slate-900"
+                  />
+                  %
+                </label>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <table className="w-full min-w-[560px] text-[11px]">
+                  <caption className="sr-only">경쟁 상품별 공급가 기준</caption>
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+                      <th scope="col" className="px-2 py-1.5 font-medium">
+                        경쟁 상품
+                      </th>
+                      <th scope="col" className="px-2 py-1.5 text-right font-medium">
+                        같은 조건 가격
+                      </th>
+                      <th scope="col" className="px-2 py-1.5 text-right font-medium">
+                        공급가 상한
+                      </th>
+                      <th scope="col" className="px-2 py-1.5 text-right font-medium">
+                        손익분기
+                      </th>
+                      <th scope="col" className="px-2 py-1.5 text-right font-medium">
+                        경쟁사 원가 추정
+                      </th>
+                      <th scope="col" className="px-2 py-1.5 font-medium">
+                        우리 업체 견적
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 tabular-nums text-slate-700">
+                    {caps.map((c) => (
+                      <tr key={c.id}>
+                        <th scope="row" className="max-w-[10rem] truncate px-2 py-1.5 text-left font-medium" title={c.name}>
+                          {c.name}
+                        </th>
+                        <td className="px-2 py-1.5 text-right">{money(c.scopedPrice)}</td>
+                        <td className={`px-2 py-1.5 text-right ${target.supplierPerPerson > c.maxSupplier ? "text-red-600" : "text-emerald-700"}`}>
+                          {money(c.maxSupplier)}
+                        </td>
+                        <td className="px-2 py-1.5 text-right">{money(c.breakEven)}</td>
+                        <td className="px-2 py-1.5 text-right">{money(c.estimatedCost)}</td>
+                        <td className="px-2 py-1.5">
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${CAP_LEVEL[c.level].tone}`}>{CAP_LEVEL[c.level].label}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-pretty text-[10px] text-slate-400">
+                공급가 상한: 그 경쟁 가격에 맞춰 팔 때 우리 수익 {Math.round(target.marginRate * 100)}%를 지키는 공급가. 경쟁사 원가 추정: 경쟁사가 표시 가격의{" "}
+                {input.competitorMarginRate}%를 수수료·마진으로 남긴다고 볼 때의 원가(우리 공급가와 같은 범위) — 우리 업체 견적이 이보다 10% 넘게 높으면
+                &lsquo;비쌈&rsquo;.
+              </p>
+            </section>
           )}
 
           {target.over > 0 && (
             <section aria-label="빼면 좋은 일정">
-              <p className="mb-1 text-[11px] font-semibold text-slate-700">원가를 맞추려고 빼면 좋은 일정 (요금은 추정)</p>
+              <p className="mb-1 text-[11px] font-semibold text-slate-700">원가를 맞추려고 빼거나 바꾸면 좋은 것 (금액은 추정)</p>
               {cuts.length === 0 ? (
                 <p className="text-[11px] text-slate-500">일정에 요금이 붙은 항목이 없습니다. 업체에 공급가 자체를 낮춰 달라고 요청하세요.</p>
               ) : (
@@ -221,9 +310,7 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
                       <label className="flex cursor-pointer items-start gap-2 px-3 py-2 text-[11px] hover:bg-slate-50">
                         <input type="checkbox" className="mt-0.5" checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
                         <span className="flex-1">
-                          <span className="font-medium text-slate-800">
-                            DAY {c.dayNo} {c.name} {c.kind === "meal-down" ? "→ 보통 식사로" : "빼기"}
-                          </span>
+                          <span className="font-medium text-slate-800">{cutLabel(c)}</span>
                           {c.recommended && <span className="ml-1 rounded bg-indigo-50 px-1 py-0.5 text-[10px] font-semibold text-indigo-700">추천</span>}
                           <span className="block text-slate-500">{c.reason}</span>
                         </span>
@@ -248,7 +335,7 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
         <p className="text-[11px] text-slate-500">목표 판매가를 넣거나 경쟁 상품을 찾으면 업체 공급가 상한을 계산합니다.</p>
       )}
 
-      <SupplierRequestBox ctx={{ input, meta, target, cuts: chosen, verify, money }} />
+      <SupplierRequestBox ctx={{ input, meta, target, cuts: chosen, verify, money, caps }} />
     </div>
   );
 }

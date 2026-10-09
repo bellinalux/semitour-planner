@@ -66,7 +66,7 @@ export function CoursePasteField({ value, onChange, file, onFileChange }: Props)
     <Field
       htmlFor="courseText"
       label="업체 코스·견적서 원문"
-      hint="DAY 1, DAY 2처럼 일차가 구분된 코스를 그대로 붙여넣거나, 업체가 보내온 코스표·견적서 파일(사진·PDF·한글·엑셀·텍스트)을 올리세요. 요금이 적혀 있으면 1인 요금·인원 기준·싱글차지·포함/불포함도 읽어 견적서의 ‘업체 견적 검증’에서 목표 원가와 비교합니다."
+      hint="DAY 1, DAY 2처럼 일차가 구분된 코스를 그대로 붙여넣거나, 업체가 보내온 코스표·견적서 파일(사진·PDF·한글·워드·엑셀·텍스트)을 올리세요. 요금이 적혀 있으면 1인 요금·인원 기준·싱글차지·포함/불포함도 읽어 견적서의 ‘업체 견적 검증’에서 목표 원가와 비교합니다."
     >
       <textarea
         id="courseText"

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculateQuote } from "@/lib/cost";
 import { toSupplierQuote } from "@/lib/schemas/course";
-import { supplierAfterCuts, supplierCuts, supplierTarget } from "@/lib/supplierCheck";
+import { competitorCaps, cutLabel, supplierAfterCuts, supplierCuts, supplierTarget } from "@/lib/supplierCheck";
 import { conversionRate, quotePriceFor, supplierQuotePatch, toAppQuote } from "@/lib/supplierQuote";
 import type { Competitor, TripInput } from "@/types";
 import { input, item, linearDay } from "./fixtures";
@@ -48,6 +48,9 @@ describe("업체 공급가 상한", () => {
     // 600,000 − 18,000 − 90,000 − 팁 10,000 = 482,000
     expect(t.maxSupplierPerPerson).toBeCloseTo(482000);
     expect(t.over).toBeCloseTo(18000);
+    // 손익분기: 회사 수익 0 → 600,000 − 18,000 − 10,000 = 572,000. 지금 500,000이면 수익 72,000 = 12%
+    expect(t.breakEvenSupplierPerPerson).toBeCloseTo(572000);
+    expect(t.marginAtCurrent).toBeCloseTo(12);
     expect(t.targetSource).toBe("manual");
   });
 
@@ -59,7 +62,47 @@ describe("업체 공급가 상한", () => {
   });
 });
 
+describe("경쟁 상품별 공급가 기준", () => {
+  it("경쟁 가격에 맞출 때 공급가 상한·손익분기, 경쟁사 마진을 빼서 추정한 원가와 우리 업체 견적 비교", () => {
+    const i = base({
+      supplierPricePerPerson: 480000,
+      supplierTargetPrice: 600000,
+      competitors: [{ ...comp(["바나힐"]), id: "k", name: "A여행", price: 600000 }],
+      competitorMarginRate: 20,
+    });
+    const [cap] = competitorCaps(i, days, {}, null, quoteOf(i));
+    // 같은 조건 가격: 600,000 − 우리 일정의 현지 지불 30,000 = 570,000 → 상한 570,000 × 85% = 484,500
+    // 경쟁사 원가 추정: 570,000 − 표시 가격 600,000의 20% = 450,000 → 우리 480,000은 비슷(10% 안)
+    expect(cap).toMatchObject({ name: "A여행", scopedPrice: 570000, maxSupplier: 484500, breakEven: 570000, estimatedCost: 450000, level: "ok" });
+    const pricey = base({ ...i, supplierPricePerPerson: 560000 });
+    expect(competitorCaps(pricey, days, {}, null, quoteOf(pricey))[0].level).toBe("high");
+    expect(competitorCaps({ ...i, pricingMode: "target_margin" }, days, {}, null, quoteOf(i))).toEqual([]);
+  });
+});
+
 describe("빼면 좋은 일정", () => {
+  it("자유일정 날 차량·가이드 빼기, 숙소 한 등급 낮추기 (시세가 있을 때)", () => {
+    const withFree = [...days, linearDay(3, [item("f", { name: "자유시간", type: "free_time" }), item("h", { name: "호텔 휴식", type: "hotel" })])];
+    const i = base({
+      travelers: 4,
+      vehicleCostPerDay: 100000,
+      guideCostPerDay: 60000,
+      packageType: "land_hotel",
+      hotelGrade: "5",
+      lodgingRatePerNight: 200000,
+      nights: 2,
+    });
+    const cuts = supplierCuts(i, withFree, {}, null, 1_000_000);
+    const ground = cuts.find((c) => c.kind === "ground-day")!;
+    expect(ground).toMatchObject({ dayNo: 3, savingPerPerson: 40000, rank: 1 });
+    expect(cutLabel(ground)).toBe("DAY 3 차량·가이드 빼기 (자유일정)");
+    const hotel = cuts.find((c) => c.kind === "hotel-down")!;
+    expect(hotel).toMatchObject({ name: "숙소 한 등급 낮추기 (5성 → 4성)", savingPerPerson: 60000, rank: 3 }); // 200,000 × 2박 ÷ 2 × 30%
+    expect(
+      supplierCuts(base({ hotelGrade: "3", packageType: "land_hotel", lodgingRatePerNight: 200000 }), days, {}, null, 1).some((c) => c.kind === "hotel-down"),
+    ).toBe(false);
+  });
+
   it("경쟁 상품에 없는 유료 일정 → 그 밖 → 경쟁 상품 대부분이 넣는 일정 → 대표 일정 순, 현지 지불은 빼고 비싼 식사는 낮추기", () => {
     const i = base({ competitors: [comp(["바나힐", "호이안"]), comp(["바나힐 테마파크", "오행산"])] });
     const meta = { packageName: "다낭 오행산 3일", cities: [], noShopping: false, noOption: false, hotelGrade: "", highlights: [] };
