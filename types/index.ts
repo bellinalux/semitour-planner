@@ -557,6 +557,16 @@ export interface SupplierQuote {
   singleSupplement: number;
   /** 인원별 요금표 */
   tiers: { travelers: number; pricePerPerson: number }[];
+  /** 출발 요일·박수별 1인 요금 (앱 통화). weekdays는 0(일)~6(토), 비어 있으면 요일 구분 없음. nights 0이면 박수 구분 없음 */
+  datePrices?: { nights: number; weekdays: number[]; label: string; pricePerPerson: number }[];
+  /** 원문의 호텔 이름 (후보가 여럿이면 모두) — 호텔별 시세를 찾을 때 쓴다 */
+  hotelNames?: string[];
+  /** 불포함·선택관광 중 금액이 적힌 것. pricePerPerson은 앱 통화 1인 금액(환율을 모르면 0) */
+  optionPrices?: { name: string; amount: number; currency: string; perGroup: boolean; minTravelers: number; pricePerPerson: number }[];
+  /** 후보 호텔별 1박(2인 1실) 시세 — 웹 검색 결과 (앱 통화) */
+  hotelRates?: { name: string; rateLow: number; rateHigh: number; found: boolean; sourceName: string }[];
+  /** 요일별 요금에서 자동으로 고른 공급가 (사람이 고친 값과 구분해, 출발일·박수가 바뀌면 다시 고른다) */
+  picked?: { price: number; label: string };
   /** 항목별 금액 (원문에 있으면) */
   lines: { label: string; amount: number; unit: "per_person" | "per_group" | "per_day" | "per_room_night" | "unknown" }[];
   includes: string[];
@@ -778,6 +788,8 @@ export interface LodgingWebEstimate {
   priceNote: string;
   searchUrl: string;
   checkedAt: string;
+  /** 호텔 이름으로 찾았을 때 호텔별 요금 */
+  hotels?: { name: string; rateLow: number; rateHigh: number; found: boolean; sourceName: string }[];
 }
 
 /** 웹 검색으로 찾은 호텔 후보 */

@@ -8,6 +8,8 @@ function researchPrompt(req: GroundCostRequest): string {
     `Google 검색 도구를 여러 번 사용해서, ${req.destination}에서 ${req.travelers}명 단체 투어를 운영할 때 드는 현지 비용을 조사해 주세요.`,
     `1. ${req.vehicleClass ? `${req.vehicleClass} ` : "인원에 맞는 "}전용 차량(기사·유류비 포함) 1일(약 8~10시간) 대절 요금`,
     `2. ${guide} 1일(약 8시간) 요금`,
+    `3. ${req.tripScope === "domestic" ? "가이드·기사 팁 관례(없으면 '없음')" : "한국 여행사 패키지에서 받는 가이드·기사 팁(가이드 경비)의 관례 금액"} — 여행자 1인 1일 기준`,
+    `4. ${req.days}일 여행 ${req.tripScope === "domestic" ? "국내" : "해외"} 여행자보험 기본형 1인 보험료`,
     "현지 차량 렌트 업체·가이드 예약 사이트·여행사 견적 사례·여행 커뮤니티 후기를 참고하고, 찾은 금액과 통화, 조건(차종, 시간)을 정리하세요.",
     "확인하지 못한 항목은 '확인 못함'이라고 쓰세요.",
   ].join("\n");
@@ -24,7 +26,7 @@ const SYSTEM = `당신은 여행사 지상비(차량·가이드) 조사 메모�
 export async function estimateGroundCost(req: GroundCostRequest): Promise<GroundCostResponse> {
   const research = await generateGroundedText({ user: researchPrompt(req), fast: true });
   if (!research.searched) {
-    return { vehicleCostPerDay: 0, guideCostPerDay: 0, vehicleNote: "", guideNote: "", searched: false, sources: [] };
+    return { vehicleCostPerDay: 0, guideCostPerDay: 0, vehicleNote: "", guideNote: "", tipPerPersonPerDay: 0, tipNote: "", insurancePerPerson: 0, insuranceNote: "", searched: false, sources: [] };
   }
   const result = await generateJson({
     fast: true,
@@ -38,6 +40,10 @@ export async function estimateGroundCost(req: GroundCostRequest): Promise<Ground
     guideCostPerDay: Math.max(0, Math.round(result.guideCostPerDay)),
     vehicleNote: result.vehicleNote.trim(),
     guideNote: result.guideNote.trim(),
+    tipPerPersonPerDay: Math.max(0, Math.round(result.tipPerPersonPerDay)),
+    tipNote: result.tipNote.trim(),
+    insurancePerPerson: Math.max(0, Math.round(result.insurancePerPerson)),
+    insuranceNote: result.insuranceNote.trim(),
     searched: true,
     sources: research.sources.slice(0, 6),
   };

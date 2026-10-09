@@ -29,6 +29,10 @@ export interface EnginePlace {
   priority?: 1 | 2 | 3;
   /** 출발·해산처럼 순서가 정해진 곳 */
   fixedOrder?: "first" | "last";
+  /** 식사 종류 (kind가 meal일 때) — 점심·저녁은 시간대를 지키고, 카페·간식은 시간대가 없다. 없으면 점심으로 본다 */
+  meal?: "lunch" | "dinner" | "cafe";
+  /** 걸어서 함께 도는 구역 이름 — 같은 구역은 명소 하나로 센다 */
+  area?: string;
 }
 
 export type MoveMode = "car" | "walk" | "public";
@@ -43,6 +47,12 @@ export interface EngineOptions {
   maxEnd?: string;
   /** 점심 시간대 */
   lunch?: { from: string; to: string };
+  /** 저녁 시간대 */
+  dinner?: { from: string; to: string };
+  /** 앱 일정표에서 확인된 이동 구간("출발id>도착id") — 이동 여유(bufferMin)를 따로 더하지 않는다 */
+  exactLegs?: string[];
+  /** 항공 등으로 시작 시각이 정해진 날 — "출발 당기기"를 제안하지 않는다 */
+  fixedStart?: boolean;
   mode: MoveMode;
   audience?: Audience;
   /** 일몰 "19:42" (best=sunset 장소를 그 전에) */

@@ -3,7 +3,8 @@
  *  - 업체 코스(linear) 날: 엔진 추천 순서로 바꾸기까지
  *  - 세미투어(semi) 날: 오전 가이드 일정만 순서를 바꾸고, 오후 반자유 코스는 시간·주의만 채운다
  */
-import { dayMeetingTime } from "@/lib/dayLoad";
+import { dayMeetingTime, walkTimeline } from "@/lib/dayLoad";
+import { fmt } from "@/lib/courseEngine";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { hoursText } from "@/lib/courseEngine";
 import type { PlaceKnowledge, PlanResponse } from "@/lib/server/courseEngineServer";
@@ -12,9 +13,13 @@ import { roundMinutes } from "@/lib/format";
 import { refitMealWindows } from "@/lib/mealTiming";
 
 export interface EngineDayRequest {
-  places: { id: string; name: string; stayMin: number; kind?: "sight" | "meal" | "free" | "transfer" | "end"; priority?: 1 | 2 | 3; fixedOrder?: "first" | "last" }[];
+  places: { id: string; name: string; stayMin: number; kind?: "sight" | "meal" | "free" | "transfer" | "end"; priority?: 1 | 2 | 3; fixedOrder?: "first" | "last"; meal?: "lunch" | "dinner" | "cafe"; area?: string }[];
   city: string; country: string; date?: string; start: string; maxEnd: string;
   mode: "car" | "walk" | "public"; audience: "any" | "couple" | "family" | "senior" | "group"; reorder: boolean; lookup: boolean;
+  /** 앱 일정표의 이동 시간 (이어지는 두 항목마다) — 엔진이 일정표와 같은 시계로 채점하게 */
+  legs?: { from: string; to: string; minutes: number }[];
+  /** 항공 등으로 시작 시각이 정해진 날 */
+  fixedStart?: boolean;
 }
 
 const KIND: Record<string, EngineDayRequest["places"][number]["kind"]> = { meal: "meal", free_time: "free", transfer: "transfer", hotel: "end", massage: "sight", shopping: "sight", experience: "sight", sightseeing: "sight" };
@@ -32,6 +37,15 @@ function kindOf(i: ItineraryItem): EngineDayRequest["places"][number]["kind"] {
   if (i.type) return KIND[i.type] ?? "sight";
   return i.cuisine || i.mealCost > 0 || MEAL_NAME.test(i.name) ? "meal" : "sight";
 }
+/** 식사 종류 — 점심·저녁은 시간대를 지키고 카페·간식은 시간대가 없다. "식사"만 적혀 있으면 일정표 시각(15시 전후)으로 정한다 */
+function mealKind(i: ItineraryItem, start: number | undefined): "lunch" | "dinner" | "cafe" {
+  const text = `${i.name} ${i.description ?? ""}`;
+  if (/점심|중식|런치|lunch/i.test(text)) return "lunch";
+  if (/저녁|석식|디너|dinner/i.test(text)) return "dinner";
+  if (/식사|정식|뷔페|buffet|meal/i.test(text)) return start != null && start % 1440 >= 15 * 60 ? "dinner" : "lunch";
+  return "cafe";
+}
+
 /** 저녁에 하는 일정 (이런 일정이 있으면 하루 끝을 늦게 본다) */
 const EVENING = /야경|야시장|야간|분수쇼|나이트|night|저녁|석식|디너|dinner/i;
 const AUD:Partial<Record<TravelType, EngineDayRequest["audience"]>> = { senior: "senior", honeymoon: "couple", package: "group", accessible: "senior" };
@@ -52,15 +66,33 @@ export function buildDayRequest(day: DayPlan, pmChoice: PmChoice, o: { destinati
   const parts = o.destination.split(",").map(s => s.trim()).filter(Boolean);
   const country = parts.length > 1 ? parts[parts.length - 1] : "";
   const city = day.overnightCity || parts[0] || o.destination;
+  // 앱 일정표 시각 — 엔진은 항공을 빼고 받으므로, 항공 뒤 첫 항목의 일정표 시각에서 시작해야 한다(예: 12:50 도착 뒤 13:40)
+  const all = dayItems(day, pmChoice);
+  const startOf = new Map(walkTimeline(all, dayMeetingTime(day)).map((s) => [s.item.id, s.start]));
+  const firstStart = startOf.get(items[0].id);
+  const hasFlight = all.some((i) => (i.type ?? "") === "flight");
+  // 이어지는 두 항목의 일정표 이동 시간 (사이에 항공이 끼면 넣지 않는다)
+  const legs = items.slice(1).flatMap((it, k) => {
+    const prev = items[k];
+    return all.indexOf(it) === all.indexOf(prev) + 1 ? [{ from: prev.id, to: it.id, minutes: Math.max(0, prev.travelMinutesToNext ?? 0) }] : [];
+  });
   return {
     places: items.map(i => {
       const kind = kindOf(i);
-      return { id: i.id, name: i.name, stayMin: Math.max(0, Math.min(720, i.stayMinutes || 0)), kind, priority: kind === "sight" ? 2 : 1, ...(kind === "end" ? { fixedOrder: "last" as const } : {}) };
+      const start = startOf.get(i.id);
+      return {
+        id: i.id, name: i.name, stayMin: Math.max(0, Math.min(720, i.stayMinutes || 0)), kind, priority: kind === "sight" ? 2 : 1,
+        ...(kind === "end" ? { fixedOrder: "last" as const } : {}),
+        ...(kind === "meal" ? { meal: mealKind(i, start) } : {}),
+        ...(i.timeCheck?.basis === "area" && i.timeCheck.area ? { area: i.timeCheck.area } : {}),
+      };
     }),
+    legs,
+    ...(hasFlight ? { fixedStart: true } : {}),
     city, country,
     ...(o.departureDate && /^\d{4}-\d{2}-\d{2}$/.test(o.departureDate) ? { date: addDays(o.departureDate, day.day - 1) } : {}),
     // 야경·분수쇼·저녁 식사 같은 저녁 일정이 있는 날은 19시에 끊으면 엔진이 그 일정을 빼 버린다
-    start: dayMeetingTime(day), maxEnd: items.some((i) => EVENING.test(`${i.name} ${i.description}`)) ? "22:30" : "19:00",
+    start: firstStart != null ? fmt(firstStart % 1440) : dayMeetingTime(day), maxEnd: items.some((i) => EVENING.test(`${i.name} ${i.description}`)) ? "23:00" : "19:00",
     mode: "car", audience: AUD[o.travelType] ?? "any",
     reorder: day.kind === "linear", lookup: true,
   };
@@ -77,10 +109,13 @@ export function cautionFrom(k?: PlaceKnowledge): string {
  *  useBest: 엔진 추천 순서·시간 / 아니면 지금 순서에 이동 시간·주의만
  *  drop: 뺄 항목 id
  */
-/** 순서를 바꾸지 않는 항목 — 항공·이동·숙소·식사·자유시간은 제자리(시간대가 정해진 일정)에 두고 관광지만 바꾼다 */
-const ANCHOR_TYPES = new Set(["flight", "transfer", "hotel", "meal", "free_time"]);
+/** 순서를 바꾸지 않는 항목 — 항공·이동·숙소·점심·저녁·자유시간은 제자리(시간대가 정해진 일정)에 두고 관광지만 바꾼다 */
+const ANCHOR_TYPES = new Set(["flight", "transfer", "hotel", "free_time"]);
+// 카페·간식(예: 콜로안의 에그타르트 가게)은 시간대가 없고 그 동네에 붙어 있어 관광지와 함께 옮긴다.
 // 야경·분수쇼 같은 저녁 일정도 시간대가 정해져 있어 옮기지 않는다
-const isAnchor = (it: ItineraryItem) => ANCHOR_TYPES.has(it.type ?? "sightseeing") || isFixedMove(it) || kindOf(it) === "meal" || EVENING.test(it.name);
+export const isCafeMeal = (it: ItineraryItem) => kindOf(it) === "meal" && mealKind(it, undefined) === "cafe";
+const isAnchor = (it: ItineraryItem) =>
+  ANCHOR_TYPES.has(it.type ?? "sightseeing") || isFixedMove(it) || (kindOf(it) === "meal" && !isCafeMeal(it)) || EVENING.test(it.name);
 
 /**
  * 엔진 추천 순서를 하루 목록에 넣는다 — 엔진이 순서를 정한 관광지들만 자기들 자리 안에서 추천 순서대로 바꾸고,

@@ -31,6 +31,19 @@ describe("코스 엔진 추천 순서 적용", () => {
     expect(next.map((i) => i.id)).toEqual(["f1", "f2", "lunch", "s4", "s2", "s1", "s3", "s5", "dinner", "night", "hotel"]);
   });
 
+  it("카페·간식(에그타르트 가게)은 제자리에 묶지 않고 관광지와 함께 추천 순서를 따른다", () => {
+    const list = [
+      item("c1", { name: "콜로안 빌리지" }),
+      item("tart", { type: "meal", name: "로드스토우 에그타르트 본점", stayMinutes: 30 }),
+      item("lunch", { type: "meal", name: "점심 식사 (딤섬)", stayMinutes: 60 }),
+      item("k1", { name: "카모에스 공원" }),
+      item("k2", { name: "안토니오 성당" }),
+    ];
+    // 엔진: 반도(카모에스·안토니오)를 먼저, 콜로안과 에그타르트는 함께 뒤로
+    const next = reorderByEngine(list, ["k1", "k2", "lunch", "c1", "tart"]);
+    expect(next.map((i) => i.id)).toEqual(["k1", "k2", "lunch", "c1", "tart"]);
+  });
+
   it("적용하면 순서가 실제로 바뀌고, 하루 끝 항목·항공 위치는 그대로", () => {
     const res = {
       current: { order: [], timeline: [], violations: [], totalTravel: 0, dropped: [] },
@@ -53,8 +66,8 @@ describe("코스 엔진 추천 순서 적용", () => {
     expect(next.items.map((i) => i.id)).toEqual(["f1", "f2", "lunch", "s3", "s1", "s2", "s4", "s5", "dinner", "night", "hotel"]);
   });
 
-  it("저녁 일정(야경·분수쇼·저녁 식사)이 있는 날은 하루 끝을 22:30으로 본다", () => {
-    expect(buildDayRequest(day(), {}, { destination: "마카오", travelType: "package" as never })?.maxEnd).toBe("22:30");
+  it("저녁 일정(야경·분수쇼·저녁 식사)이 있는 날은 하루 끝을 23:00으로 본다", () => {
+    expect(buildDayRequest(day(), {}, { destination: "마카오", travelType: "package" as never })?.maxEnd).toBe("23:00");
     const plain = linearDay(2, [item("a", { name: "콜로안 빌리지" }), item("b", { name: "마카오 타워" })]);
     expect(buildDayRequest(plain, {}, { destination: "마카오", travelType: "package" as never })?.maxEnd).toBe("19:00");
   });

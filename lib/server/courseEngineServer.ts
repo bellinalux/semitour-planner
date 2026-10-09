@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 import {
-  estimateMatrix, isoForCountry, planDay, sunTimes, timeZoneForCountry,
+  estimateMatrix, fmt, hm, isoForCountry, planDay, sunTimes, timeZoneForCountry,
   type Audience, type DayKey, type EngineOptions, type EnginePlace, type MoveMode, type PlanResult,
 } from "@/lib/courseEngine";
 import { endpoint, modelName, resolveKey } from "./gemini";
@@ -30,6 +30,7 @@ export const enginePlaceSchema = z.object({
   best: z.enum(["morning", "afternoon", "sunset", "night", ""]).optional(),
   priority: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   fixedOrder: z.enum(["first", "last"]).optional(),
+  meal: z.enum(["lunch", "dinner", "cafe"]).optional(),
 });
 export const planRequestSchema = z.object({
   places: z.array(enginePlaceSchema).min(1).max(20),
@@ -44,6 +45,10 @@ export const planRequestSchema = z.object({
   reorder: z.boolean().default(true),
   /** 장소 정보를 구글 지도로 찾아 채울지 (꺼도 저장된 지식은 씀) */
   lookup: z.boolean().default(true),
+  /** 앱 일정표에서 확인된 이동 구간 — 엔진이 다시 추정하지 않고 이 시간을 그대로 쓴다(일정표와 같은 시계로 채점) */
+  legs: z.array(z.object({ from: z.string().max(80), to: z.string().max(80), minutes: z.number().min(0).max(600) })).max(40).optional(),
+  /** 항공 등으로 시작 시각이 정해진 날 */
+  fixedStart: z.boolean().optional(),
 });
 export type PlanRequest = z.infer<typeof planRequestSchema>;
 
@@ -220,6 +225,8 @@ export async function planCourse(req: PlanRequest): Promise<PlanResponse> {
       stayMin: p.stayMin || k?.typicalStayMin || 60,
       lat: p.lat ?? k?.lat, lng: p.lng ?? k?.lng,
       open: p.open ?? k?.open, lastEntry: p.lastEntry ?? k?.lastEntry, best: p.best ?? k?.best,
+      ...(p.meal ? { meal: p.meal } : {}),
+      ...(p.area ? { area: p.area } : {}),
       ...(k ? { knowledge: k } : {}),
     };
     return merged;
@@ -235,14 +242,24 @@ export async function planCourse(req: PlanRequest): Promise<PlanResponse> {
     if (anchor) sun = sunTimes(anchor.lat!, anchor.lng!, d, timeZoneForCountry(req.country));
   }
   const { M, source, note: matrixNote } = await travelMatrix(places, req.mode);
+  // 앱 일정표의 이동 시간(구역 확인·직접 입력 등)이 있는 구간은 그 값으로 — 엔진이 추정한 값과 일정표가 어긋나지 않게
+  const pos = new Map(places.map((p, i) => [p.id, i]));
+  const exactLegs: string[] = [];
+  for (const leg of req.legs ?? []) {
+    const a = pos.get(leg.from), b = pos.get(leg.to);
+    if (a == null || b == null || a === b) continue;
+    M[a][b] = Math.round(leg.minutes);
+    exactLegs.push(`${leg.from}>${leg.to}`);
+  }
+  // 항공 도착 등으로 늦게 시작하는 날은 점심이 늦을 수밖에 없다 — 시작 뒤 1시간까지는 늦은 점심으로 보지 않는다
+  const startMin = hm(req.start);
+  const lunchEnd = req.fixedStart && startMin != null && startMin > 690 ? fmt(Math.max(840, startMin + 60)) : "14:00";
   const o: EngineOptions = {
     start: req.start, weekday: weekday ?? undefined, maxEnd: req.maxEnd, mode: req.mode, audience: req.audience as Audience,
-    lunch: { from: "11:30", to: "14:00" }, sunset: sun?.sunset, bufferMin: 5,
+    lunch: { from: "11:30", to: lunchEnd }, dinner: { from: "18:00", to: "20:30" }, sunset: sun?.sunset, bufferMin: 5,
+    exactLegs, fixedStart: req.fixedStart,
   };
   const r = planDay(places, M, o, req.reorder);
-  if (holiday) {
-    const note = `${req.date}은 공휴일(${holiday})입니다 — 휴관·단축 운영을 확인하세요`;
-    r.current.violations.unshift(note); r.best.violations.unshift(note);
-  }
+  // 공휴일은 감점하지 않고 안내만 한다(화면 머리줄에 표시) — 실제 휴관은 영업시간으로 잡힌다
   return { ...r, places, context: { weekday, holiday, sunset: sun?.sunset ?? null, sunrise: sun?.sunrise ?? null, matrix: source, matrixNote, looked, known: Object.keys(know).length } };
 }

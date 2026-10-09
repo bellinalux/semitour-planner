@@ -13,9 +13,19 @@ export { schedule, simulate } from "./schedule";
 export { scoreCourse } from "./quality";
 export { sunTimes, timeZoneForCountry, isoForCountry } from "./sun";
 
-/** 좌표로 어림한 이동 시간표 (지도 길찾기를 못 쓸 때) */
+/**
+ * 좌표로 어림한 이동 시간표 (지도 길찾기를 못 쓸 때).
+ * 좌표를 모르는 곳은 구역으로 어림한다 — 같은 구역은 걸어서 5분, 다른 구역은 25분(구역을 오가면 손해라 순서를 바꿀 때 함께 묶인다).
+ */
 export function estimateMatrix(places: EnginePlace[], mode: MoveMode): number[][] {
-  return places.map(a => places.map(b => (a === b ? 0 : estimateTravel(a, b, mode))));
+  const unknown = (p: EnginePlace) => p.lat == null || p.lng == null;
+  return places.map(a =>
+    places.map(b => {
+      if (a === b) return 0;
+      if ((unknown(a) || unknown(b)) && a.area && b.area) return a.area === b.area ? 5 : 25;
+      return estimateTravel(a, b, mode);
+    }),
+  );
 }
 
 /** 지금 순서 그대로 하루를 흘려 본 결과 (빼기·순서 바꾸기 없음) */

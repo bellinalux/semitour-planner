@@ -42,6 +42,11 @@ export interface SupplierVerify {
   marketReady: boolean;
   checklist: CheckItem[];
   questions: string[];
+  /**
+   * 업체 몫 추정 — 1인 공급가에서 우리 시세 원가를 뺀 것(업체 마진·수수료). 시세가 없으면 null.
+   * hotelsFound: 숙박 시세를 견적서 호텔 이름으로 찾은 호텔 수 (0이면 등급 평균)
+   */
+  supplierShare: { amount: number; rate: number; hotelsFound: number } | null;
 }
 
 const CATEGORY_LABELS: Record<Category, string> = { lodging: "숙박 (2인 1실)", vehicle: "차량", guide: "가이드", admission: "입장·체험", meal: "식사" };
@@ -254,5 +259,14 @@ export function verifySupplierQuote(input: TripInput, days: DayPlan[], pmChoice:
     calcIssues.push("1인 공급가가 우리 시세 원가의 절반도 안 됩니다 — 옵션·불포함 요금이나 다른 인원 기준 요금을 상품 요금으로 잘못 넣지 않았는지 확인하세요.");
   }
 
-  return { calcIssues, rows, total, marketReady, checklist, questions: [...new Set(questions)] };
+  const supplierShare =
+    marketReady && supplierTotal !== null && supplierTotal > 0
+      ? {
+          amount: supplierTotal - marketTotal,
+          rate: ((supplierTotal - marketTotal) / supplierTotal) * 100,
+          hotelsFound: (q?.hotelRates ?? []).filter((h) => h.found).length,
+        }
+      : null;
+
+  return { calcIssues, rows, total, marketReady, checklist, questions: [...new Set(questions)], supplierShare };
 }

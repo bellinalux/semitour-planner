@@ -1,5 +1,6 @@
-import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Flag, Plus, Sun, Sunset, Timer } from "lucide-react";
+import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Compass, Flag, Plus, Sun, Sunset, Timer } from "lucide-react";
 import { useContext } from "react";
+import { CourseEngineContext } from "@/hooks/useCourseEngine";
 import { DayTimeCheckContext } from "@/hooks/useDayTimeCheck";
 import { calcDayEnd, calcDayGap, calcDayLoad, computeItemTimings, dayMeetingTime, STANDARD_DAY_END, timelineEndTime, type DayLoadLevel } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
@@ -11,6 +12,13 @@ import { PmOptionSwitch } from "./PmOptionSwitch";
 import { RouteCheckPanel } from "./RouteCheckPanel";
 import { SessionBlock } from "./SessionBlock";
 import { TimelineItem, type ItemPatch } from "./TimelineItem";
+
+const SCORE_TONE: Record<string, string> = {
+  A: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+  B: "bg-sky-50 text-sky-800 ring-sky-200",
+  C: "bg-amber-50 text-amber-800 ring-amber-200",
+  D: "bg-rose-50 text-rose-700 ring-rose-200",
+};
 
 const LOAD_BADGE_TONE: Record<DayLoadLevel, string> = {
   ok: "bg-white text-slate-600 ring-slate-200",
@@ -76,6 +84,10 @@ export function DayCard({
   const load = calcDayLoad(plan, pmChoiceForDay);
   // 하루 일정 시간 검증 (방문 장소가 2곳 이상인 날)
   const dayTime = useContext(DayTimeCheckContext);
+  // 코스 엔진 점수 (한 번 점검한 날) — 누르면 점검 상자로
+  const engine = useContext(CourseEngineContext);
+  const score = engine?.scores[plan.day];
+  const rescoring = engine?.byDay[plan.day]?.status === "loading";
   const placeCount = dayItems(plan, pmChoiceForDay).filter((i) => !["flight", "transfer", "hotel", "free_time"].includes(i.type ?? "")).length;
   const meetingTime = dayMeetingTime(plan);
   const endTime = load.totalMinutes > 0 ? timelineEndTime(dayItems(plan, pmChoiceForDay), meetingTime) : null;
@@ -117,6 +129,17 @@ export function DayCard({
             <Clock className="h-3 w-3" aria-hidden />총 {formatDuration(load.totalMinutes)}
             {endTime ? ` (~${endTime} 종료)` : ""}
           </span>
+        )}
+        {score && (
+          <button
+            type="button"
+            onClick={() => document.getElementById("course-engine")?.scrollIntoView({ block: "start", behavior: "smooth" })}
+            title={score.top ? `가장 큰 감점 — ${score.top}` : "코스 엔진 점수"}
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold tabular-nums ring-1 ${SCORE_TONE[score.grade]}`}
+          >
+            <Compass className="size-3" aria-hidden />
+            {rescoring ? "다시 채점 중…" : `코스 ${score.score}점 ${score.grade}`}
+          </button>
         )}
         {dayTime && placeCount >= 2 && (
           <button

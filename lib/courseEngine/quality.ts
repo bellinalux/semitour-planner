@@ -50,8 +50,11 @@ export function scoreCourse(places: EnginePlace[], current: ScheduleResult, o: E
   const sights = tl.filter(s => (byId.get(s.id)?.kind ?? "sight") === "sight");
   const dIssues: string[] = [];
   let dScore = 15;
-  if (sights.length > pace.maxStops) { dScore -= (sights.length - pace.maxStops) * 4; dIssues.push(`하루 명소 ${sights.length}곳 — ${aud === "senior" ? "시니어" : aud === "family" ? "가족" : "일반"} 기준 ${pace.maxStops}곳 이하 권장`); }
-  sights.forEach(s => { if (s.end - s.start < 20) { dScore -= 2; dIssues.push(`${s.name} 머무는 시간 ${s.end - s.start}분 — 너무 짧음`); } });
+  // 걸어서 함께 도는 구역(역사지구 등)은 명소 하나로 센다
+  const stopCount = new Set(sights.map(s => byId.get(s.id)?.area || s.id)).size;
+  if (stopCount > pace.maxStops) { dScore -= (stopCount - pace.maxStops) * 4; dIssues.push(`하루 명소 ${stopCount}곳 — ${aud === "senior" ? "시니어" : aud === "family" ? "가족" : "일반"} 기준 ${pace.maxStops}곳 이하 권장`); }
+  // 구역 안 장소는 짧게 지나가는 것이 정상이라 "너무 짧음"으로 보지 않는다
+  sights.forEach(s => { if (!byId.get(s.id)?.area && s.end - s.start < 20) { dScore -= 2; dIssues.push(`${s.name} 머무는 시간 ${s.end - s.start}분 — 너무 짧음`); } });
   if (sights.length <= 1 && tl.length > 1) dIssues.push("명소가 한 곳뿐입니다");
   items.push({ key: "density", label: "일정 밀도", score: Math.max(0, dScore), max: 15, issues: dIssues });
 
@@ -70,17 +73,29 @@ export function scoreCourse(places: EnginePlace[], current: ScheduleResult, o: E
   const mIssues: string[] = [];
   let mScore = 15;
   const spansLunch = tl.length && tl[0].start <= 720 && tl[tl.length - 1].end >= 810;
-  const meals = tl.filter(s => byId.get(s.id)?.kind === "meal");
-  if (spansLunch && !meals.length) { mScore -= 10; mIssues.push("점심 시간(12~14시)을 지나는데 식사 코스가 없습니다"); fixes.push({ type: "addMeal", label: "동선 위에 점심 식사 넣기" }); }
-  meals.forEach(m => { const lunchTo = hm(o.lunch?.to) ?? 840; if (m.start > lunchTo) { mScore -= 5; mIssues.push(`식사 ${fmt(m.start)} — 늦음`); } });
+  const meals = tl.filter(s => byId.get(s.id)?.kind === "meal" && byId.get(s.id)?.meal !== "cafe");
+  const lunches = meals.filter(s => byId.get(s.id)?.meal !== "dinner");
+  if (spansLunch && !lunches.length) { mScore -= 10; mIssues.push("점심 시간(12~14시)을 지나는데 식사 코스가 없습니다"); fixes.push({ type: "addMeal", label: "동선 위에 점심 식사 넣기" }); }
+  meals.forEach(m => {
+    const isDinner = byId.get(m.id)?.meal === "dinner";
+    const to = isDinner ? hm(o.dinner?.to) ?? 1230 : hm(o.lunch?.to) ?? 840;
+    if (m.start > to) { mScore -= 5; mIssues.push(`${isDinner ? "저녁" : "점심"} ${fmt(m.start)} — 늦음`); }
+  });
   items.push({ key: "meal", label: "식사", score: Math.max(0, mScore), max: 15, issues: mIssues });
 
   if (current.dropped.length) current.dropped.forEach(d => fixes.push({ type: "drop", label: `${d.name} 빼기 (${d.reason})`, id: d.id }));
   // 하루가 늦게 끝나면 시작을 당기기
   const maxEnd = hm(o.maxEnd);
-  if (maxEnd != null && current.endTime > maxEnd && tl.length) {
-    const early = Math.max(420, (hm(o.start) ?? 540) - (current.endTime - maxEnd));
-    fixes.push({ type: "shiftStart", label: `출발을 ${fmt(early)}로 당기기`, start: fmt(early) });
+  if (maxEnd != null && current.endTime > maxEnd && tl.length && !o.fixedStart) {
+    // 투어 시작은 08:00보다 당기지 않는다 (이미 08:00이면 당기기 대신 일정을 줄이거나 옮겨야 한다)
+    const start = hm(o.start) ?? 540;
+    const early = Math.max(480, start - (current.endTime - maxEnd));
+    if (early < start) fixes.push({ type: "shiftStart", label: `출발을 ${fmt(early)}로 당기기`, start: fmt(early) });
+  } else if (dayLen > pace.maxDay && tl.length && !o.fixedStart && (hm(o.start) ?? 540) < 600 && tl.some(s => byId.get(s.id)?.kind === "free" || s.wait > 0)) {
+    // 이른 출발(예: 시각이 없어 08:00)로 하루가 길고 중간에 빈 시간(자유시간·대기)이 있으면 출발을 늦춰 하루를 줄인다 (최대 10:00)
+    const start = hm(o.start) ?? 540;
+    const late = Math.min(600, Math.ceil((start + dayLen - pace.maxDay) / 10) * 10);
+    if (late > start) fixes.push({ type: "shiftStart", label: `출발을 ${fmt(late)}로 늦추기 (빈 시간을 줄여 하루를 짧게)`, start: fmt(late) });
   }
 
   const score = Math.max(0, Math.min(100, items.reduce((a, b) => a + b.score, 0)));

@@ -10,6 +10,14 @@ export const lodgingWebRequestSchema = z.object({
   lodgingType: z.enum(["hotel", "bnb", "resort"]),
   hotelGrade: z.enum(["any", "3", "4", "5", "resort"]).default("4"),
   currency: z.enum(CURRENCIES),
+  /** 업체 견적서 등에 적힌 호텔 이름 — 있으면 등급 평균 대신 이 호텔들의 요금을 하나씩 찾는다 */
+  hotelNames: z.array(z.string().trim().min(1).max(80)).max(6).optional(),
+  /** 체크인 날짜 (YYYY-MM-DD) — 없으면 일반적인 요금 */
+  checkIn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  nights: z.number().int().min(1).max(30).optional(),
 });
 
 export type LodgingWebRequest = z.infer<typeof lodgingWebRequestSchema>;
@@ -24,6 +32,17 @@ export const lodgingWebResponseSchema = z.object({
   areaNote: z.string().describe("추천 숙박 지역/구역 한 줄 (예: 시내 중심가, 역 근처). 확인 못하면 빈 문자열"),
   sourceName: z.string().describe("요금을 확인한 사이트 이름 (예: Booking.com, Agoda, 네이버 호텔). 확인 못하면 빈 문자열"),
   priceNote: z.string().describe("유의사항 한 줄 (조식 포함 여부, 세금·봉사료 포함 여부 등). 없으면 빈 문자열"),
+  hotels: z
+    .array(
+      z.object({
+        name: z.string().describe("요청한 호텔 이름 그대로"),
+        rateLow: z.number().describe("그 호텔 2인 1실 1박 요금 하한 (요청 통화). 확인 못하면 0"),
+        rateHigh: z.number().describe("그 호텔 2인 1실 1박 요금 상한 (요청 통화). 확인 못하면 0"),
+        found: z.boolean().describe("검색 결과에서 그 호텔의 실제 요금을 확인했으면 true"),
+        sourceName: z.string().describe("요금을 확인한 사이트. 없으면 빈 문자열"),
+      }),
+    )
+    .describe("요청한 호텔 이름별 요금 (요청한 호텔이 없으면 빈 배열). 요청한 순서대로 모두 넣는다"),
 });
 
 type Parsed = z.infer<typeof lodgingWebResponseSchema>;
@@ -44,8 +63,17 @@ export function lodgingWebSearchUrl(destination: string, lodgingType: "hotel" | 
 
 /** 검증된 LLM 응답을 앱 내부 타입으로 다듬는다 */
 export function toLodgingWebEstimate(parsed: Parsed, req: LodgingWebRequest): LodgingWebEstimate {
-  const [low, high] = ordered(parsed.rateLow, parsed.rateHigh);
+  const names = req.hotelNames ?? [];
+  const hotels = names.map((name) => {
+    const h = parsed.hotels.find((x) => x.name.replace(/\s/g, "") === name.replace(/\s/g, "")) ?? parsed.hotels[names.indexOf(name)];
+    const [lo, hi] = h ? ordered(h.rateLow, h.rateHigh) : [0, 0];
+    return { name, rateLow: lo, rateHigh: hi, found: !!h?.found && hi > 0, sourceName: h?.sourceName.trim() ?? "" };
+  });
+  // 호텔 이름으로 찾았으면 전체 범위는 요금을 찾은 호텔들의 최저~최고
+  const found = hotels.filter((h) => h.found);
+  const [low, high] = found.length > 0 ? [Math.min(...found.map((h) => h.rateLow)), Math.max(...found.map((h) => h.rateHigh))] : ordered(parsed.rateLow, parsed.rateHigh);
   return {
+    ...(names.length > 0 ? { hotels } : {}),
     rateLow: low,
     rateHigh: high,
     basis: low > 0 ? parsed.basis : "estimated",

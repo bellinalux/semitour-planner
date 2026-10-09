@@ -18,9 +18,16 @@ export async function conversionRate(from: string, to: CurrencyCode, krwPerUnit:
   return a && b ? a / b : null;
 }
 
-export function toAppQuote(raw: ParsedSupplierQuote, rate: number | null, readAt: string): SupplierQuote {
+export function toAppQuote(raw: ParsedSupplierQuote, rate: number | null, readAt: string, optionRates: Record<string, number | null> = {}): SupplierQuote {
   const conv = (v: number) => (rate === null ? v : v * rate);
   return {
+    datePrices: (raw.datePrices ?? []).map((d) => ({ ...d, pricePerPerson: conv(d.pricePerPerson) })),
+    hotelNames: raw.hotelNames ?? [],
+    optionPrices: (raw.optionPrices ?? []).map((o) => {
+      const r = o.currency === raw.currency ? rate : (optionRates[o.currency] ?? null);
+      const perPerson = o.perGroup ? o.amount / Math.max(1, o.minTravelers || raw.basisTravelers || 1) : o.amount;
+      return { ...o, pricePerPerson: r === null ? 0 : perPerson * r };
+    }),
     originalPrice: raw.pricePerPerson,
     originalCurrency: raw.currency,
     rate,
@@ -42,9 +49,28 @@ export function toAppQuote(raw: ParsedSupplierQuote, rate: number | null, readAt
   };
 }
 
-/** 지금 인원에 맞는 1인 요금 — 인원별 요금표가 있으면 인원 이하 중 가장 가까운 칸(없으면 가장 작은 인원 칸) */
-export function quotePriceFor(q: SupplierQuote, travelers: number): { price: number; tier: number | null } {
+/**
+ * 지금 조건에 맞는 1인 요금.
+ *  - 출발 요일별 요금표가 있으면: 박수가 맞는 줄 중 출발일 요일의 요금 (출발일이 없으면 가장 낮은 요금 — dateLabel에 "출발일 미정")
+ *  - 인원별 요금표가 있으면: 인원 이하 중 가장 가까운 칸(없으면 가장 작은 인원 칸)
+ */
+export function quotePriceFor(
+  q: SupplierQuote,
+  travelers: number,
+  when: { departureDate?: string; nights?: number } = {},
+): { price: number; tier: number | null; dateLabel?: string } {
   if (q.rate === null) return { price: 0, tier: null };
+  const dated = q.datePrices ?? [];
+  if (dated.length > 0) {
+    const sameNights = dated.filter((d) => d.nights > 0 && d.nights === when.nights);
+    const rows = sameNights.length > 0 ? sameNights : dated.filter((d) => d.nights === 0).length > 0 ? dated.filter((d) => d.nights === 0) : dated;
+    const day = when.departureDate && /^\d{4}-\d{2}-\d{2}$/.test(when.departureDate) ? new Date(`${when.departureDate}T00:00:00Z`).getUTCDay() : null;
+    const nightsText = (d: { nights: number }) => (d.nights > 0 ? `${d.nights}박 ` : "");
+    const hit = day === null ? undefined : rows.find((d) => d.weekdays.includes(day));
+    if (hit) return { price: hit.pricePerPerson, tier: null, dateLabel: `${nightsText(hit)}${hit.label} 출발 요금` };
+    const low = rows.reduce((a, b) => (b.pricePerPerson < a.pricePerPerson ? b : a));
+    return { price: low.pricePerPerson, tier: null, dateLabel: `${nightsText(low)}${low.label} 요금 (${day === null ? "출발일 미정 — 가장 낮은 요금" : "출발 요일에 맞는 줄이 없어 가장 낮은 요금"})` };
+  }
   if (q.tiers.length === 0) return { price: q.pricePerPerson, tier: null };
   const sorted = [...q.tiers].sort((a, b) => a.travelers - b.travelers);
   const fit = [...sorted].reverse().find((t) => t.travelers <= travelers) ?? sorted[0];
@@ -139,9 +165,16 @@ export async function supplierQuotePatch(
   fetchRate = krwPerUnit,
   meta: CourseMeta | null = null,
 ): Promise<Partial<TripInput>> {
-  const rate = raw.pricePerPerson > 0 || raw.tiers.length > 0 || raw.singleSupplement > 0 ? await conversionRate(raw.currency, input.currency, fetchRate) : 1;
-  const quote = toAppQuote(raw, rate, new Date().toISOString());
-  const { price } = quotePriceFor(quote, input.travelers);
+  const rate =
+    raw.pricePerPerson > 0 || raw.tiers.length > 0 || raw.singleSupplement > 0 || (raw.datePrices ?? []).length > 0 || (raw.optionPrices ?? []).length > 0
+      ? await conversionRate(raw.currency, input.currency, fetchRate)
+      : 1;
+  // 옵션 금액이 상품 요금과 다른 통화(예: 상품 HKD, 홍콩 데이투어 USD)면 그 통화 환율도 받는다
+  const otherCurrencies = [...new Set((raw.optionPrices ?? []).map((o) => o.currency).filter((c) => c && c !== raw.currency))];
+  const optionRates = Object.fromEntries(await Promise.all(otherCurrencies.map(async (c) => [c, await conversionRate(c, input.currency, fetchRate)] as const)));
+  const base = toAppQuote(raw, rate, new Date().toISOString(), optionRates);
+  const { price, dateLabel } = quotePriceFor(base, input.travelers, { departureDate: input.departureDate, nights: input.nights });
+  const quote: SupplierQuote = dateLabel && price > 0 ? { ...base, picked: { price: Math.round(price), label: dateLabel } } : base;
   const wasPrice = input.pricingMode === "fixed_price" ? input.fixedPricePerPerson : 0;
   const packageType = packageFromQuote(quote);
   const grade = gradeFromText([quote.hotels, meta?.hotelGrade].filter(Boolean).join(" "));
@@ -152,5 +185,20 @@ export async function supplierQuotePatch(
     ...(input.supplierTargetPrice <= 0 && wasPrice > 0 ? { supplierTargetPrice: wasPrice } : {}),
     ...(packageType ? { packageType, ...(packageType === "full" ? { includesFlights: true } : {}) } : {}),
     ...(grade && (packageType ?? input.packageType) !== "land" ? { hotelGrade: grade, ...(grade === "resort" ? { lodgingType: "resort" as const } : {}) } : {}),
+    // 업체 최소 출발 인원을 문서의 최저 행사인원으로 (이미 더 크게 넣었으면 그대로)
+    ...(quote.minTravelers && quote.minTravelers > input.minTravelers ? { minTravelers: quote.minTravelers } : {}),
   };
+}
+
+/**
+ * 출발일·박수가 바뀌면 요일별 요금표에서 공급가를 다시 고른다.
+ * 사람이 공급가를 직접 고쳤으면(마지막으로 고른 값과 다르면) 건드리지 않는다. 바꿀 것이 없으면 null.
+ */
+export function repickSupplierPrice(input: TripInput): Partial<TripInput> | null {
+  const q = input.supplierQuote;
+  if (!q?.picked || input.pricingMode !== "supplier" || input.supplierPricePerPerson !== q.picked.price) return null;
+  const { price, dateLabel } = quotePriceFor(q, input.travelers, { departureDate: input.departureDate, nights: input.nights });
+  const next = Math.round(price);
+  if (!dateLabel || next <= 0 || (next === q.picked.price && dateLabel === q.picked.label)) return null;
+  return { supplierPricePerPerson: next, supplierQuote: { ...q, picked: { price: next, label: dateLabel } } };
 }

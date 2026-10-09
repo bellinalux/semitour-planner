@@ -7,6 +7,7 @@ import type { SettingsSection } from "@/components/form/settingsFocus";
 import type { AutoBuild } from "@/hooks/useAutoBuild";
 import type { AutoQuote } from "@/hooks/useAutoQuote";
 import type { BudgetFitView } from "@/hooks/useBudgetFit";
+import type { CourseEngineView } from "@/hooks/useCourseEngine";
 import type { DayTimeCheckView } from "@/hooks/useDayTimeCheck";
 import type { Insight, InsightAction, KeyNumbers } from "@/lib/insights";
 import type { TourCandidate, TripInput } from "@/types";
@@ -28,6 +29,8 @@ interface Props {
   onFixFlight: () => void;
   /** 하루 일정 시간 검증 (구역 단위) */
   dayTime: DayTimeCheckView;
+  /** 코스 엔진 점검 (날짜 사이 옮기기·되돌리기) */
+  engine: CourseEngineView;
 }
 
 /** 한 번에 보여 줄 추천 수 — 처음 쓰는 사람이 부담스럽지 않게 */
@@ -83,7 +86,7 @@ function NumbersCard({ numbers, money }: { numbers: KeyNumbers; money: (v: numbe
  * 레이아웃3 — 요약·추천. 지금 견적의 핵심 숫자(판매가·원가·수익)를 위에 두고, 고치면 좋은 것을 중요한 순서로 보여 주며
  * 버튼으로 바로 적용한다(예산 맞추기·올리기·입력 폴더 열기·질문 복사). 자동 구성 진행도 여기서 본다.
  */
-export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight, dayTime }: Props) {
+export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight, dayTime, engine }: Props) {
   const [showAll, setShowAll] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const visible = showAll ? insights : insights.slice(0, SHOW);
@@ -101,6 +104,9 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
         break;
       case "fix-day-time":
         dayTime.run(action.days);
+        break;
+      case "engine-move":
+        engine.fix(action.move.fromDay, { reorder: false, move: action.move, addBreak: false });
         break;
       case "budget-apply":
         budgetFit?.apply();
@@ -148,6 +154,16 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
             </span>
             {dayTime.canUndo && !dayTime.running && (
               <button type="button" onClick={dayTime.undo} className="shrink-0 font-semibold underline underline-offset-2">
+                되돌리기
+              </button>
+            )}
+          </p>
+        )}
+        {(engine.canUndo || engine.running) && (
+          <p role="status" className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] leading-4 text-indigo-900">
+            <span className="min-w-0 flex-1 text-pretty">{engine.running ? "코스 엔진이 일정을 채점하는 중... (하루 10~40초)" : "엔진 추천을 일정에 적용했습니다."}</span>
+            {engine.canUndo && (
+              <button type="button" onClick={engine.undo} className="shrink-0 font-semibold underline underline-offset-2">
                 되돌리기
               </button>
             )}

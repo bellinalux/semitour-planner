@@ -71,6 +71,17 @@ describe("업체 견적 검증표", () => {
     expect(low.questions).toContain("요금이 시세보다 낮은데, 쇼핑·선택관광이나 현지에서 따로 받는 경비가 있나요?");
   });
 
+  it("업체 몫 추정 = 1인 공급가 − 우리 시세 원가, 호텔 이름으로 찾은 숙박 시세 수", () => {
+    const hotelRates = [
+      { name: "A 호텔", rateLow: 90000, rateHigh: 110000, found: true, sourceName: "Agoda" },
+      { name: "B 호텔", rateLow: 0, rateHigh: 0, found: false, sourceName: "" },
+    ];
+    const v = verify(base({ supplierQuote: sq({ hotelRates }) }));
+    expect(v.supplierShare).toMatchObject({ amount: 35000, hotelsFound: 1 });
+    expect(v.supplierShare!.rate).toBeCloseTo((35000 / 300000) * 100);
+    expect(verify(base({ vehicleCostPerDay: 0, guideCostPerDay: 0 })).supplierShare).toBeNull();
+  });
+
   it("차량·가이드 시세가 없으면 비교하지 않는다", () => {
     const v = verify(base({ vehicleCostPerDay: 0, guideCostPerDay: 0 }));
     expect(v.marketReady).toBe(false);

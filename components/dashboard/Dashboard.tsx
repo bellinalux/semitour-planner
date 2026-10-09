@@ -84,8 +84,6 @@ interface Props {
   generatedCurrency: CurrencyCode | null;
   researchInfo: { sources: SearchSource[]; researched: boolean };
   onSelectPm: (day: number, id: PmFreeOption["id"]) => void;
-  /** 코스 엔진 점검 결과 적용 (일정 통째 바꾸기) */
-  onReplaceDays: (days: DayPlan[]) => void;
   itemActions: ItemActions;
   optionActions: OptionActions;
   regionActions: RegionActions;
@@ -117,7 +115,6 @@ export function Dashboard({
   generatedCurrency,
   researchInfo,
   onSelectPm,
-  onReplaceDays,
   itemActions,
   optionActions,
   regionActions,
@@ -146,7 +143,7 @@ export function Dashboard({
         krwRate={input.exchangeRateToKrw}
         travelType={input.mode === "paste" ? "semi" : input.travelType}
         destination={input.destination}
-        engine={{ departureDate: input.departureDate || undefined, onReplaceDays }}
+        engine={{ departureDate: input.departureDate || undefined, onDepartureDate: (departureDate) => onInputChange({ departureDate }) }}
         tripScope={input.tripScope}
         researchInfo={researchInfo}
         pickupNote={input.pickupNote}

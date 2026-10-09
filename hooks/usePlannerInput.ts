@@ -5,6 +5,7 @@ import { DEFAULT_INPUT } from "@/lib/defaults";
 import { normalizeInput } from "@/lib/inputStorage";
 import { loadPricingDefaults } from "@/lib/pricingDefaults";
 import type { TripInput } from "@/types";
+import { repickSupplierPrice } from "@/lib/supplierQuote";
 
 const STORAGE_KEY = "semitour-planner:input:v1";
 
@@ -61,7 +62,10 @@ export function usePlannerInput() {
   const input = useMemo(() => parse(raw), [raw]);
 
   const update = useCallback((patch: Partial<TripInput>) => {
-    writeRaw(JSON.stringify({ ...parse(readRaw()), ...patch }));
+    const merged = { ...parse(readRaw()), ...patch };
+    // 업체 요일별 요금표가 있으면 출발일·박수·인원이 바뀔 때 공급가를 다시 고른다 (사람이 고친 공급가는 그대로)
+    const repick = "departureDate" in patch || "nights" in patch || "travelers" in patch ? repickSupplierPrice(merged) : null;
+    writeRaw(JSON.stringify(repick ? { ...merged, ...repick } : merged));
   }, []);
 
   // 처음 쓰는 브라우저(저장된 입력 없음)에도 회사 기본값을 넣는다. 하이드레이션 뒤에 적용해 서버 렌더와 어긋나지 않게 한다.

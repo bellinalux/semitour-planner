@@ -43,7 +43,9 @@ const UNIT_LABELS: Record<SupplierQuote["lines"][number]["unit"], string> = {
 /** 업체에서 받은 견적서에서 읽은 내용 */
 function QuoteSummary({ q, input, money }: { q: SupplierQuote; input: TripInput; money: (v: number) => string }) {
   const orig = (v: number) => (q.rate === null ? `${v.toLocaleString("ko-KR")} ${q.originalCurrency}` : money(v));
-  const { tier } = quotePriceFor(q, input.travelers);
+  const { tier, dateLabel } = quotePriceFor(q, input.travelers, { departureDate: input.departureDate, nights: input.nights });
+  const dated = q.datePrices ?? [];
+  const nightsGroups = [...new Set(dated.map((d) => d.nights))];
   return (
     <div className="space-y-2 rounded-lg border border-slate-200 p-3 text-[11px] leading-5 text-slate-700">
       <p>
@@ -87,6 +89,50 @@ function QuoteSummary({ q, input, money }: { q: SupplierQuote; input: TripInput;
             </span>
           )}
         </p>
+      )}
+      {dated.length > 0 && (
+        <div>
+          <p className="font-semibold text-slate-800">출발 요일별 1인 요금</p>
+          {nightsGroups.map((n) => (
+            <p key={n} className="tabular-nums">
+              {n > 0 && <span className="text-slate-500">{n}박 · </span>}
+              {dated
+                .filter((d) => d.nights === n)
+                .map((d) => `${d.label} ${orig(d.pricePerPerson)}`)
+                .join(" · ")}
+            </p>
+          ))}
+          {dateLabel && (
+            <p className={input.departureDate ? "text-slate-500" : "text-amber-800"}>
+              → 업체 공급가에 {dateLabel}을 넣었습니다{!input.departureDate && " — 출발일을 넣으면 그 요일 요금으로 바뀝니다"}
+            </p>
+          )}
+        </div>
+      )}
+      {(q.optionPrices ?? []).length > 0 && (
+        <p className="text-pretty">
+          금액이 적힌 불포함·선택 일정:{" "}
+          {(q.optionPrices ?? [])
+            .map((o) => `${o.name} ${o.perGroup ? "단체" : "1인"} ${o.amount.toLocaleString("ko-KR")} ${o.currency}${o.minTravelers > 0 ? `(최소 ${o.minTravelers}인)` : ""}`)
+            .join(" · ")}
+          <span className="text-slate-500"> — 선택 옵션에 등록했습니다</span>
+        </p>
+      )}
+      {(q.hotelRates ?? []).length > 0 && (
+        <div>
+          <p className="font-semibold text-slate-800">후보 호텔 1박 시세 (2인 1실, 웹 공개 요금)</p>
+          <ul className="grid gap-x-4 sm:grid-cols-2">
+            {(q.hotelRates ?? []).map((h) => (
+              <li key={h.name} className="flex justify-between gap-2 tabular-nums">
+                <span className="truncate">{h.name}</span>
+                <span className={h.found ? "" : "text-slate-400"}>
+                  {h.found ? `${money(h.rateLow)}~${money(h.rateHigh)}` : "요금 못 찾음"}
+                  {h.found && h.sourceName && <span className="text-slate-400"> · {h.sourceName}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {q.lines.length > 0 && (
         <ul className="grid gap-x-4 sm:grid-cols-2">

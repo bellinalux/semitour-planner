@@ -52,6 +52,12 @@ function parsed(flights: Parsed["flights"]): Parsed {
       roomBasis: "unknown",
       singleSupplement: 0,
       tiers: [],
+
+      datePrices: [],
+
+      hotelNames: [],
+
+      optionPrices: [],
       lines: [],
       includes: [],
       excludes: [],

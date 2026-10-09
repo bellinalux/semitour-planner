@@ -1,0 +1,301 @@
+"use client";
+
+import { createContext, useEffect, useRef, useState } from "react";
+import { calcDayLoad } from "@/lib/dayLoad";
+import { dayItems } from "@/lib/itinerary";
+import { applyDayMove, insertBreak, refitDay, suggestDayMoves, type DayMove } from "@/lib/dayBalance";
+import { applyAlternative, applyDayResult, buildDayRequest } from "@/lib/engineDay";
+import type { PmChoice } from "@/lib/itinerary";
+import type { Alternative } from "@/lib/server/engineAlternatives";
+import type { PlanResponse } from "@/lib/server/courseEngineServer";
+import type { CurrencyCode, DayPlan, TravelType, TripScope } from "@/types";
+
+export type EngineDayState = { status: "loading" } | { status: "error"; message: string } | { status: "done"; res: PlanResponse };
+export type EngineAltState = { status: "loading" } | { status: "error"; message: string } | { status: "done"; list: Alternative[]; searched: boolean };
+
+/** 날짜별 마지막 점수 (결과 상자를 닫아도 남는다 — 일정 카드 배지·요약·추천에 쓴다) */
+export interface EngineScore {
+  score: number;
+  grade: "A" | "B" | "C" | "D";
+  /** 가장 큰 감점 이유 한 줄 */
+  top: string;
+  /** 엔진 추천 순서로 바꾸면 점수 */
+  best: number;
+}
+
+/** "100점 만들기"에서 고를 수 있는 고칠 것 */
+export interface FixChoice {
+  reorder: boolean;
+  /** 출발(미팅) 시각 바꾸기 "HH:MM" */
+  start?: string | null;
+  /** 뺄 항목 (예: 그 요일 휴무인 곳) */
+  drop?: string[];
+  move: DayMove | null;
+  addBreak: boolean;
+}
+
+export interface CourseEngineView {
+  byDay: Record<number, EngineDayState>;
+  alts: Record<number, EngineAltState>;
+  scores: Record<number, EngineScore>;
+  running: boolean;
+  /** 날짜들을 점검한다 (생략하면 모든 날) */
+  run: (dayNos?: number[]) => Promise<void>;
+  apply: (dayNo: number, res: PlanResponse, o: { useBest: boolean; drop?: string[]; meetingTime?: string }) => void;
+  suggest: (dayNo: number, res: PlanResponse) => Promise<void>;
+  applyAlt: (dayNo: number, alt: Alternative) => void;
+  /** 날짜 사이 옮기기 제안 */
+  moves: DayMove[];
+  /** 고른 고칠 것을 한 번에 적용 (되돌리기 가능, 적용 뒤 자동으로 다시 채점) */
+  fix: (dayNo: number, choice: FixChoice) => void;
+  canUndo: boolean;
+  undo: () => void;
+  /** 고친 뒤 다시 채점했더니 점수가 내려간 날 — 되돌리기를 권한다 */
+  regressed: { day: number; before: number; after: number }[];
+  /** 코스를 만들면 시간 검증 + 엔진 점검까지 이어서 할지 (브라우저에 기억) */
+  autoCheck: boolean;
+  setAutoCheck: (on: boolean) => void;
+  /** 코스 생성이 끝나면 걸어 둔다 — 새 일정이 화면에 들어온 뒤 한 번 실행 */
+  armAfterGenerate: () => void;
+}
+
+interface Args {
+  days: DayPlan[];
+  pmChoice: PmChoice;
+  destination: string;
+  departureDate?: string;
+  travelType: TravelType;
+  currency: CurrencyCode;
+  tripScope: TripScope;
+  replaceDays: (days: DayPlan[]) => void;
+  /** 자동 점검 전에 할 일(긴 날 시간 검증)과, 그 일이 끝날 때까지 기다릴지 */
+  beforeAuto?: { run: (dayNos: number[]) => void; busy: boolean };
+}
+
+const AUTO_KEY = "semitour.autoEngineCheck";
+
+/** 날짜 일정이 바뀌었는지 볼 서명 — 항목·체류·이동·시작 시각 */
+const signatureOf = (d: DayPlan) =>
+  JSON.stringify([d.meetingTime ?? "", ...[...d.items, ...d.amGuided, ...d.pmFreeOptions.flatMap((o) => o.items)].map((i) => [i.id, i.stayMinutes, i.travelMinutesToNext])]);
+
+function scoreOf(res: PlanResponse): EngineScore {
+  const q = res.quality;
+  const worst = [...q.items].sort((a, b) => b.max - b.score - (a.max - a.score))[0];
+  return { score: q.score, grade: q.grade, top: worst && worst.score < worst.max ? `${worst.label}: ${worst.issues[0] ?? ""}` : "", best: res.bestQuality.score };
+}
+
+/**
+ * 코스 엔진 점검 상태 — 날짜별 점검 결과·점수·추천 변경안, 결과 적용, "100점 만들기", 되돌리기.
+ * 한 번 점검한 날은 일정을 고치면 잠시 뒤 자동으로 다시 채점한다(장소 정보는 서버에 저장돼 있어 다시 찾지 않는다).
+ */
+export function useCourseEngine({ days, pmChoice, destination, departureDate, travelType, currency, tripScope, replaceDays, beforeAuto }: Args): CourseEngineView {
+  const [byDay, setByDay] = useState<Record<number, EngineDayState>>({});
+  const [alts, setAlts] = useState<Record<number, EngineAltState>>({});
+  const [scores, setScores] = useState<Record<number, EngineScore>>({});
+  const [running, setRunning] = useState(false);
+  const [snapshot, setSnapshot] = useState<DayPlan[] | null>(null);
+  /** 마지막으로 고치기 전 점수 (날짜별) */
+  const [scoreBefore, setScoreBefore] = useState<Record<number, number>>({});
+  const latest = useRef(days);
+  useEffect(() => {
+    latest.current = days;
+  }, [days]);
+
+  const requestFor = (d: DayPlan) => buildDayRequest(d, pmChoice, { destination, departureDate, travelType });
+
+  const run = async (dayNos?: number[]) => {
+    setRunning(true);
+    try {
+      for (const d of latest.current) {
+        if (dayNos && !dayNos.includes(d.day)) continue;
+        const req = requestFor(d);
+        if (!req) continue;
+        setByDay((s) => ({ ...s, [d.day]: { status: "loading" } }));
+        try {
+          const r = await fetch("/api/engine/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+          const j = await r.json();
+          if (r.ok) {
+            const res = j as PlanResponse;
+            setByDay((s) => ({ ...s, [d.day]: { status: "done", res } }));
+            setScores((s) => ({ ...s, [d.day]: scoreOf(res) }));
+          } else setByDay((s) => ({ ...s, [d.day]: { status: "error", message: j?.error?.message ?? "코스 엔진 오류" } }));
+        } catch {
+          setByDay((s) => ({ ...s, [d.day]: { status: "error", message: "서버에 연결하지 못했습니다." } }));
+        }
+      }
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  // 한 번 채점한 날은 일정이 바뀌면 1.5초 뒤 자동으로 다시 채점한다
+  const signatures = useRef<Record<number, string>>({});
+  const pending = useRef<number | null>(null);
+  useEffect(() => {
+    const changed = days.filter((d) => scores[d.day] && signatures.current[d.day] !== undefined && signatures.current[d.day] !== signatureOf(d)).map((d) => d.day);
+    for (const d of days) signatures.current[d.day] = signatureOf(d);
+    if (changed.length === 0 || running) return;
+    if (pending.current) window.clearTimeout(pending.current);
+    pending.current = window.setTimeout(() => void run(changed), 1500);
+    return () => {
+      if (pending.current) window.clearTimeout(pending.current);
+    };
+    // run은 매 렌더 새로 만들어지지만, 일정(days)이 바뀔 때만 다시 채점하면 된다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days]);
+
+  const keepSnapshot = (dayNos: number[] = []) => {
+    setSnapshot(latest.current);
+    setScoreBefore(Object.fromEntries(dayNos.filter((n) => scores[n]).map((n) => [n, scores[n].score])));
+  };
+
+  const apply: CourseEngineView["apply"] = (dayNo, res, o) => {
+    keepSnapshot([dayNo]);
+    replaceDays(applyDayResult(latest.current, dayNo, res, o));
+    setByDay((s) => {
+      const c = { ...s };
+      delete c[dayNo];
+      return c;
+    });
+  };
+
+  const suggest: CourseEngineView["suggest"] = async (dayNo, res) => {
+    const day = latest.current.find((d) => d.day === dayNo);
+    const plan = day ? requestFor(day) : null;
+    if (!plan) return;
+    const issues = res.quality.items.flatMap((it) => it.issues);
+    setAlts((s) => ({ ...s, [dayNo]: { status: "loading" } }));
+    try {
+      const r = await fetch("/api/engine/alternatives", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan, issues, destination, currency, tripScope, currentScore: res.quality.score }),
+      });
+      const j = await r.json();
+      setAlts((s) => ({
+        ...s,
+        [dayNo]: r.ok ? { status: "done", list: j.alternatives as Alternative[], searched: !!j.searched } : { status: "error", message: j?.error?.message ?? "추천 변경안을 만들지 못했습니다." },
+      }));
+    } catch {
+      setAlts((s) => ({ ...s, [dayNo]: { status: "error", message: "서버에 연결하지 못했습니다." } }));
+    }
+  };
+
+  const applyAlt: CourseEngineView["applyAlt"] = (dayNo, alt) => {
+    keepSnapshot([dayNo]);
+    replaceDays(applyAlternative(latest.current, dayNo, alt, pmChoice));
+    setAlts((s) => {
+      const c = { ...s };
+      delete c[dayNo];
+      return c;
+    });
+    setByDay((s) => {
+      const c = { ...s };
+      delete c[dayNo];
+      return c;
+    });
+  };
+
+  const fix: CourseEngineView["fix"] = (dayNo, choice) => {
+    let next = latest.current;
+    const st = byDay[dayNo];
+    const drop = choice.drop ?? [];
+    if (choice.reorder && st?.status === "done")
+      next = applyDayResult(next, dayNo, st.res, { useBest: true, ...(drop.length > 0 ? { drop } : {}), ...(choice.start ? { meetingTime: choice.start } : {}) });
+    else if (choice.start || drop.length > 0)
+      next = next.map((d) =>
+        d.day === dayNo
+          ? refitDay({ ...d, ...(choice.start ? { meetingTime: choice.start } : {}), items: d.items.filter((i) => !drop.includes(i.id)) })
+          : d,
+      );
+    if (choice.move) next = applyDayMove(next, choice.move);
+    if (choice.addBreak) next = next.map((d) => (d.day === dayNo ? insertBreak(d) : d));
+    if (next === latest.current) return;
+    keepSnapshot([dayNo, ...(choice.move ? [choice.move.toDay] : [])]);
+    replaceDays(next);
+    setByDay((s) => {
+      const c = { ...s };
+      delete c[dayNo];
+      return c;
+    });
+    // 옮겨 받은 날도 채점해 둔다 (처음이면 자동 재채점 대상이 아니므로 직접)
+    if (choice.move && !scores[choice.move.toDay]) window.setTimeout(() => void run([choice.move!.toDay]), 1600);
+  };
+
+  const undo = () => {
+    if (!snapshot) return;
+    replaceDays(snapshot);
+    setSnapshot(null);
+    setScoreBefore({});
+  };
+  const regressed = Object.entries(scoreBefore)
+    .map(([k, before]) => ({ day: Number(k), before, after: scores[Number(k)]?.score ?? before }))
+    .filter((r) => snapshot !== null && byDay[r.day]?.status === "done" && r.after < r.before);
+
+  // 코스를 만들면 자동 점검 — 너무 긴 날(아직 구역 확인 전)은 먼저 시간 검증, 끝나면 모든 날 엔진 점검
+  const [autoCheck, setAutoCheckState] = useState(false);
+  useEffect(() => {
+    try {
+      // 브라우저 저장소 값이라 화면을 그린 뒤에 읽는다
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAutoCheckState(localStorage.getItem(AUTO_KEY) === "1");
+    } catch {
+      // 무시
+    }
+  }, []);
+  const setAutoCheck = (on: boolean) => {
+    setAutoCheckState(on);
+    try {
+      localStorage.setItem(AUTO_KEY, on ? "1" : "0");
+    } catch {
+      // 무시
+    }
+  };
+  const armed = useRef(false);
+  const [waitingRun, setWaitingRun] = useState(false);
+  useEffect(() => {
+    if (!armed.current || days.length === 0) return;
+    armed.current = false;
+    const long = days
+      .filter((d) => calcDayLoad(d, pmChoice).level === "overloaded" && !dayItems(d, pmChoice).some((i) => i.timeCheck?.basis === "area"))
+      .map((d) => d.day);
+    if (long.length > 0) beforeAuto?.run(long);
+    setWaitingRun(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days]);
+  const busy = !!beforeAuto?.busy;
+  useEffect(() => {
+    if (!waitingRun || busy || running) return;
+    // 시간 검증 결과가 화면에 반영된 뒤 점검하도록 조금 기다린다
+    const t = window.setTimeout(() => {
+      setWaitingRun(false);
+      void run();
+    }, 400);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitingRun, busy, running]);
+
+  return {
+    byDay,
+    alts,
+    scores,
+    running,
+    run,
+    apply,
+    suggest,
+    applyAlt,
+    moves: suggestDayMoves(days, pmChoice),
+    fix,
+    canUndo: snapshot !== null,
+    undo,
+    regressed,
+    autoCheck,
+    setAutoCheck,
+    armAfterGenerate: () => {
+      armed.current = true;
+    },
+  };
+}
+
+/** 일정 카드·요약·추천·점검 상자가 같은 점검 상태를 쓰도록 나눠 준다 */
+export const CourseEngineContext = createContext<CourseEngineView | null>(null);

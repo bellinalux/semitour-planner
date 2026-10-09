@@ -56,12 +56,13 @@ import { suggestionToOption } from "@/lib/optionSuggestions";
 import { newSegmentId, type SegmentKind } from "@/lib/segmentLibrary";
 import { applyFlightWithMeals, tripSpanFromFlight } from "@/lib/flightApply";
 import { dayItems, overnightNights } from "@/lib/itinerary";
-import { tourToOption } from "@/lib/options";
+import { supplierOptions, tourToOption } from "@/lib/options";
 import { buildUspRequest } from "@/lib/uspRequest";
 import { suggestPlanName, type PlanSnapshot, type ResultSnapshot } from "@/lib/workspace";
 import type { CourseFile } from "@/lib/courseFile";
 import { supplierQuotePatch } from "@/lib/supplierQuote";
 import { repairFlightTimes } from "@/lib/flightRepair";
+import { CourseEngineContext, useCourseEngine } from "@/hooks/useCourseEngine";
 import { DayTimeCheckContext, useDayTimeCheck } from "@/hooks/useDayTimeCheck";
 import type { DayPlan, FlightOption, ItineraryItem, TourCandidate, TripInput } from "@/types";
 
@@ -151,6 +152,7 @@ export function PlannerApp() {
     const result = await timed("generate", input.destination.trim(), () => itinerary.generate(input, courseFile));
     if (!result) return null;
     if (autoQuote.afterGenerate && !options.fromAutoBuild) autoQuote.armAfterGenerate();
+    if (courseEngine.autoCheck) courseEngine.armAfterGenerate();
 
     // 붙여넣은 코스에서 읽은 기간/도시를 입력 폼에 반영한다 (박수는 코스 원문이 기준이다)
     let nextInput: TripInput = input;
@@ -166,7 +168,10 @@ export function PlannerApp() {
 
     // 업체 견적서였으면 읽은 금액으로 "업체 공급가에서 시작"하는 견적으로 바꾼다 (목표 판매가는 그때까지 쓰던 판매가)
     if (result.supplierQuote) {
-      const patch = await supplierQuotePatch(result.supplierQuote, nextInput, undefined, result.meta);
+      const quotePatch = await supplierQuotePatch(result.supplierQuote, nextInput, undefined, result.meta);
+      // 견적서의 불포함·선택관광 중 금액이 적힌 것(예: 홍콩 데이투어)은 선택 옵션으로 등록한다
+      const extra = quotePatch.supplierQuote ? supplierOptions(quotePatch.supplierQuote, nextInput) : [];
+      const patch = extra.length > 0 ? { ...quotePatch, options: [...nextInput.options, ...extra] } : quotePatch;
       update(patch);
       nextInput = { ...nextInput, ...patch };
     }
@@ -249,9 +254,22 @@ export function PlannerApp() {
   // 하루 일정 시간 검증 (구역 단위 웹 확인) — 요약·추천과 일정 카드의 '시간 검증'에서 쓴다
   const dayTimeCheck = useDayTimeCheck({ input, days, pmChoice, replaceDays: itinerary.replaceDays });
 
+  // 코스 엔진 점검 — 점검 상자·일정 카드 점수 배지·요약·추천이 같이 쓴다. 자동 점검을 켜면 코스를 만든 뒤 긴 날 시간 검증 → 엔진 점검
+  const courseEngine = useCourseEngine({
+    days,
+    pmChoice,
+    destination: input.destination.trim(),
+    departureDate: input.departureDate || undefined,
+    travelType: input.travelType,
+    currency: input.currency,
+    tripScope: input.tripScope,
+    replaceDays: itinerary.replaceDays,
+    beforeAuto: { run: dayTimeCheck.run, busy: dayTimeCheck.running !== null },
+  });
+
   // 레이아웃3(요약·추천): 핵심 숫자와 고치면 좋은 것
   const money = (v: number) => formatMoney(Math.round(v), input.currency);
-  const insightArgs = { input, days, pmChoice, meta, quote, budgetFit, money };
+  const insightArgs = { input, days, pmChoice, meta, quote, budgetFit, money, engine: { scores: courseEngine.scores, moves: courseEngine.moves } };
   const numbers = keyNumbers(insightArgs);
   const insights = buildInsights(insightArgs);
   const urgentCount = insights.filter((i) => i.tone === "warn").length;
@@ -278,6 +296,7 @@ export function PlannerApp() {
       onAddTourOption={(tour) => update({ options: [...input.options, tourToOption(tour, 0, input)] })}
       onInsertTour={insertTour}
       dayTime={dayTimeCheck}
+      engine={courseEngine}
       onFixFlight={() => {
         const fixed = repairFlightTimes(days, input, meta);
         if (fixed) itinerary.replaceDays(fixed);
@@ -383,6 +402,7 @@ export function PlannerApp() {
           </div>
           )}
           <DayTimeCheckContext.Provider value={dayTimeCheck}>
+          <CourseEngineContext.Provider value={courseEngine}>
           <Dashboard
             itinerary={itinerary.state}
             days={days}
@@ -393,7 +413,6 @@ export function PlannerApp() {
             generatedCurrency={itinerary.generatedCurrency}
             researchInfo={itinerary.researchInfo}
             onSelectPm={itinerary.selectPmOption}
-            onReplaceDays={itinerary.replaceDays}
             onInputChange={update}
             onOpenSettings={openSettings}
             autoQuote={{ running: autoQuote.running, run: () => void autoQuote.run() }}
@@ -444,6 +463,7 @@ export function PlannerApp() {
               onPrint: printDocument,
             }}
           />
+          </CourseEngineContext.Provider>
           </DayTimeCheckContext.Provider>
         </section>
         <aside

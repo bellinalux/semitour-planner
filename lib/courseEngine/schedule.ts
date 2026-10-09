@@ -18,6 +18,8 @@ export function simulate(order: number[], places: EnginePlace[], M: Matrix, o: E
   const start0 = hm(o.start) ?? 540;
   const maxEnd = hm(o.maxEnd) ?? null;
   const lunch = o.lunch ? [hm(o.lunch.from) ?? 690, hm(o.lunch.to) ?? 840] : null;
+  const dinner = o.dinner ? [hm(o.dinner.from) ?? 1080, hm(o.dinner.to) ?? 1230] : null;
+  const exact = new Set(o.exactLegs ?? []);
   const sunset = hm(o.sunset);
   const buf = o.bufferMin ?? 5;
   let t = start0, cost = 0, hard = 0, travel = 0, wait = 0;
@@ -25,7 +27,9 @@ export function simulate(order: number[], places: EnginePlace[], M: Matrix, o: E
   order.forEach((pi, k) => {
     const p = places[pi], issues: string[] = [];
     const tr = k === 0 ? 0 : M[order[k - 1]][pi];
-    const arrive = t + tr + (k > 0 && tr > 0 ? buf : 0);
+    // 앱 일정표에서 확인된 구간은 그 시간 그대로 (여유를 따로 더하면 일정표보다 길어진다)
+    const known = k > 0 && exact.has(`${places[order[k - 1]].id}>${p.id}`);
+    const arrive = t + tr + (k > 0 && tr > 0 && !known ? buf : 0);
     travel += tr;
     let startAt = arrive;
     // 예약 입장
@@ -46,10 +50,14 @@ export function simulate(order: number[], places: EnginePlace[], M: Matrix, o: E
     }
     const last = hm(p.lastEntry);
     if (last != null && startAt > last) { issues.push(`마지막 입장 ${fmt(last)} 지남`); hard++; }
-    // 점심: 식사 코스는 점심 시간대 안에서 시작
-    if (lunch && p.kind === "meal") {
-      if (startAt < lunch[0]) startAt = lunch[0];
-      if (startAt > lunch[1]) { issues.push(`점심이 늦음(${fmt(startAt)})`); cost += (startAt - lunch[1]) * 2; }
+    // 식사: 점심은 점심 시간대, 저녁은 저녁 시간대 안에서 시작 (카페·간식은 시간대 없음). 종류를 모르면 점심으로 본다
+    if (p.kind === "meal" && p.meal !== "cafe") {
+      const isDinner = p.meal === "dinner";
+      const win = isDinner ? dinner : lunch;
+      if (win) {
+        if (startAt < win[0]) startAt = win[0];
+        if (startAt > win[1]) { issues.push(`${isDinner ? "저녁" : "점심"}이 늦음(${fmt(startAt)})`); cost += (startAt - win[1]) * 2; }
+      }
     }
     // 좋은 시간대 (어기면 작은 벌점)
     if (p.best === "morning" && startAt > 660) cost += (startAt - 660) * 0.5;

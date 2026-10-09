@@ -86,6 +86,27 @@ const quoteSchema = z.object({
   roomBasis: z.enum(["twin", "single", "triple", "unknown"]).describe("객실 기준: 2인 1실이면 twin, 1인 1실이면 single, 3인 1실이면 triple, 원문에 없으면 unknown"),
   singleSupplement: z.number().describe("싱글차지(1인실 추가요금) 1인 금액 (원문 통화). 없으면 0"),
   tiers: z.array(z.object({ travelers: z.number(), pricePerPerson: z.number() })).describe("인원별 1인 요금표 (예: 2명 600, 4명 450). 없으면 빈 배열"),
+  datePrices: z
+    .array(
+      z.object({
+        nights: z.number().describe("몇 박 상품의 요금인지 (예: 3박 4일이면 3). 원문에 없으면 0"),
+        weekdays: z.string().describe("출발 요일·기간 표기 원문 그대로 (예: 일, 월, 화 / 목, 금 / 토). 없으면 빈 문자열"),
+        pricePerPerson: z.number().describe("그 출발 요일(기간)의 성인 1인 요금 (원문 통화)"),
+      }),
+    )
+    .describe("출발 요일·기간·박수별 1인 요금표 (예: 3박 4일 일·월·화 4780, 수 4880). 표의 모든 칸을 옮긴다. 없으면 빈 배열"),
+  hotelNames: z.array(z.string()).describe("원문에 적힌 호텔 이름만 하나씩 (등급 표기·'중 하나' 같은 말은 빼고, 예: 골든드래곤 호텔). 없으면 빈 배열"),
+  optionPrices: z
+    .array(
+      z.object({
+        name: z.string().describe("불포함·선택관광 이름 (예: 홍콩 데이투어)"),
+        amount: z.number().describe("원문에 적힌 금액"),
+        currency: z.string().describe("그 금액의 통화 코드 (상품 요금과 다를 수 있다, 예: USD). 모르면 빈 문자열"),
+        perGroup: z.boolean().describe("단체 전체 금액이면 true, 1인 금액이면 false"),
+        minTravelers: z.number().describe("그 옵션의 최소 인원 (예: 최소 8인). 없으면 0"),
+      }),
+    )
+    .describe("불포함 사항·선택관광 중 금액이 적힌 것. 상품 요금은 넣지 않는다. 없으면 빈 배열"),
   lines: z
     .array(z.object({ label: z.string(), amount: z.number(), unit: z.enum(LINE_UNITS) }))
     .describe("원문에 항목별로 나눠 적힌 금액(호텔·차량·가이드·입장료 등)과 단위. 나눠 적혀 있지 않으면 빈 배열"),
@@ -108,10 +129,32 @@ const flightLegSchema = z.object({
 
 export type ParsedFlightLeg = z.infer<typeof flightLegSchema>;
 
-export type ParsedSupplierQuote =Omit<z.infer<typeof quoteSchema>, "found"> & {
+export type ParsedSupplierQuote = Omit<z.infer<typeof quoteSchema>, "found" | "datePrices"> & {
   /** 상품 요금이 아니라고 보고 뺀 금액 (원문 통화, 없으면 0) */
   suspectPrice: number;
+  /** 출발 요일별 1인 요금 — weekdays는 0(일)~6(토), 비어 있으면 요일 구분 없음 */
+  datePrices: { nights: number; weekdays: number[]; label: string; pricePerPerson: number }[];
 };
+
+const WEEKDAY = "일월화수목금토";
+/** "일, 월, 화" · "목~토" · "주말" 같은 요일 표기를 0(일)~6(토) 목록으로 */
+export function parseWeekdays(text: string): number[] {
+  const out = new Set<number>();
+  if (/주말/.test(text)) [0, 6].forEach((d) => out.add(d));
+  if (/평일/.test(text)) [1, 2, 3, 4, 5].forEach((d) => out.add(d));
+  // "평일"·"주말"·"요일"의 '일'을 일요일로 읽지 않도록 지운다
+  const t = text.replace(/요일|평일|주말/g, "");
+  for (const m of t.matchAll(/([일월화수목금토])\s*[~\-–]\s*([일월화수목금토])/g)) {
+    const a = WEEKDAY.indexOf(m[1]);
+    const b = WEEKDAY.indexOf(m[2]);
+    for (let d = a; ; d = (d + 1) % 7) {
+      out.add(d);
+      if (d === b) break;
+    }
+  }
+  for (const ch of t) if (WEEKDAY.includes(ch)) out.add(WEEKDAY.indexOf(ch));
+  return [...out].sort((a, b) => a - b);
+}
 
 export const courseResponseSchema = z.object({
   packageName: z.string().describe("상품명. 원문에 없으면 빈 문자열"),
@@ -192,6 +235,23 @@ export function toSupplierQuote(raw: ParsedCourse["quote"] | undefined): ParsedS
       price = 0;
     }
   }
+  const datePrices = raw.datePrices
+    .filter((d) => amount(d.pricePerPerson) > 0)
+    .slice(0, 24)
+    .map((d) => ({ nights: Math.max(0, Math.round(d.nights)), weekdays: parseWeekdays(d.weekdays), label: d.weekdays.trim().slice(0, 40), pricePerPerson: d.pricePerPerson }));
+  // 요일별 요금만 있고 대표 요금이 없으면(또는 옵션 금액과 겹쳐 뺐으면) 가장 낮은 요일 요금을 대표로 둔다
+  if (price === 0 && datePrices.length > 0) price = Math.min(...datePrices.map((d) => d.pricePerPerson));
+  const hotelNames = raw.hotelNames.map((h) => h.trim().slice(0, 80)).filter(Boolean).slice(0, 8);
+  const optionPrices = raw.optionPrices
+    .filter((o) => o.name.trim() && amount(o.amount) > 0)
+    .slice(0, 10)
+    .map((o) => ({
+      name: o.name.trim().slice(0, 80),
+      amount: o.amount,
+      currency: (o.currency.trim().toUpperCase() || raw.currency.trim().toUpperCase()).slice(0, 3),
+      perGroup: o.perGroup,
+      minTravelers: Math.max(0, Math.round(o.minTravelers)),
+    }));
   const hasInfo = price > 0 || includes.length > 0 || excludes.length > 0 || raw.basisTravelers > 0 || raw.minTravelers > 0 || raw.roomBasis !== "unknown" || raw.hotels.trim() !== "";
   if (!hasInfo) return null;
   return {
@@ -204,6 +264,9 @@ export function toSupplierQuote(raw: ParsedCourse["quote"] | undefined): ParsedS
     roomBasis: raw.roomBasis,
     singleSupplement: amount(raw.singleSupplement),
     tiers,
+    datePrices,
+    hotelNames,
+    optionPrices,
     lines: raw.lines.filter((l) => l.label.trim() && amount(l.amount) > 0).slice(0, 30).map((l) => ({ label: l.label.trim().slice(0, 80), amount: l.amount, unit: l.unit })),
     includes,
     excludes,

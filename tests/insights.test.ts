@@ -50,6 +50,34 @@ describe("요약 · 추천", () => {
     expect(list.find((x) => x.id === "day-1")).toMatchObject({ tone: "warn", action: { kind: "fix-day-time", days: [1], label: "일정 시간 검증으로 맞추기" } });
     expect(list.findIndex((x) => x.tone === "info")).toBeGreaterThan(list.findIndex((x) => x.id === "day-1"));
   });
+
+  it("확인한 시간으로도 긴 날은 옮길 묶음이 있으면 '옮기기', 엔진 점수가 낮은 날은 '100점 만들기 보기'", () => {
+    const checked = { basis: "area" as const, area: "역사지구", checkedAt: "x" };
+    const long = [
+      linearDay(1, [item("x", { name: "긴 일정", stayMinutes: 700, travelMinutesToNext: 10, timeCheck: checked }), item("y", { name: "또", stayMinutes: 60 })]),
+      linearDay(2, [item("f", { type: "free_time", name: "자유 일정", stayMinutes: 600 })]),
+    ];
+    const move = { fromDay: 1, toDay: 2, itemIds: ["y"], label: "또(1곳, 1시간)을 DAY 2로 옮기기", minutes: 60 };
+    const i = input({ customerName: "" });
+    const list = buildInsights({
+      input: i,
+      days: long,
+      pmChoice: {},
+      meta: null,
+      quote: calculateQuote(i, long, {}),
+      budgetFit: null,
+      money,
+      engine: { scores: { 1: { score: 62, grade: "D", top: "시간: 점심이 늦음", best: 90 }, 2: { score: 95, grade: "A", top: "", best: 95 } }, moves: [move] },
+    });
+    expect(list.find((x) => x.id === "day-1")).toMatchObject({ action: { kind: "engine-move", move, label: "DAY 2로 옮기기" } });
+    expect(list.find((x) => x.id === "engine-1")).toMatchObject({
+      tone: "warn",
+      title: "DAY 1 코스 점수 62점 (D)",
+      detail: "시간: 점심이 늦음 · 엔진 추천대로 고치면 90점",
+      action: { kind: "scroll", target: "course-engine" },
+    });
+    expect(list.some((x) => x.id === "engine-2")).toBe(false);
+  });
 });
 
 describe("요약 · 추천 — 비행 시간", () => {

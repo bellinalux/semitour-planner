@@ -1,6 +1,6 @@
 import { roundUpPrice } from "@/lib/cost";
 import { midpoint } from "@/lib/travelEstimate";
-import type { TourCandidate, TourOption, TripInput } from "@/types";
+import type { SupplierQuote, TourCandidate, TourOption, TripInput } from "@/types";
 
 export const DEFAULT_PARTICIPATION_RATE = 30;
 export const DEFAULT_MIN_PARTICIPANTS = 2;
@@ -128,4 +128,29 @@ export function simulateOptions(
 /** 옵션 1인 요금이 원가보다 낮은(손해) 옵션 */
 export function isLossMaking(option: TourOption): boolean {
   return option.pricePerPerson > 0 && option.pricePerPerson < option.costPerPerson;
+}
+
+/**
+ * 업체 견적서의 불포함·선택관광 중 금액이 적힌 것(예: 홍콩 데이투어 1인 180 USD, 최소 8인)을 선택 옵션으로 바꾼다.
+ * 업체 금액을 원가로 보고 요금은 권장가로 시작한다. 이미 같은 이름의 옵션이 있으면 넣지 않는다. 환율을 몰라 금액이 0이면 넣지 않는다.
+ */
+export function supplierOptions(q: SupplierQuote, input: Pick<TripInput, "targetMarginRate" | "cardFeeRate" | "currency" | "options">): TourOption[] {
+  const have = new Set(input.options.map((o) => o.name.replace(/\s/g, "")));
+  return (q.optionPrices ?? [])
+    .filter((o) => o.pricePerPerson > 0 && !have.has(o.name.replace(/\s/g, "")))
+    .map((o) => {
+      const cost = Math.round(o.pricePerPerson);
+      return {
+        id: `opt-${crypto.randomUUID().slice(0, 8)}`,
+        name: o.name,
+        description: "업체 견적서의 불포함·선택 일정",
+        durationMinutes: 0,
+        dayNo: 0,
+        costPerPerson: cost,
+        pricePerPerson: suggestOptionPrice(cost, input),
+        minParticipants: o.minTravelers > 0 ? o.minTravelers : DEFAULT_MIN_PARTICIPANTS,
+        participationRate: DEFAULT_PARTICIPATION_RATE,
+        note: `업체 견적서 금액: ${o.perGroup ? "단체" : "1인"} ${o.amount.toLocaleString("ko-KR")} ${o.currency}${o.minTravelers > 0 ? ` · 최소 ${o.minTravelers}인` : ""} — 요금은 목표 마진을 붙인 권장가입니다`,
+      };
+    });
 }

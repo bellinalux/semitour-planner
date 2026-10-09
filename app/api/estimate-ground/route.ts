@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
   try {
     // 차량·가이드 시세는 자주 바뀌지 않으므로 검색 근거가 있는 결과를 7일 동안 다시 쓴다
-    return Response.json(await cached("ground", parsed.data, 7 * DAY, () => estimateGroundCost(parsed.data), (r) => r.searched));
+    return Response.json(await cached("ground-v2", parsed.data, 7 * DAY, () => estimateGroundCost(parsed.data), (r) => r.searched));
   } catch (err) {
     if (err instanceof GeminiError) return errorResponse(err.code, err.message, err.status);
     console.error("[estimate-ground]", err);

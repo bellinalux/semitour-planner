@@ -1,6 +1,7 @@
 import { budgetPlan } from "@/lib/budget";
 import { describeAction, type FitPlan, type Upgrade } from "@/lib/budgetFit";
 import { ourPolicy } from "@/lib/competitorDiff";
+import type { DayMove } from "@/lib/dayBalance";
 import { calcDayLoad } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
 import { flightMismatches, knownFlight } from "@/lib/flightRepair";
@@ -36,7 +37,8 @@ export type InsightAction =
   | { kind: "upgrade"; upgrade: Upgrade; label: string }
   | { kind: "copy"; text: string; label: string }
   | { kind: "fix-flight"; label: string }
-  | { kind: "fix-day-time"; days: number[]; label: string };
+  | { kind: "fix-day-time"; days: number[]; label: string }
+  | { kind: "engine-move"; move: DayMove; label: string };
 
 export interface Insight {
   id: string;
@@ -55,6 +57,8 @@ export interface InsightInput {
   /** 예산 맞추기 (판매가·도매가에서 시작한 견적) */
   budgetFit: { plan: FitPlan | null; upgrades: Upgrade[]; applied: string[] } | null;
   money: (v: number) => string;
+  /** 코스 엔진 점수(점검한 날)와 날짜 사이 옮기기 제안 */
+  engine?: { scores: Record<number, { score: number; grade: string; top: string; best: number }>; moves: DayMove[] };
 }
 
 export function keyNumbers({ input, days, pmChoice, meta, quote, money }: InsightInput): KeyNumbers | null {
@@ -99,7 +103,7 @@ export function keyNumbers({ input, days, pmChoice, meta, quote, money }: Insigh
 
 const TONE_ORDER = { warn: 0, info: 1, good: 2 } as const;
 
-export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, money }: InsightInput): Insight[] {
+export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, money, engine }: InsightInput): Insight[] {
   const out: Insight[] = [];
 
   if (quote && !quote.ok)
@@ -191,14 +195,35 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
     if (load.level !== "overloaded") continue;
     // 구역 단위로 이미 확인한 날이면 시간이 아니라 일정 자체가 많은 것 → 항목을 줄이도록 안내
     const checked = dayItems(day, pmChoice).some((i) => i.timeCheck?.basis === "area");
+    // 확인한 시간으로도 길면, 여유 있는 날로 옮길 묶음이 있으면 바로 옮기게 한다
+    const move = checked ? engine?.moves.find((m) => m.fromDay === day.day) : undefined;
     out.push({
       id: `day-${day.day}`,
       tone: "warn",
       title: `DAY ${day.day} 일정이 너무 깁니다 (체류+이동 ${formatDuration(load.totalMinutes)})`,
-      detail: checked
-        ? `웹에서 확인한 시간으로도 ${formatDuration(load.totalMinutes)}입니다 — 항목을 다른 날로 옮기거나 선택 옵션으로 빼세요`
-        : `체류 ${formatDuration(load.stayMinutes)} + 이동 ${formatDuration(load.travelMinutes)} — 장소마다 따로 잡은 시간이라 부풀었을 수 있습니다. 하루 순서를 웹에서 구역 단위로 확인해 맞춥니다`,
-      action: checked ? { kind: "scroll", target: `day-${day.day}`, label: "일정 보기" } : { kind: "fix-day-time", days: [day.day], label: "일정 시간 검증으로 맞추기" },
+      detail: move
+        ? `웹에서 확인한 시간으로도 ${formatDuration(load.totalMinutes)}입니다 — ${move.label}${move.note ? ` (${move.note})` : ""}`
+        : checked
+          ? `웹에서 확인한 시간으로도 ${formatDuration(load.totalMinutes)}입니다 — 항목을 다른 날로 옮기거나 선택 옵션으로 빼세요`
+          : `체류 ${formatDuration(load.stayMinutes)} + 이동 ${formatDuration(load.travelMinutes)} — 장소마다 따로 잡은 시간이라 부풀었을 수 있습니다. 하루 순서를 웹에서 구역 단위로 확인해 맞춥니다`,
+      action: move
+        ? { kind: "engine-move", move, label: `DAY ${move.toDay}로 옮기기` }
+        : checked
+          ? { kind: "scroll", target: `day-${day.day}`, label: "일정 보기" }
+          : { kind: "fix-day-time", days: [day.day], label: "일정 시간 검증으로 맞추기" },
+    });
+  }
+
+  // ④-2 코스 엔진 점수가 낮은 날 (85점 미만) — 가장 큰 감점 이유와 엔진 추천 점수
+  for (const day of days) {
+    const sc = engine?.scores[day.day];
+    if (!sc || sc.score >= 85) continue;
+    out.push({
+      id: `engine-${day.day}`,
+      tone: sc.score < 70 ? "warn" : "info",
+      title: `DAY ${day.day} 코스 점수 ${sc.score}점 (${sc.grade})`,
+      detail: [sc.top, sc.best > sc.score ? `엔진 추천대로 고치면 ${sc.best}점` : ""].filter(Boolean).join(" · ") || undefined,
+      action: { kind: "scroll", target: "course-engine", label: "100점 만들기 보기" },
     });
   }
 

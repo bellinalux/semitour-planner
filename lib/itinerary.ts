@@ -30,9 +30,10 @@ export function mapDayItems(day: DayPlan, fn: (item: ItineraryItem) => Itinerary
   };
 }
 
-/** 차량·가이드가 실제로 붙는 일수: 항공 외의 일정이 하나라도 있는 날 */
+/** 차량·가이드가 실제로 붙는 일수: 항공·숙박·자유시간 외의 일정이 하나라도 있는 날 (자유 일정만 있는 날은 가이드·차량이 없다) */
+const NO_GROUND = new Set(["flight", "hotel", "free_time"]);
 export function groundDays(days: DayPlan[], pmChoice: PmChoice): number {
-  return days.filter((d) => dayItems(d, pmChoice).some((i) => (i.type ?? "sightseeing") !== "flight")).length;
+  return days.filter((d) => dayItems(d, pmChoice).some((i) => !NO_GROUND.has(i.type ?? "sightseeing"))).length;
 }
 
 /** 도시별 숙박 수 (일정의 "그날 밤 숙박 도시" 기준, 처음 나온 순서) */

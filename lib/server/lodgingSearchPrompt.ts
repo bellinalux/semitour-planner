@@ -10,6 +10,19 @@ export function buildLodgingResearchPrompt(req: LodgingWebRequest): string {
         ? "리조트형 숙소 2인 1실의 1박 요금"
         : `${HOTEL_GRADE_QUERY[req.hotelGrade]} 호텔 2인 1실의 1박 요금`;
 
+  const names = req.hotelNames ?? [];
+  const when = req.checkIn ? `${req.checkIn} 체크인${req.nights ? ` ${req.nights}박` : ""} 기준` : "가까운 일반 날짜 기준";
+  if (names.length > 0) {
+    return [
+      `Google 검색 도구를 여러 번 사용해서, "${req.destination}"의 아래 호텔들의 2인 1실(스탠다드·디럭스 기본 객실) 1박 요금을 호텔마다 따로 조사해 주세요 (${when}).`,
+      ...names.map((n, i) => `${i + 1}. ${n}`),
+      "Booking.com, Agoda, 네이버 호텔, Hotels.com, Trip.com 등 예약 사이트에 실제로 표시된 요금을 찾으세요.",
+      "기억에 의존해 요금을 지어내지 말고, 검색으로 확인한 범위만 적으세요. 호텔마다 확인하지 못했으면 '확인 못함'이라고 쓰세요.",
+      "",
+      "호텔마다: 1박 요금 범위(최저~보통), 세금·봉사료·조식 포함 여부, 확인한 사이트 이름을 적고,",
+      "마지막에 숙박세·관광세(1인 1박)와 요금 관련 유의사항을 적어 주세요.",
+    ].join("\n");
+  }
   return [
     `Google 검색 도구를 여러 번 사용해서, "${req.destination}"의 ${unitLine}을 조사해 주세요.`,
     "Booking.com, Agoda, 네이버 호텔, Hotels.com, 야놀자(해외 숙소) 등 숙박 예약 사이트의 검색 결과 페이지에 실제로 표시된 요금을 찾으세요.",
@@ -39,6 +52,9 @@ export function buildLodgingStructurePrompt(req: LodgingWebRequest, memo: string
     `요청 통화: ${req.currency} (rateLow, rateHigh는 이 통화 단위의 숫자)`,
     `여행지: ${req.destination}`,
     `숙소 유형: ${req.lodgingType === "bnb" ? "BnB·아파트 1유닛(4인)" : req.lodgingType === "resort" ? "리조트 2인 1실" : `호텔 2인 1실, ${HOTEL_GRADE_QUERY[req.hotelGrade]}`}`,
+    (req.hotelNames ?? []).length > 0
+      ? `요청한 호텔 (hotels에 이 순서대로, name은 그대로): ${(req.hotelNames ?? []).join(" / ")}. rateLow/rateHigh는 요금을 확인한 호텔들의 최저~최고.`
+      : "요청한 호텔 없음 (hotels는 빈 배열)",
     "",
     "<research_memo>",
     memo,

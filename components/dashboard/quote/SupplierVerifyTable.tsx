@@ -88,6 +88,30 @@ export function SupplierVerifyTable({ verify, currency, market }: Props) {
           </tbody>
         </table>
       </div>
+      {verify.supplierShare && (
+        <p className="text-pretty text-slate-600">
+          {verify.supplierShare.amount >= 0 ? (
+            <>
+              업체 몫 추정 (공급가 − 우리 시세 원가):{" "}
+              <b className="tabular-nums text-slate-900">
+                1인 {money(verify.supplierShare.amount)} · 공급가의 {verify.supplierShare.rate.toFixed(0)}%
+              </b>
+            </>
+          ) : verify.supplierShare.rate >= -5 ? (
+            <>
+              공급가가 우리 시세 원가와 거의 같습니다 (<b className="tabular-nums text-slate-900">1인 {money(-verify.supplierShare.amount)}</b> 낮음) — 업체는 공개 요금보다 싼 단체·도매 요금으로 사서 마진을 남기는 구조로 보입니다.
+            </>
+          ) : (
+            <>
+              우리 시세 원가가 공급가보다 <b className="tabular-nums text-slate-900">1인 {money(-verify.supplierShare.amount)}</b> 높습니다 — 업체가 단체·도매 요금을 받거나 빠진 항목이 있을 수 있습니다.
+            </>
+          )}
+          <span className="block text-slate-400">
+            {verify.supplierShare.hotelsFound > 0 ? `숙박은 견적서 호텔 ${verify.supplierShare.hotelsFound}곳의 웹 공개 요금 평균입니다. ` : "숙박은 호텔 등급 평균 시세입니다. "}
+            업체가 받는 단체·도매 요금은 공개 요금보다 낮은 편이라, 실제 업체 몫은 이보다 클 수 있습니다.
+          </span>
+        </p>
+      )}
       {!verify.marketReady && (
         <div className="flex flex-wrap items-center gap-2 text-slate-500">
           <span className="flex-1">우리 시세(차량·가이드·숙박)를 조회하면 업체 금액과 비교합니다.</span>

@@ -6,6 +6,7 @@ import {
 } from "@/lib/server/lodgingSearchPrompt";
 import { GeminiError, generateGroundedText, generateJson } from "@/lib/server/gemini";
 import { guardRequest } from "@/lib/server/guard";
+import { cached, DAY } from "@/lib/server/aiCache";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -32,23 +33,35 @@ export async function POST(request: Request) {
   }
 
   try {
-    // 1단계: Google 검색으로 조사 (출처 수집)
-    const research = await generateGroundedText({ user: buildLodgingResearchPrompt(parsed.data), fast: true });
+    // 같은 조건(호텔 이름·날짜 포함)은 하루 동안 다시 쓴다 (검색 근거가 있는 결과만)
+    const result = await cached(
+      "lodging-web",
+      parsed.data,
+      DAY,
+      async () => {
+        // 1단계: Google 검색으로 조사 (출처 수집)
+        const research = await generateGroundedText({ user: buildLodgingResearchPrompt(parsed.data), fast: true });
 
-    // 2단계: 조사 메모를 JSON으로 정리 (메모에 없는 내용은 만들지 않는다)
-    const structured = await generateJson({
-      fast: true,
-      system: LODGING_STRUCTURE_SYSTEM_PROMPT,
-      user: buildLodgingStructurePrompt(parsed.data, research.text),
-      schema: lodgingWebResponseSchema,
-      temperature: 0.1,
-    });
+        // 2단계: 조사 메모를 JSON으로 정리 (메모에 없는 내용은 만들지 않는다)
+        const structured = await generateJson({
+          fast: true,
+          system: LODGING_STRUCTURE_SYSTEM_PROMPT,
+          user: buildLodgingStructurePrompt(parsed.data, research.text),
+          schema: lodgingWebResponseSchema,
+          temperature: 0.1,
+        });
 
-    const estimate = toLodgingWebEstimate(structured, parsed.data);
-    // 검색 근거가 없으면 "검색 확인" 표시를 믿을 수 없으므로 낮춘다
-    const final = research.searched ? estimate : { ...estimate, basis: "estimated" as const, sourceName: "" };
+        const estimate = toLodgingWebEstimate(structured, parsed.data);
+        // 검색 근거가 없으면 "검색 확인" 표시를 믿을 수 없으므로 낮춘다
+        const final = research.searched
+          ? estimate
+          : { ...estimate, basis: "estimated" as const, sourceName: "", hotels: estimate.hotels?.map((h) => ({ ...h, found: false })) };
+        return { estimate: final, sources: research.sources, searched: research.searched };
+      },
+      (r) => r.searched,
+    );
 
-    return Response.json({ estimate: final, sources: research.sources, searched: research.searched });
+    return Response.json(result);
   } catch (err) {
     if (err instanceof GeminiError) return errorResponse(err.code, err.message, err.status);
     console.error("[search-lodging-price]", err);
