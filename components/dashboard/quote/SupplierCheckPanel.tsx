@@ -3,7 +3,7 @@
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { NumberField } from "@/components/ui/NumberField";
 import { currencySymbol, formatMoney } from "@/lib/currency";
-import type { PmChoice } from "@/lib/itinerary";
+import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { competitorCaps, cutLabel, supplierAfterCuts, supplierCuts, supplierTarget, type CompetitorCap } from "@/lib/supplierCheck";
 import { quotePriceFor } from "@/lib/supplierQuote";
 import { verifySupplierQuote } from "@/lib/supplierVerify";
@@ -165,6 +165,14 @@ function QuoteSummary({ q, input, money }: { q: SupplierQuote; input: TripInput;
       )}
     </div>
   );
+}
+
+/** 자유일정만 있는 날 수 (항공·이동·숙소 외에는 자유시간뿐인 날) */
+function freeDaysOf(days: DayPlan[], pmChoice: PmChoice): number {
+  return days.filter((d) => {
+    const items = dayItems(d, pmChoice);
+    return items.some((i) => i.type === "free_time") && items.every((i) => ["free_time", "hotel", "flight", "transfer"].includes(i.type ?? ""));
+  }).length;
 }
 
 /** 업체 견적 검증 — 목표 판매가에서 업체 공급가 상한을 거꾸로 계산하고, 넘으면 업체에 빼 달라고 할 일정을 고른다 */
@@ -393,7 +401,7 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
         </p>
       )}
 
-      <SupplierRequestBox ctx={{ input, meta, target, cuts: chosen, verify, money, caps }} />
+      <SupplierRequestBox ctx={{ input, meta, target, cuts: chosen, verify, money, caps, ourFreeDays: freeDaysOf(days, pmChoice) }} />
     </div>
   );
 }

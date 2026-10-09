@@ -15,8 +15,10 @@ export interface RequestContext {
   cuts: SupplierCut[];
   verify: SupplierVerify;
   money: (v: number) => string;
-  /** 경쟁 상품별 공급가 기준 (내부용 엑셀에만) */
+  /** 경쟁 상품별 공급가 기준 (내부용 엑셀·협상 근거) */
   caps?: CompetitorCap[];
+  /** 우리 일정의 자유일 수 — 자유일이 더 많은(가벼운) 경쟁 상품은 같은 조건 근거에서 뺀다 */
+  ourFreeDays?: number;
 }
 
 /** 앱 통화 금액을 견적서 통화로도 함께 (예: ₩560,000 (약 400 USD)) */
@@ -41,6 +43,65 @@ function cutText(c: SupplierCut): string {
   }
 }
 
+/** 시세 원가에 붙일 업체 몫의 보통 수준 — 시세보다 높을 때 제안 공급가를 정할 때 쓴다 */
+const FAIR_SUPPLIER_SHARE = 0.15;
+
+/**
+ * 협상 근거 — 업체에 보여 줘도 되는 것만(우리 목표 판매가·수익은 넣지 않는다).
+ * 시세 원가, 같은 조건 타업체 판매가에서 경쟁사 원가 추정, 더 싼 출발 요일 요금.
+ */
+export function negotiationGrounds(ctx: RequestContext): { lines: string[]; suggested: number | null } {
+  const { input, verify, money } = ctx;
+  const lines: string[] = [];
+  let suggested: number | null = null;
+  const current = input.supplierPricePerPerson;
+
+  // ① 시세 원가 (숙박·차량·가이드·식사·입장을 현지 시세로) — 업체 요금에 든 큰 항목 시세가 다 있을 때만
+  if (verify.supplierShare && verify.total.market !== null && current > 0 && verify.total.market < current) {
+    const parts = verify.rows.filter((r) => r.market !== null && r.market > 0).map((r) => `${r.label.replace(/ \(2인 1실\)/, "")} ${money(r.market!)}`);
+    lines.push(`- 같은 일정을 현지 시세로 계산하면 1인 약 ${money(verify.total.market)}입니다 (${parts.join(" · ")}).`);
+    suggested = Math.round(verify.total.market * (1 + FAIR_SUPPLIER_SHARE));
+  }
+  // ② 같은 조건 타업체 판매가 → 경쟁사가 랜드사에 주는 원가 추정
+  // 다른 지역(예: 홍콩)을 함께 도는 상품은 범위가 달라 근거에서 뺀다
+  const caps = (ctx.caps ?? []).filter((c) => c.scopedPrice > 0 && !(c.extraRegions ?? []).length);
+  // 자유일이 우리보다 많은(관광·식사가 적은) 상품은 같은 일정으로 볼 수 없어 참고로만
+  const freeOf = (id: string) => {
+    const it = input.competitors.find((c) => c.id === id)?.itinerary;
+    return it?.found ? it.days.filter((d) => d.free).length : null;
+  };
+  const lighter = caps.filter((c) => (freeOf(c.id) ?? 0) > (ctx.ourFreeDays ?? 0));
+  const comparable = caps.filter((c) => !lighter.includes(c));
+  const round = (v: number) => Math.round(v / 1000) * 1000;
+  const range = (xs: CompetitorCap[]) => {
+    const lo = Math.min(...xs.map((c) => c.scopedPrice));
+    const hi = Math.max(...xs.map((c) => c.scopedPrice));
+    return lo === hi ? money(lo) : `${money(lo)}~${money(hi)}`;
+  };
+  if (comparable.length > 0) {
+    const cost = round(comparable.reduce((s, c) => s + c.estimatedCost, 0) / comparable.length);
+    lines.push(
+      `- 같은 지역·기간 대형 여행사 상품 ${comparable.length}개는 같은 조건(항공 제외 등)으로 1인 ${range(comparable)}에 판매 중이라, 랜드 원가는 1인 약 ${money(cost)} 수준으로 보입니다.`,
+    );
+    // 시세 기준과 타업체 기준 중 높은 쪽 — 업체가 받아들일 만한(무리하지 않은) 제안 금액
+    suggested = suggested === null ? cost : Math.max(suggested, cost);
+  }
+  if (lighter.length > 0)
+    lines.push(`- (참고) 자유일정이 더 많은 가벼운 상품 ${lighter.length}개는 같은 조건 1인 ${range(lighter)}입니다 — 일정이 달라 직접 비교하지는 않았습니다.`);
+  // ③ 출발 요일별 요금 — 지금 요일보다 싼 요일이 있으면 그 요금으로 맞춰 달라고
+  const q = input.supplierQuote;
+  const dated = q?.datePrices ?? [];
+  if (q?.picked && dated.length > 1) {
+    const sameNights = dated.filter((d) => d.nights === 0 || d.nights === input.nights);
+    const cheapest = sameNights.reduce((a, b) => (b.pricePerPerson < a.pricePerPerson ? b : a), sameNights[0]);
+    if (cheapest && cheapest.pricePerPerson < q.picked.price - 1) {
+      lines.push(`- 견적서의 ${cheapest.label} 출발 요금(1인 ${withOriginal(cheapest.pricePerPerson, ctx)})으로 맞춰 주실 수 있는지도 여쭙니다 (지금 ${q.picked.label}).`);
+      suggested = suggested === null ? Math.round(cheapest.pricePerPerson) : suggested;
+    }
+  }
+  return { lines, suggested: suggested !== null && suggested < current ? suggested : null };
+}
+
 export function supplierRequestText(ctx: RequestContext): string {
   const { input, meta, target, cuts, verify } = ctx;
   const title = meta?.packageName?.trim() || `${input.destination} ${input.nights}박 ${input.days}일`;
@@ -52,14 +113,26 @@ export function supplierRequestText(ctx: RequestContext): string {
   }
   lines.push("아래 내용 확인 부탁드립니다.");
 
+  const grounds = negotiationGrounds(ctx);
   if (target && target.over > 0) {
     lines.push("", "■ 요청 공급가", `- 1인 ${withOriginal(target.maxSupplierPerPerson, ctx)} 이하 (2인 1실 기준)로 맞춰 주실 수 있을까요?`);
     lines.push(`  지금 견적 1인 ${withOriginal(target.supplierPerPerson, ctx)}보다 ${ctx.money(target.over)} 낮은 금액입니다.`);
+    if (grounds.lines.length > 0) lines.push("", "■ 요청 근거", ...grounds.lines);
     if (cuts.length > 0) {
       lines.push("", "■ 일정 조정 (금액을 맞추기 어려우면 아래를 빼거나 바꿔 주세요)");
       for (const c of cuts) lines.push(`- ${cutText(c)}`);
       lines.push("  조정했을 때 1인 공급가도 함께 알려 주세요.");
     }
+  }
+
+  // 목표 상한 안이어도 시세·타업체 기준으로 높으면 조정 여지를 묻는다
+  if (!(target && target.over > 0) && grounds.suggested !== null && grounds.lines.length > 0) {
+    lines.push(
+      "",
+      "■ 요금 조정 문의",
+      `- 1인 ${withOriginal(grounds.suggested, ctx)} 정도로 조정이 가능할지 여쭙니다 (지금 1인 ${withOriginal(input.supplierPricePerPerson, ctx)}).`,
+      ...grounds.lines,
+    );
   }
 
   if (verify.questions.length > 0) {

@@ -3,6 +3,7 @@ import { DIRECT_CHANNEL_ID, feeRows } from "@/lib/channels";
 import { competitorPriceInOurScope, ourPolicy } from "@/lib/competitorDiff";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { samePlace } from "@/lib/places";
+import { extraRegionsOf } from "@/lib/tourCompare";
 import { roundDownPrice } from "@/lib/priceRound";
 import type { Competitor, CourseMeta, DayPlan, QuoteData, TripInput } from "@/types";
 
@@ -103,6 +104,8 @@ export interface CompetitorCap {
   estimatedCost: number;
   /** 우리 업체 공급가가 경쟁사 원가 추정보다 높은지(10% 넘게) / 비슷한지 / 낮은지 */
   level: "high" | "ok" | "low";
+  /** 우리 여행지 밖 지역을 함께 도는 상품이면 그 지역 (예: 홍콩) — 업체 협상 근거에서는 뺀다 */
+  extraRegions?: string[];
 }
 
 /**
@@ -122,7 +125,8 @@ export function competitorCaps(input: TripInput, days: DayPlan[], pmChoice: PmCh
     const estimatedCost = Math.max(0, (scoped - c.price * m) / (1 + b.fxBufferRate) - b.otherPerPerson);
     const ratio = estimatedCost > 0 ? input.supplierPricePerPerson / estimatedCost : 1;
     const level: CompetitorCap["level"] = ratio > 1.1 ? "high" : ratio < 0.9 ? "low" : "ok";
-    return [{ id: c.id, name: c.name, scopedPrice: scoped, maxSupplier: caps.max, breakEven: caps.breakEven, estimatedCost, level }];
+    const extraRegions = extraRegionsOf(c.name, input.destination);
+    return [{ id: c.id, name: c.name, scopedPrice: scoped, maxSupplier: caps.max, breakEven: caps.breakEven, estimatedCost, level, ...(extraRegions.length > 0 ? { extraRegions } : {}) }];
   });
 }
 
