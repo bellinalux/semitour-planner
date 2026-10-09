@@ -185,3 +185,31 @@ describe("한 글자 다른 표기", () => {
     expect(samePlace("마카오 타워", "마카오 사원")).toBe(false);
   });
 });
+
+describe("호텔 등급 범위 (섞어서 예약)", () => {
+  it("원문 표기에서 범위를 읽고, 가운데 값으로 견준다", async () => {
+    const { gradeRangeOfText, gradeText } = await import("@/lib/itemTypes");
+    expect(gradeRangeOfText("4·5성")).toEqual([4, 5]);
+    expect(gradeRangeOfText("준특급~특급 호텔")).toEqual([4, 5]);
+    expect(gradeRangeOfText("3박 4일")).toBeNull();
+    expect(gradeText("4-5")).toBe("4~5성급");
+    expect(gradeText("3")).toBe("3성급");
+  });
+
+  it("우리 4~5성(섞어서)은 4성 상품보다 높고 5성 상품보다 낮다", () => {
+    const { cmp } = compareFor({
+      packageType: "land_hotel",
+      lodgingType: "hotel",
+      hotelGrade: "4-5",
+      competitors: [
+        competitor({ id: "a", name: "A", price: 9_000_000, hotelGrade: "4성급" }),
+        competitor({ id: "b", name: "B", price: 9_000_000, hotelGrade: "5성급" }),
+        competitor({ id: "c", name: "C", price: 9_000_000, hotelGrade: "4·5성" }),
+      ],
+    });
+    expect(cmp!.columns[0].hotelGrade).toContain("4~5성급");
+    expect(cmp!.verdicts.find((v) => v.id === "a")!.text).toContain("호텔 등급 높음(4~5성 vs 4성)");
+    expect(cmp!.verdicts.find((v) => v.id === "b")!.text).toContain("호텔 등급 낮음(4~5성 vs 5성)");
+    expect(cmp!.verdicts.find((v) => v.id === "c")!.text).not.toContain("호텔 등급");
+  });
+});

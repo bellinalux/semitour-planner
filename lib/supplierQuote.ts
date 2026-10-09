@@ -1,4 +1,5 @@
 import { FX_CODES } from "@/lib/fxCodes";
+import { gradeRangeOfText } from "@/lib/itemTypes";
 import type { ParsedSupplierQuote } from "@/lib/schemas/course";
 import type { CompetitorIncludes, CourseMeta, CurrencyCode, HotelGrade, PackageType, SupplierQuote, TripInput } from "@/types";
 
@@ -137,12 +138,14 @@ export function supplierIncludes(q: SupplierQuote, fallback: CompetitorIncludes)
   };
 }
 
-/** 원문 호텔 표기에서 등급 — 여러 등급이 섞여 있으면(4·5성 중 하나) 낮은 쪽으로 본다 */
+/** 원문 호텔 표기에서 등급 — 여러 등급이 섞여 있으면(4·5성 중 하나) 범위(4~5성)로 본다 */
 export function gradeFromText(text: string): HotelGrade | null {
-  const grades = [...text.matchAll(/([345])\s*(?:성|star|\*)/gi)].map((m) => Number(m[1]));
-  const mixed = /([345])\s*[·,/~-]\s*([345])\s*성/.exec(text);
-  if (mixed) grades.push(Number(mixed[1]), Number(mixed[2]));
-  if (grades.length > 0) return String(Math.min(...grades)) as HotelGrade;
+  const r = gradeRangeOfText(text.replace(/리조트|resort/gi, ""));
+  if (r) {
+    if (r[0] === r[1]) return String(r[0]) as HotelGrade;
+    const key = `${r[0]}-${r[1]}`;
+    return (["3-4", "4-5", "3-5"] as const).includes(key as "3-4") ? (key as HotelGrade) : null;
+  }
   return /리조트|resort/i.test(text) ? "resort" : null;
 }
 

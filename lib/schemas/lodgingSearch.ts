@@ -1,3 +1,4 @@
+import { HOTEL_GRADE_IDS } from "@/lib/itemTypes";
 import { z } from "zod";
 import type { LodgingWebEstimate } from "@/types";
 
@@ -8,7 +9,7 @@ const CURRENCIES = ["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD
 export const lodgingWebRequestSchema = z.object({
   destination: z.string().trim().min(1, "여행지를 입력해 주세요.").max(100),
   lodgingType: z.enum(["hotel", "bnb", "resort"]),
-  hotelGrade: z.enum(["any", "3", "4", "5", "resort"]).default("4"),
+  hotelGrade: z.enum(HOTEL_GRADE_IDS).default("4"),
   currency: z.enum(CURRENCIES),
   /** 업체 견적서 등에 적힌 호텔 이름 — 있으면 등급 평균 대신 이 호텔들의 요금을 하나씩 찾는다 */
   hotelNames: z.array(z.string().trim().min(1).max(80)).max(6).optional(),

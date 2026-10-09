@@ -39,8 +39,51 @@ export const HOTEL_GRADES: { id: HotelGrade; label: string }[] = [
   { id: "3", label: "3성" },
   { id: "4", label: "4성" },
   { id: "5", label: "5성" },
+  { id: "3-4", label: "3~4성 (섞어서)" },
+  { id: "4-5", label: "4~5성 (섞어서)" },
+  { id: "3-5", label: "3~5성 (섞어서)" },
   { id: "resort", label: "리조트" },
 ];
+/** 서버 요청 검증(zod enum)에 쓰는 등급 값 목록 */
+export const HOTEL_GRADE_IDS = ["any", "3", "4", "5", "3-4", "4-5", "3-5", "resort"] as const;
+
+/** 등급의 성급 범위 [낮은, 높은] — 리조트는 5성으로, 전체는 null */
+export function gradeRange(grade: HotelGrade): [number, number] | null {
+  switch (grade) {
+    case "3":
+    case "4":
+    case "5":
+      return [Number(grade), Number(grade)];
+    case "3-4":
+      return [3, 4];
+    case "4-5":
+      return [4, 5];
+    case "3-5":
+      return [3, 5];
+    case "resort":
+      return [5, 5];
+    default:
+      return null;
+  }
+}
+
+/** 원문 표기(예: "4·5성", "준특급~특급", "5성급 리조트")에서 성급 범위 — 모르면 null */
+export function gradeRangeOfText(text: string): [number, number] | null {
+  const nums = [...text.matchAll(/([345])\s*(?=[·,/~\-]|성|star|\*)/gi)].map((m) => Number(m[1]));
+  if (/준특급/.test(text)) nums.push(4);
+  if (/(^|[^준])특급|리조트|resort/i.test(text)) nums.push(5);
+  return nums.length > 0 ? [Math.min(...nums), Math.max(...nums)] : null;
+}
+/** 범위의 가운데 값 (등급을 견줄 때) */
+export const gradeMid = (r: [number, number]) => (r[0] + r[1]) / 2;
+
+/** 화면·문서에 쓰는 등급 표기 (예: 4~5성급) */
+export function gradeText(grade: HotelGrade): string {
+  const r = gradeRange(grade);
+  if (grade === "resort") return "리조트";
+  if (!r) return "";
+  return r[0] === r[1] ? `${r[0]}성급` : `${r[0]}~${r[1]}성급`;
+}
 
 export const HOTEL_PREFERENCES: { id: HotelPreference; label: string; query: string }[] = [
   { id: "transit", label: "역세권·교통 편리", query: "지하철·기차역에서 도보 가까운 곳, 대중교통 이용이 편한 곳" },
@@ -56,6 +99,9 @@ export const HOTEL_GRADE_QUERY: Record<HotelGrade, string> = {
   "3": "3성급",
   "4": "4성급",
   "5": "5성급",
+  "3-4": "3성급·4성급(섞어서 예약)",
+  "4-5": "4성급·5성급(섞어서 예약)",
+  "3-5": "3성급~5성급(섞어서 예약)",
   resort: "리조트형 호텔(휴양 시설을 갖춘 곳)",
 };
 

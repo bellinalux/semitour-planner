@@ -2,7 +2,8 @@ import { competitorPriceInOurScope, ourPolicy, POLICY_LABELS } from "@/lib/compe
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { samePlace } from "@/lib/places";
 import { documentQuote } from "@/lib/pricing";
-import type { CompetitorIncludes, CourseMeta, DayPlan, HotelGrade, QuoteData, TourPolicy, TripInput } from "@/types";
+import { gradeMid, gradeRange, gradeRangeOfText, gradeText } from "@/lib/itemTypes";
+import type { CompetitorIncludes, CourseMeta, DayPlan, QuoteData, TourPolicy, TripInput } from "@/types";
 
 /**
  * 투어 비교표 — 우리 상품과 경쟁 상품을 같은 줄에 놓고 가격(같은 조건으로 맞춘 1인, 2인 1실 기준)·일수·호텔 등급·포함 내역·
@@ -98,18 +99,13 @@ export function ourPlaces(days: DayPlan[], pmChoice: PmChoice): string[] {
   return [...new Set(names)].filter(Boolean);
 }
 
-const GRADE_NUM: Record<HotelGrade, number | null> = {
-  any: null,
-  "3": 3,
-  "4": 4,
-  "5": 5,
-  resort: 5,
-};
-const gradeOf = (text: string): number | null => {
-  const m = /([345])\s*성/.exec(text);
-  if (m) return Number(m[1]);
-  return /리조트|resort/i.test(text) ? 5 : null;
-};
+/** 우리 숙소 등급 범위 (랜드는 숙박 없음, 리조트형은 5성) */
+export function ourGradeRange(input: Pick<TripInput, "packageType" | "lodgingType" | "hotelGrade">): [number, number] | null {
+  if (input.packageType === "land") return null;
+  if (input.lodgingType === "resort") return [5, 5];
+  return gradeRange(input.hotelGrade);
+}
+const rangeText = (r: [number, number]) => (r[0] === r[1] ? `${r[0]}성` : `${r[0]}~${r[1]}성`);
 
 export function buildTourCompare(input: TripInput, days: DayPlan[], pmChoice: PmChoice, quote: QuoteData, meta: CourseMeta | null): TourCompare | null {
   const competitors = input.competitors.slice(0, 4);
@@ -128,9 +124,7 @@ export function buildTourCompare(input: TripInput, days: DayPlan[], pmChoice: Pm
       ? "숙박 없음"
       : input.lodgingType === "resort"
         ? "리조트"
-        : GRADE_NUM[input.hotelGrade]
-          ? `${GRADE_NUM[input.hotelGrade]}성급`
-          : "";
+        : gradeText(input.hotelGrade);
 
   const ours: CompareColumn = {
     id: "ours",
@@ -193,11 +187,12 @@ export function buildTourCompare(input: TripInput, days: DayPlan[], pmChoice: Pm
     if (extra.length > 0) parts.unshift(`${extra.join("·")} 포함 상품(코스 범위가 다름)`);
     const plus: string[] = [];
     const minus: string[] = [];
-    const og = input.packageType === "land" ? null : input.lodgingType === "resort" ? 5 : GRADE_NUM[input.hotelGrade];
-    const tg = gradeOf(c.hotelGrade ?? "");
+    // 등급은 범위(예: 4~5성 섞어서)의 가운데로 견준다 — 반 등급 이상 차이 날 때만
+    const og = ourGradeRange(input);
+    const tg = gradeRangeOfText(c.hotelGrade ?? "");
     if (og && tg) {
-      if (og > tg) plus.push(`호텔 등급 높음(${og}성 vs ${tg}성)`);
-      if (og < tg) minus.push(`호텔 등급 낮음(${og}성 vs ${tg}성)`);
+      if (gradeMid(og) - gradeMid(tg) >= 0.5) plus.push(`호텔 등급 높음(${rangeText(og)} vs ${rangeText(tg)})`);
+      if (gradeMid(tg) - gradeMid(og) >= 0.5) minus.push(`호텔 등급 낮음(${rangeText(og)} vs ${rangeText(tg)})`);
     }
     // 항공·숙박은 상품 범위 차이라 강점·약점이 아니다 (같은 조건 가격에서 맞춘다)
     for (const k of INCLUDE_KEYS.filter((x) => !SCOPE_KEYS.has(x))) {
@@ -290,12 +285,12 @@ function summarize(
     if (pricier > 0) weaknesses.push(`가격: ${of(pricier)}보다 비쌈 (${range})`);
   }
 
-  const og = input.packageType === "land" ? null : input.lodgingType === "resort" ? 5 : GRADE_NUM[input.hotelGrade];
+  const og = ourGradeRange(input);
   if (og) {
-    const grades = rivals.map((c) => gradeOf(c.hotelGrade)).filter((g): g is number => g !== null);
-    const lower = grades.filter((g) => g < og).length;
-    const higher = grades.filter((g) => g > og).length;
-    if (lower > 0) strengths.push(`호텔: ${og}성으로 ${of(lower)}보다 등급 높음`);
+    const grades = rivals.map((c) => gradeRangeOfText(c.hotelGrade)).filter((g): g is [number, number] => g !== null);
+    const lower = grades.filter((g) => gradeMid(og) - gradeMid(g) >= 0.5).length;
+    const higher = grades.filter((g) => gradeMid(g) - gradeMid(og) >= 0.5).length;
+    if (lower > 0) strengths.push(`호텔: ${rangeText(og)}으로 ${of(lower)}보다 등급 높음`);
     if (higher > 0) weaknesses.push(`호텔: ${who(higher)} 더 높은 등급`);
   }
 

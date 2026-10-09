@@ -192,7 +192,8 @@ export interface CostSource {
 }
 export type LodgingType = "hotel" | "bnb" | "resort";
 /** 호텔 등급: 전체(3~5성) / 3성 / 4성 / 5성 / 리조트 */
-export type HotelGrade = "any" | "3" | "4" | "5" | "resort";
+/** 호텔 등급 — 한 등급 또는 섞어서 예약하는 범위(예: 4~5성 = 4성·5성 섞어서) */
+export type HotelGrade = "any" | "3" | "4" | "5" | "3-4" | "4-5" | "3-5" | "resort";
 export type HotelPreference = "transit" | "airport" | "korean" | "breakfast" | "value";
 /** target_margin: 목표 마진으로 판매가 계산 / fixed_price: 판매가를 넣고 마진 확인 */
 /**

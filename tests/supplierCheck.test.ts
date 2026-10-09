@@ -211,17 +211,19 @@ describe("견적서 내용으로 판매 구성·확인할 것", () => {
     expect(quoteRaw({ pricePerPerson: 1800 })).toMatchObject({ pricePerPerson: 1800, suspectPrice: 0 });
   });
 
-  it("호텔이 적혀 있으면 랜드+숙박, 등급은 낮은 쪽(4·5성 → 4성)", async () => {
+  it("호텔이 적혀 있으면 랜드+숙박, 4성·5성이 섞여 있으면 등급은 4~5성(섞어서)", async () => {
     const i = input({ packageType: "land", hotelGrade: "any", currency: "KRW" });
     const patch = await supplierQuotePatch(quoteRaw({}), i, async () => 1400);
-    expect(patch).toMatchObject({ packageType: "land_hotel", hotelGrade: "4" });
+    expect(patch).toMatchObject({ packageType: "land_hotel", hotelGrade: "4-5" });
     expect(patch.pricingMode).toBeUndefined(); // 요금이 없으면 견적 방식은 그대로
   });
 });
 
 describe("견적서 표기 해석", () => {
   it("호텔 등급·판매 구성·포함 항목", () => {
-    expect(gradeFromText("4·5성 호텔")).toBe("4");
+    expect(gradeFromText("4·5성 호텔")).toBe("4-5");
+    expect(gradeFromText("골든드래곤 호텔(4성), 리젠시 아트 호텔(5성) 중 하나")).toBe("4-5");
+    expect(gradeFromText("4성급")).toBe("4");
     expect(gradeFromText("5성급 리조트")).toBe("5");
     expect(gradeFromText("풀빌라 리조트")).toBe("resort");
     expect(packageFromQuote({ includes: ["왕복 항공권", "호텔"], excludes: [] })).toBe("full");

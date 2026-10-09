@@ -3,7 +3,8 @@ import { dayMeals } from "@/lib/documents";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { samePlace } from "@/lib/places";
 import { documentQuote } from "@/lib/pricing";
-import { extraRegionsOf } from "@/lib/tourCompare";
+import { gradeMid, gradeRangeOfText, gradeText } from "@/lib/itemTypes";
+import { extraRegionsOf, ourGradeRange } from "@/lib/tourCompare";
 import type { CompetitorIncludes, CourseMeta, DayPlan, QuoteData, TourPolicy, TripInput } from "@/types";
 
 /**
@@ -61,11 +62,6 @@ export interface ProductCompare {
 
 const SKIP = new Set(["meal", "transfer", "hotel", "flight", "free_time"]);
 const won = (v: number) => Math.round(v).toLocaleString("ko-KR");
-const gradeOf = (text: string): number | null => {
-  const m = /([345])\s*성/.exec(text);
-  if (m) return Number(m[1]);
-  return /리조트|resort|특급/i.test(text) ? 5 : /준특급/.test(text) ? 4 : null;
-};
 const INCLUDE_NAMES: Partial<Record<keyof CompetitorIncludes, string>> = { guide: "가이드", vehicle: "차량", meals: "식사", admission: "입장료" };
 
 export function buildProductCompare(input: TripInput, days: DayPlan[], pmChoice: PmChoice, quote: QuoteData, meta: CourseMeta | null): ProductCompare | null {
@@ -92,7 +88,8 @@ export function buildProductCompare(input: TripInput, days: DayPlan[], pmChoice:
   const theirAll = input.competitors.flatMap((c) => [...(c.places ?? []), ...(c.itinerary?.found ? c.itinerary.days.flatMap((d) => d.places) : [])]);
   const markOurs = (name: string): PlaceMark => (theirAll.some((t) => samePlace(name, t)) ? "shared" : "only");
   const markTheirs = (name: string): PlaceMark => (ourAll.some((o) => samePlace(o, name)) ? "shared" : "only");
-  const ourGradeNum = input.packageType === "land" ? null : input.lodgingType === "resort" ? 5 : ({ "3": 3, "4": 4, "5": 5, resort: 5, any: null } as const)[input.hotelGrade];
+  const ourGrade = ourGradeRange(input);
+  const rt = (r: [number, number]) => (r[0] === r[1] ? `${r[0]}성` : `${r[0]}~${r[1]}성`);
 
   const ours: CompareProduct = {
     id: "ours",
@@ -103,7 +100,7 @@ export function buildProductCompare(input: TripInput, days: DayPlan[], pmChoice:
     diff: 0,
     adjustNote: "",
     span: `${input.nights}박 ${input.days}일`,
-    hotel: [ourGradeNum ? `${ourGradeNum}성급` : "", Object.values(input.selectedHotels)[0]?.name ?? input.supplierQuote?.hotels ?? ""].filter(Boolean).join(" · "),
+    hotel: [input.packageType === "land" ? "" : input.lodgingType === "resort" ? "리조트" : gradeText(input.hotelGrade), Object.values(input.selectedHotels)[0]?.name ?? input.supplierQuote?.hotels ?? ""].filter(Boolean).join(" · "),
     includes: quote.ourIncludes,
     shopping: policy.shopping,
     optionTour: policy.optionTour,
@@ -132,7 +129,7 @@ export function buildProductCompare(input: TripInput, days: DayPlan[], pmChoice:
     if ((c.localPayPerPerson ?? 0) > 0) adjust.push(`현지 경비 +${won(c.localPayPerPerson ?? 0)}`);
     const theirMeals = itDays ? it!.mealCount || itDays.reduce((s, d) => s + (/포함|식|특식/.test(d.meals.lunch) && !/불포함|자유/.test(d.meals.lunch) ? 1 : 0) + (/포함|식|특식/.test(d.meals.dinner) && !/불포함|자유/.test(d.meals.dinner) ? 1 : 0), 0) : null;
     const theirFree = itDays ? itDays.filter((d) => d.free).length : null;
-    const theirGrade = gradeOf(c.hotelGrade ?? "");
+    const theirGrade = gradeRangeOfText(c.hotelGrade ?? "");
     const diff = scoped !== null ? Math.round(scoped - ourPrice) : null;
 
     const ourBetter: string[] = [];
@@ -145,9 +142,9 @@ export function buildProductCompare(input: TripInput, days: DayPlan[], pmChoice:
     if (policy.shopping === "some" && c.shopping === "none") theirBetter.push("노쇼핑");
     if (policy.optionTour === "none" && c.optionTour === "some") ourBetter.push("노옵션");
     if (policy.optionTour === "some" && c.optionTour === "none") theirBetter.push("노옵션");
-    if (ourGradeNum && theirGrade) {
-      if (ourGradeNum > theirGrade) ourBetter.push(`호텔 ${ourGradeNum}성 (그 상품 ${theirGrade}성)`);
-      if (ourGradeNum < theirGrade) theirBetter.push(`호텔 ${theirGrade}성 (우리 ${ourGradeNum}성)`);
+    if (ourGrade && theirGrade) {
+      if (gradeMid(ourGrade) - gradeMid(theirGrade) >= 0.5) ourBetter.push(`호텔 ${rt(ourGrade)} (그 상품 ${rt(theirGrade)})`);
+      if (gradeMid(theirGrade) - gradeMid(ourGrade) >= 0.5) theirBetter.push(`호텔 ${rt(theirGrade)} (우리 ${rt(ourGrade)})`);
     }
     if (theirMeals !== null) {
       if (ourMeals >= theirMeals + 2) ourBetter.push(`식사 ${ourMeals - theirMeals}회 더 포함 (우리 ${ourMeals}회, 그 상품 ${theirMeals}회)`);

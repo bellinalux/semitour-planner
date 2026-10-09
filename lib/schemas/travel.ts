@@ -1,3 +1,4 @@
+import { HOTEL_GRADE_IDS } from "@/lib/itemTypes";
 import { z } from "zod";
 import type { TravelEstimate } from "@/types";
 
@@ -8,7 +9,7 @@ export const travelRequestSchema = z.object({
   destination: z.string().trim().min(1, "여행지를 입력해 주세요.").max(100),
   currency: z.enum(["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD", "AUD"]),
   nights: z.number().int().min(0).max(30),
-  hotelGrade: z.enum(["any", "3", "4", "5", "resort"]).default("4"),
+  hotelGrade: z.enum(HOTEL_GRADE_IDS).default("4"),
 });
 
 export type TravelRequest = z.infer<typeof travelRequestSchema>;

@@ -157,7 +157,14 @@ export function cutLabel(c: Pick<SupplierCut, "kind" | "dayNo" | "name">): strin
   }
 }
 
-const GRADE_DOWN: Partial<Record<TripInput["hotelGrade"], string>> = { "5": "5성 → 4성", "4": "4성 → 3성", resort: "리조트 → 4성 호텔" };
+const GRADE_DOWN: Partial<Record<TripInput["hotelGrade"], string>> = {
+  "5": "5성 → 4성",
+  "4": "4성 → 3성",
+  "4-5": "4~5성 섞어서 → 4성",
+  "3-5": "3~5성 섞어서 → 3~4성",
+  "3-4": "3~4성 섞어서 → 3성",
+  resort: "리조트 → 4성 호텔",
+};
 /** 한 등급 낮출 때 숙박 요금이 줄어드는 비율 (추정) */
 export const HOTEL_DOWN_RATE = 0.3;
 /** 이동·관광 없이 쉬는 날로 보는 항목 유형 */
