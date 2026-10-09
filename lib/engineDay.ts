@@ -20,7 +20,15 @@ export interface EngineDayRequest {
 const KIND: Record<string, EngineDayRequest["places"][number]["kind"]> = { meal: "meal", free_time: "free", transfer: "transfer", hotel: "end", massage: "sight", shopping: "sight", experience: "sight", sightseeing: "sight" };
 /** 유형이 없는 항목(예전에 만든 AI 세미투어)은 식대·음식 종류·이름으로 식사를 알아본다 (문서의 조중석 표기와 같은 기준) */
 const MEAL_NAME = /점심|저녁|식사|중식|석식|런치|디너|lunch|dinner/i;
+/**
+ * 공항·출입국·가이드 미팅·호텔 체크인/아웃처럼 시간이 정해진 이동 일정 — AI가 관광(sightseeing)으로 잘못 분류해도
+ * 이름으로 알아보고, 엔진에는 이동(transfer)으로 보내며 순서를 바꾸지 않는다.
+ */
+const FIXED_MOVE = /공항|airport|출국|입국|미팅|meeting|체크인|체크아웃|check-?in|check-?out|(출발|도착)\s*(\(|$|[0-9])/i;
+export const isFixedMove = (i: ItineraryItem) => i.type === "flight" || i.type === "transfer" || i.type === "hotel" || FIXED_MOVE.test(i.name);
+
 function kindOf(i: ItineraryItem): EngineDayRequest["places"][number]["kind"] {
+  if (i.type !== "hotel" && FIXED_MOVE.test(i.name)) return "transfer";
   if (i.type) return KIND[i.type] ?? "sight";
   return i.cuisine || i.mealCost > 0 || MEAL_NAME.test(i.name) ? "meal" : "sight";
 }
@@ -72,7 +80,7 @@ export function cautionFrom(k?: PlaceKnowledge): string {
 /** 순서를 바꾸지 않는 항목 — 항공·이동·숙소·식사·자유시간은 제자리(시간대가 정해진 일정)에 두고 관광지만 바꾼다 */
 const ANCHOR_TYPES = new Set(["flight", "transfer", "hotel", "meal", "free_time"]);
 // 야경·분수쇼 같은 저녁 일정도 시간대가 정해져 있어 옮기지 않는다
-const isAnchor = (it: ItineraryItem) => ANCHOR_TYPES.has(it.type ?? "sightseeing") || kindOf(it) === "meal" || EVENING.test(it.name);
+const isAnchor = (it: ItineraryItem) => ANCHOR_TYPES.has(it.type ?? "sightseeing") || isFixedMove(it) || kindOf(it) === "meal" || EVENING.test(it.name);
 
 /**
  * 엔진 추천 순서를 하루 목록에 넣는다 — 엔진이 순서를 정한 관광지들만 자기들 자리 안에서 추천 순서대로 바꾸고,

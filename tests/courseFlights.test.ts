@@ -135,3 +135,18 @@ describe("항공편 칸이 비어도 비행 항목 글의 시각으로", () => {
     expect(slots[2].start).toBeGreaterThanOrEqual(13 * 60 + 30); // 도착 후 미팅 40분 + 이동 20분 뒤
   });
 });
+
+describe("공항 출발·도착을 관광으로 분류해도", () => {
+  it("항공 항목으로 바로잡고 입장료는 0", () => {
+    const p = parsed({ outbound: leg({ departTime: "09:50", arriveTime: "12:50" }), inbound: leg() });
+    p.days[0].items = [
+      raw("flight", "인천 출발", { travelMinutesToNext: 40 }),
+      raw("sightseeing", "마카오 공항 도착 ( 12:50 ), 가이드 미팅", { stayMinutes: 40, entryFee: 10000 }),
+      raw("sightseeing", "탑석광장", { stayMinutes: 30 }),
+    ];
+    const d1 = toCoursePlan(p).days[0];
+    const arr = d1.items.find((i) => i.name.startsWith("마카오 공항 도착"))!;
+    expect(arr).toMatchObject({ type: "flight", entryFee: 0 });
+    expect(d1.items.find((i) => i.name === "탑석광장")?.type).toBe("sightseeing");
+  });
+});

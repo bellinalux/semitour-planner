@@ -59,3 +59,26 @@ describe("코스 엔진 추천 순서 적용", () => {
     expect(buildDayRequest(plain, {}, { destination: "마카오", travelType: "package" as never })?.maxEnd).toBe("19:00");
   });
 });
+
+describe("AI가 공항·미팅 항목을 관광으로 잘못 분류해도", () => {
+  it("이름으로 고정 이동으로 보고 맨 위 자리를 지킨다 (엔진에도 이동으로 보낸다)", () => {
+    const d = linearDay(
+      1,
+      [
+        item("dep", { type: "flight", name: "인천 국제공항 출발", stayMinutes: 0, travelMinutesToNext: 180 }),
+        // AI가 sightseeing으로 분류한 도착 항목
+        item("arr", { type: "sightseeing", name: "마카오 공항 도착 ( 12:50 ), 가이드 미팅", stayMinutes: 40 }),
+        item("s1", { name: "탑석광장" }),
+        item("s2", { name: "몬테요새" }),
+        item("s3", { name: "세나도 광장" }),
+      ],
+      { meetingTime: "09:50" },
+    );
+    // 엔진이 도착 항목을 저녁 쪽으로 보낸 추천 순서
+    const next = reorderByEngine(d.items, ["s3", "s1", "s2", "arr"]);
+    expect(next.map((i) => i.id)).toEqual(["dep", "arr", "s3", "s1", "s2"]);
+    const req = buildDayRequest(d, {}, { destination: "마카오", travelType: "package" as never })!;
+    expect(req.places.find((p) => p.id === "arr")?.kind).toBe("transfer");
+    expect(req.places.find((p) => p.id === "s1")?.kind).toBe("sight");
+  });
+});

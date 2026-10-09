@@ -1,5 +1,5 @@
 import { clockMinutes, dayMeetingTime, walkTimeline } from "@/lib/dayLoad";
-import { applyFlightWithMeals } from "@/lib/flightApply";
+import { applyFlightWithMeals, looksLikeFlightItem } from "@/lib/flightApply";
 import { courseFlightOption } from "@/lib/schemas/course";
 import type { CourseMeta, DayPlan, FlightOption, TripInput } from "@/types";
 
@@ -22,7 +22,7 @@ function legOff(day: DayPlan | undefined, depart: string, arrive: string): strin
   const dep = clockMinutes(firstClock(depart));
   const arr = clockMinutes(firstClock(arrive));
   if (dep === null || arr === null) return null;
-  const flights = walkTimeline(day.items, dayMeetingTime(day)).filter((s) => s.item.type === "flight");
+  const flights = walkTimeline(day.items, dayMeetingTime(day)).filter((s) => looksLikeFlightItem(s.item));
   if (flights.length === 0) return null;
   const hhmm = (m: number) =>
     `${String(Math.floor((((m % 1440) + 1440) % 1440) / 60)).padStart(2, "0")}:${String((((m % 1440) + 1440) % 1440) % 60).padStart(2, "0")}`;

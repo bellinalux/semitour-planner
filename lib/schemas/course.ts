@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ITEM_TYPES } from "@/lib/itemTypes";
 import { isSupportedCourseFile, MAX_COURSE_FILE_BYTES } from "@/lib/courseFile";
 import { roundMinutes } from "@/lib/format";
-import { applyFlightWithMeals } from "@/lib/flightApply";
+import { applyFlightWithMeals, looksLikeFlightItem } from "@/lib/flightApply";
 import { clampMealStay, enforceMealWindows } from "@/lib/mealTiming";
 import type { CourseMeta, DayPlan, FlightOption, ItineraryItem } from "@/types";
 
@@ -141,10 +141,17 @@ type ParsedCourse = z.infer<typeof courseResponseSchema>;
 /** 입장/체험 요금이 붙지 않는 항목 유형 */
 const NO_FEE_TYPES = new Set(["flight", "transfer", "hotel", "free_time", "meal"]);
 
+/** "마카오 공항 도착", "인천 국제공항 출발"처럼 공항 출발·도착인데 관광 등으로 분류된 항목은 항공으로 바로잡는다 */
+function itemType(raw: { type: string; name: string }): ItineraryItem["type"] {
+  const airport = /공항|airport/i.test(raw.name) && /도착|출발|arriv|depart/i.test(raw.name);
+  if (airport && !["flight", "transfer", "hotel", "meal"].includes(raw.type)) return "flight";
+  return raw.type as ItineraryItem["type"];
+}
+
 function toItem(raw: ParsedCourse["days"][number]["items"][number], id: string): ItineraryItem {
   return {
     id,
-    type: raw.type as ItineraryItem["type"],
+    type: itemType(raw),
     admission: raw.admission,
     timeNote: raw.timeNote.trim() || undefined,
     name: raw.name.trim(),
@@ -152,7 +159,7 @@ function toItem(raw: ParsedCourse["days"][number]["items"][number], id: string):
     stayMinutes: clampMealStay(raw.type, `${raw.name} ${raw.description}`, roundMinutes(raw.stayMinutes)),
     travelMinutesToNext: roundMinutes(raw.travelMinutesToNext),
     // 입장 개념이 없어도(마사지, 체험) 요금은 있을 수 있다. 외부 조망이나 요금이 없는 유형만 0으로 둔다.
-    entryFee: raw.admission === "view_only" || NO_FEE_TYPES.has(raw.type) ? 0 : Math.max(0, raw.entryFee),
+    entryFee: raw.admission === "view_only" || NO_FEE_TYPES.has(itemType(raw) ?? "") ? 0 : Math.max(0, raw.entryFee),
     mealCost: raw.type === "meal" ? Math.max(0, raw.mealCost) : 0,
     isEstimated: true,
     caution: raw.caution.trim() || undefined,
@@ -219,7 +226,7 @@ const TIME_RANGE = /(\d{1,2}:\d{2})\s*(?:~|〜|∼|-|–|—|→)\s*(\d{1,2}:\d{
 export function flightTimesInDay(day: DayPlan | undefined): { depart: string; arrive: string } | null {
   if (!day) return null;
   for (const item of day.items) {
-    if (item.type !== "flight") continue;
+    if (!looksLikeFlightItem(item)) continue;
     const m = TIME_RANGE.exec(`${item.name} ${item.description}`);
     if (m) return { depart: m[1].padStart(5, "0"), arrive: m[2].padStart(5, "0") };
   }

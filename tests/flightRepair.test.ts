@@ -59,3 +59,29 @@ describe("이미 만든 일정표의 항공 시각 바로잡기", () => {
     expect(repairFlightTimes(days, input({ selectedFlight: null }), null)).toBeNull();
   });
 });
+
+describe("저장된 일정에서 공항 도착이 관광으로 분류돼 있어도", () => {
+  it("중복 도착 항목을 만들지 않고 그 항목을 12:50 도착으로 맞춘다", () => {
+    const days = [
+      linearDay(
+        1,
+        [
+          item("dep", { type: "flight", name: "인천 국제공항 출발", stayMinutes: 0, travelMinutesToNext: 20 }),
+          item("arr", {
+            type: "sightseeing",
+            name: "마카오 공항 도착, 가이드 미팅",
+            description: "제주항공 (09:50 ~ 12:50)",
+            stayMinutes: 40,
+            travelMinutesToNext: 20,
+          }),
+          item("s1", { name: "탑석광장", stayMinutes: 30 }),
+        ],
+        { meetingTime: "09:50" },
+      ),
+      linearDay(2, [item("s", { name: "콜로안 빌리지" })]),
+    ];
+    const fixed = repairFlightTimes(days, { selectedFlight: null }, null)!;
+    expect(fixed[0].items.map((i) => i.id)).toEqual(["dep", "arr", "s1"]);
+    expect(starts(fixed[0]).slice(0, 2)).toEqual(["09:50", "12:50"]);
+  });
+});

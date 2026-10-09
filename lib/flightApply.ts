@@ -53,9 +53,10 @@ function legLine(leg: FlightLeg): string {
  * (예: "출발 국제공항 출발"을 단순 이동으로 착각), type이 명백히 다른 유형(관광·식사 등)이
  * 아닌 한 이름으로도 한 번 더 확인한다.
  */
-function looksLikeFlightItem(item: ItineraryItem): boolean {
+export function looksLikeFlightItem(item: ItineraryItem): boolean {
   if (item.type === "flight") return true;
-  if (item.type !== undefined && item.type !== "transfer") return false;
+  // AI가 공항 도착을 관광·체험으로 잘못 분류한 경우도 이름으로 알아본다 (식사·숙소·자유시간은 아님)
+  if (item.type !== undefined && !["transfer", "sightseeing", "experience"].includes(item.type)) return false;
   return item.name.includes("공항") && (item.name.includes("출발") || item.name.includes("도착"));
 }
 
