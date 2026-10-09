@@ -1,4 +1,5 @@
-import { clockDiffMinutes, clockMinutes, shiftClock, walkTimeline } from "@/lib/dayLoad";
+import { clockDiffMinutes, clockMinutes, dayMeetingTime, shiftClock, walkTimeline } from "@/lib/dayLoad";
+import { refitMealWindows } from "@/lib/mealTiming";
 import { TIME_STEP } from "@/lib/format";
 import { addDays, isBreakfastItem, parseDate } from "@/lib/documents";
 import { mapDayItems } from "@/lib/itinerary";
@@ -319,4 +320,16 @@ export function checkReturnDate(input: Pick<TripInput, "departureDate" | "days" 
   }
 
   return { expectedReturnDate: expectedText, flightReturnDate: flightReturn, mismatched, suggestedDays };
+}
+
+/**
+ * 항공편을 반영하고, 첫날(가는 편) 식사 시간대 맞춤 자유시간을 새 시작 시각으로 다시 계산한다.
+ * 예전 시각(예: 기본 08:00)으로 넣어 둔 자유시간이 남으면 도착 뒤 점심이 너무 늦게 밀린다.
+ * 마지막 날은 귀국편 출발 시각에 맞춰 거꾸로 계산하므로 다시 계산하지 않는다(출발 시각이 어긋나지 않게).
+ */
+export function applyFlightWithMeals(days: DayPlan[], flight: FlightOption): DayPlan[] {
+  const next = applyFlightToDays(days, flight);
+  if (next === days || next.length === 0 || next[0].kind !== "linear") return next;
+  const first = next[0];
+  return [{ ...first, items: refitMealWindows(first.items, dayMeetingTime(first)) }, ...next.slice(1)];
 }

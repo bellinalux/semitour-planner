@@ -3,6 +3,7 @@ import { describeAction, type FitPlan, type Upgrade } from "@/lib/budgetFit";
 import { ourPolicy } from "@/lib/competitorDiff";
 import { calcDayLoad } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
+import { flightMismatches, knownFlight } from "@/lib/flightRepair";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { buildPriceTiers, documentQuote } from "@/lib/pricing";
 import { setupChecklist, type SetupSection } from "@/lib/setupChecklist";
@@ -33,7 +34,8 @@ export type InsightAction =
   | { kind: "budget-apply"; label: string }
   | { kind: "budget-undo"; label: string }
   | { kind: "upgrade"; upgrade: Upgrade; label: string }
-  | { kind: "copy"; text: string; label: string };
+  | { kind: "copy"; text: string; label: string }
+  | { kind: "fix-flight"; label: string };
 
 export interface Insight {
   id: string;
@@ -195,8 +197,20 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
     });
   }
 
-  // ⑤ 비행 시간이 비었거나 너무 짧은 날 (검증되지 않은 시각으로 일정이 짜이지 않게)
-  for (const day of days) {
+  // ⑤ 확인된 항공편(고른 항공편·원문 시각)과 일정표의 항공 시각이 다르면 한 번에 맞추기
+  const mismatches = flightMismatches(days, knownFlight(days, input, meta));
+  if (mismatches.length > 0) {
+    out.push({
+      id: "flight-mismatch",
+      tone: "warn",
+      title: "항공 시각이 확인된 항공편과 다릅니다",
+      detail: mismatches.join(" / "),
+      action: { kind: "fix-flight", label: "항공 시각 맞추기" },
+    });
+  }
+
+  // ⑥ 비행 시간이 비었거나 너무 짧은 날 (검증되지 않은 시각으로 일정이 짜이지 않게) — 맞출 항공편이 있으면 위에서 처리
+  for (const day of mismatches.length > 0 ? [] : days) {
     const items = dayItems(day, pmChoice);
     items.forEach((item, i) => {
       if (item.type !== "flight" || i === items.length - 1) return;

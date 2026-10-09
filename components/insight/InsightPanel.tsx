@@ -23,6 +23,8 @@ interface Props {
   onScrollTo: (id: string) => void;
   onAddTourOption: (tour: TourCandidate) => void;
   onInsertTour: (tour: TourCandidate) => void;
+  /** 확인된 항공편 시각으로 일정표의 항공 시각을 다시 맞춘다 */
+  onFixFlight: () => void;
 }
 
 /** 한 번에 보여 줄 추천 수 — 처음 쓰는 사람이 부담스럽지 않게 */
@@ -78,7 +80,7 @@ function NumbersCard({ numbers, money }: { numbers: KeyNumbers; money: (v: numbe
  * 레이아웃3 — 요약·추천. 지금 견적의 핵심 숫자(판매가·원가·수익)를 위에 두고, 고치면 좋은 것을 중요한 순서로 보여 주며
  * 버튼으로 바로 적용한다(예산 맞추기·올리기·입력 폴더 열기·질문 복사). 자동 구성 진행도 여기서 본다.
  */
-export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour }: Props) {
+export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight }: Props) {
   const [showAll, setShowAll] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const visible = showAll ? insights : insights.slice(0, SHOW);
@@ -90,6 +92,9 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
         break;
       case "scroll":
         onScrollTo(action.target);
+        break;
+      case "fix-flight":
+        onFixFlight();
         break;
       case "budget-apply":
         budgetFit?.apply();

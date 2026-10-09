@@ -571,6 +571,8 @@ export interface CourseMeta {
   noOption: boolean;
   hotelGrade: string;
   highlights: string[];
+  /** 업체 코스표 원문에서 읽은 항공편 (출발·도착 시각) — 나중에 일정표 항공 시각을 바로잡을 때 쓴다 */
+  flight?: FlightOption | null;
 }
 
 export interface UspItem {

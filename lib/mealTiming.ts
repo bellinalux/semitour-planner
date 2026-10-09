@@ -15,13 +15,15 @@ function mealWindowStart(item: ItineraryItem): string | null {
   return null;
 }
 
+const FILLER_NOTE = "다음 식사 시간에 맞춰 비워 둔 자유시간입니다.";
+
 function freeTimeItem(id: string, minutes: number): ItineraryItem {
   return {
     id,
     type: "free_time",
     admission: "none",
     name: "자유시간",
-    description: "다음 식사 시간에 맞춰 비워 둔 자유시간입니다.",
+    description: FILLER_NOTE,
     stayMinutes: minutes,
     travelMinutesToNext: 0,
     entryFee: 0,
@@ -66,4 +68,18 @@ export function enforceMealWindows(items: ItineraryItem[], meetingTime: string =
     clock = (item.type === "flight" ? end : snapUp(end)) + Math.max(0, item.travelMinutesToNext ?? 0);
   }
   return result;
+}
+
+/** enforceMealWindows가 끼워 넣은 자유시간인지 (사람이 넣은 자유시간은 건드리지 않는다) */
+export const isMealFiller = (item: ItineraryItem) => item.type === "free_time" && /-free-\d+$/.test(item.id) && item.description === FILLER_NOTE;
+
+/**
+ * 하루 일정의 시작 시각이 바뀐 뒤(예: 항공 시각을 맞춘 뒤) 식사 시간대 맞춤 자유시간을 다시 계산한다.
+ * 예전 시각 기준으로 넣어 둔 자유시간은 빼고, 지금 미팅 시각으로 다시 넣는다.
+ */
+export function refitMealWindows(items: ItineraryItem[], meetingTime: string): ItineraryItem[] {
+  return enforceMealWindows(
+    items.filter((i) => !isMealFiller(i)),
+    meetingTime,
+  );
 }

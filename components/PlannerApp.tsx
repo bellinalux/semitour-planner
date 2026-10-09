@@ -54,13 +54,14 @@ import { prewarmEstimates } from "@/lib/autoQuoteRequests";
 import { timed } from "@/lib/perf";
 import { suggestionToOption } from "@/lib/optionSuggestions";
 import { newSegmentId, type SegmentKind } from "@/lib/segmentLibrary";
-import { applyFlightToDays, tripSpanFromFlight } from "@/lib/flightApply";
+import { applyFlightWithMeals, tripSpanFromFlight } from "@/lib/flightApply";
 import { dayItems, overnightNights } from "@/lib/itinerary";
 import { tourToOption } from "@/lib/options";
 import { buildUspRequest } from "@/lib/uspRequest";
 import { suggestPlanName, type PlanSnapshot, type ResultSnapshot } from "@/lib/workspace";
 import type { CourseFile } from "@/lib/courseFile";
 import { supplierQuotePatch } from "@/lib/supplierQuote";
+import { repairFlightTimes } from "@/lib/flightRepair";
 import type { DayPlan, FlightOption, ItineraryItem, TourCandidate, TripInput } from "@/types";
 
 const NO_USPS: never[] = [];
@@ -124,8 +125,10 @@ export function PlannerApp() {
     () => ({ days, pmChoice, meta, generatedCurrency: itinerary.generatedCurrency, usps, uspKey }),
     [days, pmChoice, meta, itinerary.generatedCurrency, usps, uspKey],
   );
-  const restoreResult = (saved: ResultSnapshot) => {
-    itinerary.restore(saved);
+  // 저장해 둔 일정을 되살릴 때, 항공 시각이 확인된 항공편(원문 시각·고른 항공편)과 어긋나 있으면 바로잡아서 넣는다
+  const restoreResult = (saved: ResultSnapshot, forInput: TripInput = input) => {
+    const fixed = repairFlightTimes(saved.days, forInput, saved.meta);
+    itinerary.restore(fixed ? { ...saved, days: fixed } : saved);
     usp.restore(saved.usps, saved.uspKey);
   };
   useWorkPersistence(result, restoreResult);
@@ -133,7 +136,7 @@ export function PlannerApp() {
   const snapshot = useMemo<PlanSnapshot>(() => ({ ...result, input }), [result, input]);
   const handleLoadPlan = (saved: PlanSnapshot) => {
     replace(saved.input);
-    restoreResult(saved);
+    restoreResult(saved, saved.input);
     if (saved.days.length > 0) setTab("result");
   };
 
@@ -207,7 +210,7 @@ export function PlannerApp() {
       ...withSource(input, "flight", "flight", [flight.airline, flight.flightNumber].filter(Boolean).join(" ")),
       ...(span ? { departureDate: span.departureDate, days: span.days, nights: span.nights, includesFlights: true } : {}),
     });
-    itinerary.replaceDays(applyFlightToDays(days, flight));
+    itinerary.replaceDays(applyFlightWithMeals(days, flight));
   };
 
   // 견적에 넣은 원가를 여행지별로 기억해, 다음에 같은 여행지 견적을 만들 때 자동 견적이 불러온다
@@ -270,6 +273,10 @@ export function PlannerApp() {
       onScrollTo={scrollToResult}
       onAddTourOption={(tour) => update({ options: [...input.options, tourToOption(tour, 0, input)] })}
       onInsertTour={insertTour}
+      onFixFlight={() => {
+        const fixed = repairFlightTimes(days, input, meta);
+        if (fixed) itinerary.replaceDays(fixed);
+      }}
     />
   );
 
