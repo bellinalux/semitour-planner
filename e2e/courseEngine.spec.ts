@@ -158,3 +158,40 @@ test("지그재그 동선: 떠났던 구역으로 되돌아오는 날을 알리�
   await page.locator("#course-engine").getByRole("button", { name: "되돌리기" }).click();
   await expect(day1.getByText(/지그재그 동선/)).toBeVisible();
 });
+
+test("동선상 식당: 다른 지역 식당에 갔다가 되돌아오면 알리고, 그 지역 식당으로 바꾼다", async ({ page }) => {
+  await mockAi(page);
+  await page.route("**/api/suggest-restaurant", (r) =>
+    r.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        searched: true,
+        sources: [],
+        restaurants: [
+          { name: "찬 셍 케이", cuisine: "광둥 요리", area: "콜로안 빌리지 광장", walkMinutes: 1, mealCost: 0, groupOk: true, reason: "단체 원형 테이블", sourceName: "미쉐린 가이드" },
+        ],
+      }),
+    }),
+  );
+  const rg = (id: string, name: string, region: string, type = "sightseeing") => ({
+    ...area(id, name, region, 30, 10),
+    type,
+    timeCheck: { basis: "area", area: region, region, checkedAt: "2026-10-09T00:00:00Z" },
+  });
+  const mealWork = { ...work, days: [{ ...work.days[0], items: [rg("c1", "콜로안 빌리지", "콜로안"), rg("l", "점심 식사 (딤섬)", "코타이", "meal"), rg("c2", "하비에르 성당", "콜로안")] }] };
+  await page.addInitScript((w) => {
+    if (sessionStorage.getItem("e2e-seeded")) return;
+    sessionStorage.setItem("e2e-seeded", "1");
+    localStorage.setItem("semitour-planner:input:v1", JSON.stringify({ mode: "paste", destination: "마카오", days: 1, nights: 0, travelers: 8 }));
+    localStorage.setItem("semitour-planner:work:v1", JSON.stringify(w));
+  }, mealWork);
+  await page.goto("/");
+
+  const day1 = page.locator("#day-1");
+  await expect(day1.getByText(/점심 식사 \(딤섬\)이\(가\) 코타이에 있어/)).toBeVisible();
+  await day1.getByRole("button", { name: "콜로안 식당 찾기" }).click();
+  await day1.getByRole("button", { name: "이 식당으로 바꾸기" }).click();
+  await expect(day1.getByText("점심 식사 (찬 셍 케이)")).toBeVisible();
+  await expect(day1.getByText(/코타이에 있어/)).toHaveCount(0);
+  await expect(day1.getByText(/지그재그 동선/)).toHaveCount(0);
+});

@@ -50,6 +50,7 @@ export const planRequestSchema = z.object({
   legs: z.array(z.object({ from: z.string().max(80), to: z.string().max(80), minutes: z.number().min(0).max(600) })).max(40).optional(),
   /** 항공 등으로 시작 시각이 정해진 날 */
   fixedStart: z.boolean().optional(),
+  homeRegion: z.string().max(60).optional(),
 });
 export type PlanRequest = z.infer<typeof planRequestSchema>;
 
@@ -259,7 +260,7 @@ export async function planCourse(req: PlanRequest): Promise<PlanResponse> {
   const o: EngineOptions = {
     start: req.start, weekday: weekday ?? undefined, maxEnd: req.maxEnd, mode: req.mode, audience: req.audience as Audience,
     lunch: { from: "11:30", to: lunchEnd }, dinner: { from: "18:00", to: "20:30" }, sunset: sun?.sunset, bufferMin: 5,
-    exactLegs, fixedStart: req.fixedStart,
+    exactLegs, fixedStart: req.fixedStart, ...(req.homeRegion ? { homeRegion: req.homeRegion } : {}),
   };
   const r = planDay(places, M, o, req.reorder);
   // 공휴일은 감점하지 않고 안내만 한다(화면 머리줄에 표시) — 실제 휴관은 영업시간으로 잡힌다

@@ -7,7 +7,10 @@ import { formatDuration } from "@/lib/format";
 import { dayItems } from "@/lib/itinerary";
 import type { SegmentKind } from "@/lib/segmentLibrary";
 import type { DayPlan, CurrencyCode, ItineraryItem, OptionSuggestion, PmFreeOption, TourSlot, TripScope } from "@/types";
+import { continuousDriving } from "@/lib/driverHours";
+import { offRouteMeals } from "@/lib/routeOrder";
 import { DayFillPanel } from "./DayFillPanel";
+import { MealRoutePanel } from "./MealRoutePanel";
 import { PmOptionSwitch } from "./PmOptionSwitch";
 import { RouteCheckPanel } from "./RouteCheckPanel";
 import { SessionBlock } from "./SessionBlock";
@@ -39,6 +42,8 @@ interface Props {
   hotelName?: string;
   /** 동선 확인에 쓰는 여행지 (국가·지역) */
   destination: string;
+  /** 인원 (동선상 식당을 찾을 때 단체 수용 기준) */
+  travelers?: number;
   /** 국내(한국 방문 외국인 대상)/해외 여행. 추천일정 검색 대상 관광객을 정한다 */
   tripScope: TripScope;
   currency: CurrencyCode;
@@ -62,6 +67,7 @@ export function DayCard({
   days,
   hotelName,
   destination,
+  travelers,
   tripScope,
   currency,
   selectedPmId,
@@ -177,7 +183,7 @@ export function DayCard({
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
           <span className="min-w-0 flex-1 text-pretty">
             지그재그 동선 — {engine.zigzags[plan.day].map((z) => `${z.from} → ${z.area}로 되돌아옴`).join(", ")}. 구역을 한 방향으로 돌아야 이동이 줄어듭니다.
-            {!engine.zigzagFixable[plan.day] && " 식당 위치 때문이라 코스 엔진 점검에서 점심 자리까지 함께 순서를 바꾸세요."}
+            {!engine.zigzagFixable[plan.day] && " 식당 위치 때문이라 아래에서 동선상 식당으로 바꾸거나, 코스 엔진 점검으로 순서를 맞추세요."}
           </span>
           {engine.zigzagFixable[plan.day] ? (
             <button type="button" onClick={() => engine.groupAreas(plan.day)} className="shrink-0 rounded border border-amber-400 bg-white px-2 py-0.5 font-semibold hover:bg-amber-100">
@@ -194,6 +200,17 @@ export function DayCard({
           )}
         </p>
       )}
+      {continuousDriving(plan, pmChoiceForDay).map((w) => (
+        <p key={`${w.from}-${w.to}`} className="flex items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span className="text-pretty">
+            기사 연속 운전 {formatDuration(w.minutes)} ({w.from} → {w.to}) — 국내 전세버스 기준은 4시간 연속 운전마다 30분 이상 휴게(15분씩 나눠 쉬기 가능)입니다. 중간에 휴게소·관광지 정차를 넣으세요. 해외는 현지 규정을 업체에 확인하세요.
+          </span>
+        </p>
+      ))}
+      {offRouteMeals(plan, pmChoiceForDay).map((m) => (
+        <MealRoutePanel key={m.mealId} meal={m} destination={destination} travelers={travelers} tripScope={tripScope} currency={currency} onReplace={onChangeItem} />
+      ))}
       {dayEnd?.isLate && (
         <p className="flex items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />

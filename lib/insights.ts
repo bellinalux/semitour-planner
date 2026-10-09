@@ -230,8 +230,8 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
       title: `DAY ${k} 동선이 지그재그입니다`,
       ...(engine?.zigzagFixable?.[Number(k)] === false
         ? {
-            detail: `${zig.map((z) => `${z.from} → ${z.area}로 되돌아옴`).join(", ")} — 식당 위치 때문이라 코스 엔진 점검에서 점심 자리까지 함께 순서를 바꾸세요`,
-            action: { kind: "scroll" as const, target: "course-engine", label: "코스 엔진 점검 보기" },
+            detail: `${zig.map((z) => `${z.from} → ${z.area}로 되돌아옴`).join(", ")} — 식당 위치 때문입니다. 일정 카드에서 그 지역 안 식당으로 바꾸거나, 코스 엔진 점검으로 순서를 맞추세요`,
+            action: { kind: "scroll" as const, target: `day-${k}`, label: "일정 카드 보기" },
           }
         : {
             detail: `${zig.map((z) => `${z.from} → ${z.area}로 되돌아옴`).join(", ")} — 구역을 한 방향으로 돌도록 같은 지역 장소를 붙입니다 (식사·밤 일정·숙소 복귀는 제자리)`,

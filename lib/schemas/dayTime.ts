@@ -36,9 +36,11 @@ export const dayTimeAreaSchema = z.object({
   walkMinutes: z.number().describe("구역 안 장소 사이 보통 도보 시간(분). 확인 못했으면 0"),
   travelToNextMinutes: z.number().describe("이 구역 마지막 장소에서 다음 항목까지 이동 시간(분). 다음이 없거나 확인 못했으면 0"),
   sourceName: z.string().describe("근거로 삼은 출처 이름 (여행사 일정표·클룩·관광청 등). 없으면 빈 문자열"),
+  dropOff: z.string().describe("전세 차량·버스가 내려 주는 곳 (구역 걷기 시작점, 예: 세나도 광장 입구). 차량이 못 들어가는 구역이 아니거나 모르면 빈 문자열"),
+  pickUp: z.string().describe("구역을 다 걸은 뒤 차량이 기다리는 곳 (걷기 끝점, 예: 성바울 성당 아래 주차장). 모르면 빈 문자열"),
 });
 /** 큰 지역(region)은 예전 결과(저장된 캐시)에는 없을 수 있다 */
-export type DayTimeArea = Omit<z.infer<typeof dayTimeAreaSchema>, "region"> & { region?: string };
+export type DayTimeArea = Omit<z.infer<typeof dayTimeAreaSchema>, "region" | "dropOff" | "pickUp"> & { region?: string; dropOff?: string; pickUp?: string };
 
 export const dayTimeResultSchema = z.object({ areas: z.array(dayTimeAreaSchema) });
 

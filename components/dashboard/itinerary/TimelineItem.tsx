@@ -190,7 +190,17 @@ export function TimelineItem({
               <Check className="size-3" aria-hidden />
               구역 확인{item.timeCheck.area ? ` · ${item.timeCheck.area}` : ""}
             </span>
-          ) : item.timeCheck?.basis === "place" || item.feeCheck?.stayMinutesChecked ? (
+          ) : null}
+          {item.timeCheck?.basis === "area" && (item.timeCheck.dropOff || item.timeCheck.pickUp) ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800"
+              title="차량이 못 들어가는 걷기 구역 — 한 방향으로 걷고 차량은 반대편에서 기다립니다. 가이드·기사에게 미리 알려 주세요"
+            >
+              <Bus className="size-3" aria-hidden />
+              {[item.timeCheck.dropOff && `하차 ${item.timeCheck.dropOff}`, item.timeCheck.pickUp && `픽업 ${item.timeCheck.pickUp}`].filter(Boolean).join(" → 걸어서 → ")}
+            </span>
+          ) : null}
+          {item.timeCheck?.basis === "area" ? null : item.timeCheck?.basis === "place" || item.feeCheck?.stayMinutesChecked ? (
             <span
               className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
               title={`이 장소 하나만 웹에서 확인한 통상적인 ${stayTimeLabel(item.type)} 시간 — 걸어서 함께 도는 장소들이면 일정 카드의 '시간 검증'으로 구역 단위로 맞추세요`}

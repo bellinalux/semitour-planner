@@ -67,10 +67,12 @@ function fitList(items: ItineraryItem[], areas: DayTimeArea[], checkedAt: string
       if (nextInArea) next[i].travelMinutesToNext = walk;
       else if (k === idxs.length - 1 && area.travelToNextMinutes > 0) next[i].travelMinutesToNext = roundMinutes(area.travelToNextMinutes) || UNIT;
     });
-    for (const m of members) {
+    for (const [k, m] of members.entries()) {
       m.timeCheck = {
         basis: "area",
         area: area.name,
+        ...(k === 0 && area.dropOff ? { dropOff: area.dropOff } : {}),
+        ...(k === 0 && area.pickUp ? { pickUp: area.pickUp } : {}),
         ...(area.region ? { region: area.region } : {}),
         sourceName:
           [area.sourceName, foldWalk && area.walkMinutes > 0 ? `구역 안 도보 ${area.walkMinutes}분 포함` : ""].filter(Boolean).join(" · ") || undefined,

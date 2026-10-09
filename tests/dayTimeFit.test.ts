@@ -47,6 +47,15 @@ describe("일정 시간 검증 (구역 단위)", () => {
     expect(byId.get("m")!.stayMinutes).toBe(60); // 식사는 구역 밖이면 그대로
   });
 
+  it("큰 지역은 구역 장소 모두에, 차량 하차·픽업 지점은 구역 첫 장소에만 붙인다", () => {
+    const withPoints: DayTimeArea[] = [{ ...areas[0], region: "마카오 반도", dropOff: "세나도 광장 입구", pickUp: "성바울 성당 아래" }, areas[1]];
+    const byId = new Map(fitDayTimes(day(), withPoints, "x").items.map((i) => [i.id, i]));
+    expect(byId.get("a1")!.timeCheck).toMatchObject({ region: "마카오 반도", dropOff: "세나도 광장 입구", pickUp: "성바울 성당 아래" });
+    expect(byId.get("a2")!.timeCheck).toMatchObject({ region: "마카오 반도" });
+    expect(byId.get("a2")!.timeCheck?.dropOff).toBeUndefined();
+    expect(byId.get("b1")!.timeCheck?.region).toBeUndefined();
+  });
+
   it("하루 체류+이동이 크게 줄어든다 (장소별 합산 → 구역 기준)", () => {
     const before = calcDayLoad(day(), {}).totalMinutes;
     const after = calcDayLoad(fitDayTimes(day(), areas, "x"), {}).totalMinutes;

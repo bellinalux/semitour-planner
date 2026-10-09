@@ -13,13 +13,14 @@ import { roundMinutes } from "@/lib/format";
 import { refitMealWindows } from "@/lib/mealTiming";
 
 export interface EngineDayRequest {
-  places: { id: string; name: string; stayMin: number; kind?: "sight" | "meal" | "free" | "transfer" | "end"; priority?: 1 | 2 | 3; fixedOrder?: "first" | "last"; meal?: "lunch" | "dinner" | "cafe"; area?: string }[];
+  places: { id: string; name: string; stayMin: number; kind?: "sight" | "meal" | "free" | "transfer" | "end"; priority?: 1 | 2 | 3; fixedOrder?: "first" | "last"; meal?: "lunch" | "dinner" | "cafe"; area?: string; region?: string; best?: "night" }[];
   city: string; country: string; date?: string; start: string; maxEnd: string;
   mode: "car" | "walk" | "public"; audience: "any" | "couple" | "family" | "senior" | "group"; reorder: boolean; lookup: boolean;
   /** 앱 일정표의 이동 시간 (이어지는 두 항목마다) — 엔진이 일정표와 같은 시계로 채점하게 */
   legs?: { from: string; to: string; minutes: number }[];
   /** 항공 등으로 시작 시각이 정해진 날 */
   fixedStart?: boolean;
+  homeRegion?: string;
 }
 
 const KIND: Record<string, EngineDayRequest["places"][number]["kind"]> = { meal: "meal", free_time: "free", transfer: "transfer", hotel: "end", massage: "sight", shopping: "sight", experience: "sight", sightseeing: "sight" };
@@ -72,6 +73,11 @@ export function buildDayRequest(day: DayPlan, pmChoice: PmChoice, o: { destinati
   const startOf = new Map(walkTimeline(all, dayMeetingTime(day)).map((s) => [s.item.id, s.start]));
   const firstStart = startOf.get(items[0].id);
   const hasFlight = all.some((i) => (i.type ?? "") === "flight");
+  // 숙소 쪽 지역: 숙소 항목, 없으면 하루 마지막의 야경·저녁 일정이 있는 지역 (시간 검증으로 붙은 큰 지역)
+  const regionOfItem = (i: ItineraryItem) => (i.timeCheck?.basis === "area" ? i.timeCheck.region || i.timeCheck.area : undefined);
+  const homeRegion =
+    regionOfItem(all.find((i) => i.type === "hotel") ?? ({} as ItineraryItem)) ??
+    [...all].reverse().filter((i) => EVENING.test(`${i.name} ${i.description}`)).map(regionOfItem).find(Boolean);
   // 이어지는 두 항목의 일정표 이동 시간 (사이에 항공이 끼면 넣지 않는다)
   const legs = items.slice(1).flatMap((it, k) => {
     const prev = items[k];
@@ -95,6 +101,7 @@ export function buildDayRequest(day: DayPlan, pmChoice: PmChoice, o: { destinati
     }),
     legs,
     ...(hasFlight ? { fixedStart: true } : {}),
+    ...(homeRegion ? { homeRegion } : {}),
     city, country,
     ...(o.departureDate && /^\d{4}-\d{2}-\d{2}$/.test(o.departureDate) ? { date: addDays(o.departureDate, day.day - 1) } : {}),
     // 야경·분수쇼·저녁 식사 같은 저녁 일정이 있는 날은 19시에 끊으면 엔진이 그 일정을 빼 버린다

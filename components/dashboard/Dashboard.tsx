@@ -143,6 +143,7 @@ export function Dashboard({
         krwRate={input.exchangeRateToKrw}
         travelType={input.mode === "paste" ? "semi" : input.travelType}
         destination={input.destination}
+        travelers={input.travelers}
         engine={{ departureDate: input.departureDate || undefined, onDepartureDate: (departureDate) => onInputChange({ departureDate }) }}
         tripScope={input.tripScope}
         researchInfo={researchInfo}

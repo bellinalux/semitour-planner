@@ -58,6 +58,8 @@ interface Props {
   travelType: TravelType;
   /** 동선 확인에 쓰는 여행지 (국가·지역) */
   destination: string;
+  /** 인원 (동선상 식당을 찾을 때 단체 수용 기준) */
+  travelers?: number;
   /** 국내(한국 방문 외국인 대상)/해외 여행. 추천일정 검색 대상 관광객을 정한다 */
   tripScope: TripScope;
   researchInfo: { sources: SearchSource[]; researched: boolean };
@@ -96,6 +98,7 @@ export function ItineraryPanel({
   currency,
   travelType,
   destination,
+  travelers,
   tripScope,
   engine,
   researchInfo,
@@ -235,6 +238,7 @@ export function ItineraryPanel({
                   days={days}
                   hotelName={plan.overnightCity ? selectedHotels[plan.overnightCity.trim()]?.name : undefined}
                   destination={destination}
+                  travelers={travelers}
                   tripScope={tripScope}
                   currency={currency}
                   selectedPmId={pmChoice[plan.day] ?? "A"}

@@ -10,7 +10,7 @@ import type { EngineOptions, EnginePlace, ScheduleResult, TimelineStop } from ".
 type Matrix = number[][];
 const HARD = 10_000;
 
-interface Sim { cost: number; hard: number; stops: TimelineStop[]; travel: number; wait: number; end: number; violations: string[]; zigzag: string[] }
+interface Sim { cost: number; hard: number; stops: TimelineStop[]; travel: number; wait: number; end: number; violations: string[]; zigzag: string[]; zigzagIds: string[]; homeFirst: boolean }
 
 /** 떠났던 구역으로 되돌아올 때 더하는 벌점(분) — 이동이 조금 늘더라도 구역을 한 방향으로 돌게 한다 */
 const ZIGZAG_COST = 120;
@@ -21,6 +21,8 @@ const ZIGZAG_COST = 120;
  */
 const AGAINST_WALK = 15;
 const AGAINST_AREA = 30;
+/** 숙소 쪽 지역에서 먼저 돌다가 먼 지역으로 떠나는 벌점(분) — 업계 관행은 먼 곳 먼저, 숙소 쪽은 하루 끝 */
+const AWAY_FROM_HOME = 20;
 /** 되돌아와도 되는 곳 — 숙소·공항 등 복귀 이동, 자유시간, 밤 일정(숙소 쪽으로 돌아가며 하는 야경 등) */
 const returnOk = (p: EnginePlace) => p.kind === "end" || p.kind === "transfer" || p.kind === "free" || p.best === "night";
 /**
@@ -41,7 +43,7 @@ export function simulate(order: number[], places: EnginePlace[], M: Matrix, o: E
   const sunset = hm(o.sunset);
   const buf = o.bufferMin ?? 5;
   let t = start0, cost = 0, hard = 0, travel = 0, wait = 0;
-  const stops: TimelineStop[] = [], violations: string[] = [], zigzag: string[] = [];
+  const stops: TimelineStop[] = [], violations: string[] = [], zigzag: string[] = [], zigzagIds: string[] = [];
   // 구역 흐름: 지금 구역과 이미 떠난 구역들 (구역을 모르는 관광지는 그 장소 하나를 구역으로 본다, 구역 없는 식사는 흐름에 끼지 않는다)
   let curArea: string | null = null;
   const leftAreas = new Set<string>();
@@ -49,6 +51,7 @@ export function simulate(order: number[], places: EnginePlace[], M: Matrix, o: E
   const firstOfArea = new Map<string, number>();
   places.forEach((q, i) => { const k = q.region || q.area; if (k && !firstOfArea.has(k)) firstOfArea.set(k, i); });
   const lastInArea = new Map<string, number>();
+  let homeFirst = false;
   order.forEach((pi, k) => {
     const p = places[pi], issues: string[] = [];
     const tr = k === 0 ? 0 : M[order[k - 1]][pi];
@@ -98,9 +101,11 @@ export function simulate(order: number[], places: EnginePlace[], M: Matrix, o: E
       const from = curArea && !curArea.startsWith("#") ? firstOfArea.get(curArea) : undefined;
       const to = firstOfArea.get(area);
       if (from != null && to != null && to < from && !leftAreas.has(area)) cost += AGAINST_AREA;
+      if (o.homeRegion && curArea === o.homeRegion && area !== o.homeRegion) { cost += AWAY_FROM_HOME; homeFirst = true; }
       if (leftAreas.has(area)) {
         const name = p.region || p.area || p.name;
         zigzag.push(`${name}${!p.region && p.area ? " 구역" : ""}(으)로 되돌아옴 (${curArea && !curArea.startsWith("#") ? curArea : (stops[stops.length - 1]?.name ?? "")} 다음)`);
+        zigzagIds.push(p.id);
         cost += ZIGZAG_COST;
       }
       if (curArea) leftAreas.add(curArea);
@@ -115,7 +120,7 @@ export function simulate(order: number[], places: EnginePlace[], M: Matrix, o: E
   });
   if (maxEnd != null && t > maxEnd) { violations.push(`하루 끝 ${fmt(t)} — ${fmt(maxEnd)}보다 늦음`); hard++; cost += (t - maxEnd) * 3; }
   cost += travel + wait * 0.4 + hard * HARD;
-  return { cost, hard, stops, travel, wait, end: t, violations, zigzag };
+  return { cost, hard, stops, travel, wait, end: t, violations, zigzag, zigzagIds, homeFirst };
 }
 
 function permuteBest(mid: number[], head: number[], tail: number[], places: EnginePlace[], M: Matrix, o: EngineOptions): number[] {
@@ -189,7 +194,7 @@ export function schedule(places: EnginePlace[], M: Matrix, o: EngineOptions): Sc
     active = active.filter(i => i !== victim);
   }
   return {
-    order: best.map(i => places[i].id), timeline: sim.stops, violations: sim.violations, zigzag: sim.zigzag, dropped,
+    order: best.map(i => places[i].id), timeline: sim.stops, violations: sim.violations, zigzag: sim.zigzag, zigzagIds: sim.zigzagIds, homeFirst: sim.homeFirst, dropped,
     totalTravel: sim.travel, totalWait: sim.wait, endTime: sim.end,
     savedTravel: Math.max(0, original.travel - sim.travel), method,
   };

@@ -55,6 +55,8 @@ export interface EngineOptions {
   exactLegs?: string[];
   /** 항공 등으로 시작 시각이 정해진 날 — "출발 당기기"를 제안하지 않는다 */
   fixedStart?: boolean;
+  /** 숙소가 있는 지역 — 먼 곳을 먼저 돌고 숙소 쪽은 하루 끝에 (숙소 쪽에서 시작해 멀리 갔다가 돌아오면 작은 벌점) */
+  homeRegion?: string;
   mode: MoveMode;
   audience?: Audience;
   /** 일몰 "19:42" (best=sunset 장소를 그 전에) */
@@ -82,6 +84,10 @@ export interface ScheduleResult {
   violations: string[];
   /** 떠났던 구역으로 되돌아온 곳 (지그재그 동선) */
   zigzag?: string[];
+  /** 되돌아온 장소 id (zigzag와 같은 순서) */
+  zigzagIds?: string[];
+  /** 숙소 쪽 지역을 먼저 돌고 먼 지역으로 떠났는지 */
+  homeFirst?: boolean;
   /** 넣지 못해 뺀 곳과 이유 */
   dropped: { id: string; name: string; reason: string }[];
   totalTravel: number;

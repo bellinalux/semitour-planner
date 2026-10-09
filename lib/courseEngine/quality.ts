@@ -2,7 +2,7 @@
  * 코스 품질 점수 (100점) — 전문가 검수 기준을 다섯 갈래로 채점하고, 고칠 방법을 제안한다.
  *  시간 맞음 30 · 동선 25 · 일정 밀도 15 · 체력 15 · 식사 15
  */
-import { fmt, hm } from "./time";
+import { dayKey, fmt, hm, parseRange } from "./time";
 import type { Audience, EngineOptions, EnginePlace, QualityFix, QualityItem, QualityReport, ScheduleResult } from "./types";
 
 const PACE: Record<Audience, { maxStops: number; maxDay: number; maxWalkLeg: number }> = {
@@ -34,9 +34,31 @@ export function scoreCourse(places: EnginePlace[], current: ScheduleResult, o: E
   const rIssues: string[] = [];
   let rScore = 25;
   if (ratio > 0.3) { rScore -= Math.min(15, Math.round((ratio - 0.3) * 50)); rIssues.push(`이동이 일정의 ${Math.round(ratio * 100)}% — 30% 이하가 좋습니다`); }
-  // 지그재그: 떠났던 구역으로 되돌아오면 한 번에 8점 (숙소·공항 복귀와 밤 일정은 괜찮다)
+  // 지그재그: 떠났던 구역으로 되돌아오면 한 번에 8점 (숙소·공항 복귀와 밤 일정은 괜찮다).
+  // 엔진이 다른 순서로도 피하지 못한 되돌아옴은 이유(예약 시각·영업 시작·식사 시간대)를 붙이고 3점만 뺀다
   const zig = current.zigzag ?? [];
-  if (zig.length) { rScore -= Math.min(16, zig.length * 8); rIssues.push(`지그재그 이동 — ${zig.join(", ")}`); }
+  // best가 없으면(엔진이 고른 결과 자체를 채점할 때) 그 결과의 되돌아옴이 곧 엔진도 피하지 못한 것
+  const forced = new Set((best ?? current).zigzagIds ?? []);
+  const reasonOf = (id: string): string => {
+    const p = byId.get(id);
+    if (!p) return "";
+    if (p.fixedTime) return `예약 ${p.fixedTime} 고정`;
+    const day = dayKey(o.weekday);
+    const ranges = day && p.open ? parseRange(p.open[day]) : null;
+    if (ranges?.length) return `영업 ${fmt(ranges[0][0])} 시작`;
+    if (p.lastEntry) return `마지막 입장 ${p.lastEntry}`;
+    if (p.kind === "meal" && p.meal !== "cafe") return `${p.meal === "dinner" ? "저녁" : "점심"} 시간대`;
+    return "";
+  };
+  (current.zigzagIds ?? []).forEach((id, k) => {
+    const why = forced.has(id) ? reasonOf(id) : "";
+    if (why) { rScore -= 3; rIssues.push(`되돌아옴 — ${zig[k]} (불가피: ${why})`); }
+    else { rScore -= 8; rIssues.push(`지그재그 이동 — ${zig[k]}`); }
+  });
+  if (current.homeFirst && o.homeRegion) {
+    rScore -= 2;
+    rIssues.push(`숙소 쪽(${o.homeRegion})을 먼저 돌고 먼 곳으로 갑니다 — 먼 곳 먼저, 숙소 쪽은 하루 끝이 좋습니다`);
+  }
   if (best && best.order.join() !== current.order.join()) {
     const save = current.totalTravel - best.totalTravel;
     const solved = current.violations.length - best.violations.length;

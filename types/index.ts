@@ -456,6 +456,9 @@ export interface ItineraryItem {
     area?: string;
     /** 구역이 속한 큰 지역 (예: 마카오 반도, 타이파) — 지그재그 동선을 볼 때 쓴다 */
     region?: string;
+    /** 구역 첫 장소에만: 차량 하차 지점과, 다 걸은 뒤 차량이 기다리는 곳 */
+    dropOff?: string;
+    pickUp?: string;
     sourceName?: string;
     checkedAt: string;
   };

@@ -59,6 +59,32 @@ describe("코스 엔진 — 한 방향으로, 원래 코스 순서대로", () =>
     expect(planDay(places, M, opts).best.order).toEqual(["탑석", "라자로", "몬테", "성바울", "세나도"]);
   });
 
+  it("엔진도 피할 수 없는 되돌아옴은 이유(예약 시각)를 붙이고 덜 감점한다", () => {
+    const places = [P("a1", "반도", { lastEntry: "10:30" }), P("t1", "타이파", { lastEntry: "11:00" }), P("a2", "반도", { fixedTime: "13:00" })];
+    const M = places.map((_, i) => places.map((__, j) => (i === j ? 0 : 10)));
+    const r = planDay(places, M, opts);
+    expect(r.best.order).toEqual(["a1", "t1", "a2"]);
+    const route = r.quality.items.find((i) => i.key === "route")!;
+    expect(route.issues.join()).toContain("불가피: 예약 13:00 고정");
+    expect(route.score).toBe(22);
+  });
+
+  it("숙소 쪽 지역을 먼저 돌면 알린다 — 원래 코스 순서가 우선이라, 이동이 줄 때만 순서를 바꾼다", () => {
+    const places = [P("c1", "코타이"), P("k1", "콜로안"), P("show", "코타이", { best: "night" })];
+    const M = places.map((_, i) => places.map((__, j) => (i === j ? 0 : 15)));
+    const home = { ...opts, homeRegion: "코타이" };
+    const r = planDay(places, M, home);
+    expect(r.quality.items.find((i) => i.key === "route")?.issues.join()).toContain("숙소 쪽(코타이)을 먼저");
+    expect(r.best.order).toEqual(["c1", "k1", "show"]);
+    // 숙소 쪽에서 먼 곳으로 가는 길이 멀면(왕복 이동이 크면) 먼 곳 먼저로 바꾼다
+    const far = [
+      [0, 40, 1],
+      [40, 0, 40],
+      [1, 40, 0],
+    ];
+    expect(planDay(places, far, { ...home, start: "10:00", sunset: "18:00" }).best.order).toEqual(["k1", "c1", "show"]);
+  });
+
   it("밤 일정(야경)은 지나온 구역이어도 지그재그가 아니다", () => {
     const places = [P("c1", "코타이"), P("a1", "반도"), P("show", "코타이", { best: "night" })];
     expect(planDay(places, [[0, 20, 1], [20, 0, 20], [1, 20, 0]], opts, false).current.zigzag).toEqual([]);
@@ -87,5 +113,26 @@ describe("큰 지역 기준·식당 위치", () => {
     ]);
     expect(findZigzag(d, {})).toEqual([{ area: "콜로안", from: "코타이" }]);
     expect(findZigzag(groupByArea(d), {})).toHaveLength(1);
+  });
+});
+
+describe("동선상 식당", () => {
+  const rg = (id: string, name: string, region: string, patch = {}) =>
+    item(id, { name, stayMinutes: 30, travelMinutesToNext: 10, timeCheck: { basis: "area", area: region, region, checkedAt: "x" }, ...patch });
+
+  it("앞뒤 장소와 다른 지역 식당에 갔다가 되돌아오면 알리고, 그 지역 안 식당을 찾을 기준을 준다", async () => {
+    const { offRouteMeals } = await import("@/lib/routeOrder");
+    const d = linearDay(1, [
+      rg("c1", "콜로안 빌리지", "콜로안"),
+      rg("lunch", "점심 식사 (딤섬)", "코타이", { type: "meal" }),
+      rg("c2", "하비에르 성당", "콜로안"),
+      rg("t1", "베네시안", "코타이"),
+    ]);
+    expect(offRouteMeals(d, {})).toEqual([
+      { mealId: "lunch", mealName: "점심 식사 (딤섬)", mealRegion: "코타이", hereRegion: "콜로안", nearPlaces: ["콜로안 빌리지", "하비에르 성당"], meal: "lunch", cuisine: "딤섬" },
+    ]);
+    // 식사 뒤 다른 지역으로 가는 길이면(콜로안 → 점심(코타이) → 코타이) 동선상이다
+    const onWay = linearDay(1, [rg("c1", "콜로안 빌리지", "콜로안"), rg("lunch", "점심", "코타이", { type: "meal" }), rg("t1", "베네시안", "코타이")]);
+    expect(offRouteMeals(onWay, {})).toEqual([]);
   });
 });

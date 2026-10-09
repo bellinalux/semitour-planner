@@ -92,3 +92,45 @@ export function groupByArea(day: DayPlan): DayPlan {
   });
   return refitDay({ ...day, items: fixed });
 }
+
+export interface OffRouteMeal {
+  mealId: string;
+  mealName: string;
+  /** 식당이 있는 지역 */
+  mealRegion: string;
+  /** 식사 무렵 일행이 있는 지역 (앞 장소 지역) */
+  hereRegion: string;
+  /** 식당을 찾을 기준 장소 (앞뒤로 들르는 그 지역 장소) */
+  nearPlaces: string[];
+  meal: "lunch" | "dinner";
+  cuisine: string;
+}
+
+/**
+ * 동선에서 벗어난 식당 — 점심·저녁 식당이 앞 장소와 다른 지역에 있고, 식사 뒤에 다시 앞 지역으로 돌아오는 경우
+ * (예: 콜로안 → 점심(코타이) → 콜로안). 그 지역 안 식당으로 바꾸면 되돌아오는 이동이 사라진다.
+ * 식당 위치(구역)를 모르면 판단하지 않는다.
+ */
+export function offRouteMeals(day: DayPlan, pmChoice: PmChoice): OffRouteMeal[] {
+  const items = dayItems(day, pmChoice);
+  const out: OffRouteMeal[] = [];
+  items.forEach((it, i) => {
+    if (it.type !== "meal" || isCafeMeal(it)) return;
+    const mealRegion = regionOf(it);
+    if (!mealRegion) return;
+    const before = items.slice(0, i).reverse().find((x) => !returnOk(x) && x.type !== "meal" && regionOf(x));
+    const after = items.slice(i + 1).find((x) => !returnOk(x) && x.type !== "meal" && regionOf(x));
+    const here = before ? regionOf(before) : null;
+    if (!here || here === mealRegion || !after || regionOf(after) !== here) return;
+    out.push({
+      mealId: it.id,
+      mealName: it.name,
+      mealRegion,
+      hereRegion: here,
+      nearPlaces: [before!.name, after.name],
+      meal: /저녁|석식|디너|dinner/i.test(`${it.name} ${it.description}`) ? "dinner" : "lunch",
+      cuisine: it.cuisine ?? (/\(([^)]+)\)/.exec(it.name)?.[1] ?? ""),
+    });
+  });
+  return out;
+}
