@@ -6,6 +6,7 @@ import { itineraryBudgetNote } from "@/lib/autoBuild";
 import { appendDay, defaultPmChoice, mapDayItems, moveItem, relocateItem, reorderItems, tourDayCount, withTravelDays, type PmChoice } from "@/lib/itinerary";
 import { insertItem, insertItems } from "@/lib/tourItem";
 import type { CourseFile } from "@/lib/courseFile";
+import type { ParsedSupplierQuote } from "@/lib/schemas/course";
 import type {
   AsyncState,
   CourseMeta,
@@ -37,6 +38,8 @@ export interface GeneratedItinerary {
   sources: SearchSource[];
   /** 웹 검색 근거로 조사됐는지 (장애인투어는 이게 false면 이용 편의시설 정보를 화면에서 "확인 못함"으로 표시한다) */
   researched: boolean;
+  /** 붙여넣은 업체 견적서에서 읽은 금액 (원문 통화). 요금이 없으면 null */
+  supplierQuote: ParsedSupplierQuote | null;
 }
 
 /** 입력 모드에 따라 AI가 세미투어를 만들거나, 붙여넣은(또는 사진·PDF로 올린) 업체 코스를 구조화한다. */
@@ -46,7 +49,7 @@ async function requestItinerary(
   signal: AbortSignal,
 ): Promise<Omit<GeneratedItinerary, "pmChoice">> {
   if (input.mode === "paste") {
-    const result = await postJson<{ days: DayPlan[]; meta: CourseMeta; nights: number; totalDays: number }>(
+    const result = await postJson<{ days: DayPlan[]; meta: CourseMeta; nights: number; totalDays: number; quote?: ParsedSupplierQuote | null }>(
       "/api/parse-course",
       { text: input.courseText, currency: input.currency, ...(courseFile ? { file: { name: courseFile.name, mimeType: courseFile.mimeType, data: courseFile.data } } : {}) },
       signal,
@@ -57,6 +60,7 @@ async function requestItinerary(
       detected: { days: result.totalDays, nights: result.nights, cities: result.meta.cities },
       sources: [],
       researched: false,
+      supplierQuote: result.quote ?? null,
     };
   }
 
@@ -83,6 +87,7 @@ async function requestItinerary(
     detected: null,
     sources,
     researched,
+    supplierQuote: null,
   };
 }
 

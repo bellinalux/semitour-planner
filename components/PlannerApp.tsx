@@ -55,6 +55,7 @@ import { tourToOption } from "@/lib/options";
 import { buildUspRequest } from "@/lib/uspRequest";
 import { suggestPlanName, type PlanSnapshot, type ResultSnapshot } from "@/lib/workspace";
 import type { CourseFile } from "@/lib/courseFile";
+import { supplierQuotePatch } from "@/lib/supplierQuote";
 import type { DayPlan, FlightOption, ItineraryItem, TourCandidate, TripInput } from "@/types";
 
 const NO_USPS: never[] = [];
@@ -152,6 +153,13 @@ export function PlannerApp() {
       };
       update(patch);
       nextInput = { ...input, ...patch };
+    }
+
+    // 업체 견적서였으면 읽은 금액으로 "업체 공급가에서 시작"하는 견적으로 바꾼다 (목표 판매가는 그때까지 쓰던 판매가)
+    if (result.supplierQuote) {
+      const patch = await supplierQuotePatch(result.supplierQuote, nextInput);
+      update(patch);
+      nextInput = { ...nextInput, ...patch };
     }
 
     // 일정이 만들어지면 세일즈 포인트도 이어서 생성한다 (실패해도 일정/견적에는 영향 없음)

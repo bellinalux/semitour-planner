@@ -21,6 +21,7 @@ import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PackageType, QuoteR
 import { ChannelTable } from "./quote/ChannelTable";
 import { CompetitorTable } from "./quote/CompetitorTable";
 import { TourCompareTable } from "./quote/TourCompareTable";
+import { SupplierCheckPanel } from "./quote/SupplierCheckPanel";
 import { useCompetitorRefresh } from "@/hooks/useCompetitorRefresh";
 import { CostBreakdownTable } from "./quote/CostBreakdownTable";
 import { DeparturePricesPanel } from "./quote/DeparturePricesPanel";
@@ -231,6 +232,22 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
           거래처 권장 소비자가(거래처 마진 {input.partnerMarginRate}%): 1인{" "}
           <span className="font-semibold">{formatMoney(quote.partnerConsumerPrice, input.currency)}</span> (2인 1실 기준) — 경쟁 상품과 비교할 때 이 가격을 기준으로 보세요.
         </p>
+      )}
+
+      {input.pricingMode === "supplier" && (
+        <section>
+          <SubHeading>업체 견적 검증 · 목표 원가</SubHeading>
+          <SupplierCheckPanel
+            input={input}
+            days={days}
+            pmChoice={pmChoice}
+            meta={meta}
+            quote={quote}
+            competitorP25={tiers.stats?.p25 ?? null}
+            competitorCount={tiers.stats?.count ?? 0}
+            onInputChange={onInputChange}
+          />
+        </section>
       )}
 
       {budget && (

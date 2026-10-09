@@ -20,7 +20,7 @@ export const packagePatch = (packageType: PackageType) => (packageType === "full
  * 입력 화면의 "무엇을, 어떤 가격 기준으로 팔지" — 판매 구성(랜드·숙박·항공), 숙소 종류·등급, 견적 시작 방법(원가·판매가·B2B·공급가).
  * 자동 구성이 이 값으로 숙소를 찾고 예산을 나누므로 코스를 만들기 전에 정한다.
  */
-export function SalesSetupSection({ input, onChange }: SectionProps) {
+export function SalesSetupSection({ input, onChange, autoBuild }: SectionProps & { autoBuild?: { run: () => void; running: boolean; disabled: boolean } }) {
   const hasLodging = input.packageType !== "land";
   return (
     <SectionCard title="판매 구성 · 견적 방식" description="무엇을 묶어 팔지, 가격을 어디서부터 정할지 고릅니다 (1인 요금은 2인 1실 기준)" icon={Store}>
@@ -56,7 +56,7 @@ export function SalesSetupSection({ input, onChange }: SectionProps) {
           </div>
         )}
 
-        <PriceStartFields input={input} onChange={onChange} />
+        <PriceStartFields input={input} onChange={onChange} autoBuild={autoBuild} />
       </div>
     </SectionCard>
   );

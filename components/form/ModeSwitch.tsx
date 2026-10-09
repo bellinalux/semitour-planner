@@ -8,7 +8,7 @@ interface Props {
 
 const OPTIONS: { id: PlannerMode; label: string; hint: string; icon: typeof Sparkles }[] = [
   { id: "ai", label: "AI가 만들기", hint: "여행지·기간으로 세미투어 생성", icon: Sparkles },
-  { id: "paste", label: "내 코스 붙여넣기", hint: "업체 코스를 구조화", icon: ClipboardPaste },
+  { id: "paste", label: "업체 코스·견적", hint: "코스표·견적서를 읽고 검증", icon: ClipboardPaste },
 ];
 
 export function ModeSwitch({ value, onChange }: Props) {

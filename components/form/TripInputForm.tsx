@@ -44,7 +44,7 @@ export function TripInputForm({ input, onChange, onReset, onGenerate, isGenerati
       <div className="flex-1 space-y-4 p-4">
         {!isPaste && <OneLineRequest input={input} onChange={onChange} />}
         <TripBasicsSection input={input} onChange={onChange} courseFile={courseFile} onCourseFileChange={onCourseFileChange} />
-        <SalesSetupSection input={input} onChange={onChange} />
+        <SalesSetupSection input={input} onChange={onChange} autoBuild={{ run: onAutoBuild, running: autoBuilding, disabled: !canGenerate || isGenerating }} />
         <QuickSettingsSection input={input} onChange={onChange} onApplyFlight={onApplyFlight} />
         <p className="text-pretty rounded-lg bg-white px-3 py-2.5 text-[11px] leading-4 text-slate-500 ring-1 ring-slate-200">
           아래 <span className="font-medium text-slate-700">자동 구성</span>을 누르면 코스 → 숙소 → 차량·가이드·입장료·시세 → 경쟁 상품 → 추천 투어까지 한 번에 채웁니다. 아는 비용은 설정에서

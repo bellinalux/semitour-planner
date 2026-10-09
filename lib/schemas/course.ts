@@ -64,6 +64,29 @@ const itemSchema = z.object({
   caution: z.string().describe("확인이 필요한 사항(예약 필수 등). 없으면 빈 문자열"),
 });
 
+const LINE_UNITS = ["per_person", "per_group", "per_day", "per_room_night", "unknown"] as const;
+
+/** 업체 견적서의 금액 — 원문에 적힌 것만 옮긴다 (금액을 지어내지 않는다) */
+const quoteSchema = z.object({
+  found: z.boolean().describe("원문에 이 상품의 요금(견적 금액)이 적혀 있으면 true. 없으면 false이고 나머지는 0·빈 값"),
+  currency: z.string().describe("요금 통화 코드 (KRW, USD, VND, THB, JPY, EUR, CNY 등). '원'은 KRW, '$'·'불'은 USD. 없으면 빈 문자열"),
+  pricePerPerson: z.number().describe("성인 1인 요금 (원문 통화 그대로). 인원별 요금표만 있으면 원문이 기준으로 삼은 인원의 요금. 없으면 0"),
+  basisTravelers: z.number().describe("몇 명 기준 요금인지 (예: 성인 4명 기준이면 4). 원문에 없으면 0"),
+  roomBasis: z.enum(["twin", "single", "triple", "unknown"]).describe("객실 기준: 2인 1실이면 twin, 1인 1실이면 single, 3인 1실이면 triple, 원문에 없으면 unknown"),
+  singleSupplement: z.number().describe("싱글차지(1인실 추가요금) 1인 금액 (원문 통화). 없으면 0"),
+  tiers: z.array(z.object({ travelers: z.number(), pricePerPerson: z.number() })).describe("인원별 1인 요금표 (예: 2명 600, 4명 450). 없으면 빈 배열"),
+  lines: z
+    .array(z.object({ label: z.string(), amount: z.number(), unit: z.enum(LINE_UNITS) }))
+    .describe("원문에 항목별로 나눠 적힌 금액(호텔·차량·가이드·입장료 등)과 단위. 나눠 적혀 있지 않으면 빈 배열"),
+  includes: z.array(z.string()).describe("포함 사항 (원문 그대로 짧게). 없으면 빈 배열"),
+  excludes: z.array(z.string()).describe("불포함 사항 (원문 그대로 짧게). 없으면 빈 배열"),
+  shopping: z.string().describe("쇼핑 일정 표기 (예: 쇼핑 2회, 노쇼핑). 없으면 빈 문자열"),
+  options: z.string().describe("선택관광 표기 (예: 선택관광 있음, 노옵션). 없으면 빈 문자열"),
+  notes: z.string().describe("견적 조건·유효기간·시즌 할증 등 원문 메모. 없으면 빈 문자열"),
+});
+
+export type ParsedSupplierQuote = Omit<z.infer<typeof quoteSchema>, "found">;
+
 export const courseResponseSchema = z.object({
   packageName: z.string().describe("상품명. 원문에 없으면 빈 문자열"),
   totalDays: z.number().describe("총 일수 (예: 4박 6일이면 6)"),
@@ -73,6 +96,7 @@ export const courseResponseSchema = z.object({
   noOption: z.boolean().describe("원문이 노옵션을 명시한 경우에만 true"),
   hotelGrade: z.string().describe("원문에 적힌 호텔 등급/유형. 없으면 빈 문자열"),
   highlights: z.array(z.string()).describe("원문의 핵심 포인트 요약 목록. 없으면 빈 배열"),
+  quote: quoteSchema.describe("원문(업체 견적서)에 적힌 요금. 코스만 있고 요금이 없으면 found=false"),
   days: z.array(
     z.object({
       day: z.number(),
@@ -109,11 +133,37 @@ function toItem(raw: ParsedCourse["days"][number]["items"][number], id: string):
 }
 
 /** 검증된 LLM 응답을 앱 내부 타입으로 변환한다 (하루 전체를 순서대로 나열하는 linear 일정). */
+/** 견적 금액을 정리한다. 원문에 요금이 없으면 null */
+export function toSupplierQuote(raw: ParsedCourse["quote"] | undefined): ParsedSupplierQuote | null {
+  if (!raw || !raw.found) return null;
+  const amount = (v: number) => (Number.isFinite(v) && v > 0 ? v : 0);
+  const tiers = raw.tiers.filter((t) => amount(t.travelers) > 0 && amount(t.pricePerPerson) > 0).map((t) => ({ travelers: Math.round(t.travelers), pricePerPerson: t.pricePerPerson }));
+  const price = amount(raw.pricePerPerson) || tiers[0]?.pricePerPerson || 0;
+  if (price <= 0) return null;
+  const text = (s: string) => s.trim().slice(0, 300);
+  const list = (xs: string[]) => xs.map((x) => x.trim()).filter(Boolean).slice(0, 20).map((x) => x.slice(0, 120));
+  return {
+    currency: raw.currency.trim().toUpperCase().slice(0, 3),
+    pricePerPerson: price,
+    basisTravelers: Math.max(0, Math.round(raw.basisTravelers)),
+    roomBasis: raw.roomBasis,
+    singleSupplement: amount(raw.singleSupplement),
+    tiers,
+    lines: raw.lines.filter((l) => l.label.trim() && amount(l.amount) > 0).slice(0, 30).map((l) => ({ label: l.label.trim().slice(0, 80), amount: l.amount, unit: l.unit })),
+    includes: list(raw.includes),
+    excludes: list(raw.excludes),
+    shopping: text(raw.shopping),
+    options: text(raw.options),
+    notes: text(raw.notes),
+  };
+}
+
 export function toCoursePlan(parsed: ParsedCourse): {
   days: DayPlan[];
   meta: CourseMeta;
   nights: number;
   totalDays: number;
+  quote: ParsedSupplierQuote | null;
 } {
   const days: DayPlan[] = parsed.days.map((day, index) => {
     const dayNo = index + 1;
@@ -136,6 +186,7 @@ export function toCoursePlan(parsed: ParsedCourse): {
     days,
     nights: Math.max(0, Math.round(parsed.nights)),
     totalDays: days.length,
+    quote: toSupplierQuote(parsed.quote),
     meta: {
       packageName: parsed.packageName.trim(),
       cities: stayCities.length > 0 ? stayCities : fallbackCities,

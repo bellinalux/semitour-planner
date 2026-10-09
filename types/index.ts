@@ -254,6 +254,12 @@ export interface TripInput {
   partnerMarginRate: number;
   /** pricingMode === "supplier"일 때 랜드사 공급가 1인 (2인 1실 기준, 숙박·차량·가이드·일정 비용 포함) */
   supplierPricePerPerson: number;
+  /** 업체 코스표·견적서에서 읽은 견적 (붙여넣기 모드로 읽었을 때만) */
+  supplierQuote: SupplierQuote | null;
+  /** 업체 견적 검증의 목표 1인 판매가. 0이면 경쟁 상품 가격의 하위 25%를 쓴다 */
+  supplierTargetPrice: number;
+  /** 업체에 빼 달라고 요청할 일정 항목 id. null이면 추천대로 */
+  supplierCutIds: string[] | null;
 
   /** ---- 판매 채널·가격 정책 ---- */
   /** 직판 외에 파는 플랫폼(채널)과 수수료. 비어 있으면 직판만 계산한다 */
@@ -519,6 +525,36 @@ export interface DayPlan {
 }
 
 /** 붙여넣은 코스에서 읽은 상품 정보 */
+/** 업체 견적서에서 읽은 금액 (원문 통화 그대로, 앱 통화로 바꾼 값은 pricePerPerson) */
+export interface SupplierQuote {
+  /** 원문에 적힌 1인 요금과 통화 */
+  originalPrice: number;
+  originalCurrency: string;
+  /** 원문 통화 1 = 앱 통화 몇. 바꾸지 못했으면 null (그때 아래 금액들은 원문 통화 그대로) */
+  rate: number | null;
+  /** 앱 통화로 바꾼 1인 요금. 통화를 바꾸지 못했으면 0 */
+  pricePerPerson: number;
+  /** 몇 명 기준 요금인지 (모르면 0) */
+  basisTravelers: number;
+  /** 객실 기준 */
+  roomBasis: "twin" | "single" | "triple" | "unknown";
+  /** 싱글차지 1인 (모르면 0) */
+  singleSupplement: number;
+  /** 인원별 요금표 */
+  tiers: { travelers: number; pricePerPerson: number }[];
+  /** 항목별 금액 (원문에 있으면) */
+  lines: { label: string; amount: number; unit: "per_person" | "per_group" | "per_day" | "per_room_night" | "unknown" }[];
+  includes: string[];
+  excludes: string[];
+  /** 쇼핑·선택관광 표기 (원문 그대로) */
+  shopping: string;
+  options: string;
+  /** 원문에 적힌 견적 조건·유효기간 등 */
+  notes: string;
+  /** 읽은 시각 (ISO) */
+  readAt: string;
+}
+
 export interface CourseMeta {
   packageName: string;
   cities: string[];

@@ -81,6 +81,9 @@ export const DEFAULT_INPUT: TripInput = {
   wholesalePricePerPerson: 0,
   partnerMarginRate: 15,
   supplierPricePerPerson: 0,
+  supplierQuote: null,
+  supplierTargetPrice: 0,
+  supplierCutIds: null,
   fixedPricePerPerson: 0,
 
   channels: [],

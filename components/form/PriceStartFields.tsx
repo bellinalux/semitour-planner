@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Loader2, Plus, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { ChoiceGroup } from "@/components/ui/ChoiceGroup";
 import { NumberField } from "@/components/ui/NumberField";
@@ -12,14 +12,19 @@ import type { PricingMode } from "@/types";
 import type { SectionProps } from "./types";
 
 export const PRICE_START_MODES: { id: PricingMode; label: string; hint: string }[] = [
-  { id: "target_margin", label: "원가에서 시작", hint: "원가 + 회사 수익 → 권장 판매가" },
+  { id: "target_margin", label: "가격 모름 · 자동 견적", hint: "코스·숙소·차량·입장료를 시세로 추천 → 원가 + 회사 수익 = 판매가" },
   { id: "fixed_price", label: "판매가에서 시작", hint: "판매가 − 수수료·수익 → 원가 예산 안에서 구성" },
   { id: "wholesale", label: "B2B 도매가에서 시작", hint: "거래처에 넘길 가격 − 수익 → 원가 예산" },
   { id: "supplier", label: "랜드사 공급가에서 시작", hint: "공급가 + 회사 수익 → 판매가" },
 ];
 
+interface Props extends SectionProps {
+  /** 가격을 모를 때 바로 자동 구성을 시작한다 (입력 화면에서만) */
+  autoBuild?: { run: () => void; running: boolean; disabled: boolean };
+}
+
 /** 견적 시작 방법 고르기 + 그 방법에 필요한 가격 입력 + (판매가·도매가) 원가 예산 계산 */
-export function PriceStartFields({ input, onChange }: SectionProps) {
+export function PriceStartFields({ input, onChange, autoBuild }: Props) {
   const symbol = currencySymbol(input.currency);
   const money = (v: number) => formatMoney(v, input.currency);
   const plan = budgetPlan(input, null);
@@ -37,6 +42,28 @@ export function PriceStartFields({ input, onChange }: SectionProps) {
     <div className="space-y-3">
       <ChoiceGroup name="pricingMode" label="견적 시작 방법" value={input.pricingMode} options={PRICE_START_MODES} onChange={(pricingMode) => onChange({ pricingMode })} />
       <p className="text-pretty text-[11px] leading-4 text-slate-500">모든 1인 가격은 2인 1실 기준입니다. 혼자 방을 쓰면 싱글차지를 따로 받습니다.</p>
+
+      {input.pricingMode === "target_margin" && (
+        <div className="space-y-2 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 text-[11px] leading-5 text-slate-700">
+          <p className="text-pretty">
+            원가·판매가를 몰라도 됩니다. 자동 견적이 코스를 만들고, {input.packageType === "land" ? "" : "고른 등급의 숙소를 시세 가운데 가격대로 고르고, "}
+            인원에 맞는 차량·가이드비, 입장료·식사, 시장 시세를 채워 원가를 만든 뒤{" "}
+            <span className="font-semibold text-slate-900">원가 + 회사 수익 {input.targetMarginRate}% = 권장 판매가</span>를 견적서에 냅니다. 아는 원가가 있으면 설정에 먼저
+            넣어 두면 그 값을 그대로 씁니다.
+          </p>
+          {autoBuild && (
+            <button
+              type="button"
+              onClick={autoBuild.run}
+              disabled={autoBuild.disabled || autoBuild.running}
+              className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:bg-indigo-300"
+            >
+              {autoBuild.running ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Wand2 className="size-3.5" aria-hidden />}
+              {autoBuild.running ? "자동 견적 만드는 중..." : "자동 견적 만들기"}
+            </button>
+          )}
+        </div>
+      )}
 
       {input.pricingMode === "fixed_price" && (
         <div className="space-y-3 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
