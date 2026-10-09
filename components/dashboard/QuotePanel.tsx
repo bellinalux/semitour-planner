@@ -1,5 +1,6 @@
 import { AlertTriangle, Calculator } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ChoiceGroup } from "@/components/ui/ChoiceGroup";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import type { SettingsSection } from "@/components/form/SettingsPanel";
@@ -137,22 +138,19 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
 
   return (
     <div className="space-y-6">
-      <div role="radiogroup" aria-label="견적 보기" className="flex items-center justify-end gap-2">
+      <div className="flex items-center justify-end gap-2">
         <span className="text-[11px] text-slate-500">{detail ? "모든 분석을 보여 줍니다" : "채널·할인·환율·출발일별 분석은 '자세히'에서"}</span>
-        <div className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white text-[11px] font-medium">
-          {(["summary", "detail"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              role="radio"
-              aria-checked={view === v}
-              onClick={() => setView(v)}
-              className={`px-2.5 py-1 ${view === v ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
-            >
-              {v === "summary" ? "요약" : "자세히"}
-            </button>
-          ))}
-        </div>
+        <ChoiceGroup
+          name="quoteView"
+          label="견적 보기"
+          variant="segmented"
+          value={view}
+          options={[
+            { id: "summary", label: "요약" },
+            { id: "detail", label: "자세히" },
+          ]}
+          onChange={setView}
+        />
       </div>
       {warnings.some((w) => settingsTargetFor(w) !== null) && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] text-indigo-900">

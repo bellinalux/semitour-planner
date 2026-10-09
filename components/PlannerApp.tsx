@@ -39,6 +39,8 @@ import { missingLegalFields } from "@/lib/company";
 import { calculateQuote } from "@/lib/cost";
 import { rememberCosts } from "@/lib/costMemory";
 import { useAutoQuote } from "@/hooks/useAutoQuote";
+import { autoBuildStatus, useAutoBuild } from "@/hooks/useAutoBuild";
+import { slotOptions, tourToItem } from "@/lib/tourItem";
 import { documentQuote } from "@/lib/pricing";
 import { withSource } from "@/lib/costSource";
 import { plannerGuide } from "@/lib/plannerGuide";
@@ -47,12 +49,12 @@ import { timed } from "@/lib/perf";
 import { suggestionToOption } from "@/lib/optionSuggestions";
 import { newSegmentId, type SegmentKind } from "@/lib/segmentLibrary";
 import { applyFlightToDays, tripSpanFromFlight } from "@/lib/flightApply";
-import { overnightNights } from "@/lib/itinerary";
+import { dayItems, overnightNights } from "@/lib/itinerary";
 import { tourToOption } from "@/lib/options";
 import { buildUspRequest } from "@/lib/uspRequest";
 import { suggestPlanName, type PlanSnapshot, type ResultSnapshot } from "@/lib/workspace";
 import type { CourseFile } from "@/lib/courseFile";
-import type { FlightOption, ItineraryItem, TripInput } from "@/types";
+import type { DayPlan, FlightOption, ItineraryItem, TourCandidate, TripInput } from "@/types";
 
 const NO_USPS: never[] = [];
 
@@ -128,15 +130,16 @@ export function PlannerApp() {
     if (saved.days.length > 0) setTab("result");
   };
 
-  const handleGenerate = async () => {
+  /** 코스를 만든다. 만든 일정을 돌려준다(실패하면 null). 자동 구성에서 부르면 자동 견적은 자동 구성이 직접 돌린다 */
+  const handleGenerate = async (options: { fromAutoBuild?: boolean } = {}): Promise<DayPlan[] | null> => {
     setTab("result");
     webChecks.clear();
     usp.reset();
     // 코스를 만드는 동안 비어 있는 차량·가이드·숙박·항공 시세를 미리 조회해 둔다 (자동 견적이 캐시에서 바로 받는다)
     prewarmEstimates(input);
     const result = await timed("generate", input.destination.trim(), () => itinerary.generate(input, courseFile));
-    if (!result) return;
-    if (autoQuote.afterGenerate) autoQuote.armAfterGenerate();
+    if (!result) return null;
+    if (autoQuote.afterGenerate && !options.fromAutoBuild) autoQuote.armAfterGenerate();
 
     // 붙여넣은 코스에서 읽은 기간/도시를 입력 폼에 반영한다 (박수는 코스 원문이 기준이다)
     let nextInput: TripInput = input;
@@ -155,6 +158,7 @@ export function PlannerApp() {
     if (firstQuote.ok) {
       void usp.generate(buildUspRequest(nextInput, result.days, result.pmChoice, firstQuote, result.meta));
     }
+    return result.days;
   };
 
   /** 오전·오후·하루 일정이나 장소 하나를 라이브러리에 즐겨찾기로 저장한다 */
@@ -197,7 +201,17 @@ export function PlannerApp() {
     if (quote?.ok) rememberCosts(input);
   }, [quote, input]);
 
+  /** 추천 투어를 판매가에 넣는다 — 일정이 가장 한가한 날(첫날·마지막 날 제외)의 마지막 칸에 */
+  const insertTour = (tour: TourCandidate) => {
+    if (days.length === 0) return;
+    const middle = days.length > 2 ? days.slice(1, -1) : days;
+    const target = [...middle].sort((a, b) => dayItems(a, pmChoice).length - dayItems(b, pmChoice).length)[0];
+    const slots = slotOptions(target);
+    itinerary.insertSegment(target.day, slots[slots.length - 1].slot, [tourToItem(tour)]);
+  };
+
   const autoQuote = useAutoQuote({ input, update, verifyFees: webChecks.verifyFees, hasItinerary: days.length > 0, itinerary: days });
+  const autoBuild = useAutoBuild({ input, update, days, pmChoice, generate: () => handleGenerate({ fromAutoBuild: true }), runAutoQuote: autoQuote.run });
 
   const { exporter, printDocument } = useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quoteLog, author: session.user?.name || quoteLog.author, print });
 
@@ -276,6 +290,13 @@ export function PlannerApp() {
             courseFile={courseFile}
             onCourseFileChange={setCourseFile}
             onApplyFlight={handleApplyFlight}
+            onAutoBuild={() => void autoBuild.run()}
+            autoBuilding={autoBuild.running}
+            autoStatus={autoBuildStatus(autoBuild)}
+            onShowProgress={() => {
+              setTab("settings");
+              window.setTimeout(() => document.getElementById("settings-auto")?.scrollIntoView({ block: "start", behavior: "smooth" }), 60);
+            }}
           />
         </aside>
         <aside
@@ -292,6 +313,9 @@ export function PlannerApp() {
             focus={settingsFocus}
             onFocus={openSettings}
             auto={autoQuote}
+            build={autoBuild}
+            onAddTourOption={(tour) => update({ options: [...input.options, tourToOption(tour, 0, input)] })}
+            onInsertTour={insertTour}
           />
         </aside>
         </div>

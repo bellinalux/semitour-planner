@@ -8,6 +8,8 @@ export const groundCostRequestSchema = z.object({
   travelers: z.number().int().min(1).max(60),
   currency: z.enum(CURRENCIES),
   tripScope: z.enum(["domestic", "overseas"]).default("overseas"),
+  /** 인원에 맞는 차종 (예: "미니밴 (15~16인승)"). 비우면 AI가 인원으로 판단 */
+  vehicleClass: z.string().trim().max(40).default(""),
 });
 
 export type GroundCostRequest = z.infer<typeof groundCostRequestSchema>;

@@ -9,6 +9,8 @@ export const hotelRequestSchema = z.object({
   lodgingType: z.enum(["hotel", "bnb", "resort"]),
   preferences: z.array(z.enum(["transit", "airport", "korean", "breakfast", "value"])).max(5),
   currency: z.enum(["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD", "AUD"]),
+  /** 1실 1박 상한 (판매가에서 시작한 견적의 숙박 예산). 0이면 제한 없음 */
+  maxNightly: z.number().min(0).max(1_000_000_000).default(0),
 });
 
 export type HotelRequest = z.infer<typeof hotelRequestSchema>;

@@ -1,3 +1,4 @@
+import { vehicleClassFor } from "@/lib/autoBuild";
 import type { TripInput } from "@/types";
 
 /**
@@ -10,6 +11,7 @@ export function groundRequest(input: TripInput) {
     travelers: Math.min(60, Math.max(1, input.travelers)),
     currency: input.currency,
     tripScope: input.tripScope,
+    vehicleClass: vehicleClassFor(input.travelers),
   };
 }
 

@@ -2,6 +2,7 @@
 
 import { Plus } from "lucide-react";
 import { useState } from "react";
+import { ChoiceGroup } from "@/components/ui/ChoiceGroup";
 import { NumberField } from "@/components/ui/NumberField";
 import { budgetPlan } from "@/lib/budget";
 import { DIRECT_CHANNEL_ID } from "@/lib/channels";
@@ -34,27 +35,8 @@ export function PriceStartFields({ input, onChange }: SectionProps) {
 
   return (
     <div className="space-y-3">
-      <div role="radiogroup" aria-label="견적 시작 방법" className="grid grid-cols-2 gap-2">
-        {PRICE_START_MODES.map((mode) => {
-          const selected = input.pricingMode === mode.id;
-          return (
-            <button
-              key={mode.id}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => onChange({ pricingMode: mode.id })}
-              className={`rounded-lg border px-3 py-2 text-left transition-colors ${
-                selected ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500" : "border-slate-200 bg-white hover:border-indigo-300"
-              }`}
-            >
-              <span className={`block text-xs font-semibold ${selected ? "text-indigo-800" : "text-slate-700"}`}>{mode.label}</span>
-              <span className="mt-0.5 block text-[10px] leading-3 text-slate-500">{mode.hint}</span>
-            </button>
-          );
-        })}
-      </div>
-      <p className="text-[11px] leading-4 text-slate-500">모든 1인 가격은 2인 1실 기준입니다. 혼자 방을 쓰면 싱글차지를 따로 받습니다.</p>
+      <ChoiceGroup name="pricingMode" label="견적 시작 방법" value={input.pricingMode} options={PRICE_START_MODES} onChange={(pricingMode) => onChange({ pricingMode })} />
+      <p className="text-pretty text-[11px] leading-4 text-slate-500">모든 1인 가격은 2인 1실 기준입니다. 혼자 방을 쓰면 싱글차지를 따로 받습니다.</p>
 
       {input.pricingMode === "fixed_price" && (
         <div className="space-y-3 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">

@@ -110,6 +110,9 @@ export function buildItineraryUserPrompt(req: ItineraryRequest, researchMemo = "
     `견적 통화: ${req.currency} (모든 금액은 1인 기준, 이 통화 단위)`,
     `선호 테마: ${themeLabels || "지정 없음"}`,
     `<user_notes>${req.notes.trim() || "없음"}</user_notes>`,
+    ...(req.budgetNote
+      ? ["", `[예산] ${req.budgetNote}`, "이 예산 안에서 명소·체험·식당을 고르세요. 비싼 유료 체험은 줄이고 무료 명소·외관 관람·시장 등을 섞어 맞추세요."]
+      : []),
     "",
     `위 조건으로 ${req.days}일 세미투어 일정을 만들어 주세요.`,
   ].join("\n");

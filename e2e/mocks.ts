@@ -72,3 +72,45 @@ export async function mockAi(page: Page) {
   await page.route("**/api/fx**", (r) => r.fulfill(json({ krwPerUnit: 1 })));
   // 의견·속도 기록 등 서버 저장 API는 로컬(잠금 꺼짐)에서 403 — 그대로 둔다
 }
+
+const hotelCandidate = (name: string, low: number, high: number) => ({
+  name,
+  grade: "4성급",
+  area: "미케 비치",
+  nearestStation: "",
+  walkMinutes: 0,
+  nightlyLow: low,
+  nightlyHigh: high,
+  priceBasis: "searched",
+  koreanFriendly: true,
+  koreanNote: "",
+  highlights: "",
+  mapUrl: "https://example.com",
+});
+
+const tourCandidate = (name: string, price: number) => ({
+  name,
+  category: "night",
+  description: "",
+  durationMinutes: 120,
+  priceLow: price,
+  priceHigh: price,
+  priceBasis: "searched",
+  includes: "",
+  booking: "",
+  koreanGuide: true,
+  koreanNote: "",
+  highlights: "",
+  operator: "",
+  sourceName: "클룩",
+  searchUrl: "https://example.com",
+});
+
+/** 자동 구성에서 쓰는 숙소·투어 검색 */
+export async function mockBuild(page: Page) {
+  const json = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  await page.route("**/api/find-hotels", (r) =>
+    r.fulfill(json({ hotels: [hotelCandidate("싼 호텔", 50000, 70000), hotelCandidate("알맞은 호텔", 100000, 120000), hotelCandidate("비싼 호텔", 300000, 350000)], sources: [], searched: true, searchedAt: "" })),
+  );
+  await page.route("**/api/find-tours", (r) => r.fulfill(json({ tours: [tourCandidate("한강 야경 크루즈", 30000), tourCandidate("고가 헬기 투어", 900000)], sources: [], searched: true, searchedAt: "" })));
+}

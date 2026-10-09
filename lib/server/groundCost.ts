@@ -6,7 +6,7 @@ function researchPrompt(req: GroundCostRequest): string {
   const guide = req.tripScope === "domestic" ? "외국인 관광객을 안내하는 외국어(영어 등) 가이드" : "한국어 가이드";
   return [
     `Google 검색 도구를 여러 번 사용해서, ${req.destination}에서 ${req.travelers}명 단체 투어를 운영할 때 드는 현지 비용을 조사해 주세요.`,
-    `1. 인원에 맞는 전용 차량(기사·유류비 포함) 1일(약 8~10시간) 대절 요금`,
+    `1. ${req.vehicleClass ? `${req.vehicleClass} ` : "인원에 맞는 "}전용 차량(기사·유류비 포함) 1일(약 8~10시간) 대절 요금`,
     `2. ${guide} 1일(약 8시간) 요금`,
     "현지 차량 렌트 업체·가이드 예약 사이트·여행사 견적 사례·여행 커뮤니티 후기를 참고하고, 찾은 금액과 통화, 조건(차종, 시간)을 정리하세요.",
     "확인하지 못한 항목은 '확인 못함'이라고 쓰세요.",

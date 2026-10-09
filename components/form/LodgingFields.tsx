@@ -1,3 +1,4 @@
+import { ChoiceGroup } from "@/components/ui/ChoiceGroup";
 import { NumberField } from "@/components/ui/NumberField";
 import { lodgingRoomsFor } from "@/lib/cost";
 import { currencySymbol } from "@/lib/currency";
@@ -111,24 +112,7 @@ export function LodgingFields({ input, onChange, stays }: Props) {
           <span className="text-[11px] font-medium text-slate-600">
             홀수 인원으로 남는 방 {odd ? <span className="text-amber-700">(지금 {input.travelers}명 — 1명 남음)</span> : <span className="text-slate-400">(지금은 짝수)</span>}
           </span>
-          <div role="radiogroup" aria-label="홀수 인원 방 처리" className="grid grid-cols-3 gap-1.5">
-            {ODD_POLICIES.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                role="radio"
-                aria-checked={input.oddRoomPolicy === p.id}
-                onClick={() => onChange({ oddRoomPolicy: p.id })}
-                title={p.hint}
-                className={`rounded-md border px-2 py-1.5 text-left text-[11px] leading-4 ${
-                  input.oddRoomPolicy === p.id ? "border-indigo-500 bg-indigo-50 font-semibold text-indigo-800" : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300"
-                }`}
-              >
-                {p.label}
-                <span className="block text-[10px] font-normal text-slate-500">{p.hint}</span>
-              </button>
-            ))}
-          </div>
+          <ChoiceGroup name="oddRoomPolicy" label="홀수 인원 방 처리" columns={3} value={input.oddRoomPolicy} options={ODD_POLICIES} onChange={(oddRoomPolicy) => onChange({ oddRoomPolicy })} />
           {input.oddRoomPolicy === "triple" && (
             <NumberField
               id="extraBedPerNight"

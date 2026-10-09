@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
+import { itineraryBudgetNote } from "@/lib/autoBuild";
 import { appendDay, defaultPmChoice, mapDayItems, moveItem, relocateItem, reorderItems, tourDayCount, withTravelDays, type PmChoice } from "@/lib/itinerary";
 import { insertItem, insertItems } from "@/lib/tourItem";
 import type { CourseFile } from "@/lib/courseFile";
@@ -71,6 +72,8 @@ async function requestItinerary(
       travelType: input.travelType,
       tripScope: input.tripScope,
       regionPlan: input.regionPlan,
+      // 판매가·도매가에서 시작한 견적이면 예산 안의 명소·식당을 고르게 한다
+      budgetNote: itineraryBudgetNote(input),
     },
     signal,
   );

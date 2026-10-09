@@ -3,7 +3,7 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import { NumberField } from "@/components/ui/NumberField";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { priceIsGiven } from "@/lib/channels";
-import { PRICE_START_MODES, PriceStartFields } from "./PriceStartFields";
+import { PRICE_START_MODES } from "./PriceStartFields";
 import type { SectionProps } from "./types";
 
 export function PricingSection({ input, onChange, openSignal }: SectionProps) {
@@ -12,7 +12,7 @@ export function PricingSection({ input, onChange, openSignal }: SectionProps) {
 
   return (
     <SectionCard
-      title="가격 정책"
+      title="회사 수익 · 수수료"
       description="견적 시작 방법(원가·판매가·B2B 도매가·랜드사 공급가)과 회사 수익·수수료를 정합니다. 모든 1인 가격은 2인 1실 기준"
       icon={Percent}
       collapsible
@@ -22,7 +22,9 @@ export function PricingSection({ input, onChange, openSignal }: SectionProps) {
       summary={`${mode?.label ?? ""} · 회사 수익 ${input.targetMarginRate}% · 카드 수수료 ${input.cardFeeRate}%`}
     >
       <div className="space-y-4">
-        <PriceStartFields input={input} onChange={onChange} />
+        <p className="rounded-md bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-600">
+          견적 시작 방법: <span className="font-semibold text-slate-800">{mode?.label}</span> — 판매가·도매가·공급가와 판매 플랫폼은 입력 화면의 &apos;판매 구성 · 견적 방식&apos;에서 바꿉니다.
+        </p>
 
         <NumberField
           id="targetMarginRate"

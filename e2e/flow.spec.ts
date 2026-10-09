@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
 test("입력 → 코스 → 자동 견적 → 인쇄 전 확인 → 예약 등록", async ({ page }) => {
   // ① 입력
   await page.getByLabel("여행지").fill("다낭");
-  await page.getByRole("button", { name: "일정·견적 생성" }).click();
+  await page.getByRole("button", { name: "코스만" }).click();
 
   // ② 코스: 시각은 10분 단위 (45분 체류 → 08:00–08:50, 다음 코스 09:00)
   await expect(page.getByText("08:00 – 08:50")).toBeVisible();
@@ -23,9 +23,11 @@ test("입력 → 코스 → 자동 견적 → 인쇄 전 확인 → 예약 등�
   await expect(page.getByText("출처: 웹 검색").first()).toBeVisible();
 
   // 견적 보기: 기본은 요약, 자세히로 바꾸면 채널·할인 분석이 보인다
-  await page.getByRole("radio", { name: "자세히" }).click();
+  const view = page.getByRole("group", { name: "견적 보기" });
+  await view.getByText("자세히", { exact: true }).click();
+  await expect(view.getByRole("radio", { name: "자세히" })).toBeChecked();
   await expect(page.getByText("할인·쿠폰 시뮬레이션")).toBeVisible();
-  await page.getByRole("radio", { name: "요약" }).click();
+  await view.getByText("요약", { exact: true }).click();
 
   // ④ 문서: 추정값이 남아 있으면 인쇄 전에 확인을 받는다
   await page.getByRole("button", { name: /^견적서$/ }).click();

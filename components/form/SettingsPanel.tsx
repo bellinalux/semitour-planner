@@ -3,10 +3,13 @@
 import { Check, CircleAlert, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSession } from "@/components/SessionContext";
+import type { AutoBuild } from "@/hooks/useAutoBuild";
 import type { AutoQuote } from "@/hooks/useAutoQuote";
+import { priceIsGiven } from "@/lib/channels";
+import { AutoBuildPanel } from "./AutoBuildPanel";
 import { fillFromMemory, recallCosts } from "@/lib/costMemory";
 import { clearPricingDefaults, DEFAULT_LABELS, pricingDefaultsSavedAt, savePricingDefaults } from "@/lib/pricingDefaults";
-import type { FlightOption, TripInput } from "@/types";
+import type { FlightOption, TourCandidate, TripInput } from "@/types";
 import { AutoQuotePanel } from "./AutoQuotePanel";
 import { ChannelSection } from "./ChannelSection";
 import { CompetitorSection } from "./CompetitorSection";
@@ -34,6 +37,10 @@ interface Props {
   focus: SettingsFocus | null;
   onFocus: (section: SettingsSection) => void;
   auto: AutoQuote;
+  /** 자동 구성 (코스·숙소·차량·투어까지 한 번에) */
+  build?: AutoBuild;
+  onAddTourOption?: (tour: TourCandidate) => void;
+  onInsertTour?: (tour: TourCandidate) => void;
 }
 
 /** 지금 가격 설정을 회사 기본값으로 저장해, 새 견적·초기화 때 자동으로 들어가게 한다 (이 브라우저에 저장) */
@@ -120,7 +127,7 @@ function MemoryHint({ input, onChange }: { input: TripInput; onChange: (patch: P
  */
 const ADVANCED_KEY = "semitour-planner:settings-advanced:v1";
 
-export function SettingsPanel({ input, onChange, stays, onApplyFlight, focus, onFocus, auto }: Props) {
+export function SettingsPanel({ input, onChange, stays, onApplyFlight, focus, onFocus, auto, build, onAddTourOption, onInsertTour }: Props) {
   const signal = (section: SettingsSection) => (focus?.section === section ? focus.n : undefined);
   // 판매 채널·경쟁사는 한 번 정하면 잘 안 바꾸고(채널) 자동 견적이 채워 주므로(경쟁사) "고급 설정"에 접어 둔다
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -154,15 +161,18 @@ export function SettingsPanel({ input, onChange, stays, onApplyFlight, focus, on
 
   return (
     <div className="space-y-4 p-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-900">설정</h2>
-        <p className="mt-0.5 text-xs leading-4 text-slate-500">
-          코스를 만든 뒤 원가·가격·판매 채널·경쟁사·고객 문서를 여기서 정합니다. 값을 바꾸면 견적이 바로 다시 계산됩니다.
-        </p>
+      <div id="settings-auto" className="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-900">자동 견적</h2>
+        <p className="mt-0.5 text-xs leading-4 text-slate-500">버튼 하나로 코스·숙소·차량·가이드·입장료·시세·경쟁 상품·추천 투어를 채우고, 진행 상황과 결과를 여기서 봅니다.</p>
         <div className="mt-3">
-          <AutoQuotePanel auto={auto} />
+          {build && onAddTourOption && onInsertTour ? (
+            <AutoBuildPanel build={build} auto={auto} currency={input.currency} budgetMode={priceIsGiven(input.pricingMode)} onAddOption={onAddTourOption} onInsertTour={onInsertTour} />
+          ) : (
+            <AutoQuotePanel auto={auto} />
+          )}
         </div>
-        <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="필수 설정 확인">
+        <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] font-semibold text-slate-600">세부 조정 — 값을 바꾸면 견적이 바로 다시 계산됩니다</p>
+        <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="필수 설정 확인">
           {items.map((item) => (
             <li key={item.label}>
               <button
@@ -186,8 +196,8 @@ export function SettingsPanel({ input, onChange, stays, onApplyFlight, focus, on
         </div>
       </div>
 
-      <PackageSection input={input} onChange={onChange} stays={stays} onApplyFlight={onApplyFlight} openSignal={signal("package")} />
       <CostSection input={input} onChange={onChange} openSignal={signal("cost")} />
+      <PackageSection input={input} onChange={onChange} stays={stays} onApplyFlight={onApplyFlight} openSignal={signal("package")} />
       <PricingSection input={input} onChange={onChange} openSignal={signal("pricing")} />
       <DocumentSection input={input} onChange={onChange} openSignal={signal("documents")} />
       <button

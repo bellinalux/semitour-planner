@@ -20,6 +20,7 @@ export function buildHotelResearchPrompt(req: HotelRequest): string {
     "",
     "원하는 조건:",
     ...(wants.length > 0 ? wants : ["- 특별한 조건 없음 (위치가 좋고 평이 안정적인 곳)"]),
+    ...(req.maxNightly > 0 ? [`- 예산: 1실 1박 ${Math.round(req.maxNightly)} ${req.currency} 이하 (2인 1실). 이 안의 숙소를 우선 찾고, 없으면 가장 가까운 곳을 넣으세요`] : []),
     "",
     "숙소마다 아래 항목을 조사 메모로 정리해 주세요. 검색으로 확인하지 못한 항목은 '확인 못함'이라고 쓰세요.",
     "1. 정확한 상호 (영문 원문 + 한글 표기)와 등급",

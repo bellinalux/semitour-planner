@@ -4,7 +4,7 @@ import { mockAi } from "./mocks";
 test("휴대폰: 가로로 넘치지 않고, 상단 메뉴가 한 줄에 들어간다", async ({ page }) => {
   await mockAi(page);
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "일정·견적 생성" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "자동 구성", exact: true })).toBeVisible();
 
   const { docWidth, viewport, headerBottom, headerHeight } = await page.evaluate(() => {
     const header = document.querySelector("header")!;
@@ -22,5 +22,5 @@ test("휴대폰: 가로로 넘치지 않고, 상단 메뉴가 한 줄에 들어�
 
   // 아래 탭으로 결과·설정을 오갈 수 있다
   await page.getByRole("tab", { name: "설정" }).click();
-  await expect(page.getByText("자동 견적 — 빈 값 한 번에 채우기")).toBeVisible();
+  await expect(page.getByRole("button", { name: /자동 구성 — 코스·숙소·차량·투어까지 한 번에/ })).toBeVisible();
 });

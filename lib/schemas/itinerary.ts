@@ -16,6 +16,8 @@ export const itineraryRequestSchema = z.object({
   tripScope: z.enum(["domestic", "overseas"]).default("overseas"),
   /** 사용자가 직접 지정한 도시 순서·일수 (예: "로마 2일, 피렌체 2일, 베니스 2일"). 비우면 AI가 알아서 도시를 구성한다 */
   regionPlan: z.string().max(300).default(""),
+  /** 판매가·도매가에서 시작한 견적의 예산 안내 (1인 입장·체험 합계, 식사 1끼 수준). 비우면 예산 제한 없음 */
+  budgetNote: z.string().trim().max(300).default(""),
 });
 
 export type ItineraryRequest = z.infer<typeof itineraryRequestSchema>;
