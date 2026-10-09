@@ -38,6 +38,7 @@ export function ChannelSection({ input, onChange, openSignal }: SectionProps) {
       description="플랫폼 수수료까지 반영해 채널별 판매가와 정산액을 계산합니다"
       icon={Store}
       collapsible
+      nested
       defaultOpen={false}
       anchorId="settings-channels"
       openSignal={openSignal}

@@ -14,7 +14,7 @@ test("가격 모름 · 자동 견적: 코스·숙소·시세를 채워 권장 �
   await seed(page, { destination: "다낭", days: 3, nights: 2, travelers: 4, packageType: "land_hotel", pricingMode: "target_margin", targetMarginRate: 15 });
   await page.goto("/");
 
-  await page.getByRole("button", { name: "자동 견적 만들기" }).click();
+  await page.getByRole("button", { name: "자동 구성", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "자동 구성 끝" })).toBeVisible({ timeout: 30_000 });
   const costTable = page.locator("table", { has: page.locator("caption", { hasText: "원가 내역" }) });
   await expect(costTable.getByText(/출처: 고른 숙소/)).toBeVisible();

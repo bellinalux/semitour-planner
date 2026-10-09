@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ChoiceGroup } from "@/components/ui/ChoiceGroup";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import type { SettingsSection } from "@/components/form/SettingsPanel";
+import type { SettingsSection } from "@/components/form/settingsFocus";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ourPolicy } from "@/lib/competitorDiff";
@@ -48,7 +48,7 @@ interface Props {
   generatedCurrency: CurrencyCode | null;
   /** 할인 시나리오·가격안 저장처럼 견적 화면에서 입력값을 바꾸는 곳에서 쓴다 */
   onInputChange: (patch: Partial<TripInput>) => void;
-  /** 경고에서 설정 패널의 해당 항목으로 이동한다 */
+  /** 경고에서 입력 화면의 해당 폴더로 이동한다 */
   onOpenSettings: (section: SettingsSection) => void;
   autoQuote: { running: boolean; run: () => void };
   /** 판매가·도매가에서 시작한 견적의 예산 맞추기 */
@@ -189,7 +189,7 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
                 <span className="flex-1">{warning}</span>
                 {target && (
                   <button type="button" onClick={() => onOpenSettings(target)} className="shrink-0 font-semibold underline underline-offset-2 hover:text-amber-950">
-                    설정에서 수정
+                    입력에서 수정
                   </button>
                 )}
               </li>

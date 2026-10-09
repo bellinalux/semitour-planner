@@ -307,13 +307,13 @@ export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmCh
     };
   }
   if (input.pricingMode === "fixed_price" && input.fixedPricePerPerson <= 0) {
-    return { ok: false, error: "판매가에서 시작하는 견적입니다. '가격 정책'에서 1인 판매가(2인 1실 기준)를 입력해 주세요." };
+    return { ok: false, error: "판매가에서 시작하는 견적입니다. '3. 가격 방식'에서 1인 판매가(2인 1실 기준)를 입력해 주세요." };
   }
   if (input.pricingMode === "wholesale" && input.wholesalePricePerPerson <= 0) {
-    return { ok: false, error: "B2B 도매가에서 시작하는 견적입니다. '가격 정책'에서 거래처에 넘기는 1인 도매가를 입력해 주세요." };
+    return { ok: false, error: "B2B 도매가에서 시작하는 견적입니다. '3. 가격 방식'에서 거래처에 넘기는 1인 도매가를 입력해 주세요." };
   }
   if (input.pricingMode === "supplier" && input.supplierPricePerPerson <= 0) {
-    return { ok: false, error: "랜드사 공급가에서 시작하는 견적입니다. '가격 정책'에서 1인 공급가(2인 1실 기준)를 입력해 주세요." };
+    return { ok: false, error: "랜드사 공급가에서 시작하는 견적입니다. '3. 가격 방식'에서 1인 공급가(2인 1실 기준)를 입력해 주세요." };
   }
 
   const travelers = Math.max(1, Math.round(input.travelers));

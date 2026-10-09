@@ -27,6 +27,7 @@ export function CompetitorSection({ input, onChange, openSignal }: SectionProps)
       description="가격 비교와 세일즈 포인트(USP) 생성에 사용합니다"
       icon={Swords}
       collapsible
+      nested
       defaultOpen={false}
       anchorId="settings-competitors"
       openSignal={openSignal}

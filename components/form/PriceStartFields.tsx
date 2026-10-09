@@ -1,11 +1,11 @@
 "use client";
 
-import { Loader2, Plus, Wand2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { ChoiceGroup } from "@/components/ui/ChoiceGroup";
 import { NumberField } from "@/components/ui/NumberField";
 import { budgetPlan } from "@/lib/budget";
-import { DIRECT_CHANNEL_ID } from "@/lib/channels";
+import { DIRECT_CHANNEL_ID, priceIsGiven } from "@/lib/channels";
 import { currencySymbol, formatMoney } from "@/lib/currency";
 import { createChannel } from "@/lib/defaults";
 import type { PricingMode } from "@/types";
@@ -18,13 +18,8 @@ export const PRICE_START_MODES: { id: PricingMode; label: string; hint: string }
   { id: "supplier", label: "랜드사 공급가에서 시작", hint: "공급가 + 회사 수익 → 판매가" },
 ];
 
-interface Props extends SectionProps {
-  /** 가격을 모를 때 바로 자동 구성을 시작한다 (입력 화면에서만) */
-  autoBuild?: { run: () => void; running: boolean; disabled: boolean };
-}
-
-/** 견적 시작 방법 고르기 + 그 방법에 필요한 가격 입력 + (판매가·도매가) 원가 예산 계산 */
-export function PriceStartFields({ input, onChange, autoBuild }: Props) {
+/** 견적 시작 방법 고르기 + 그 방법에 필요한 가격 + 판매 플랫폼 + 회사 수익률 + (판매가·도매가) 원가 예산 계산 */
+export function PriceStartFields({ input, onChange }: SectionProps) {
   const symbol = currencySymbol(input.currency);
   const money = (v: number) => formatMoney(v, input.currency);
   const plan = budgetPlan(input, null);
@@ -40,7 +35,13 @@ export function PriceStartFields({ input, onChange, autoBuild }: Props) {
 
   return (
     <div className="space-y-3">
-      <ChoiceGroup name="pricingMode" label="견적 시작 방법" value={input.pricingMode} options={PRICE_START_MODES} onChange={(pricingMode) => onChange({ pricingMode })} />
+      <ChoiceGroup
+        name="pricingMode"
+        label="견적 시작 방법"
+        value={input.pricingMode}
+        options={PRICE_START_MODES}
+        onChange={(pricingMode) => onChange({ pricingMode })}
+      />
       <p className="text-pretty text-[11px] leading-4 text-slate-500">모든 1인 가격은 2인 1실 기준입니다. 혼자 방을 쓰면 싱글차지를 따로 받습니다.</p>
 
       {input.pricingMode === "target_margin" && (
@@ -48,20 +49,9 @@ export function PriceStartFields({ input, onChange, autoBuild }: Props) {
           <p className="text-pretty">
             원가·판매가를 몰라도 됩니다. 자동 견적이 코스를 만들고, {input.packageType === "land" ? "" : "고른 등급의 숙소를 시세 가운데 가격대로 고르고, "}
             인원에 맞는 차량·가이드비, 입장료·식사, 시장 시세를 채워 원가를 만든 뒤{" "}
-            <span className="font-semibold text-slate-900">원가 + 회사 수익 {input.targetMarginRate}% = 권장 판매가</span>를 견적서에 냅니다. 아는 원가가 있으면 설정에 먼저
-            넣어 두면 그 값을 그대로 씁니다.
+            <span className="font-semibold text-slate-900">원가 + 회사 수익 {input.targetMarginRate}% = 권장 판매가</span>를 견적서에 냅니다. 아는 원가가 있으면
+            &lsquo;4. 원가 직접 입력&rsquo;에 먼저 넣어 두면 그 값을 그대로 씁니다. 아래 &lsquo;자동 구성&rsquo;을 누르세요.
           </p>
-          {autoBuild && (
-            <button
-              type="button"
-              onClick={autoBuild.run}
-              disabled={autoBuild.disabled || autoBuild.running}
-              className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:bg-indigo-300"
-            >
-              {autoBuild.running ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Wand2 className="size-3.5" aria-hidden />}
-              {autoBuild.running ? "자동 견적 만드는 중..." : "자동 견적 만들기"}
-            </button>
-          )}
         </div>
       )}
 
@@ -75,9 +65,49 @@ export function PriceStartFields({ input, onChange, autoBuild }: Props) {
             hint="고객이 내는 가격입니다. 여기서 수수료·회사 수익을 뺀 금액이 원가 예산이 됩니다."
             onChange={(fixedPricePerPerson) => onChange({ fixedPricePerPerson })}
           />
+        </div>
+      )}
+
+      {input.pricingMode === "wholesale" && (
+        <div className="grid grid-cols-2 gap-3 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
+          <NumberField
+            id="wholesalePricePerPerson"
+            label="거래처 도매가 (1인, 2인 1실)"
+            value={input.wholesalePricePerPerson}
+            prefix={symbol}
+            hint="다른 여행사에 넘기는 가격. 플랫폼·카드 수수료 없이 회사 수익만 뺍니다."
+            onChange={(wholesalePricePerPerson) => onChange({ wholesalePricePerPerson })}
+          />
+          <NumberField
+            id="partnerMarginRate"
+            label="거래처 마진율"
+            value={input.partnerMarginRate}
+            suffix="%"
+            max={80}
+            hint="거래처가 소비자에게 팔 권장가 계산용"
+            onChange={(partnerMarginRate) => onChange({ partnerMarginRate })}
+          />
+        </div>
+      )}
+
+      {input.pricingMode === "supplier" && (
+        <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
+          <NumberField
+            id="supplierPricePerPerson"
+            label="랜드사 공급가 (1인, 2인 1실 기준)"
+            value={input.supplierPricePerPerson}
+            prefix={symbol}
+            hint="숙박·차량·가이드·입장료·식사가 들어 있는 금액으로 계산합니다. 항공·팁·보험·기타 고정비는 따로 더합니다."
+            onChange={(supplierPricePerPerson) => onChange({ supplierPricePerPerson })}
+          />
+        </div>
+      )}
+
+      {input.pricingMode !== "wholesale" && (
+        <div className="rounded-lg border border-slate-200 bg-white p-3">
           <div>
             <label htmlFor="salesPlatform" className="mb-1 block text-xs font-medium text-slate-700">
-              판매 플랫폼 (수수료)
+              {input.pricingMode === "fixed_price" ? "판매 플랫폼 (수수료)" : "판매 플랫폼 (견적서·고객 문서에 넣을 가격)"}
             </label>
             <select
               id="salesPlatform"
@@ -125,45 +155,24 @@ export function PriceStartFields({ input, onChange, autoBuild }: Props) {
                 추가
               </button>
             </div>
-            <p className="mt-1 text-[11px] leading-4 text-slate-500">수수료는 계약한 값을 직접 넣어 주세요. 아래 &apos;판매 채널&apos;에서 고칠 수 있습니다.</p>
+            <p className="mt-1 text-[11px] leading-4 text-slate-500">
+              수수료는 계약한 값을 직접 넣어 주세요. 자세한 수정은 &lsquo;6. 고급 → 판매 채널&rsquo;에서 합니다. 고객 문서에는 고른 플랫폼의 소비자가만
+              나갑니다.
+            </p>
           </div>
         </div>
       )}
 
-      {input.pricingMode === "wholesale" && (
-        <div className="grid grid-cols-2 gap-3 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
-          <NumberField
-            id="wholesalePricePerPerson"
-            label="거래처 도매가 (1인, 2인 1실)"
-            value={input.wholesalePricePerPerson}
-            prefix={symbol}
-            hint="다른 여행사에 넘기는 가격. 플랫폼·카드 수수료 없이 회사 수익만 뺍니다."
-            onChange={(wholesalePricePerPerson) => onChange({ wholesalePricePerPerson })}
-          />
-          <NumberField
-            id="partnerMarginRate"
-            label="거래처 마진율"
-            value={input.partnerMarginRate}
-            suffix="%"
-            max={80}
-            hint="거래처가 소비자에게 팔 권장가 계산용"
-            onChange={(partnerMarginRate) => onChange({ partnerMarginRate })}
-          />
-        </div>
-      )}
-
-      {input.pricingMode === "supplier" && (
-        <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
-          <NumberField
-            id="supplierPricePerPerson"
-            label="랜드사 공급가 (1인, 2인 1실 기준)"
-            value={input.supplierPricePerPerson}
-            prefix={symbol}
-            hint="숙박·차량·가이드·입장료·식사가 들어 있는 금액으로 계산합니다. 항공·팁·보험·기타 고정비는 따로 더합니다."
-            onChange={(supplierPricePerPerson) => onChange({ supplierPricePerPerson })}
-          />
-        </div>
-      )}
+      <NumberField
+        id="targetMarginRate"
+        label={priceIsGiven(input.pricingMode) ? "회사 수익 (판매가 대비 %)" : "회사 수익률 (판매가 대비 %)"}
+        value={input.targetMarginRate}
+        suffix="%"
+        min={0}
+        max={90}
+        hint="원가에 %를 더하는 마크업과 다릅니다. 25% = 판매가의 25%가 회사 이익"
+        onChange={(targetMarginRate) => onChange({ targetMarginRate })}
+      />
 
       {plan && (
         <div className="space-y-1 rounded-lg bg-slate-900 px-3 py-2.5 text-[11px] leading-5 text-slate-100" aria-label="원가 예산 계산">
@@ -187,9 +196,7 @@ export function PriceStartFields({ input, onChange, autoBuild }: Props) {
             <span>= 1인 원가 예산</span>
             <span className="tabular-nums">{money(plan.budgetPerPerson)}</span>
           </div>
-          {plan.caps.roomPerNight !== null && (
-            <p className="text-slate-300">→ 숙소는 1실 1박 {money(plan.caps.roomPerNight)} 이하 (2인 1실)로 찾습니다</p>
-          )}
+          {plan.caps.roomPerNight !== null && <p className="text-slate-300">→ 숙소는 1실 1박 {money(plan.caps.roomPerNight)} 이하 (2인 1실)로 찾습니다</p>}
         </div>
       )}
     </div>

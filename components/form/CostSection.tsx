@@ -17,6 +17,7 @@ export function CostSection({ input, onChange, openSignal }: SectionProps) {
       description="각 비용은 확정 · 추정 · 미정으로 표시할 수 있습니다"
       icon={Wallet}
       collapsible
+      nested
       defaultOpen={false}
       anchorId="settings-cost"
       openSignal={openSignal}

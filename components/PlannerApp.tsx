@@ -19,7 +19,8 @@ import { useSession } from "@/components/SessionContext";
 import { StepGuide } from "@/components/layout/StepGuide";
 import { StudioNotices } from "@/components/layout/StudioNotices";
 import { MobileTabs, type PlannerTab } from "@/components/layout/MobileTabs";
-import { SettingsPanel, type SettingsFocus, type SettingsSection } from "@/components/form/SettingsPanel";
+import type { SettingsFocus, SettingsSection } from "@/components/form/settingsFocus";
+import { BuildProgress, progressStarted } from "@/components/dashboard/BuildProgress";
 import { useItinerary } from "@/hooks/useItinerary";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { usePrintDocument } from "@/hooks/usePrintDocument";
@@ -66,9 +67,9 @@ export function PlannerApp() {
   const usp = useUsp();
   const [tab, setTab] = useState<PlannerTab>("input");
   const [settingsFocus, setSettingsFocus] = useState<SettingsFocus | null>(null);
-  /** 설정 패널의 해당 항목을 펼치고 그곳으로 이동한다 (좁은 화면에서는 설정 탭으로 전환) */
+  /** 입력 화면의 해당 폴더·항목을 펼치고 그곳으로 이동한다 (좁은 화면에서는 입력 탭으로 전환) */
   const openSettings = (section: SettingsSection) => {
-    setTab("settings");
+    setTab("input");
     setSettingsFocus((prev) => ({ section, n: (prev?.n ?? 0) + 1 }));
   };
   // 상세페이지 스튜디오 [세미투어로 보내기]로 받은 상품 → 입력칸 채우기
@@ -290,18 +291,11 @@ export function PlannerApp() {
       />
       <StepGuide steps={guideSteps} />
       <MobileTabs active={tab} onChange={setTab} />
-      {/* 좁은 화면: 탭 하나씩 / lg: 왼쪽에 입력+설정을 쌓고 오른쪽에 결과 / 넓은 화면(1400px~): 입력 | 결과 | 설정 3열 고정 */}
-      <main className="grid min-h-0 flex-1 lg:grid-cols-[400px_minmax(0,1fr)] wide:grid-cols-[380px_minmax(0,1fr)_420px]">
-        <div
-          className={`relative min-h-0 overflow-y-auto border-slate-200 bg-slate-50 lg:block lg:border-r wide:contents ${
-            tab === "result" ? "hidden" : "block"
-          }`}
-        >
+      {/* 좁은 화면: 탭 하나씩(입력·결과) / lg 이상: 왼쪽 입력 폴더 | 오른쪽 결과 */}
+      <main className="grid min-h-0 flex-1 lg:grid-cols-[420px_minmax(0,1fr)] wide:grid-cols-[460px_minmax(0,1fr)]">
         <aside
           aria-label="입력"
-          className={`relative bg-slate-50 lg:block wide:order-1 wide:min-h-0 wide:overflow-y-auto wide:border-r wide:border-slate-200 ${
-            tab === "input" ? "block" : "hidden"
-          }`}
+          className={`relative min-h-0 overflow-y-auto border-slate-200 bg-slate-50 lg:block lg:border-r ${tab === "input" ? "block" : "hidden"}`}
         >
           <StudioNotices provide={provide} productTitle={days.length ? (getProduct()?.title ?? "") : ""} studioNotice={studioNotice} onClearStudioNotice={clearStudioNotice} />
           <span id="planner-input" className="block scroll-mt-2" aria-hidden />
@@ -314,41 +308,33 @@ export function PlannerApp() {
             courseFile={courseFile}
             onCourseFileChange={setCourseFile}
             onApplyFlight={handleApplyFlight}
+            stays={stays}
+            focus={settingsFocus}
             onAutoBuild={() => void autoBuild.run()}
             autoBuilding={autoBuild.running}
             autoStatus={autoBuildStatus(autoBuild)}
             onShowProgress={() => {
-              setTab("settings");
-              window.setTimeout(() => document.getElementById("settings-auto")?.scrollIntoView({ block: "start", behavior: "smooth" }), 60);
+              setTab("result");
+              window.setTimeout(() => document.getElementById("build-progress")?.scrollIntoView({ block: "start", behavior: "smooth" }), 60);
             }}
           />
         </aside>
-        <aside
-          aria-label="설정"
-          className={`relative border-t border-slate-200 bg-slate-50 lg:block wide:order-3 wide:min-h-0 wide:overflow-y-auto wide:border-l wide:border-t-0 ${
-            tab === "settings" ? "block" : "hidden"
-          }`}
-        >
-          <SettingsPanel
-            input={input}
-            onChange={update}
-            stays={stays}
-            onApplyFlight={handleApplyFlight}
-            focus={settingsFocus}
-            onFocus={openSettings}
-            auto={autoQuote}
-            build={autoBuild}
-            onAddTourOption={(tour) => update({ options: [...input.options, tourToOption(tour, 0, input)] })}
-            onInsertTour={insertTour}
-          />
-        </aside>
-        </div>
         <section
           aria-label="결과"
-          className={`relative min-h-0 overflow-y-auto bg-slate-100/60 lg:block wide:order-2 ${
-            tab === "result" ? "block" : "hidden"
-          }`}
+          className={`relative min-h-0 overflow-y-auto bg-slate-100/60 lg:block ${tab === "result" ? "block" : "hidden"}`}
         >
+          {progressStarted(autoBuild, autoQuote) ? (
+            <div className="p-4 pb-0">
+              <BuildProgress
+                input={input}
+                build={autoBuild}
+                auto={autoQuote}
+                onAddTourOption={(tour) => update({ options: [...input.options, tourToOption(tour, 0, input)] })}
+                onInsertTour={insertTour}
+                onFocus={openSettings}
+              />
+            </div>
+          ) : null}
           <Dashboard
             itinerary={itinerary.state}
             days={days}

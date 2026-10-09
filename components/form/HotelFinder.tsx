@@ -143,24 +143,9 @@ export function HotelFinder({ input, onChange, stays }: Props) {
       </div>
 
       {!isBnb && (
-        <div role="radiogroup" aria-label="호텔 등급" className="flex flex-wrap gap-1.5">
-          {HOTEL_GRADES.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              role="radio"
-              aria-checked={input.hotelGrade === g.id}
-              onClick={() => onChange({ hotelGrade: g.id })}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                input.hotelGrade === g.id
-                  ? "border-indigo-600 bg-indigo-600 text-white"
-                  : "border-slate-300 bg-white text-slate-600 hover:border-indigo-300"
-              }`}
-            >
-              {g.label}
-            </button>
-          ))}
-        </div>
+        <p className="text-[11px] text-slate-500">
+          찾을 등급: <span className="font-semibold text-slate-700">{HOTEL_GRADES.find((g) => g.id === input.hotelGrade)?.label}</span> (&lsquo;2. 상품 구성&rsquo;에서 바꿉니다)
+        </p>
       )}
 
       <div className="flex flex-wrap gap-1.5">

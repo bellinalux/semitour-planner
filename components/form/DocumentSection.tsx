@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, FileText, Loader2, ShieldAlert } from "lucide-react";
-import { Field, inputClass } from "@/components/ui/Field";
+import { inputClass } from "@/components/ui/Field";
 import { NumberField } from "@/components/ui/NumberField";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { TextField } from "@/components/ui/TextField";
@@ -36,7 +36,7 @@ export function DocumentSection({ input, onChange, openSignal }: SectionProps) {
 
   return (
     <SectionCard
-      title="고객 문서 정보"
+      title="5. 고객 · 문서 (선택)"
       description="일정표·견적서·청구서를 인쇄할 때 쓰는 값입니다"
       icon={FileText}
       collapsible
@@ -100,25 +100,13 @@ export function DocumentSection({ input, onChange, openSignal }: SectionProps) {
         </div>
 
         {input.channels.length > 0 && (
-          <Field
-            htmlFor="documentChannelId"
-            label="견적서·청구서·계약서에 넣을 판매가"
-            hint="고객 문서에는 선택한 채널의 소비자가만 나가고, 채널 이름·수수료·마진은 들어가지 않습니다 (내부 검토서에서만 확인)"
-          >
-            <select
-              id="documentChannelId"
-              value={input.documentChannelId}
-              onChange={(e) => onChange({ documentChannelId: e.target.value })}
-              className={inputClass}
-            >
-              <option value="">직판 가격</option>
-              {input.channels.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name.trim() || "이름 없는 채널"} 가격
-                </option>
-              ))}
-            </select>
-          </Field>
+          <p className="text-pretty rounded-md bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-600">
+            고객 문서에 넣을 판매가:{" "}
+            <span className="font-semibold text-slate-800">
+              {input.channels.find((c) => c.id === input.documentChannelId)?.name.trim() || "직판"} 가격
+            </span>{" "}
+            — &lsquo;3. 가격 방식&rsquo;의 판매 플랫폼에서 바꿉니다. 채널 이름·수수료·마진은 고객 문서에 들어가지 않습니다.
+          </p>
         )}
 
         <div className="grid grid-cols-2 gap-3">

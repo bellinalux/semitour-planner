@@ -33,27 +33,11 @@ export function LodgingFields({ input, onChange, stays }: Props) {
 
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-slate-700">숙박 ({input.nights}박)</span>
-        <div role="radiogroup" aria-label="숙소 유형" className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white">
-          {TYPES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="radio"
-              aria-checked={input.lodgingType === t.id}
-              onClick={() =>
-                // 유형을 바꾸면 1실당 인원 기본값도 함께 바꾼다 (호텔 2인, BnB 4인)
-                onChange({ lodgingType: t.id, guestsPerUnit: t.id === "bnb" ? 4 : 2 })
-              }
-              className={`px-2.5 py-1 text-[11px] font-medium ${
-                input.lodgingType === t.id ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-xs font-semibold text-slate-700">
+          숙박 ({input.nights}박 · {TYPES.find((t) => t.id === input.lodgingType)?.label})
+        </span>
+        <span className="text-[10px] text-slate-400">숙소 종류·등급은 &lsquo;2. 상품 구성&rsquo;에서 바꿉니다</span>
       </div>
 
       <label className="flex cursor-pointer items-center gap-2 text-[11px] text-slate-600">

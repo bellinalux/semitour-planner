@@ -1,9 +1,6 @@
 import { ExternalLink } from "lucide-react";
-import { TextField } from "@/components/ui/TextField";
 import { currencySymbol } from "@/lib/currency";
-import type { FlightOption } from "@/types";
 import { CostField } from "./CostField";
-import { FlightOptionsPanel } from "./FlightOptionsPanel";
 import { FlightPricePanel } from "./FlightPricePanel";
 import { FlightWebSearchPanel } from "./FlightWebSearchPanel";
 import type { SectionProps } from "./types";
@@ -12,7 +9,7 @@ function flightSearchUrl(origin: string, destination: string): string {
   return `https://www.google.com/travel/flights?q=${encodeURIComponent(`Flights from ${origin} to ${destination}`)}`;
 }
 
-export function FlightFields({ input, onChange, onApplyFlight }: SectionProps & { onApplyFlight: (flight: FlightOption) => void }) {
+export function FlightFields({ input, onChange }: SectionProps) {
   const canSearch = input.originCity.trim() !== "" && input.destination.trim() !== "";
 
   return (
@@ -25,13 +22,7 @@ export function FlightFields({ input, onChange, onApplyFlight }: SectionProps & 
           이 상품은 항공을 팔지 않아(랜드+숙박) 여기서 확인한 항공료는 견적에 더해지지 않습니다. 고객이 직접 예매할 항공권을 참고용으로 조회하거나, 견적서에 별도 안내할 때 쓰세요.
         </p>
       )}
-      <TextField
-        id="flightOrigin"
-        label="출발지"
-        value={input.originCity}
-        placeholder="예) 인천"
-        onChange={(originCity) => onChange({ originCity })}
-      />
+      <p className="text-[10px] text-slate-400">출발지와 항공편 선택은 &lsquo;1. 여행 기본&rsquo;·&lsquo;2. 상품 구성&rsquo;에서 합니다</p>
       <CostField
         id="flightPricePerPerson"
         label="왕복 항공료 (1인, 세금 포함)"
@@ -45,7 +36,6 @@ export function FlightFields({ input, onChange, onApplyFlight }: SectionProps & 
       />
       <FlightPricePanel input={input} onChange={onChange} />
       <FlightWebSearchPanel input={input} onChange={onChange} />
-      <FlightOptionsPanel input={input} onChange={onChange} onApplyFlight={onApplyFlight} />
       {canSearch && (
         <a
           href={flightSearchUrl(input.originCity.trim(), input.destination.trim())}

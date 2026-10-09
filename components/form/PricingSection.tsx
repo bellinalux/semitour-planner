@@ -2,40 +2,24 @@ import { Percent } from "lucide-react";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { NumberField } from "@/components/ui/NumberField";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { priceIsGiven } from "@/lib/channels";
-import { PRICE_START_MODES } from "./PriceStartFields";
 import type { SectionProps } from "./types";
 
+/** 고급: 예비비·카드 수수료·환율 버퍼·아동 요금 (회사 수익률은 '3. 가격 방식'에서) */
 export function PricingSection({ input, onChange, openSignal }: SectionProps) {
-  const isFixed = priceIsGiven(input.pricingMode);
-  const mode = PRICE_START_MODES.find((m) => m.id === input.pricingMode);
 
   return (
     <SectionCard
-      title="회사 수익 · 수수료"
-      description="견적 시작 방법(원가·판매가·B2B 도매가·랜드사 공급가)과 회사 수익·수수료를 정합니다. 모든 1인 가격은 2인 1실 기준"
+      title="예비비 · 카드 수수료 · 아동 요금"
+      description="회사 수익률과 견적 시작 방법은 '3. 가격 방식'에서 정합니다"
       icon={Percent}
       collapsible
+      nested
       defaultOpen={false}
       anchorId="settings-pricing"
       openSignal={openSignal}
-      summary={`${mode?.label ?? ""} · 회사 수익 ${input.targetMarginRate}% · 카드 수수료 ${input.cardFeeRate}%`}
+      summary={`예비비 ${input.contingencyRate}% · 카드 수수료 ${input.cardFeeRate}%${input.childCount + input.childNoBedCount + input.infantCount > 0 ? " · 아동·유아 있음" : ""}`}
     >
       <div className="space-y-4">
-        <p className="rounded-md bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-600">
-          견적 시작 방법: <span className="font-semibold text-slate-800">{mode?.label}</span> — 판매가·도매가·공급가와 판매 플랫폼은 입력 화면의 &apos;판매 구성 · 견적 방식&apos;에서 바꿉니다.
-        </p>
-
-        <NumberField
-          id="targetMarginRate"
-          label={isFixed ? "회사 수익 (판매가 대비 %)" : "목표 마진율 (판매가 대비)"}
-          value={input.targetMarginRate}
-          suffix="%"
-          min={0}
-          max={90}
-          hint="원가에 %를 더하는 마크업과 다릅니다. 마진율 25% = 판매가의 25%가 이익"
-          onChange={(targetMarginRate) => onChange({ targetMarginRate })}
-        />
         <div className="grid grid-cols-2 gap-3">
           <NumberField
             id="contingencyRate"

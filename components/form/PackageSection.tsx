@@ -1,7 +1,7 @@
 import { Boxes } from "lucide-react";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { SectionCard } from "@/components/ui/SectionCard";
-import type { FlightOption, PackageType } from "@/types";
+import type { PackageType } from "@/types";
 import { FlightFields } from "./FlightFields";
 import { HotelFinder } from "./HotelFinder";
 import { LodgingFields } from "./LodgingFields";
@@ -18,15 +18,15 @@ export function PackageSection({
   input,
   onChange,
   stays,
-  onApplyFlight,
   openSignal,
-}: SectionProps & { stays: { city: string; nights: number }[]; onApplyFlight: (flight: FlightOption) => void }) {
+}: SectionProps & { stays: { city: string; nights: number }[] }) {
   return (
     <SectionCard
       title="숙박 · 항공 원가"
       description="숙박 요금·방 배정(2인 1실)·호텔 찾기·항공료를 넣습니다. 판매 구성은 입력 화면의 '판매 구성 · 견적 방식'에서 고릅니다"
       icon={Boxes}
       collapsible
+      nested
       defaultOpen={false}
       anchorId="settings-package"
       openSignal={openSignal}
@@ -43,7 +43,7 @@ export function PackageSection({
             <Disclosure label={input.lodgingType === "bnb" ? "숙소 찾기 (웹 검색)" : "호텔 찾기 (웹 검색)"} summary={Object.keys(input.selectedHotels).length > 0 ? `선택한 숙소 ${Object.keys(input.selectedHotels).length}곳` : "지역별로 호텔 후보를 찾아 고릅니다"}>
               <HotelFinder input={input} onChange={onChange} stays={stays} />
             </Disclosure>
-            <FlightFields input={input} onChange={onChange} onApplyFlight={onApplyFlight} />
+            <FlightFields input={input} onChange={onChange} />
             <TravelEstimatePanel input={input} onChange={onChange} />
           </>
         )}

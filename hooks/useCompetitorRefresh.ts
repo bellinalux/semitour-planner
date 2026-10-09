@@ -37,7 +37,7 @@ export function useCompetitorRefresh(input: TripInput, update: (patch: Partial<T
       if (result.updated.length > 0) update({ competitors: result.competitors });
       setMessage(
         result.updated.length === 0
-          ? "같은 상품을 다시 찾지 못했습니다. 설정의 경쟁 상품 찾기에서 새로 넣어 주세요."
+          ? "같은 상품을 다시 찾지 못했습니다. 입력의 '6. 고급 → 경쟁사 정보'에서 새로 넣어 주세요."
           : `${result.updated.length}개를 새로 고쳤습니다${result.missing.length > 0 ? ` (못 찾은 상품: ${result.missing.join(", ")})` : ""}`,
       );
       setFailed(result.updated.length === 0);

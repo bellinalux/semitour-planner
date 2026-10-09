@@ -1,6 +1,6 @@
 import type { TripInput } from "@/types";
 
-/** 설정 패널에서 이동할 구역 */
+/** 입력 폴더 안에서 이동할 구역 */
 export type SetupSection = "package" | "cost" | "pricing" | "channels" | "competitors" | "documents";
 
 export interface CheckItem {

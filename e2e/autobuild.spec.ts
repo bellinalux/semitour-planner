@@ -22,7 +22,7 @@ test("자동 구성: 판매가에서 시작 → 코스·예산 안 숙소·견�
   // 숙소: 원가 예산에서 나온 1실 1박 상한 안에서 고른다 (비싼 호텔은 상한 밖)
   await expect(page.getByText(/알맞은 호텔 \(1실 1박 상한/)).toBeVisible({ timeout: 30_000 });
   // 추천 투어: 남은 입장·투어 예산 안의 것만
-  const autoPanel = page.locator("#settings-auto");
+  const autoPanel = page.locator("#build-progress");
   await expect(autoPanel.getByText("한강 야경 크루즈")).toBeVisible({ timeout: 30_000 });
   await expect(autoPanel.getByText("고가 헬기 투어")).toHaveCount(0);
 

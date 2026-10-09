@@ -20,9 +20,11 @@ interface Props {
   openSignal?: number;
   /** 이동·스크롤 대상으로 쓰는 id */
   anchorId?: string;
+  /** 폴더 안의 하위 항목 — 그림자 없이 옅게 */
+  nested?: boolean;
 }
 
-export function SectionCard({ title, description, icon: Icon, action, children, collapsible, defaultOpen = true, summary, openSignal, anchorId }: Props) {
+export function SectionCard({ title, description, icon: Icon, action, children, collapsible, defaultOpen = true, summary, openSignal, anchorId, nested }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   // 신호가 바뀌면(다른 화면에서 이 항목으로 이동시킨 경우) 렌더 중에 바로 펼친다
   const [seenSignal, setSeenSignal] = useState(openSignal);
@@ -40,16 +42,16 @@ export function SectionCard({ title, description, icon: Icon, action, children, 
         </span>
       )}
       <div className="min-w-0 text-left">
-        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-        {description && expanded && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
+        <h2 className={`text-balance font-semibold text-slate-900 ${nested ? "text-xs" : "text-sm"}`}>{title}</h2>
+        {description && expanded && <p className="mt-0.5 text-pretty text-xs text-slate-500">{description}</p>}
         {collapsible && !expanded && summary && <p className="mt-0.5 truncate text-xs text-slate-500">{summary}</p>}
       </div>
     </>
   );
 
   return (
-    <section id={anchorId} className="scroll-mt-3 rounded-xl border border-slate-200 bg-white shadow-sm">
-      <header className={`flex items-start justify-between gap-3 px-4 py-3 ${expanded ? "border-b border-slate-100" : ""}`}>
+    <section id={anchorId} className={`scroll-mt-3 border border-slate-200 ${nested ? "rounded-lg bg-slate-50/60" : "rounded-xl bg-white shadow-sm"}`}>
+      <header className={`flex items-start justify-between gap-3 ${nested ? "px-3 py-2.5" : "px-4 py-3"} ${expanded ? "border-b border-slate-100" : ""}`}>
         {collapsible ? (
           <button
             type="button"
@@ -65,7 +67,7 @@ export function SectionCard({ title, description, icon: Icon, action, children, 
         )}
         {action}
       </header>
-      <div className="p-4" hidden={!expanded}>
+      <div className={nested ? "p-3" : "p-4"} hidden={!expanded}>
         {children}
       </div>
     </section>
