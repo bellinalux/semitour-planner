@@ -153,7 +153,7 @@ export function useAutoBuild({ input, update, days, pmChoice, generate, runAutoQ
             "tours",
             picked.length > 0 ? "done" : "skipped",
             picked.length > 0
-              ? `${picked.length}개 추천${remaining !== null ? ` (남은 1인 입장·투어 예산 ${remaining.toLocaleString("ko-KR")} 안)` : ""}`
+              ? `${picked.length}개 추천${remaining !== null ? ` (남은 1인 입장·투어 예산 ${Math.round(remaining).toLocaleString("ko-KR")} 안)` : ""}`
               : remaining !== null
                 ? "남은 예산 안의 투어가 없습니다"
                 : "요금이 확인된 투어가 없습니다",

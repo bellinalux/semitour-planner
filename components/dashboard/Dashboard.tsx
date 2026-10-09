@@ -18,6 +18,7 @@ import type { CourseSegment, SegmentKind } from "@/lib/segmentLibrary";
 import type { SettingsSection } from "@/components/form/SettingsPanel";
 import { ExportBar } from "./ExportBar";
 import { DocumentBar } from "./DocumentBar";
+import type { BudgetFitView } from "@/hooks/useBudgetFit";
 import { ItineraryPanel, type AccessibilityCheckView, type FeeCheckView, type OptionSuggestView } from "./ItineraryPanel";
 import { CourseLibraryPanel } from "./library/CourseLibraryPanel";
 import type { ItemPatch } from "./itinerary/TimelineItem";
@@ -102,6 +103,8 @@ interface Props {
   onOpenSettings: (section: SettingsSection) => void;
   /** 견적 경고에서 바로 실행하는 자동 견적 */
   autoQuote: { running: boolean; run: () => void };
+  /** 판매가·도매가에서 시작한 견적의 예산 맞추기 */
+  budgetFit?: BudgetFitView | null;
 }
 
 export function Dashboard({
@@ -129,6 +132,7 @@ export function Dashboard({
   onInputChange,
   onOpenSettings,
   autoQuote,
+  budgetFit,
 }: Props) {
   const { onAddTour, ...panelActions } = itemActions;
 
@@ -193,6 +197,7 @@ export function Dashboard({
         onInputChange={onInputChange}
         onOpenSettings={onOpenSettings}
         autoQuote={autoQuote}
+        budgetFit={budgetFit}
       />
       <UspPanel {...usp} />
       <ExportBar {...exporter} />

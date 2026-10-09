@@ -58,6 +58,13 @@ export interface Competitor {
   localPayPerPerson?: number;
   /** 가격을 마지막으로 직접 입력·수정한 시각 (ISO). 검색으로 찾은 상품은 source.foundAt을 쓴다 */
   priceCheckedAt?: string;
+  /** 일정의 주요 방문지 (투어 비교표에서 우리 일정과 겹치는 곳을 본다) */
+  places?: string[];
+  /** 호텔 등급 표기 (예: 4성급) */
+  hotelGrade?: string;
+  /** 숙박 수·총 일수 (모르면 0) */
+  nights?: number;
+  days?: number;
 }
 
 /**
@@ -115,6 +122,8 @@ export interface PriceScenarioSnapshot {
 export interface CompetitorCandidate {
   agency: string;
   productName: string;
+  /** 일정의 주요 방문지 (확인한 것만, 최대 8곳) */
+  places: string[];
   /** 성인 1인 요금 (요청 통화). 확인 못했으면 0 */
   pricePerPerson: number;
   priceNote: string;

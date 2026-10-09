@@ -28,6 +28,10 @@ export function candidateToCompetitor(candidate: CompetitorCandidate, foundAt: s
     shopping: policyOf(candidate.noShopping, candidate.policyUnknown),
     optionTour: policyOf(candidate.noOption, candidate.policyUnknown),
     note: note.slice(0, 200),
+    places: candidate.places,
+    hotelGrade: candidate.hotelGrade,
+    nights: candidate.nights,
+    days: candidate.days,
     source: {
       agency: candidate.agency,
       url: candidate.searchUrl,

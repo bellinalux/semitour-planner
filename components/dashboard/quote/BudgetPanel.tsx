@@ -41,7 +41,7 @@ export function BudgetPanel({ plan, currency }: { plan: BudgetPlan; currency: Cu
                   <td className="py-1.5 pr-3 text-right text-slate-700">{money(c.budget)}</td>
                   <td className="py-1.5 pr-3 text-right text-slate-700">{c.actual === null ? "—" : money(c.actual)}</td>
                   <td className={`py-1.5 text-right ${diff === null ? "text-slate-400" : diff < -0.5 ? "text-red-600" : "text-emerald-700"}`}>
-                    {diff === null ? "—" : `${diff >= 0 ? "+" : "−"}${money(Math.abs(diff))}`}
+                    {diff === null ? "—" : `${Math.round(diff) === 0 ? "" : diff > 0 ? "+" : "−"}${money(Math.abs(diff))}`}
                   </td>
                 </tr>
               );
@@ -51,7 +51,7 @@ export function BudgetPanel({ plan, currency }: { plan: BudgetPlan; currency: Cu
               <td className="py-1.5 pr-3 text-right">{money(plan.budgetPerPerson)}</td>
               <td className="py-1.5 pr-3 text-right">{plan.actualPerPerson === null ? "—" : money(plan.actualPerPerson)}</td>
               <td className={`py-1.5 pr-2 text-right ${over ? "text-red-600" : "text-emerald-700"}`}>
-                {plan.gap === null ? "—" : `${plan.gap >= 0 ? "+" : "−"}${money(Math.abs(plan.gap))}`}
+                {plan.gap === null ? "—" : `${Math.round(plan.gap) === 0 ? "" : plan.gap > 0 ? "+" : "−"}${money(Math.abs(plan.gap))}`}
               </td>
             </tr>
           </tbody>

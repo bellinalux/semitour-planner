@@ -22,8 +22,9 @@ test("자동 구성: 판매가에서 시작 → 코스·예산 안 숙소·견�
   // 숙소: 원가 예산에서 나온 1실 1박 상한 안에서 고른다 (비싼 호텔은 상한 밖)
   await expect(page.getByText(/알맞은 호텔 \(1실 1박 상한/)).toBeVisible({ timeout: 30_000 });
   // 추천 투어: 남은 입장·투어 예산 안의 것만
-  await expect(page.getByText("한강 야경 크루즈")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("고가 헬기 투어")).toHaveCount(0);
+  const autoPanel = page.locator("#settings-auto");
+  await expect(autoPanel.getByText("한강 야경 크루즈")).toBeVisible({ timeout: 30_000 });
+  await expect(autoPanel.getByText("고가 헬기 투어")).toHaveCount(0);
 
   // 입력 화면 버튼 옆에도 결과 한 줄이 보인다
   await expect(page.getByRole("status").filter({ hasText: "자동 구성 끝" })).toBeVisible({ timeout: 30_000 });
@@ -34,6 +35,12 @@ test("자동 구성: 판매가에서 시작 → 코스·예산 안 숙소·견�
   await expect(costTable.getByText("출처: 고른 숙소 · 알맞은 호텔")).toBeVisible();
 
   // 추천 투어를 판매가에 넣으면 일정에 들어간다
-  await page.getByRole("button", { name: "판매가에 포함" }).click();
+  await autoPanel.getByRole("button", { name: "판매가에 포함" }).click();
   await expect(page.getByRole("heading", { name: "한강 야경 크루즈" })).toBeVisible();
+
+  // 원가 계산서(엑셀)와 투어 비교표: 경쟁 상품의 방문지 중 우리 일정과 겹치는 곳을 센다
+  await expect(page.getByRole("button", { name: "엑셀로 내려받기" })).toBeVisible();
+  const compare = page.locator("table", { has: page.locator("caption", { hasText: "투어 비교표" }) });
+  await expect(compare.getByRole("columnheader", { name: /하나투어/ })).toBeVisible({ timeout: 30_000 });
+  await expect(compare.getByText(/방문지 2곳 겹침/).first()).toBeVisible();
 });

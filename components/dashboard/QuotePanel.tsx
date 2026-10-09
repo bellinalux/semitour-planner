@@ -7,15 +7,20 @@ import type { SettingsSection } from "@/components/form/SettingsPanel";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ourPolicy } from "@/lib/competitorDiff";
+import { buildTourCompare } from "@/lib/tourCompare";
 import { budgetPlan } from "@/lib/budget";
 import { lodgingRoomsFor } from "@/lib/cost";
 import { formatMoney } from "@/lib/currency";
 import { BudgetPanel } from "./quote/BudgetPanel";
+import { CostSheetPanel } from "./quote/CostSheetPanel";
+import { BudgetFitBox } from "./quote/BudgetFitBox";
+import type { BudgetFitView } from "@/hooks/useBudgetFit";
 import { bindingChannel, buildPriceTiers, singleSupplement } from "@/lib/pricing";
 import type { PmChoice } from "@/lib/itinerary";
 import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PackageType, QuoteResult, TripInput } from "@/types";
 import { ChannelTable } from "./quote/ChannelTable";
 import { CompetitorTable } from "./quote/CompetitorTable";
+import { TourCompareTable } from "./quote/TourCompareTable";
 import { CostBreakdownTable } from "./quote/CostBreakdownTable";
 import { DeparturePricesPanel } from "./quote/DeparturePricesPanel";
 import { DiscountSimulator } from "./quote/DiscountSimulator";
@@ -44,6 +49,8 @@ interface Props {
   /** 경고에서 설정 패널의 해당 항목으로 이동한다 */
   onOpenSettings: (section: SettingsSection) => void;
   autoQuote: { running: boolean; run: () => void };
+  /** 판매가·도매가에서 시작한 견적의 예산 맞추기 */
+  budgetFit?: BudgetFitView | null;
 }
 
 /** 경고 문구가 가리키는 설정 항목. 없으면 바로 가기를 만들지 않는다 */
@@ -105,11 +112,12 @@ function useQuoteView(): [QuoteView, (v: QuoteView) => void] {
   return [view, change];
 }
 
-function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
+function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote, budgetFit }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
   const [view, setView] = useQuoteView();
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
 
   const policy = ourPolicy(days, pmChoice, input, meta);
+  const tourCompare = buildTourCompare(input, days, pmChoice, quote, meta);
   // 판매가·도매가에서 시작한 견적이면 원가 예산과 지금 원가를 비교한다
   const budget = budgetPlan(input, quote, quote.groundDays);
   const single = singleSupplement(quote, input);
@@ -227,6 +235,11 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
         <section>
           <SubHeading>예산 사용표 (1인, 2인 1실 기준)</SubHeading>
           <BudgetPanel plan={budget} currency={input.currency} />
+          {budgetFit && (
+            <div className="mt-2">
+              <BudgetFitBox fit={budgetFit} />
+            </div>
+          )}
         </section>
       )}
 
@@ -253,6 +266,11 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
           pricingMode={quote.pricingMode}
           withUndecided={quote.withUndecided}
         />
+      </section>
+
+      <section>
+        <SubHeading>원가 계산서 · 엑셀</SubHeading>
+        <CostSheetPanel input={input} days={days} pmChoice={pmChoice} quote={quote} title={meta?.packageName?.trim() || `${input.destination} ${input.nights}박${input.days}일`} />
       </section>
 
       {detail && (
@@ -298,16 +316,25 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
         </>
       )}
 
-      <section>
-        <SubHeading>경쟁사 비교</SubHeading>
-        <CompetitorTable
-          competitors={input.competitors}
-          ourPricePerPerson={quote.scenario.pricePerPerson}
-          ourIncludes={quote.ourIncludes}
-          ourPolicy={policy}
-          currency={input.currency}
-        />
-      </section>
+      {tourCompare && (
+        <section>
+          <SubHeading>투어 비교표 (우리 vs 경쟁 상품)</SubHeading>
+          <TourCompareTable compare={tourCompare} currency={input.currency} />
+        </section>
+      )}
+
+      {(!tourCompare || detail) && (
+        <section>
+          <SubHeading>{tourCompare ? "경쟁사 가격 확인 시점 · 포함 내역" : "경쟁사 비교"}</SubHeading>
+          <CompetitorTable
+            competitors={input.competitors}
+            ourPricePerPerson={quote.scenario.pricePerPerson}
+            ourIncludes={quote.ourIncludes}
+            ourPolicy={policy}
+            currency={input.currency}
+          />
+        </section>
+      )}
 
       {detail && input.competitors.some((c) => c.price > 0) && (
         <section>
@@ -326,7 +353,7 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
   );
 }
 
-export function QuotePanel({ state, quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote }: Props) {
+export function QuotePanel({ state, quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote, budgetFit }: Props) {
   return (
     <SectionCard
       title="견적서"
@@ -345,6 +372,7 @@ export function QuotePanel({ state, quote, input, days, pmChoice, meta, generate
           onInputChange={onInputChange}
           onOpenSettings={onOpenSettings}
           autoQuote={autoQuote}
+          budgetFit={budgetFit}
         />
       )}
       {(state.status === "idle" || state.status === "error") && (

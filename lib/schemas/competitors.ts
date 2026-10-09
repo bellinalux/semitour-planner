@@ -40,6 +40,7 @@ export const competitorResponseSchema = z.object({
         noOption: z.boolean().describe("노옵션을 내세우면 true"),
         policyUnknown: z.boolean().describe("메모에서 쇼핑·선택관광 언급을 전혀 찾지 못했으면 true. 노쇼핑/노옵션이라고 밝힌 경우에는 false"),
         highlight: z.string().describe("이 상품의 특징 한 줄. 없으면 빈 문자열"),
+        places: z.array(z.string()).describe("일정에 들어간 주요 방문지·관광지 이름 (메모에 적힌 것만, 최대 8개). 모르면 빈 배열"),
         basis: z.enum(["searched", "estimated"]).describe("판매 페이지에서 요금을 확인했으면 searched, 아니면 estimated"),
         sourceName: z.string().describe("요금을 확인한 사이트 이름. 없으면 빈 문자열"),
         productUrl: z
@@ -96,6 +97,7 @@ export function toCompetitorCandidates(parsed: Parsed): CompetitorCandidate[] {
       noOption: p.noOption,
       policyUnknown: p.policyUnknown && !p.noShopping && !p.noOption,
       highlight: clean(p.highlight),
+      places: (p.places ?? []).map(clean).filter(Boolean).slice(0, 8),
       basis: p.pricePerPerson > 0 ? p.basis : "estimated",
       sourceName: clean(p.sourceName),
       searchUrl: isUsableUrl(clean(p.productUrl)) ? clean(p.productUrl) : fallbackSearchUrl(clean(p.agency), clean(p.productName)),

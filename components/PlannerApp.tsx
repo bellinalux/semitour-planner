@@ -40,6 +40,7 @@ import { calculateQuote } from "@/lib/cost";
 import { rememberCosts } from "@/lib/costMemory";
 import { useAutoQuote } from "@/hooks/useAutoQuote";
 import { autoBuildStatus, useAutoBuild } from "@/hooks/useAutoBuild";
+import { useBudgetFit } from "@/hooks/useBudgetFit";
 import { slotOptions, tourToItem } from "@/lib/tourItem";
 import { documentQuote } from "@/lib/pricing";
 import { withSource } from "@/lib/costSource";
@@ -212,6 +213,8 @@ export function PlannerApp() {
 
   const autoQuote = useAutoQuote({ input, update, verifyFees: webChecks.verifyFees, hasItinerary: days.length > 0, itinerary: days });
   const autoBuild = useAutoBuild({ input, update, days, pmChoice, generate: () => handleGenerate({ fromAutoBuild: true }), runAutoQuote: autoQuote.run });
+  // 판매가·도매가에서 시작한 견적: 예산을 넘으면 줄이고 남으면 올린다
+  const budgetFit = useBudgetFit({ input, update, days, pmChoice, quote, replaceDays: itinerary.replaceDays, hotelChoices: autoBuild.hotelChoices, tours: autoBuild.tours, insertTour, onHotelChosen: autoBuild.chooseHotel });
 
   const { exporter, printDocument } = useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quoteLog, author: session.user?.name || quoteLog.author, print });
 
@@ -339,6 +342,7 @@ export function PlannerApp() {
             onInputChange={update}
             onOpenSettings={openSettings}
             autoQuote={{ running: autoQuote.running, run: () => void autoQuote.run() }}
+            budgetFit={budgetFit}
             itemActions={{
               onChangeItem: itinerary.updateItem,
               onChangeDay: itinerary.updateDay,

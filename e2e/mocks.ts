@@ -42,6 +42,7 @@ const competitor = (agency: string, price: number) => ({
   noOption: true,
   policyUnknown: false,
   highlight: "",
+  places: ["바나힐 테마파크", "오행산"],
   basis: "searched",
   sourceName: agency,
   searchUrl: "https://example.com",
