@@ -91,3 +91,25 @@ test("상품 비교 보기: 경쟁 상품 일정을 가져와 날짜별 코스·
   const [download] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "엑셀(CSV) 저장" }).click()]);
   expect(download.suggestedFilename()).toContain("상품비교");
 });
+
+test("가격 낮추기: 방법마다 판매가·경쟁 순위 변화를 보여 주고, 골라서 적용·되돌리기", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await mockAi(page);
+  await page.goto("/");
+  await page.getByLabel("여행지").fill("다낭");
+  await page.getByRole("button", { name: "코스만" }).click();
+  const levers = page.locator("#price-levers");
+  await expect(levers).toBeVisible({ timeout: 30_000 });
+  await expect(levers).toContainText(/지금 1인 ₩[\d,]+ · 같은 조건 3개 중 \d위/);
+  await expect(levers).toContainText("쇼핑·선택관광을 늘려 메우는 방법은");
+
+  const lever = levers.getByRole("listitem").filter({ hasText: "DAY 3 호이안 올드타운 빼기" });
+  await expect(lever).toContainText("바로 적용");
+  await expect(lever).toContainText("업계 기준:");
+  await lever.getByRole("checkbox").check();
+  await expect(levers.getByRole("status")).toContainText(/고른 1개를 함께 하면 1인 ₩[\d,]+/);
+  await levers.getByRole("button", { name: "고른 것 적용" }).click();
+  await expect(page.locator("#day-3")).not.toContainText("호이안 올드타운");
+  await levers.getByRole("button", { name: "되돌리기" }).click();
+  await expect(page.locator("#day-3")).toContainText("호이안 올드타운");
+});

@@ -97,6 +97,8 @@ interface Props {
   documents: React.ComponentProps<typeof DocumentBar>;
   /** 견적 화면에서 입력값(할인 시나리오·가격안 등)을 바꾼다 */
   onInputChange: (patch: Partial<TripInput>) => void;
+  /** 가격 낮추기에서 일정을 바꿀 때 */
+  onReplaceDays?: (days: DayPlan[]) => void;
   /** 견적 경고에서 입력 화면의 해당 폴더로 이동한다 */
   onOpenSettings: (section: SettingsSection) => void;
   /** 견적 경고에서 바로 실행하는 자동 견적 */
@@ -127,6 +129,7 @@ export function Dashboard({
   library,
   documents,
   onInputChange,
+  onReplaceDays,
   onOpenSettings,
   autoQuote,
   budgetFit,
@@ -196,6 +199,7 @@ export function Dashboard({
         onOpenSettings={onOpenSettings}
         autoQuote={autoQuote}
         budgetFit={budgetFit}
+        onReplaceDays={onReplaceDays}
       />
       <UspPanel {...usp} />
       <ExportBar {...exporter} />

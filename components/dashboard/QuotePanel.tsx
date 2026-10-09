@@ -19,6 +19,7 @@ import type { PmChoice } from "@/lib/itinerary";
 import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PackageType, QuoteResult, TripInput } from "@/types";
 import { ChannelTable } from "./quote/ChannelTable";
 import { CompetitorTable } from "./quote/CompetitorTable";
+import { PriceLeversPanel } from "./quote/PriceLeversPanel";
 import { ProductCompareDialog } from "./quote/ProductCompareDialog";
 import { TourCompareTable } from "./quote/TourCompareTable";
 import { SupplierCheckPanel } from "./quote/SupplierCheckPanel";
@@ -53,6 +54,8 @@ interface Props {
   autoQuote: { running: boolean; run: () => void };
   /** 판매가·도매가에서 시작한 견적의 예산 맞추기 */
   budgetFit?: BudgetFitView | null;
+  /** 가격 낮추기에서 일정을 바꿀 때 */
+  onReplaceDays?: (days: DayPlan[]) => void;
 }
 
 /** 경고 문구가 가리키는 설정 항목. 없으면 바로 가기를 만들지 않는다 */
@@ -114,7 +117,7 @@ function useQuoteView(): [QuoteView, (v: QuoteView) => void] {
   return [view, change];
 }
 
-function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote, budgetFit }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
+function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote, budgetFit, onReplaceDays }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
   const [view, setView] = useQuoteView();
   const competitorRefresh = useCompetitorRefresh(input, onInputChange);
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
@@ -344,6 +347,11 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
               <ProductCompareDialog input={input} days={days} pmChoice={pmChoice} quote={quote} meta={meta} onInputChange={onInputChange} />
             </div>
           )}
+          {quote?.ok && (
+            <div className="mb-3">
+              <PriceLeversPanel input={input} days={days} pmChoice={pmChoice} quote={quote} meta={meta} onInputChange={onInputChange} onReplaceDays={onReplaceDays} />
+            </div>
+          )}
           <TourCompareTable
             compare={tourCompare}
             currency={input.currency}
@@ -382,7 +390,7 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
   );
 }
 
-export function QuotePanel({ state, quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote, budgetFit }: Props) {
+export function QuotePanel({ state, quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote, budgetFit, onReplaceDays }: Props) {
   return (
     <SectionCard
       title="견적서"
@@ -402,6 +410,7 @@ export function QuotePanel({ state, quote, input, days, pmChoice, meta, generate
           onOpenSettings={onOpenSettings}
           autoQuote={autoQuote}
           budgetFit={budgetFit}
+          onReplaceDays={onReplaceDays}
         />
       )}
       {(state.status === "idle" || state.status === "error") && (

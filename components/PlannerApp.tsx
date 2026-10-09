@@ -445,6 +445,7 @@ export function PlannerApp() {
             researchInfo={itinerary.researchInfo}
             onSelectPm={itinerary.selectPmOption}
             onInputChange={update}
+            onReplaceDays={itinerary.replaceDays}
             onOpenSettings={openSettings}
             autoQuote={{ running: autoQuote.running, run: () => void autoQuote.run() }}
             budgetFit={budgetFit}
