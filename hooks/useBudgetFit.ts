@@ -5,24 +5,28 @@ import { budgetPlan } from "@/lib/budget";
 import { describeAction, itemToOption, planBudgetFit, planUpgrades, type FitPlan, type HotelChoiceLike, type Upgrade } from "@/lib/budgetFit";
 import { formatMoney } from "@/lib/currency";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
-import type { DayPlan, QuoteResult, TourCandidate, TripInput } from "@/types";
+import type { CourseMeta, DayPlan, QuoteResult, TourCandidate, TripInput } from "@/types";
 
 interface Options {
   input: TripInput;
   update: (patch: Partial<TripInput>) => void;
   days: DayPlan[];
   pmChoice: PmChoice;
+  meta: CourseMeta | null;
   quote: QuoteResult | null;
   replaceDays: (days: DayPlan[]) => void;
   hotelChoices: HotelChoiceLike[];
   tours: TourCandidate[];
   insertTour: (tour: TourCandidate) => void;
   onHotelChosen: (city: string, hotel: HotelChoiceLike["candidates"][number]) => void;
+  /** 되돌리기: 숙소 후보 표시를 이전 선택으로 */
+  onHotelRestore: (picks: Record<string, HotelChoiceLike["picked"]>) => void;
 }
 
 interface Snapshot {
   days: DayPlan[];
   input: Pick<TripInput, "options" | "selectedHotels" | "lodgingRatePerNight" | "lodgingCityRates" | "costStatus" | "costSource">;
+  hotelPicks: Record<string, HotelChoiceLike["picked"]>;
 }
 
 export interface BudgetFitView {
@@ -37,7 +41,7 @@ export interface BudgetFitView {
 }
 
 /** 견적 화면의 "예산 맞추기" — 넘으면 자동으로 줄이고(되돌리기 가능), 남으면 올릴 방법을 보여 준다 */
-export function useBudgetFit({ input, update, days, pmChoice, quote, replaceDays, hotelChoices, tours, insertTour, onHotelChosen }: Options): BudgetFitView | null {
+export function useBudgetFit({ input, update, days, pmChoice, meta, quote, replaceDays, hotelChoices, tours, insertTour, onHotelChosen, onHotelRestore }: Options): BudgetFitView | null {
   const [applied, setApplied] = useState<string[]>([]);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [addedTours, setAddedTours] = useState<string[]>([]);
@@ -45,7 +49,7 @@ export function useBudgetFit({ input, update, days, pmChoice, quote, replaceDays
 
   const plan = quote?.ok ? budgetPlan(input, quote, quote.groundDays) : null;
   if (!plan || !quote?.ok) return null;
-  const fit = planBudgetFit(input, days, pmChoice, plan, hotelChoices);
+  const fit = planBudgetFit(input, days, pmChoice, plan, hotelChoices, meta);
   const upgrades = planUpgrades(input, days, plan, hotelChoices, tours, addedTours);
 
   const apply = () => {
@@ -60,6 +64,7 @@ export function useBudgetFit({ input, update, days, pmChoice, quote, replaceDays
         costStatus: input.costStatus,
         costSource: input.costSource,
       },
+      hotelPicks: Object.fromEntries(hotelChoices.map((c) => [c.city, c.picked])),
     });
     // 선택 옵션으로 옮길 항목: 일정에서 빼고 옵션에 더한다
     const moving = fit.actions.filter((a) => a.kind === "to-option");
@@ -89,6 +94,7 @@ export function useBudgetFit({ input, update, days, pmChoice, quote, replaceDays
     if (!snapshot) return;
     replaceDays(snapshot.days);
     update(snapshot.input);
+    onHotelRestore(snapshot.hotelPicks);
     setSnapshot(null);
     setApplied([]);
   };

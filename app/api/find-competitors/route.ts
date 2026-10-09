@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   try {
     // 같은 조건의 경쟁 상품 조사는 3일 동안 다시 쓴다 (검색 근거가 있고 상품을 찾은 결과만)
     const result = await cached(
-      "competitors",
+      "competitors-v2",
       parsed.data,
       3 * DAY,
       async () => {

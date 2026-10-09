@@ -1,5 +1,6 @@
 import { competitorPriceInOurScope, ourPolicy, POLICY_LABELS } from "@/lib/competitorDiff";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
+import { samePlace } from "@/lib/places";
 import { documentQuote } from "@/lib/pricing";
 import type { CompetitorIncludes, CourseMeta, DayPlan, HotelGrade, QuoteData, TourPolicy, TripInput } from "@/types";
 
@@ -47,22 +48,6 @@ const INCLUDE_LABELS: Record<keyof CompetitorIncludes, string> = {
 };
 export const INCLUDE_KEYS = Object.keys(INCLUDE_LABELS) as (keyof CompetitorIncludes)[];
 export const includeLabel = (k: keyof CompetitorIncludes) => INCLUDE_LABELS[k];
-
-/** 방문지 이름 비교용 (괄호·공백·기호를 뺀다) */
-export function placeKey(name: string): string {
-  return name
-    .replace(/\(.*?\)/g, "")
-    .replace(/[\s·・,./\-_'"]/g, "")
-    .toLowerCase();
-}
-
-/** 두 이름이 같은 곳으로 보이는지 (한쪽이 다른 쪽을 포함하면 같다고 본다: "바나힐" ⊂ "바나힐 테마파크") */
-export function samePlace(a: string, b: string): boolean {
-  const x = placeKey(a);
-  const y = placeKey(b);
-  if (x.length < 2 || y.length < 2) return false;
-  return x.includes(y) || y.includes(x);
-}
 
 /** 우리 일정의 방문지 (식사·이동·숙소·항공·자유시간 제외) */
 export function ourPlaces(days: DayPlan[], pmChoice: PmChoice): string[] {

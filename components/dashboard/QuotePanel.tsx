@@ -21,6 +21,7 @@ import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PackageType, QuoteR
 import { ChannelTable } from "./quote/ChannelTable";
 import { CompetitorTable } from "./quote/CompetitorTable";
 import { TourCompareTable } from "./quote/TourCompareTable";
+import { useCompetitorRefresh } from "@/hooks/useCompetitorRefresh";
 import { CostBreakdownTable } from "./quote/CostBreakdownTable";
 import { DeparturePricesPanel } from "./quote/DeparturePricesPanel";
 import { DiscountSimulator } from "./quote/DiscountSimulator";
@@ -114,6 +115,7 @@ function useQuoteView(): [QuoteView, (v: QuoteView) => void] {
 
 function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote, budgetFit }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
   const [view, setView] = useQuoteView();
+  const competitorRefresh = useCompetitorRefresh(input, onInputChange);
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
 
   const policy = ourPolicy(days, pmChoice, input, meta);
@@ -319,7 +321,11 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
       {tourCompare && (
         <section>
           <SubHeading>투어 비교표 (우리 vs 경쟁 상품)</SubHeading>
-          <TourCompareTable compare={tourCompare} currency={input.currency} />
+          <TourCompareTable
+            compare={tourCompare}
+            currency={input.currency}
+            refresh={input.competitors.some((c) => c.source) ? competitorRefresh : null}
+          />
         </section>
       )}
 

@@ -178,7 +178,17 @@ export function useAutoBuild({ input, update, days, pmChoice, generate, runAutoQ
     setHotelChoices((prev) => prev.map((c) => (c.city === city ? { ...c, picked } : c)));
   };
 
-  return { steps, running, run, hotelChoices, chooseHotel, tours };
+  /** 숙소 후보 표시만 이전 선택으로 되돌린다 (예산 맞추기 되돌리기 — 견적 값은 부르는 쪽이 되돌린다) */
+  const restoreHotelPicks = (picks: Record<string, { hotel: HotelCandidate; rate: number; overBudget?: boolean } | null>) =>
+    setHotelChoices((prev) =>
+      prev.map((c) => {
+        if (!(c.city in picks)) return c;
+        const p = picks[c.city];
+        return { ...c, picked: p ? { ...p, overBudget: p.overBudget ?? false } : null };
+      }),
+    );
+
+  return { steps, running, run, hotelChoices, chooseHotel, restoreHotelPicks, tours };
 }
 
 export type AutoBuild = ReturnType<typeof useAutoBuild>;

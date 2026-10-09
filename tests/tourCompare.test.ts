@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculateQuote } from "@/lib/cost";
-import { buildTourCompare, ourPlaces, samePlace } from "@/lib/tourCompare";
+import { buildTourCompare, ourPlaces } from "@/lib/tourCompare";
+import { samePlace } from "@/lib/places";
 import type { Competitor, TripInput } from "@/types";
 import { input, item, linearDay } from "./fixtures";
 

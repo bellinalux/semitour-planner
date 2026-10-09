@@ -214,7 +214,20 @@ export function PlannerApp() {
   const autoQuote = useAutoQuote({ input, update, verifyFees: webChecks.verifyFees, hasItinerary: days.length > 0, itinerary: days });
   const autoBuild = useAutoBuild({ input, update, days, pmChoice, generate: () => handleGenerate({ fromAutoBuild: true }), runAutoQuote: autoQuote.run });
   // 판매가·도매가에서 시작한 견적: 예산을 넘으면 줄이고 남으면 올린다
-  const budgetFit = useBudgetFit({ input, update, days, pmChoice, quote, replaceDays: itinerary.replaceDays, hotelChoices: autoBuild.hotelChoices, tours: autoBuild.tours, insertTour, onHotelChosen: autoBuild.chooseHotel });
+  const budgetFit = useBudgetFit({
+    input,
+    update,
+    days,
+    pmChoice,
+    meta,
+    quote,
+    replaceDays: itinerary.replaceDays,
+    hotelChoices: autoBuild.hotelChoices,
+    tours: autoBuild.tours,
+    insertTour,
+    onHotelChosen: autoBuild.chooseHotel,
+    onHotelRestore: autoBuild.restoreHotelPicks,
+  });
 
   const { exporter, printDocument } = useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quoteLog, author: session.user?.name || quoteLog.author, print });
 

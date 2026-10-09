@@ -1,12 +1,16 @@
-import { Check, ExternalLink, Minus } from "lucide-react";
+import { Check, ExternalLink, Minus, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
+import type { CompetitorRefreshView } from "@/hooks/useCompetitorRefresh";
 import { formatMoney } from "@/lib/currency";
-import { includeLabel, INCLUDE_KEYS, policyLabel, samePlace, type CompareColumn, type TourCompare } from "@/lib/tourCompare";
+import { samePlace } from "@/lib/places";
+import { includeLabel, INCLUDE_KEYS, policyLabel, type CompareColumn, type TourCompare } from "@/lib/tourCompare";
 import type { CurrencyCode, TourPolicy } from "@/types";
 
 interface Props {
   compare: TourCompare;
   currency: CurrencyCode;
+  /** 검색으로 넣은 경쟁 상품이 있을 때만 — 방문지·호텔 등급·가격 다시 조회 */
+  refresh?: CompetitorRefreshView | null;
 }
 
 const TONE = {
@@ -37,7 +41,8 @@ function Places({ column, sharedByOthers }: { column: CompareColumn; sharedByOth
 }
 
 /** 투어 비교표 — 우리 상품과 경쟁 상품(최대 4개)을 같은 조건 가격·호텔·포함·쇼핑/옵션·방문지로 나란히 비교하고 한 줄 판정을 붙인다 */
-export function TourCompareTable({ compare, currency }: Props) {
+export function TourCompareTable({ compare, currency, refresh }: Props) {
+  const unknownPlaces = compare.columns.filter((c) => !c.isOurs && c.places.length === 0).length;
   const money = (v: number | null) => (v === null ? <span className="text-slate-400">모름</span> : formatMoney(Math.round(v), currency));
   const shared = [...new Set(compare.columns.flatMap((c) => c.overlap))];
   const verdict = Object.fromEntries(compare.verdicts.map((v) => [v.id, v]));
@@ -93,6 +98,25 @@ export function TourCompareTable({ compare, currency }: Props) {
         경비)으로 맞춘 1인 가격입니다 (2인 1실 기준).
         {compare.onlyOurs.length > 0 && <> 경쟁 상품에 없는 우리만의 방문지: {compare.onlyOurs.join(", ")}.</>}
       </p>
+      {refresh && (
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <span className={`flex-1 text-pretty ${refresh.failed ? "text-red-600" : "text-slate-500"}`} role={refresh.message ? "status" : undefined}>
+            {refresh.message ??
+              (unknownPlaces > 0
+                ? `경쟁 상품 ${unknownPlaces}개는 방문지를 아직 모릅니다 — 다시 조회하면 방문지·호텔 등급·가격을 새로 채웁니다.`
+                : "다시 조회하면 검색으로 넣은 경쟁 상품의 가격·방문지를 새로 고칩니다.")}
+          </span>
+          <button
+            type="button"
+            onClick={refresh.run}
+            disabled={refresh.running}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
+          >
+            <RefreshCw className={`size-3.5 ${refresh.running ? "motion-safe:animate-spin" : ""}`} aria-hidden />
+            {refresh.running ? "다시 조회 중..." : "경쟁 상품 다시 조회"}
+          </button>
+        </div>
+      )}
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="w-full min-w-[560px] text-[11px]">
           <caption className="sr-only">투어 비교표</caption>

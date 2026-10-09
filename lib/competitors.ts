@@ -70,3 +70,50 @@ export function pickComparableCompetitors(products: CompetitorCandidate[], max =
   const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
   return priced.filter((p) => p.pricePerPerson >= median * 0.3).slice(0, max);
 }
+
+export interface CompetitorRefresh {
+  competitors: Competitor[];
+  /** 새로 고친 상품 이름 */
+  updated: string[];
+  /** 다시 조회에서 못 찾은 상품 이름 (그대로 둔다) */
+  missing: string[];
+}
+
+/**
+ * 다시 조회한 결과로, 검색으로 넣었던 경쟁 상품을 새로 고친다 — 방문지·호텔 등급·일정 길이를 채우고 가격·확인 시각을 갱신한다.
+ * 직접 입력한 상품과, 찾은 뒤 사람이 직접 고친 가격은 그대로 둔다. 같은 상품은 이름 → 상품 페이지 주소 → 같은 여행사 순으로 찾는다.
+ */
+export function refreshCompetitors(existing: Competitor[], products: CompetitorCandidate[], searchedAt: string): CompetitorRefresh {
+  const unused = [...products];
+  const take = (match: (p: CompetitorCandidate) => boolean) => {
+    const i = unused.findIndex(match);
+    return i < 0 ? undefined : unused.splice(i, 1)[0];
+  };
+  const updated: string[] = [];
+  const missing: string[] = [];
+  const competitors = existing.map((c) => {
+    if (!c.source) return c;
+    const name = c.name.trim();
+    const found =
+      take((p) => [p.agency, p.productName].filter(Boolean).join(" ").trim() === name) ??
+      take((p) => p.linkIsDirect && p.searchUrl !== "" && p.searchUrl === c.source?.url) ??
+      take((p) => p.agency !== "" && p.agency === c.source?.agency);
+    if (!found) {
+      missing.push(c.name);
+      return c;
+    }
+    updated.push(c.name);
+    const editedByHand = Boolean(c.priceCheckedAt && Date.parse(c.priceCheckedAt) > Date.parse(c.source.foundAt));
+    const keepPrice = editedByHand || found.pricePerPerson <= 0;
+    return {
+      ...c,
+      price: keepPrice ? c.price : found.pricePerPerson,
+      places: found.places.length > 0 ? found.places : c.places,
+      hotelGrade: found.hotelGrade || c.hotelGrade,
+      nights: found.nights || c.nights,
+      days: found.days || c.days,
+      source: keepPrice ? c.source : { ...c.source, foundAt: searchedAt },
+    };
+  });
+  return { competitors, updated, missing };
+}

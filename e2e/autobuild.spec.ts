@@ -43,4 +43,8 @@ test("자동 구성: 판매가에서 시작 → 코스·예산 안 숙소·견�
   const compare = page.locator("table", { has: page.locator("caption", { hasText: "투어 비교표" }) });
   await expect(compare.getByRole("columnheader", { name: /하나투어/ })).toBeVisible({ timeout: 30_000 });
   await expect(compare.getByText(/방문지 2곳 겹침/).first()).toBeVisible();
+
+  // 검색으로 넣은 경쟁 상품은 다시 조회해 방문지·가격을 새로 고칠 수 있다
+  await page.getByRole("button", { name: "경쟁 상품 다시 조회" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "2개를 새로 고쳤습니다" })).toBeVisible();
 });
