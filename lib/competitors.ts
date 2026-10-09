@@ -29,6 +29,7 @@ export function candidateToCompetitor(candidate: CompetitorCandidate, foundAt: s
     optionTour: policyOf(candidate.noOption, candidate.policyUnknown),
     note: note.slice(0, 200),
     places: candidate.places,
+    ...(candidate.highlight ? { highlight: candidate.highlight.slice(0, 120) } : {}),
     hotelGrade: candidate.hotelGrade,
     nights: candidate.nights,
     days: candidate.days,

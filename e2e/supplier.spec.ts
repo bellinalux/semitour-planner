@@ -23,6 +23,22 @@ test("가격 모름 · 자동 견적: 코스·숙소·시세를 채워 권장 �
 
 test("업체 견적서: 요금을 읽어 공급가로 넣고, 목표 판매가에서 공급가 상한을 계산", async ({ page }) => {
   await mockAi(page);
+  // 숙박 시세도 받아야 업체 요금(호텔 포함)과 끝까지 비교한다
+  await page.route("**/api/estimate-travel", (r) =>
+    r.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        estimate: {
+          flight: { roundTripLow: 0, roundTripHigh: 0, outboundHours: 5, inboundHours: 5, direct: true, note: "" },
+          timeDifferenceHours: -2,
+          lodging: { hotelLow: 80000, hotelHigh: 120000, bnbLow: 0, bnbHigh: 0, cityTaxPerPersonPerNight: 0, note: "" },
+          seasonNote: "",
+          searched: true,
+          sources: [],
+        },
+      }),
+    }),
+  );
   await page.route("**/api/fx**", (r) => {
     const code = new URL(r.request().url()).searchParams.get("code");
     return r.fulfill({ contentType: "application/json", body: JSON.stringify({ krwPerUnit: code === "USD" ? 1400 : 1 }) });

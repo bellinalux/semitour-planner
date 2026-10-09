@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
 import { groundRequest, needsFlight, needsGround, needsInsurance, needsLodging, needsTip, travelRequest } from "@/lib/autoQuoteRequests";
-import { candidateToCompetitor, pickComparableCompetitors } from "@/lib/competitors";
+import { findCompetitorProducts } from "@/lib/competitorSearch";
 import { reportPerf } from "@/lib/perf";
 import { fillFromMemory } from "@/lib/costMemory";
 import { estimateToPatch } from "@/lib/travelEstimate";
 import type { GroundCostResponse } from "@/lib/schemas/groundCost";
-import type { CompetitorCandidate, CostKey, CostSourceKind, LodgingWebEstimate, TravelEstimate, TripInput } from "@/types";
+import type { CostKey, CostSourceKind, LodgingWebEstimate, TravelEstimate, TripInput } from "@/types";
 
 export type AutoStepStatus = "pending" | "running" | "done" | "skipped" | "error";
 
@@ -276,18 +276,10 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary, itinerar
         else {
           set("competitors", "running");
           try {
-            const r = await postJson<{ products: CompetitorCandidate[]; searchedAt: string }>("/api/find-competitors", {
-              destination,
-              nights: working.nights,
-              days: working.days,
-              currency: working.currency,
-              packageType: working.packageType,
-              originCity: working.originCity.trim(),
-            });
-            const picked = pickComparableCompetitors(r.products);
-            if (picked.length > 0) {
-              apply({ competitors: picked.map((p) => candidateToCompetitor(p, r.searchedAt)) });
-              set("competitors", "done", `${picked.map((p) => p.agency || p.productName).join(", ")} 추가`);
+            const found = await findCompetitorProducts(working);
+            if (found.length > 0) {
+              apply({ competitors: found });
+              set("competitors", "done", `${found.map((c) => c.source?.agency || c.name).join(", ")} 추가`);
             } else set("competitors", "error", "가격이 확인된 상품을 찾지 못했습니다");
           } catch (err) {
             set("competitors", "error", err instanceof Error ? err.message : "찾지 못했습니다");

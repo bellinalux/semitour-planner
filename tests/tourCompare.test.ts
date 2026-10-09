@@ -100,3 +100,22 @@ describe("투어 비교표", () => {
     expect(cmp!.columns[0].hotelGrade).toBe("5성급");
   });
 });
+
+describe("투어 비교 정리 — 우리가 나은 점 / 경쟁 상품이 나은 점", () => {
+  it("경쟁 상품에만 있는 방문지, 여러 곳이 가는데 우리에게 없는 곳, 강점·약점을 몇 곳 대비인지와 함께", () => {
+    const { cmp } = compareFor({
+      competitors: [
+        competitor({ id: "a", name: "A", price: 9_000_000, shopping: "some", places: ["바나힐", "오행산", "린응사"], highlight: "바나힐 케이블카 왕복" }),
+        competitor({ id: "b", name: "B", price: 9_500_000, shopping: "some", places: ["오행산", "호이안"] }),
+      ],
+    });
+    const a = cmp!.columns.find((c) => c.id === "a")!;
+    expect(a.theirOnly).toEqual(["오행산", "린응사"]);
+    expect(a.highlight).toBe("바나힐 케이블카 왕복");
+    expect(cmp!.missingPopular[0]).toEqual({ name: "오행산", count: 2 });
+    expect(cmp!.summary.strengths).toContain("노쇼핑 (2곳 모두 쇼핑 있음)");
+    expect(cmp!.summary.strengths.some((s) => s.startsWith("가격: 2곳 모두보다 저렴"))).toBe(true);
+    expect(cmp!.summary.strengths.some((s) => s.startsWith("우리만 가는 곳: 미케 비치"))).toBe(true);
+    expect(cmp!.summary.weaknesses.some((s) => s.includes("오행산(2곳)"))).toBe(true);
+  });
+});

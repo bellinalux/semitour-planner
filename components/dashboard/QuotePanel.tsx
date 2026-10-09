@@ -336,7 +336,7 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
       )}
 
       {tourCompare && (
-        <section>
+        <section id="tour-compare" className="scroll-mt-4">
           <SubHeading>투어 비교표 (우리 vs 경쟁 상품)</SubHeading>
           <TourCompareTable
             compare={tourCompare}

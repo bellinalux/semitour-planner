@@ -82,6 +82,21 @@ describe("업체 견적 검증표", () => {
     expect(verify(base({ vehicleCostPerDay: 0, guideCostPerDay: 0 })).supplierShare).toBeNull();
   });
 
+  it("업체 요금에 든 숙박·가이드 시세가 비어 있으면 반쪽 원가로 판정하지 않는다 (업체 몫도 내지 않음)", () => {
+    const v = verify(base({ guideCostPerDay: 0 }));
+    expect(v.total.level).toBe("unknown");
+    expect(v.total.note).toContain("가이드 시세가 없어 비교가 불완전합니다");
+    expect(v.supplierShare).toBeNull();
+    const noHotel = verify(base({ lodgingRatePerNight: 0 }));
+    expect(noHotel.total.note).toContain("숙박 (2인 1실) 시세가 없어");
+  });
+
+  it("포함 사항에 숙박이 없어도 상품에 호텔이 적혀 있으면 숙박 포함으로 본다 (묻지 않는다)", () => {
+    const v = verify(base({ supplierQuote: sq({ includes: ["차량", "가이드"], hotels: "골든드래곤 호텔(4성) 등 중 하나" }) }));
+    expect(v.checklist.find((c) => c.key === "lodging")).toMatchObject({ state: "included" });
+    expect(v.questions.some((q) => q.startsWith("숙박이 포함인지"))).toBe(false);
+  });
+
   it("차량·가이드 시세가 없으면 비교하지 않는다", () => {
     const v = verify(base({ vehicleCostPerDay: 0, guideCostPerDay: 0 }));
     expect(v.marketReady).toBe(false);

@@ -81,6 +81,23 @@ export function TourCompareTable({ compare, currency, refresh }: Props) {
     { label: "선택관광", cell: (c) => <Policy value={c.optionTour} /> },
     { label: "방문지", cell: (c) => <Places column={c} sharedByOthers={shared} /> },
     {
+      label: "우리에겐 없는 곳",
+      cell: (c) =>
+        c.isOurs ? (
+          <span className="text-slate-400">—</span>
+        ) : c.places.length === 0 ? (
+          <span className="text-slate-400">모름</span>
+        ) : c.theirOnly.length === 0 ? (
+          <span className="text-emerald-700">없음</span>
+        ) : (
+          <span className="text-pretty text-amber-800">{c.theirOnly.join(", ")}</span>
+        ),
+    },
+    {
+      label: "특징",
+      cell: (c) => (c.isOurs ? <span className="text-slate-400">—</span> : c.highlight ? <span className="text-pretty">{c.highlight}</span> : <span className="text-slate-400">—</span>),
+    },
+    {
       label: "판정",
       cell: (c) =>
         c.isOurs ? (
@@ -98,6 +115,38 @@ export function TourCompareTable({ compare, currency, refresh }: Props) {
         경비)으로 맞춘 1인 가격입니다 (2인 1실 기준).
         {compare.onlyOurs.length > 0 && <> 경쟁 상품에 없는 우리만의 방문지: {compare.onlyOurs.join(", ")}.</>}
       </p>
+      {(compare.summary.strengths.length > 0 || compare.summary.weaknesses.length > 0) && (
+        <div className="grid gap-2 text-[11px] leading-4 sm:grid-cols-2">
+          <div className="rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2">
+            <p className="font-semibold text-emerald-900">우리가 나은 점</p>
+            {compare.summary.strengths.length === 0 ? (
+              <p className="text-slate-500">눈에 띄는 강점이 없습니다 — 포함 항목·노쇼핑·방문지로 차별점을 만드세요.</p>
+            ) : (
+              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-emerald-900">
+                {compare.summary.strengths.map((s) => (
+                  <li key={s} className="text-pretty">
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2">
+            <p className="font-semibold text-amber-900">경쟁 상품이 나은 점 (보완할 곳)</p>
+            {compare.summary.weaknesses.length === 0 ? (
+              <p className="text-slate-500">경쟁 상품보다 뒤지는 점이 없습니다.</p>
+            ) : (
+              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-amber-900">
+                {compare.summary.weaknesses.map((s) => (
+                  <li key={s} className="text-pretty">
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
       {refresh && (
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
           <span className={`flex-1 text-pretty ${refresh.failed ? "text-red-600" : "text-slate-500"}`} role={refresh.message ? "status" : undefined}>

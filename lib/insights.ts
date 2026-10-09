@@ -39,7 +39,8 @@ export type InsightAction =
   | { kind: "fix-flight"; label: string }
   | { kind: "fix-day-time"; days: number[]; label: string }
   | { kind: "engine-move"; move: DayMove; label: string }
-  | { kind: "group-areas"; day: number; label: string };
+  | { kind: "group-areas"; day: number; label: string }
+  | { kind: "find-competitors"; label: string };
 
 export interface Insight {
   id: string;
@@ -253,6 +254,28 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
     });
   }
 
+  // ④-3 타업체 비교 — 아직 경쟁 상품이 없으면 찾아 비교하게, 있으면 우리가 나은 점 / 경쟁 상품이 나은 점 (투어 비교표 요약)
+  if (quote?.ok && input.competitors.length === 0 && input.destination.trim() && days.length > 0) {
+    out.push({
+      id: "find-competitors",
+      tone: "info",
+      title: "타업체 상품과 아직 비교하지 않았습니다",
+      detail: "같은 여행지·기간의 대형 여행사 상품을 찾아 같은 조건 판매가·코스·우리가 나은 점을 비교합니다",
+      action: { kind: "find-competitors", label: "타업체 찾아 비교" },
+    });
+  }
+  const compare = quote?.ok ? buildTourCompare(input, days, pmChoice, quote, meta) : null;
+  if (compare && (compare.summary.strengths.length > 0 || compare.summary.weaknesses.length > 0)) {
+    const { strengths, weaknesses } = compare.summary;
+    out.push({
+      id: "tour-compare",
+      tone: weaknesses.length > strengths.length ? "warn" : "info",
+      title: `타업체 ${compare.columns.length - 1}곳 비교 — 우리가 나은 점 ${strengths.length}개 · 경쟁 상품이 나은 점 ${weaknesses.length}개`,
+      detail: [strengths[0] && `강점: ${strengths[0]}`, weaknesses[0] && `보완: ${weaknesses[0]}`].filter(Boolean).join(" / "),
+      action: { kind: "scroll", target: "tour-compare", label: "투어 비교표 보기" },
+    });
+  }
+
   // ⑤ 확인된 항공편(고른 항공편·원문 시각)과 일정표의 항공 시각이 다르면 한 번에 맞추기
   const mismatches = flightMismatches(days, knownFlight(days, input, meta));
   if (mismatches.length > 0) {
@@ -284,5 +307,7 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
     });
   }
 
-  return out.sort((a, b) => TONE_ORDER[a.tone] - TONE_ORDER[b.tone]);
+  // 같은 무게면 넣은 순서대로, 문서 수신처 같은 서류 준비는 맨 뒤
+  const last = (i: Insight) => (i.action?.kind === "focus" && i.action.section === "documents" ? 1 : 0);
+  return out.sort((a, b) => TONE_ORDER[a.tone] - TONE_ORDER[b.tone] || last(a) - last(b));
 }

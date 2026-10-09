@@ -58,7 +58,8 @@ export async function POST(request: Request) {
           : { ...estimate, basis: "estimated" as const, sourceName: "", hotels: estimate.hotels?.map((h) => ({ ...h, found: false })) };
         return { estimate: final, sources: research.sources, searched: research.searched };
       },
-      (r) => r.searched,
+      // 호텔 이름으로 찾았는데 한 곳도 못 찾았으면 저장하지 않는다 (다음에 다시 찾는다)
+      (r) => r.searched && (!(parsed.data.hotelNames ?? []).length || (r.estimate.hotels ?? []).some((h) => h.found)),
     );
 
     return Response.json(result);

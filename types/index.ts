@@ -60,6 +60,8 @@ export interface Competitor {
   priceCheckedAt?: string;
   /** 일정의 주요 방문지 (투어 비교표에서 우리 일정과 겹치는 곳을 본다) */
   places?: string[];
+  /** 상품 특징 한 줄 (검색으로 찾은 경쟁 상품) */
+  highlight?: string;
   /** 호텔 등급 표기 (예: 4성급) */
   hotelGrade?: string;
   /** 숙박 수·총 일수 (모르면 0) */

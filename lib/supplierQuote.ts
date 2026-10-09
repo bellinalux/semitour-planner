@@ -104,7 +104,7 @@ export type QuoteItemKey = keyof typeof QUOTE_ITEM_PATTERNS;
 
 /** 견적서에서 이 항목이 포함/불포함/안 적힘인지와, 찾은 문구 */
 export function quoteItemState(
-  q: Pick<SupplierQuote, "includes" | "excludes">,
+  q: Pick<SupplierQuote, "includes" | "excludes"> & { hotels?: string },
   key: QuoteItemKey,
 ): { state: "included" | "excluded" | "missing"; evidence: string } {
   const re = QUOTE_ITEM_PATTERNS[key];
@@ -113,6 +113,8 @@ export function quoteItemState(
   // 같은 말이 양쪽에 있으면(예: "가이드" 포함, "가이드 팁" 불포함) 팁은 불포함 쪽을 따른다
   if (ex && (!inc || key === "tip")) return { state: "excluded", evidence: ex };
   if (inc) return { state: "included", evidence: inc };
+  // 포함 사항에 숙박이 안 적혀 있어도 상품에 호텔(후보)이 적혀 있으면 숙박 포함 상품이다
+  if (key === "lodging" && (q.hotels ?? "").trim()) return { state: "included", evidence: `호텔: ${(q.hotels ?? "").trim().slice(0, 60)}` };
   return { state: "missing", evidence: "" };
 }
 

@@ -62,6 +62,7 @@ import { suggestPlanName, type PlanSnapshot, type ResultSnapshot } from "@/lib/w
 import type { CourseFile } from "@/lib/courseFile";
 import { supplierQuotePatch } from "@/lib/supplierQuote";
 import { repairFlightTimes } from "@/lib/flightRepair";
+import { useCompetitorAutoFind } from "@/hooks/useCompetitorAutoFind";
 import { CourseEngineContext, useCourseEngine } from "@/hooks/useCourseEngine";
 import { DayTimeCheckContext, useDayTimeCheck } from "@/hooks/useDayTimeCheck";
 import type { DayPlan, FlightOption, ItineraryItem, TourCandidate, TripInput } from "@/types";
@@ -70,6 +71,8 @@ const NO_USPS: never[] = [];
 
 export function PlannerApp() {
   const { input, update, reset, replace } = usePlannerInput();
+  // 타업체 상품 자동 찾기 (코스를 만들면 비교표를 바로 채운다)
+  const competitorFind = useCompetitorAutoFind(update);
   const itinerary = useItinerary();
   const usp = useUsp();
   const [tab, setTab] = useState<PlannerTab>("input");
@@ -178,6 +181,10 @@ export function PlannerApp() {
       // 업체 견적서를 읽었으면 우리 시세(견적서 호텔별 숙박·차량·가이드·팁·보험)를 바로 조회해 업체 몫 추정까지 보여 준다
       if (!options.fromAutoBuild) autoQuote.armAfterGenerate();
     }
+
+    // 타업체 상품을 자동으로 찾아 비교한다 — 자동 견적이 돌면 그쪽에서 찾으므로 그때는 건너뛴다
+    const autoQuoteRuns = !options.fromAutoBuild && (autoQuote.afterGenerate || !!result.supplierQuote);
+    if (!options.fromAutoBuild && !autoQuoteRuns) competitorFind.run(nextInput);
 
     // 일정이 만들어지면 세일즈 포인트도 이어서 생성한다 (실패해도 일정/견적에는 영향 없음)
     const firstQuote = calculateQuote(nextInput, result.days, result.pmChoice);
@@ -300,6 +307,7 @@ export function PlannerApp() {
       onInsertTour={insertTour}
       dayTime={dayTimeCheck}
       engine={courseEngine}
+      competitorFind={competitorFind}
       onFixFlight={() => {
         const fixed = repairFlightTimes(days, input, meta);
         if (fixed) itinerary.replaceDays(fixed);

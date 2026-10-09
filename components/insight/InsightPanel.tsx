@@ -7,6 +7,7 @@ import type { SettingsSection } from "@/components/form/settingsFocus";
 import type { AutoBuild } from "@/hooks/useAutoBuild";
 import type { AutoQuote } from "@/hooks/useAutoQuote";
 import type { BudgetFitView } from "@/hooks/useBudgetFit";
+import type { CompetitorAutoFindView } from "@/hooks/useCompetitorAutoFind";
 import type { CourseEngineView } from "@/hooks/useCourseEngine";
 import type { DayTimeCheckView } from "@/hooks/useDayTimeCheck";
 import type { Insight, InsightAction, KeyNumbers } from "@/lib/insights";
@@ -31,6 +32,8 @@ interface Props {
   dayTime: DayTimeCheckView;
   /** 코스 엔진 점검 (날짜 사이 옮기기·되돌리기) */
   engine: CourseEngineView;
+  /** 타업체 상품 자동 찾기 */
+  competitorFind: CompetitorAutoFindView;
 }
 
 /** 한 번에 보여 줄 추천 수 — 처음 쓰는 사람이 부담스럽지 않게 */
@@ -86,7 +89,7 @@ function NumbersCard({ numbers, money }: { numbers: KeyNumbers; money: (v: numbe
  * 레이아웃3 — 요약·추천. 지금 견적의 핵심 숫자(판매가·원가·수익)를 위에 두고, 고치면 좋은 것을 중요한 순서로 보여 주며
  * 버튼으로 바로 적용한다(예산 맞추기·올리기·입력 폴더 열기·질문 복사). 자동 구성 진행도 여기서 본다.
  */
-export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight, dayTime, engine }: Props) {
+export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight, dayTime, engine, competitorFind }: Props) {
   const [showAll, setShowAll] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const visible = showAll ? insights : insights.slice(0, SHOW);
@@ -104,6 +107,9 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
         break;
       case "fix-day-time":
         dayTime.run(action.days);
+        break;
+      case "find-competitors":
+        competitorFind.run(input);
         break;
       case "group-areas":
         engine.groupAreas(action.day);
@@ -160,6 +166,11 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
                 되돌리기
               </button>
             )}
+          </p>
+        )}
+        {(competitorFind.running || competitorFind.message) && (
+          <p role="status" className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] leading-4 text-indigo-900 text-pretty">
+            {competitorFind.running ? "타업체 상품을 찾아 비교하는 중... (30초~1분)" : competitorFind.message}
           </p>
         )}
         {(engine.canUndo || engine.running) && (

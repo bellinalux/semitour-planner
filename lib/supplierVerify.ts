@@ -237,7 +237,10 @@ export function verifySupplierQuote(input: TripInput, days: DayPlan[], pmChoice:
   // 전체: 업체 1인 공급가 vs 우리 시세 원가 (불포함 항목은 빼고)
   const marketTotal = rows.reduce((s, r) => s + (r.market ?? 0), 0);
   const supplierTotal = input.supplierPricePerPerson > 0 ? input.supplierPricePerPerson : null;
-  const totalLevel = marketReady ? levelOf(supplierTotal, marketTotal) : "unknown";
+  // 업체 요금에 들어 있는 큰 항목(숙박·차량·가이드)의 시세가 비어 있으면 반쪽 원가와 비교하게 된다 — 판정하지 않는다
+  const missingMarket = rows.filter((r) => ["lodging", "vehicle", "guide"].includes(r.key) && r.market === null && !excluded.has(r.key as never)).map((r) => r.label);
+  const complete = marketReady && missingMarket.length === 0;
+  const totalLevel = complete ? levelOf(supplierTotal, marketTotal) : "unknown";
   const total: VerifyRow = {
     key: "total",
     label: "1인 공급가 전체",
@@ -246,7 +249,9 @@ export function verifySupplierQuote(input: TripInput, days: DayPlan[], pmChoice:
     level: totalLevel,
     note: !marketReady
       ? "차량·가이드 시세가 없어 비교하지 못했습니다 — 시세 조회를 먼저 하세요"
-      : totalLevel === "high"
+      : !complete
+        ? `${missingMarket.join("·")} 시세가 없어 비교가 불완전합니다 — 업체 요금에 들어 있는 항목이라, 시세를 채워야 업체 몫을 판단할 수 있습니다`
+        : totalLevel === "high"
         ? `시세 원가보다 ${Math.round((supplierTotal! / marketTotal - 1) * 100)}% 높음 — 업체 마진을 감안해도 높아 협상 여지가 있습니다`
         : totalLevel === "low"
           ? `시세 원가보다 ${Math.round((1 - supplierTotal! / marketTotal) * 100)}% 낮음 — 빠진 항목·숨은 경비(쇼핑·옵션)가 없는지 확인하세요`
@@ -260,7 +265,7 @@ export function verifySupplierQuote(input: TripInput, days: DayPlan[], pmChoice:
   }
 
   const supplierShare =
-    marketReady && supplierTotal !== null && supplierTotal > 0
+    complete && supplierTotal !== null && supplierTotal > 0
       ? {
           amount: supplierTotal - marketTotal,
           rate: ((supplierTotal - marketTotal) / supplierTotal) * 100,
