@@ -29,6 +29,8 @@ export interface CompareColumn {
   theirOnly: string[];
   /** 상품 특징 한 줄 */
   highlight?: string;
+  /** 우리 여행지 밖에 함께 도는 지역 (예: 마카오 상품과 비교하는데 "홍콩/마카오") — 코스 범위가 다르다 */
+  extraRegions: string[];
   link?: string;
 }
 
@@ -43,7 +45,7 @@ export interface TourCompare {
   /** 경쟁 상품 여러 곳이 가는데 우리 일정에 없는 방문지 (가는 곳 수 많은 순) */
   missingPopular: { name: string; count: number }[];
   /** 경쟁 상품 전체와 견준 정리 — 우리가 나은 점 / 경쟁 상품이 나은 점 */
-  summary: { strengths: string[]; weaknesses: string[] };
+  summary: { strengths: string[]; weaknesses: string[]; scopeNotes: string[] };
 }
 
 const INCLUDE_LABELS: Record<keyof CompetitorIncludes, string> = {
@@ -55,6 +57,35 @@ const INCLUDE_LABELS: Record<keyof CompetitorIncludes, string> = {
   admission: "입장료",
 };
 export const INCLUDE_KEYS = Object.keys(INCLUDE_LABELS) as (keyof CompetitorIncludes)[];
+/** 상품 범위(포함 여부가 가격에 그대로 들어가는 것) — 강점·약점이 아니라 같은 조건 가격으로 맞춘다 */
+const SCOPE_KEYS = new Set<keyof CompetitorIncludes>(["flight", "hotel"]);
+
+/** 상품 이름에 붙는 꾸밈말 — 지역 이름으로 읽지 않는다 */
+const NOT_REGION = /^(노쇼핑|노옵션|노팁|자유|자유일정|관광|특식|호텔|시그니처|프리미엄|가족|커플|패키지|세미|세미패키지|럭셔리|핵심|일정|여행|투어|단독|소규모|에어텔|특가|초특가|직항|국적기)$/;
+
+const AGENCY = /(투어|여행|항공|트립|레저|관광)$/;
+
+/**
+ * 상품 이름에서 우리 여행지 밖 지역을 찾는다 — "홍콩/마카오 4일"·"홍콩 마카오 3박 4일"을 "마카오"와 견주면 ["홍콩"].
+ * 이름에 지역이 "A/B"·"A+B"·"A·B" 꼴로, 또는 "A 마카오 N박"처럼 우리 여행지 바로 앞에 붙어 있을 때만 본다 (꾸밈말은 빼고).
+ */
+export function extraRegionsOf(name: string, destination: string): string[] {
+  const dest = destination.split(/[,·/]/).map((d) => d.trim()).filter(Boolean);
+  if (dest.length === 0) return [];
+  const isOurs = (r: string) => dest.some((d) => d.includes(r) || r.includes(d));
+  const found = new Set<string>();
+  for (const m of name.matchAll(/([가-힣A-Za-z]{2,10})\s*[/+·&]\s*([가-힣A-Za-z]{2,10})(?:\s*[/+·&]\s*([가-힣A-Za-z]{2,10}))?/g)) {
+    const regions = [m[1], m[2], m[3]].filter((r): r is string => !!r && !NOT_REGION.test(r));
+    if (regions.some(isOurs)) regions.filter((r) => !isOurs(r)).forEach((r) => found.add(r));
+  }
+  for (const d of dest) {
+    const esc = d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    for (const m of name.matchAll(new RegExp(`(?:^|[\\s\\]\\[(])([가-힣]{2,6})\\s+${esc}(?=[\\s\\d]|$)`, "g")))
+      // 여행사 이름(하나투어·참좋은여행…)은 지역이 아니다
+      if (!NOT_REGION.test(m[1]) && !AGENCY.test(m[1]) && !isOurs(m[1])) found.add(m[1]);
+  }
+  return [...found];
+}
 export const includeLabel = (k: keyof CompetitorIncludes) => INCLUDE_LABELS[k];
 
 /** 우리 일정의 방문지 (식사·이동·숙소·항공·자유시간 제외) */
@@ -115,6 +146,7 @@ export function buildTourCompare(input: TripInput, days: DayPlan[], pmChoice: Pm
     places,
     overlap: [],
     theirOnly: [],
+    extraRegions: [],
   };
 
   const columns: CompareColumn[] = [ours];
@@ -137,6 +169,7 @@ export function buildTourCompare(input: TripInput, days: DayPlan[], pmChoice: Pm
       places: theirPlaces,
       overlap,
       theirOnly: theirPlaces.filter((t) => !places.some((p) => samePlace(p, t))),
+      extraRegions: extraRegionsOf(c.name, input.destination),
       ...(c.highlight ? { highlight: c.highlight } : {}),
       link: c.source?.url,
     });
@@ -154,7 +187,10 @@ export function buildTourCompare(input: TripInput, days: DayPlan[], pmChoice: Pm
         parts.push(`우리가 1인 ${(-diff).toLocaleString("ko-KR")} 비쌈`);
         tone = "bad";
       }
-    } else parts.push("경쟁 가격 모름");
+    } else if (c.price > 0 && c.includes.flight && !quote.ourIncludes.flight) parts.push("항공 포함 상품 — 항공료 시세가 있어야 같은 조건으로 견줄 수 있음");
+    else parts.push("경쟁 가격 모름");
+    const extra = extraRegionsOf(c.name, input.destination);
+    if (extra.length > 0) parts.unshift(`${extra.join("·")} 포함 상품(코스 범위가 다름)`);
     const plus: string[] = [];
     const minus: string[] = [];
     const og = input.packageType === "land" ? null : input.lodgingType === "resort" ? 5 : GRADE_NUM[input.hotelGrade];
@@ -163,7 +199,8 @@ export function buildTourCompare(input: TripInput, days: DayPlan[], pmChoice: Pm
       if (og > tg) plus.push(`호텔 등급 높음(${og}성 vs ${tg}성)`);
       if (og < tg) minus.push(`호텔 등급 낮음(${og}성 vs ${tg}성)`);
     }
-    for (const k of INCLUDE_KEYS) {
+    // 항공·숙박은 상품 범위 차이라 강점·약점이 아니다 (같은 조건 가격에서 맞춘다)
+    for (const k of INCLUDE_KEYS.filter((x) => !SCOPE_KEYS.has(x))) {
       if (quote.ourIncludes[k] && !c.includes[k]) plus.push(`${INCLUDE_LABELS[k]} 포함`);
       if (!quote.ourIncludes[k] && c.includes[k]) minus.push(`${INCLUDE_LABELS[k]} 미포함`);
     }
@@ -220,16 +257,24 @@ function summarize(
   ourIncludes: CompetitorIncludes,
   policy: ReturnType<typeof ourPolicy>,
   ours: CompareColumn,
-  rivals: CompareColumn[],
+  allRivals: CompareColumn[],
   onlyOurs: string[],
   missingPopular: { name: string; count: number }[],
 ): TourCompare["summary"] {
   const strengths: string[] = [];
   const weaknesses: string[] = [];
+  const scopeNotes: string[] = [];
+  let rivals = allRivals;
+  // 다른 지역을 함께 도는 상품(예: 홍콩/마카오)은 범위가 달라 가격·코스 강약 비교에서 뺀다 (비교표에는 남긴다)
+  const mixed = rivals.filter((c) => c.extraRegions.length > 0);
+  if (mixed.length > 0)
+    scopeNotes.push(`${mixed.map((c) => c.name.slice(0, 20)).join(", ")}은(는) ${[...new Set(mixed.flatMap((c) => c.extraRegions))].join("·")}도 함께 도는 상품이라 강약 비교에서 뺐습니다`);
+  rivals = rivals.filter((c) => c.extraRegions.length === 0);
   const n = rivals.length;
-  const of = (k: number) => (k === n ? `${n}곳 모두` : `${n}곳 중 ${k}곳`);
+  if (n === 0) return { strengths, weaknesses, scopeNotes };
+  const of = (k: number) => (n === 1 ? "경쟁 상품" : k === n ? `${n}곳 모두` : `${n}곳 중 ${k}곳`);
   /** "2곳 모두 …" / "3곳 중 1곳은 …" (주어로 쓸 때) */
-  const who = (k: number) => (k === n ? `${n}곳 모두` : `${n}곳 중 ${k}곳은`);
+  const who = (k: number) => (n === 1 ? "경쟁 상품은" : k === n ? `${n}곳 모두` : `${n}곳 중 ${k}곳은`);
 
   const priced = rivals.filter((c) => c.price !== null);
   if (ours.price !== null && priced.length > 0) {
@@ -237,7 +282,8 @@ function summarize(
     const pricier = priced.filter((c) => c.price! < ours.price! * 0.97).length;
     const lo = Math.min(...priced.map((c) => c.price!));
     const hi = Math.max(...priced.map((c) => c.price!));
-    const range = `경쟁 같은 조건 1인 ${Math.round(lo).toLocaleString("ko-KR")}~${Math.round(hi).toLocaleString("ko-KR")}`;
+    const won = (v: number) => Math.round(v).toLocaleString("ko-KR");
+    const range = `경쟁 같은 조건 1인 ${lo === hi ? won(lo) : `${won(lo)}~${won(hi)}`}`;
     if (cheaper > 0) strengths.push(`가격: ${of(cheaper)}보다 저렴 (${range})`);
     if (pricier > 0) weaknesses.push(`가격: ${of(pricier)}보다 비쌈 (${range})`);
   }
@@ -251,7 +297,16 @@ function summarize(
     if (higher > 0) weaknesses.push(`호텔: ${who(higher)} 더 높은 등급`);
   }
 
-  for (const k of INCLUDE_KEYS) {
+  // 항공·숙박 포함 여부는 범위 차이 — 같은 조건 가격에서 맞췄다는 안내만
+  for (const k of [...SCOPE_KEYS]) {
+    const diff = rivals.filter((c) => c.includes[k] !== ourIncludes[k]).length;
+    if (diff === 0) continue;
+    const unpriced = k === "flight" && !ourIncludes.flight && rivals.some((c) => c.includes.flight && c.price === null);
+    scopeNotes.push(
+      `${who(diff)} ${INCLUDE_LABELS[k]} ${ourIncludes[k] ? "불포함" : "포함"} 상품 — ${unpriced ? "항공료 시세가 없어 같은 조건 가격을 낼 수 없습니다 (시세 조회로 채우세요)" : `같은 조건 가격은 ${INCLUDE_LABELS[k]} 금액을 ${ourIncludes[k] ? "더해" : "빼고"} 견줬습니다`}`,
+    );
+  }
+  for (const k of INCLUDE_KEYS.filter((x) => !SCOPE_KEYS.has(x))) {
     const without = rivals.filter((c) => !c.includes[k]).length;
     const withIt = rivals.filter((c) => c.includes[k]).length;
     if (ourIncludes[k] && without > 0) strengths.push(`${INCLUDE_LABELS[k]} 포함 (${who(without)} 불포함)`);
@@ -267,20 +322,16 @@ function summarize(
   if (policy.optionTour === "none" && optSome > 0) strengths.push(`노옵션 (${who(optSome)} 선택관광 있음)`);
   if (policy.optionTour === "some" && optNone > 0) weaknesses.push(`선택관광 있음 (${who(optNone)} 노옵션)`);
 
-  const withPlaces = rivals.filter((c) => c.places.length > 0);
-  if (withPlaces.length > 0) {
-    const avg = withPlaces.reduce((s, c) => s + c.places.length, 0) / withPlaces.length;
-    if (ours.places.length >= avg + 2) strengths.push(`방문지가 더 많음 (우리 ${ours.places.length}곳, 경쟁 평균 ${Math.round(avg)}곳)`);
-    if (ours.places.length <= avg - 2) weaknesses.push(`방문지가 적음 (우리 ${ours.places.length}곳, 경쟁 평균 ${Math.round(avg)}곳)`);
-  }
-  if (onlyOurs.length > 0) strengths.push(`우리만 가는 곳: ${onlyOurs.slice(0, 5).join(", ")}${onlyOurs.length > 5 ? ` 외 ${onlyOurs.length - 5}곳` : ""}`);
+  // 경쟁 상품 방문지는 소개 문구의 주요 방문지만 잡혀(최대 8곳) 방문지 수는 견주지 않는다
+  if (onlyOurs.length > 0)
+    strengths.push(`경쟁 상품 소개에 없는 우리 방문지: ${onlyOurs.slice(0, 5).join(", ")}${onlyOurs.length > 5 ? ` 외 ${onlyOurs.length - 5}곳` : ""}`);
   if (missingPopular.length > 0)
     weaknesses.push(`경쟁 상품은 가는데 우리에겐 없는 곳: ${missingPopular.map((p) => `${p.name}(${p.count}곳)`).join(", ")}`);
 
   const longer = rivals.filter((c) => c.span && Number(/(\d+)\s*박/.exec(c.span)?.[1] ?? 0) > input.nights).length;
   if (longer > 0) weaknesses.push(`일정 길이: ${who(longer)} 더 긴 일정 (같은 가격대면 하루 더 머무는 상품)`);
 
-  return { strengths, weaknesses };
+  return { strengths, weaknesses, scopeNotes };
 }
 
 export const policyLabel = (p: TourPolicy) => POLICY_LABELS[p];

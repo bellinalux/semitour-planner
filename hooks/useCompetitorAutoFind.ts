@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { findCompetitorProducts } from "@/lib/competitorSearch";
+import { findCompetitorProducts, flightPriceForCompare } from "@/lib/competitorSearch";
 import type { TripInput } from "@/types";
 
 export interface CompetitorAutoFindView {
@@ -24,12 +24,17 @@ export function useCompetitorAutoFind(update: (patch: Partial<TripInput>) => voi
     setRunning(true);
     setMessage(null);
     void findCompetitorProducts(input)
-      .then((found) => {
+      .then(async (found) => {
         if (found.length === 0) {
           setMessage("가격이 확인된 타업체 상품을 찾지 못했습니다. 입력의 '경쟁 상품'에서 직접 넣을 수 있습니다.");
           return;
         }
-        update({ competitors: found });
+        // 경쟁 상품이 항공 포함이면 항공료 시세를 찾아 같은 조건(항공 뺀 가격)으로 견준다
+        const flight = await flightPriceForCompare(input, found);
+        update({
+          competitors: found,
+          ...(flight ? { flightPricePerPerson: flight, costStatus: { ...input.costStatus, flight: "estimated" as const } } : {}),
+        });
         setMessage(`타업체 상품 ${found.length}개를 찾아 투어 비교표에 넣었습니다 (${found.map((c) => c.source?.agency || c.name).join(", ")}).`);
       })
       .catch((err: unknown) => setMessage(err instanceof Error ? err.message : "타업체 상품을 찾지 못했습니다."))

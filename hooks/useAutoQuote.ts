@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
 import { groundRequest, needsFlight, needsGround, needsInsurance, needsLodging, needsTip, travelRequest } from "@/lib/autoQuoteRequests";
-import { findCompetitorProducts } from "@/lib/competitorSearch";
+import { findCompetitorProducts, flightPriceForCompare } from "@/lib/competitorSearch";
 import { reportPerf } from "@/lib/perf";
 import { fillFromMemory } from "@/lib/costMemory";
 import { estimateToPatch } from "@/lib/travelEstimate";
@@ -279,6 +279,9 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary, itinerar
             const found = await findCompetitorProducts(working);
             if (found.length > 0) {
               apply({ competitors: found });
+              // 경쟁 상품이 항공 포함이면 항공료 시세를 찾아 같은 조건(항공 뺀 가격)으로 견준다 (항공 불포함 상품의 원가에는 들어가지 않는다)
+              const flight = await flightPriceForCompare(working, found);
+              if (flight) apply({ flightPricePerPerson: flight }, { flight: "estimated" }, "web", "경쟁 상품 비교용 항공 시세");
               set("competitors", "done", `${found.map((c) => c.source?.agency || c.name).join(", ")} 추가`);
             } else set("competitors", "error", "가격이 확인된 상품을 찾지 못했습니다");
           } catch (err) {

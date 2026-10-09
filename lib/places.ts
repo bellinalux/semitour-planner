@@ -12,11 +12,16 @@ export function placeKey(name: string): string {
     .toLowerCase();
 }
 
-/** 한 이름의 여러 표기 — 본 이름, 괄호 속 표기, 슬래시로 나눈 표기 */
+/** 장소 이름 뒤에 붙는 덧말 — "베네시안 리조트" = "베네시안 호텔 관광 및 카지노 체험" (3글자 이상 남을 때만 쓴다) */
+const SUFFIX_WORDS = /리조트|호텔|관광|투어|체험|카지노|방문|구경|및|resort|hotel|tour/gi;
+
+/** 한 이름의 여러 표기 — 본 이름, 괄호 속 표기, 슬래시로 나눈 표기, 덧말을 뺀 이름 */
 export function placeAliases(name: string): string[] {
   const inner = [...name.matchAll(/\((.*?)\)|\[(.*?)\]/g)].map((m) => m[1] ?? m[2] ?? "");
   const parts = [name, ...inner, ...name.split("/")];
-  return [...new Set(parts.map(placeKey).filter((k) => k.length >= 2))];
+  const keys = parts.map(placeKey).filter((k) => k.length >= 2);
+  const core = keys.map((k) => k.replace(SUFFIX_WORDS, "")).filter((k) => k.length >= 3 && !GENERIC.has(k));
+  return [...new Set([...keys, ...core])];
 }
 
 /** 어디에나 붙는 일반 이름 — 포함 관계로는 같은 곳이라고 하지 않는다 */

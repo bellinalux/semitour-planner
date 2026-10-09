@@ -147,6 +147,15 @@ export function TourCompareTable({ compare, currency, refresh }: Props) {
           </div>
         </div>
       )}
+      {compare.summary.scopeNotes.length > 0 && (
+        <ul className="list-disc space-y-0.5 rounded-md bg-slate-50 py-1.5 pl-7 pr-3 text-[11px] leading-4 text-slate-600 ring-1 ring-slate-200">
+          {compare.summary.scopeNotes.map((s) => (
+            <li key={s} className="text-pretty">
+              {s}
+            </li>
+          ))}
+        </ul>
+      )}
       {refresh && (
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
           <span className={`flex-1 text-pretty ${refresh.failed ? "text-red-600" : "text-slate-500"}`} role={refresh.message ? "status" : undefined}>

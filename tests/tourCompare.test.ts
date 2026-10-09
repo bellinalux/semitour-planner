@@ -115,7 +115,41 @@ describe("투어 비교 정리 — 우리가 나은 점 / 경쟁 상품이 나�
     expect(cmp!.missingPopular[0]).toEqual({ name: "오행산", count: 2 });
     expect(cmp!.summary.strengths).toContain("노쇼핑 (2곳 모두 쇼핑 있음)");
     expect(cmp!.summary.strengths.some((s) => s.startsWith("가격: 2곳 모두보다 저렴"))).toBe(true);
-    expect(cmp!.summary.strengths.some((s) => s.startsWith("우리만 가는 곳: 미케 비치"))).toBe(true);
+    expect(cmp!.summary.strengths.some((s) => s.startsWith("경쟁 상품 소개에 없는 우리 방문지: 미케 비치"))).toBe(true);
     expect(cmp!.summary.weaknesses.some((s) => s.includes("오행산(2곳)"))).toBe(true);
+  });
+});
+
+describe("투어 비교 — 상품 범위가 다른 경우", () => {
+  it("다른 지역을 함께 도는 상품은 표시하고 강약 비교에서 뺀다", async () => {
+    const { extraRegionsOf } = await import("@/lib/tourCompare");
+    expect(extraRegionsOf("인터파크투어 [홍콩/마카오] 관광+자유 4일", "마카오")).toEqual(["홍콩"]);
+    expect(extraRegionsOf("하나투어 마카오 4일 #노쇼핑", "마카오")).toEqual([]);
+    expect(extraRegionsOf("다낭/호이안 5일", "다낭, 호이안")).toEqual([]);
+    expect(extraRegionsOf("참좋은여행 [노쇼핑/마카오 3박 4일] 핵심관광", "마카오")).toEqual([]);
+    expect(extraRegionsOf("[2030 크루투어] 홍콩 마카오 3박 4일 가족 여행", "마카오")).toEqual(["홍콩"]);
+    expect(extraRegionsOf("모두투어 [시그니처] 마카오+홍콩 3박4일", "마카오")).toEqual(["홍콩"]);
+  });
+
+  it("항공 포함 상품은 항공료를 모르면 같은 조건 가격을 내지 않고, 항공 포함 여부는 약점이 아니라 범위 안내로", () => {
+    const withAir = { ...land, flight: true };
+    const { cmp } = compareFor({
+      flightPricePerPerson: 0,
+      competitors: [competitor({ id: "a", name: "A", price: 9_000_000, includes: withAir })],
+    });
+    expect(cmp!.columns[1].price).toBeNull();
+    expect(cmp!.verdicts[0].text).toContain("항공료 시세가 있어야");
+    expect(cmp!.summary.weaknesses.join()).not.toContain("항공");
+    expect(cmp!.summary.scopeNotes.join()).toContain("항공료 시세가 없어 같은 조건 가격을 낼 수 없습니다");
+    // 항공료를 알면 빼고 견준다
+    const known = compareFor({ flightPricePerPerson: 400_000, competitors: [competitor({ id: "a", name: "A", price: 9_000_000, includes: withAir })] });
+    expect(known.cmp!.columns[1].price).toBe(9_000_000 - 400_000);
+    expect(known.cmp!.summary.scopeNotes.join()).toContain("항공 금액을 빼고 견줬습니다");
+  });
+
+  it("'베네시안 리조트'와 '베네시안 호텔 관광 및 카지노 체험'은 같은 곳", async () => {
+    const { samePlace } = await import("@/lib/places");
+    expect(samePlace("베네시안리조트", "베네시안 호텔 관광 및 카지노 체험")).toBe(true);
+    expect(samePlace("마카오 타워", "마카오 에펠타워")).toBe(false);
   });
 });

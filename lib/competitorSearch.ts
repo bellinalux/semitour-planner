@@ -1,6 +1,8 @@
 import { postJson } from "@/lib/api";
+import { travelRequest } from "@/lib/autoQuoteRequests";
 import { candidateToCompetitor, pickComparableCompetitors } from "@/lib/competitors";
-import type { Competitor, CompetitorCandidate, TripInput } from "@/types";
+import { midpoint } from "@/lib/travelEstimate";
+import type { Competitor, CompetitorCandidate, TravelEstimate, TripInput } from "@/types";
 
 /**
  * 대형 여행사의 같은 여행지·기간 상품을 웹에서 찾아 경쟁사 목록 형태로 돌려준다 (가격이 확인된 비교할 만한 상품만).
@@ -16,4 +18,20 @@ export async function findCompetitorProducts(input: TripInput): Promise<Competit
     originCity: input.originCity.trim(),
   });
   return pickComparableCompetitors(r.products).map((p) => candidateToCompetitor(p, r.searchedAt));
+}
+
+/**
+ * 경쟁 상품이 항공 포함인데 우리 상품은 항공이 없고 항공료를 모르면, 같은 조건으로 견줄 수 없다.
+ * 그때 항공 왕복 시세(1인)를 찾아 돌려준다 — 비교용이라 항공 불포함 상품의 원가에는 더하지 않는다. 필요 없거나 못 찾으면 null.
+ */
+export async function flightPriceForCompare(input: TripInput, competitors: Competitor[]): Promise<number | null> {
+  const needed = input.packageType !== "full" && input.flightPricePerPerson <= 0 && competitors.some((c) => c.includes.flight && c.price > 0);
+  if (!needed) return null;
+  try {
+    const { estimate } = await postJson<{ estimate: TravelEstimate }>("/api/estimate-travel", travelRequest(input));
+    const price = midpoint(estimate.flight.roundTripLow, estimate.flight.roundTripHigh);
+    return price > 0 ? Math.round(price) : null;
+  } catch {
+    return null;
+  }
 }

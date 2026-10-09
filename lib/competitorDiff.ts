@@ -192,7 +192,8 @@ export function analyzeCompetitors(
 
 /**
  * 경쟁사 가격을 "우리 상품과 같은 범위(우리가 포함한 항목만)"로 환산한다. 추천 판매가(경쟁력 가격)를 정할 때 쓴다.
- * 우리만 포함한 항공·숙박은 더하고 경쟁사만 포함한 것은 빼며, 현지 지불 경비 차이도 맞춘다. 가격이 없으면 null.
+ * 우리만 포함한 항공·숙박은 더하고 경쟁사만 포함한 것은 빼며, 현지 지불 경비 차이도 맞춘다.
+ * 가격이 없거나, 맞춰야 할 항공료를 모르면(예: 우리는 랜드인데 경쟁 상품은 항공 포함, 항공료 시세 없음) null — 범위가 다른 가격을 그대로 견주지 않는다.
  */
 export function competitorPriceInOurScope(competitor: Competitor, quote: QuoteData, input: TripInput, policy: OurPolicy): number | null {
   if (competitor.price <= 0) return null;
@@ -204,6 +205,9 @@ export function competitorPriceInOurScope(competitor: Competitor, quote: QuoteDa
   for (const part of parts) {
     const ourIn = quote.ourIncludes[part.key];
     const theirIn = competitor.includes[part.key];
+    if (ourIn === theirIn) continue;
+    // 항공은 늘 돈이 드는데 금액을 모르면 맞출 수 없다 (숙박 0은 당일 일정일 수 있어 그대로)
+    if (part.key === "flight" && part.amount <= 0) return null;
     if (ourIn && !theirIn) price += part.amount;
     if (theirIn && !ourIn) price -= part.amount;
   }
