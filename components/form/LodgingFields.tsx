@@ -1,7 +1,7 @@
 import { NumberField } from "@/components/ui/NumberField";
-import { lodgingUnitsFor } from "@/lib/cost";
+import { lodgingRoomsFor } from "@/lib/cost";
 import { currencySymbol } from "@/lib/currency";
-import type { LodgingType } from "@/types";
+import type { LodgingType, OddRoomPolicy } from "@/types";
 import { CostField } from "./CostField";
 import { HotelWebSearchPanel } from "./HotelWebSearchPanel";
 import type { SectionProps } from "./types";
@@ -10,6 +10,12 @@ interface Props extends SectionProps {
   /** 일정에서 센 도시별 숙박 수. 2곳 이상이면 도시별 요금을 입력할 수 있다 */
   stays: { city: string; nights: number }[];
 }
+
+const ODD_POLICIES: { id: OddRoomPolicy; label: string; hint: string }[] = [
+  { id: "single", label: "싱글차지 따로", hint: "남는 1명은 1인실, 추가요금을 그 사람에게" },
+  { id: "triple", label: "3인 1실", hint: "엑스트라베드 요금을 원가에" },
+  { id: "share", label: "모두 나눠 반영", hint: "남는 방값을 전체 1인 요금에" },
+];
 
 const TYPES: { id: LodgingType; label: string }[] = [
   { id: "hotel", label: "호텔" },
@@ -21,7 +27,8 @@ export function LodgingFields({ input, onChange, stays }: Props) {
   const symbol = currencySymbol(input.currency);
   const isBnb = input.lodgingType === "bnb";
   const unitLabel = isBnb ? "유닛" : "실";
-  const units = lodgingUnitsFor(input.travelers, input.guestsPerUnit);
+  const rooms = lodgingRoomsFor(input.travelers, input);
+  const odd = !isBnb && input.guestsPerUnit >= 2 && input.travelers % Math.round(input.guestsPerUnit) !== 0;
 
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
@@ -77,7 +84,7 @@ export function LodgingFields({ input, onChange, stays }: Props) {
           max={20}
           step={1}
           suffix="명"
-          hint={`예상 ${input.travelers}명 → ${units}${unitLabel} 필요`}
+          hint={`예상 ${input.travelers}명 → ${rooms.bookedRooms}${unitLabel}${rooms.singles > 0 ? ` (1인실 ${rooms.singles})` : ""}${rooms.extraBeds > 0 ? ` (3인 1실 ${rooms.extraBeds})` : ""}${isBnb ? "" : " · 1인 요금은 2인 1실 기준"}`}
           onChange={(guestsPerUnit) => onChange({ guestsPerUnit })}
         />
         {isBnb && (
@@ -98,6 +105,42 @@ export function LodgingFields({ input, onChange, stays }: Props) {
           onChange={(cityTaxPerPersonPerNight) => onChange({ cityTaxPerPersonPerNight })}
         />
       </div>
+
+      {!isBnb && input.guestsPerUnit >= 2 && (
+        <div className="space-y-1.5">
+          <span className="text-[11px] font-medium text-slate-600">
+            홀수 인원으로 남는 방 {odd ? <span className="text-amber-700">(지금 {input.travelers}명 — 1명 남음)</span> : <span className="text-slate-400">(지금은 짝수)</span>}
+          </span>
+          <div role="radiogroup" aria-label="홀수 인원 방 처리" className="grid grid-cols-3 gap-1.5">
+            {ODD_POLICIES.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                role="radio"
+                aria-checked={input.oddRoomPolicy === p.id}
+                onClick={() => onChange({ oddRoomPolicy: p.id })}
+                title={p.hint}
+                className={`rounded-md border px-2 py-1.5 text-left text-[11px] leading-4 ${
+                  input.oddRoomPolicy === p.id ? "border-indigo-500 bg-indigo-50 font-semibold text-indigo-800" : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300"
+                }`}
+              >
+                {p.label}
+                <span className="block text-[10px] font-normal text-slate-500">{p.hint}</span>
+              </button>
+            ))}
+          </div>
+          {input.oddRoomPolicy === "triple" && (
+            <NumberField
+              id="extraBedPerNight"
+              label="엑스트라베드 1박 요금"
+              value={input.extraBedPerNight}
+              prefix={symbol}
+              hint="호텔마다 다릅니다. 0이면 반영하지 않습니다"
+              onChange={(extraBedPerNight) => onChange({ extraBedPerNight })}
+            />
+          )}
+        </div>
+      )}
 
       <HotelWebSearchPanel input={input} onChange={onChange} />
 

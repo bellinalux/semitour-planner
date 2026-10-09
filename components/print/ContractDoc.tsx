@@ -41,7 +41,7 @@ function OneCover({ recipient, breakBefore, data }: { recipient: DocRecipient; b
               { label: "여행기간", value: `${tripPeriod(input)} (${input.nights}박 ${input.days}일)` },
               { label: "인원", value: `${recipient.personCount}명${recipient.personCount !== quote.travelers ? ` (전체 ${quote.travelers}명 중 1인)` : ""}` },
               ...(input.minTravelers > 0 ? [{ label: "최저 행사인원", value: `${input.minTravelers}명` }] : []),
-              { label: "여행경비 (1인)", value: money(recipient.pricePerPerson) },
+              { label: quote.lodgingUnits > 0 ? "여행경비 (1인, 2인 1실 기준)" : "여행경비 (1인)", value: money(recipient.pricePerPerson) },
               { label: "여행경비 (총액)", value: money(recipient.totalPrice) },
               { label: "계약금 (계약 체결 시)", value: `${money(payment.deposit)} (여행요금의 ${payment.depositRate}%)` },
               ...(payment.interim

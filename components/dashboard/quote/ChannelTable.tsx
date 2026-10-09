@@ -3,6 +3,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { channelMix } from "@/lib/channels";
 import { formatMoney } from "@/lib/currency";
 import type { CurrencyCode, QuoteData, TripInput } from "@/types";
+import { priceIsGiven } from "@/lib/channels";
 
 interface Props {
   quote: QuoteData;
@@ -23,7 +24,7 @@ export function ChannelTable({ quote, input, currency }: Props) {
   const mix = channelMix(rows, quote.travelers, quote.scenario.baseCost);
 
   const policy =
-    input.pricingMode === "fixed_price"
+    priceIsGiven(input.pricingMode)
       ? "판매가 직접 입력: 모든 채널이 같은 가격입니다."
       : input.channelPriceMode === "parity"
         ? "모든 채널 같은 가격: 수수료가 가장 큰 채널 기준 가격이 직판까지 적용됩니다."

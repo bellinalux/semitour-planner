@@ -17,9 +17,10 @@ function OneQuote({ recipient, isGroup, breakBefore, data }: { recipient: DocRec
   const comp = composition(quote, input);
   const single = singleSupplement(quote, input);
   const rateNotes: string[] = [];
-  if (comp && comp.children > 0) rateNotes.push(`아동 1인 ${money(comp.childPrice)} (성인 요금의 ${input.childPriceRate}%)`);
+  if (comp && comp.children > 0) rateNotes.push(`아동(침대 사용) 1인 ${money(comp.childPrice)} (성인 요금의 ${input.childPriceRate}%)`);
+  if (comp && comp.childrenNoBed > 0) rateNotes.push(`아동(노베드) 1인 ${money(comp.childNoBedPrice)} (성인 요금의 ${input.childNoBedPriceRate}%)`);
   if (comp && comp.infants > 0) rateNotes.push(`유아 1인 ${money(comp.infantPrice)} (성인 요금의 ${input.infantPriceRate}%)`);
-  if (single) rateNotes.push(`1인실 사용 시 추가요금 1인 ${money(single.price)}`);
+  if (single) rateNotes.push(`싱글차지(1인실 사용) 1인 +${money(single.price)}${single.travelers > 0 ? ` — ${single.travelers}명 해당` : ""}`);
 
   return (
     <div style={breakBefore ? { breakBefore: "page" } : undefined}>
@@ -43,7 +44,7 @@ function OneQuote({ recipient, isGroup, breakBefore, data }: { recipient: DocRec
             <thead>
               <tr className="border-b border-slate-300 bg-slate-50 text-left">
                 <th className="px-2 py-1.5 font-medium">구분</th>
-                <th className="px-2 py-1.5 text-right font-medium">1인 요금</th>
+                <th className="px-2 py-1.5 text-right font-medium">{quote.lodgingUnits > 0 ? "1인 요금 (2인 1실)" : "1인 요금"}</th>
                 <th className="w-20 px-2 py-1.5 text-right font-medium">인원</th>
                 <th className="px-2 py-1.5 text-right font-medium">금액</th>
               </tr>

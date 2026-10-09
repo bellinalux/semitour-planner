@@ -6,8 +6,11 @@ import type { SettingsSection } from "@/components/form/SettingsPanel";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ourPolicy } from "@/lib/competitorDiff";
-import { lodgingUnitsFor } from "@/lib/cost";
-import { bindingChannel, buildPriceTiers } from "@/lib/pricing";
+import { budgetPlan } from "@/lib/budget";
+import { lodgingRoomsFor } from "@/lib/cost";
+import { formatMoney } from "@/lib/currency";
+import { BudgetPanel } from "./quote/BudgetPanel";
+import { bindingChannel, buildPriceTiers, singleSupplement } from "@/lib/pricing";
 import type { PmChoice } from "@/lib/itinerary";
 import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PackageType, QuoteResult, TripInput } from "@/types";
 import { ChannelTable } from "./quote/ChannelTable";
@@ -23,6 +26,7 @@ import { QuoteKpis } from "./quote/QuoteKpis";
 import { RateStructurePanel } from "./quote/RateStructurePanel";
 import { ScenarioCompare } from "./quote/ScenarioCompare";
 import { UndecidedRange } from "./quote/UndecidedRange";
+import { priceIsGiven } from "@/lib/channels";
 
 interface Props {
   /** 견적은 일정 결과에 의존하므로 일정 상태를 그대로 받는다 */
@@ -105,10 +109,13 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
 
   const policy = ourPolicy(days, pmChoice, input, meta);
+  // 판매가·도매가에서 시작한 견적이면 원가 예산과 지금 원가를 비교한다
+  const budget = budgetPlan(input, quote, quote.groundDays);
+  const single = singleSupplement(quote, input);
   const tiers = buildPriceTiers(quote, input, policy);
   const binding = bindingChannel(quote, input);
   const priceNote =
-    input.pricingMode !== "fixed_price" && input.channelPriceMode === "parity" && quote.channels.length > 1
+    !priceIsGiven(input.pricingMode) && input.channelPriceMode === "parity" && quote.channels.length > 1
       ? `모든 채널 같은 가격 · '${binding.name}' 수수료 기준`
       : undefined;
   const hasFxData = input.currency !== "KRW" && input.exchangeRateToKrw > 0;
@@ -205,6 +212,26 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
         priceNote={priceNote}
       />
 
+      {quote.singleTravelers > 0 && single && (
+        <p className="rounded-md bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-600 ring-1 ring-slate-200">
+          {quote.travelers}명은 2인 1실로 나누면 {quote.singleTravelers}명이 1인실을 씁니다 — 그 {quote.singleTravelers}명은 싱글차지{" "}
+          <span className="font-semibold text-slate-800">+{formatMoney(single.price, input.currency)}</span>를 더 받습니다(1인 요금에는 넣지 않음).
+        </p>
+      )}
+      {quote.partnerConsumerPrice !== null && (
+        <p className="rounded-md bg-indigo-50 px-3 py-2 text-[11px] leading-4 text-indigo-900 ring-1 ring-indigo-100">
+          거래처 권장 소비자가(거래처 마진 {input.partnerMarginRate}%): 1인{" "}
+          <span className="font-semibold">{formatMoney(quote.partnerConsumerPrice, input.currency)}</span> (2인 1실 기준) — 경쟁 상품과 비교할 때 이 가격을 기준으로 보세요.
+        </p>
+      )}
+
+      {budget && (
+        <section>
+          <SubHeading>예산 사용표 (1인, 2인 1실 기준)</SubHeading>
+          <BudgetPanel plan={budget} currency={input.currency} />
+        </section>
+      )}
+
       <section>
         <SubHeading>추천 판매가 (최저 · 권장 · 경쟁력)</SubHeading>
         <PriceTiersCard tiers={tiers} currency={input.currency} targetMarginRate={input.targetMarginRate} />
@@ -238,7 +265,7 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
               quote={quote}
               currency={input.currency}
               targetMarginRate={input.targetMarginRate}
-              unitsFor={quote.lodgingUnits > 0 ? (n) => lodgingUnitsFor(n, input.guestsPerUnit) : null}
+              unitsFor={quote.lodgingUnits > 0 ? (n) => lodgingRoomsFor(n, input).bookedRooms : null}
               unitLabel={input.lodgingType === "bnb" ? "유닛" : "실"}
             />
           </section>

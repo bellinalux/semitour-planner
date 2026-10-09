@@ -5,6 +5,7 @@ import { localPayRows } from "@/lib/fees";
 import { simulateOptions } from "@/lib/options";
 import { buildPriceTiers, composition, fxSensitivity, singleSupplement } from "@/lib/pricing";
 import { DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
+import { priceLabel } from "@/lib/channels";
 
 /**
  * 내부용 원가·마진 검토서. 고객용 문서에는 넣지 않는 원가 내역, 마진, 경쟁사 분석을 모두 담는다.
@@ -91,7 +92,7 @@ export function InternalQuoteDoc({ input, days, pmChoice, quote: documentQuote, 
             </tr>
             <tr className="font-bold">
               <td className="px-2 py-1.5" colSpan={2}>
-                {quote.pricingMode === "fixed_price" ? "판매가 (직접 입력)" : "권장 판매가"} · 1인 {money(s.pricePerPerson)}
+                {priceLabel(quote.pricingMode)} · {money(s.pricePerPerson)}
               </td>
               <td className="px-2 py-1.5 text-right tabular-nums">{money(s.totalPrice)}</td>
             </tr>

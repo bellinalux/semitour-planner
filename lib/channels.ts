@@ -1,6 +1,16 @@
 import { roundUpPrice } from "@/lib/priceRound";
 import type { ChannelPriceMode, ChannelResult, CurrencyCode, PricingMode, SalesChannel, TripInput } from "@/types";
 
+/** 판매가 또는 도매가를 먼저 정해 둔 견적인지 (원가에서 가격을 계산하지 않는다) */
+export const priceIsGiven = (mode: PricingMode) => mode === "fixed_price" || mode === "wholesale";
+
+/** 1인 가격 이름표 — 모든 1인 요금은 2인 1실 기준이다 */
+export function priceLabel(mode: PricingMode): string {
+  if (mode === "fixed_price") return "판매가 (2인 1실 기준 1인)";
+  if (mode === "wholesale") return "B2B 도매가 (2인 1실 기준 1인)";
+  return "최종 권장 판매가 (2인 1실 기준 1인)";
+}
+
 /** 직판(자사 카드결제)의 채널 id */
 export const DIRECT_CHANNEL_ID = "direct";
 
@@ -29,8 +39,9 @@ export function priceParamsOf(input: TripInput): PriceParams {
   return {
     margin: input.targetMarginRate / 100,
     currency: input.currency,
-    pricingMode: input.pricingMode,
-    fixedPrice: input.fixedPricePerPerson,
+    // 도매가는 정해진 가격으로 파는 것과 같고, 공급가는 원가에서 목표 마진으로 계산하는 것과 같다
+    pricingMode: input.pricingMode === "wholesale" ? "fixed_price" : input.pricingMode === "supplier" ? "target_margin" : input.pricingMode,
+    fixedPrice: input.pricingMode === "wholesale" ? input.wholesalePricePerPerson : input.fixedPricePerPerson,
     channelPriceMode: input.channelPriceMode,
   };
 }

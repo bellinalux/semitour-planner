@@ -1,5 +1,6 @@
 import { formatMoney } from "@/lib/currency";
 import type { CurrencyCode, PricingMode, QuoteScenario } from "@/types";
+import { priceLabel } from "@/lib/channels";
 
 interface Props {
   scenario: QuoteScenario;
@@ -29,7 +30,7 @@ export function QuoteKpis({ scenario, pricingMode, currency, exchangeRateToKrw, 
       </div>
 
       <div className="rounded-lg bg-indigo-600 p-3 text-white shadow-sm">
-        <p className="text-[11px] font-medium text-indigo-100">{pricingMode === "fixed_price" ? "판매가 · 입력값 (1인)" : "최종 권장 판매가 (1인)"}</p>
+        <p className="text-[11px] font-medium text-indigo-100">{priceLabel(pricingMode)}</p>
         <p className="mt-1 text-xl font-bold tabular-nums">{money(scenario.pricePerPerson)}</p>
         <p className="mt-0.5 text-[11px] tabular-nums text-indigo-100">총 {money(scenario.totalPrice)}</p>
         <KrwHint amount={scenario.pricePerPerson} currency={currency} rate={exchangeRateToKrw} />

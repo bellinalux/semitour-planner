@@ -33,7 +33,41 @@ export function sumItineraryCosts(days: DayPlan[], pmChoice: PmChoice) {
   };
 }
 
-/** 인원에 맞는 방/유닛 수 */
+export interface LodgingRooms {
+  /** 숙박 원가에 넣는 방 수 (2인 1실 기준이면 홀수 인원에서 0.5실처럼 나뉠 수 있다) */
+  costRooms: number;
+  /** 실제로 예약할 방 수 */
+  bookedRooms: number;
+  /** 1인실을 쓰는 인원 (싱글차지 대상) */
+  singles: number;
+  /** 3인 1실로 넣는 엑스트라베드 수 */
+  extraBeds: number;
+}
+
+/**
+ * 숙박 원가에 넣는 방 수 — 패키지 1인 요금은 "2인 1실 기준"이 표준이라, 호텔·리조트는 인원 ÷ 2실로 나눈다.
+ * 홀수 인원으로 남는 1명은 정책에 따라:
+ *  - single(기본): 1인 요금에는 반 실만 넣고(모두 같은 2인 1실 요금), 남는 반 실은 싱글차지로 따로 받는다
+ *  - triple: 3인 1실로 넣고 엑스트라베드 요금을 더한다
+ *  - share: 남는 방값을 전체 인원이 나눠 낸다 (방 수 = 올림)
+ * BnB(유닛)·1실 1인 기준은 올림 그대로.
+ */
+export function lodgingRoomsFor(lodgers: number, input: Pick<TripInput, "guestsPerUnit" | "lodgingType" | "oddRoomPolicy">): LodgingRooms {
+  const g = Math.max(1, Math.round(input.guestsPerUnit));
+  const people = Math.max(0, Math.round(lodgers));
+  const ceil = Math.ceil(people / g);
+  const rem = people % g;
+  if (input.lodgingType === "bnb" || g < 2 || rem === 0 || input.oddRoomPolicy === "share") {
+    return { costRooms: ceil, bookedRooms: ceil, singles: 0, extraBeds: 0 };
+  }
+  const full = Math.floor(people / g);
+  if (input.oddRoomPolicy === "triple" && g === 2 && full > 0) {
+    return { costRooms: full, bookedRooms: full, singles: 0, extraBeds: rem };
+  }
+  return { costRooms: people / g, bookedRooms: ceil, singles: rem, extraBeds: 0 };
+}
+
+/** 인원에 맞는 방/유닛 수 (올림) */
 export function lodgingUnitsFor(travelers: number, guestsPerUnit: number): number {
   return Math.ceil(travelers / Math.max(1, Math.round(guestsPerUnit)));
 }
@@ -70,6 +104,9 @@ function buildLines(n: number, ctx: Context): CostLine[] {
   const variablePerPerson =
     ctx.admissionPerPerson + ctx.mealPerPerson + input.tipPerPerson + input.insurancePerPerson;
 
+  // 랜드사 공급가로 시작하면 숙박·차량·가이드·입장료·식대가 공급가에 들어 있다고 보고 공급가 한 줄로 계산한다
+  if (input.pricingMode === "supplier") return supplierLines(n, ctx, withStatus, money);
+
   const lines: CostLine[] = [
     withStatus("vehicle", {
       key: "vehicle",
@@ -87,14 +124,20 @@ function buildLines(n: number, ctx: Context): CostLine[] {
   ];
 
   if (ctx.includeLodging) {
-    const units = lodgingUnitsFor(n, input.guestsPerUnit);
+    const rooms = lodgingRoomsFor(n, input);
+    const units = rooms.costRooms;
     const unitLabel = input.lodgingType === "bnb" ? "유닛" : "실";
     const segments = lodgingSegments(input, ctx.lodgingStays);
     const first = segments[0];
+    const roomsText = Number.isInteger(units) ? `${units}${unitLabel}` : `${units.toFixed(1)}${unitLabel}분`;
+    const basis =
+      input.lodgingType !== "bnb" && input.guestsPerUnit >= 2
+        ? ` (${Math.round(input.guestsPerUnit)}인 1실 기준${rooms.singles > 0 ? ` · ${rooms.singles}명 싱글차지 별도` : ""}${rooms.extraBeds > 0 ? ` · 3인 1실 ${rooms.extraBeds}실` : ""})`
+        : "";
     const note =
-      segments.length === 1 && first
-        ? `${units}${unitLabel} × ${first.nights}박 × ${money(first.rate)}`
-        : `${units}${unitLabel} × (${segments.map((sg) => `${sg.city || "기타"} ${sg.nights}박 × ${money(sg.rate)}`).join(" + ")})`;
+      (segments.length === 1 && first
+        ? `${roomsText} × ${first.nights}박 × ${money(first.rate)}`
+        : `${roomsText} × (${segments.map((sg) => `${sg.city || "기타"} ${sg.nights}박 × ${money(sg.rate)}`).join(" + ")})`) + basis;
     lines.push(
       withStatus("lodging", {
         key: "lodging",
@@ -103,6 +146,16 @@ function buildLines(n: number, ctx: Context): CostLine[] {
         note,
       }),
     );
+    if (rooms.extraBeds > 0 && input.extraBedPerNight > 0) {
+      lines.push(
+        withStatus("lodging", {
+          key: "lodging-extrabed",
+          label: "엑스트라베드",
+          amount: rooms.extraBeds * input.extraBedPerNight * input.nights,
+          note: `${rooms.extraBeds}개 × ${input.nights}박 × ${money(input.extraBedPerNight)}`,
+        }),
+      );
+    }
     if (input.lodgingType === "bnb" && input.cleaningFeePerUnit > 0) {
       lines.push(
         withStatus("lodging", {
@@ -173,6 +226,32 @@ function buildLines(n: number, ctx: Context): CostLine[] {
   return lines;
 }
 
+/** 랜드사 공급가 모드의 원가: 공급가(1인, 2인 1실 기준) + 항공(포함 시) + 팁·보험·기타 고정비 + 환율 버퍼 */
+function supplierLines(
+  n: number,
+  ctx: Context,
+  withStatus: (key: CostKey, line: Omit<CostLine, "status" | "excluded">) => CostLine,
+  money: (v: number) => string,
+): CostLine[] {
+  const { input } = ctx;
+  const lines: CostLine[] = [
+    { key: "supplier", label: "랜드사 공급가", amount: input.supplierPricePerPerson * n, note: `1인 ${money(input.supplierPricePerPerson)} × ${n}명 (2인 1실 기준)`, status: "confirmed" },
+  ];
+  if (ctx.includeFlight) {
+    lines.push(withStatus("flight", { key: "flight", label: "항공료", amount: n * input.flightPricePerPerson, note: `1인 ${money(input.flightPricePerPerson)} × ${n}명` }));
+  }
+  lines.push(
+    withStatus("other", { key: "other", label: "기타 고정비", amount: input.otherFixedCost }),
+    { key: "tip", label: "팁", amount: input.tipPerPerson * n },
+    { key: "insurance", label: "보험료", amount: input.insurancePerPerson * n },
+  );
+  if (input.currency !== "KRW" && input.fxBufferRate > 0) {
+    const base = totalCost(lines, false);
+    lines.push({ key: "fx-buffer", label: "환율 변동 버퍼", amount: base * (input.fxBufferRate / 100), note: `원가 합계의 ${input.fxBufferRate}%` });
+  }
+  return lines;
+}
+
 function totalCost(lines: CostLine[], includeUndecided: boolean): number {
   return lines.reduce((sum, l) => sum + (l.excluded && !includeUndecided ? 0 : l.amount), 0);
 }
@@ -226,7 +305,13 @@ export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmCh
     };
   }
   if (input.pricingMode === "fixed_price" && input.fixedPricePerPerson <= 0) {
-    return { ok: false, error: "판매가 입력 모드입니다. 왼쪽 '가격 정책'에서 1인 판매가를 입력해 주세요." };
+    return { ok: false, error: "판매가에서 시작하는 견적입니다. '가격 정책'에서 1인 판매가(2인 1실 기준)를 입력해 주세요." };
+  }
+  if (input.pricingMode === "wholesale" && input.wholesalePricePerPerson <= 0) {
+    return { ok: false, error: "B2B 도매가에서 시작하는 견적입니다. '가격 정책'에서 거래처에 넘기는 1인 도매가를 입력해 주세요." };
+  }
+  if (input.pricingMode === "supplier" && input.supplierPricePerPerson <= 0) {
+    return { ok: false, error: "랜드사 공급가에서 시작하는 견적입니다. '가격 정책'에서 1인 공급가(2인 1실 기준)를 입력해 주세요." };
   }
 
   const travelers = Math.max(1, Math.round(input.travelers));
@@ -248,9 +333,10 @@ export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmCh
     includeLodging: input.packageType !== "land",
     includeFlight: input.packageType === "full",
     contingency,
-    cardFee,
+    // 도매가(거래처 B2B)는 계좌로 받는다고 보고 카드·플랫폼 수수료를 빼지 않는다
+    cardFee: input.pricingMode === "wholesale" ? 0 : cardFee,
     margin,
-    rows: feeRows(input),
+    rows: input.pricingMode === "wholesale" ? feeRows({ channels: [], cardFeeRate: 0 }) : feeRows(input),
     priceParams: priceParamsOf(input),
   };
 
@@ -267,13 +353,13 @@ export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmCh
   const matrix = sizes.map((n) => scenarioFor(n, totalCost(buildLines(n, ctx), false), ctx));
 
   const warnings: string[] = [];
-  if (input.vehicleCostPerDay + input.guideCostPerDay === 0) {
+  if (input.pricingMode !== "supplier" && input.vehicleCostPerDay + input.guideCostPerDay === 0) {
     warnings.push("차량비와 가이드비가 0으로 입력되어 원가가 실제보다 낮게 계산됩니다.");
   }
-  if (admissionPerPerson + mealPerPerson === 0 && !activeItems(days, pmChoice).some((i) => i.payment === "local")) {
+  if (input.pricingMode !== "supplier" && admissionPerPerson + mealPerPerson === 0 && !activeItems(days, pmChoice).some((i) => i.payment === "local")) {
     warnings.push("일정의 입장료·식대가 모두 0입니다. 일정표에서 금액을 확인해 주세요.");
   }
-  if (ctx.includeLodging) {
+  if (ctx.includeLodging && input.pricingMode !== "supplier") {
     const segments = lodgingSegments(input, ctx.lodgingStays);
     const unpriced = segments.filter((sg) => sg.rate === 0);
     if (unpriced.length === 1 && segments.length === 1) {
@@ -316,7 +402,13 @@ export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmCh
     groundDays: tourDays,
     packageType: input.packageType,
     pricingMode: input.pricingMode,
-    lodgingUnits: ctx.includeLodging ? lodgingUnitsFor(travelers, input.guestsPerUnit) : 0,
+    lodgingUnits: ctx.includeLodging && input.pricingMode !== "supplier" ? lodgingRoomsFor(travelers, input).bookedRooms : 0,
+    roomCostPerUnit: ctx.includeLodging && input.pricingMode !== "supplier" ? roomCostPerUnit(input, ctx.lodgingStays) : 0,
+    singleTravelers: ctx.includeLodging && input.pricingMode !== "supplier" ? lodgingRoomsFor(travelers, input).singles : 0,
+    partnerConsumerPrice:
+      input.pricingMode === "wholesale" && input.partnerMarginRate < 100
+        ? roundUpPrice(input.wholesalePricePerPerson / (1 - Math.max(0, input.partnerMarginRate) / 100), input.currency)
+        : null,
     lines,
     scenario,
     withUndecided,
@@ -335,6 +427,11 @@ export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmCh
     channels,
     warnings,
   };
+}
+
+/** 1실(유닛)이 전체 숙박 기간 동안 내는 요금 (청소비 포함) */
+function roomCostPerUnit(input: TripInput, stays: { city: string; nights: number }[]): number {
+  return lodgingCostPerUnit(lodgingSegments(input, stays)) + (input.lodgingType === "bnb" ? input.cleaningFeePerUnit : 0);
 }
 
 export interface CompetitorComparison {

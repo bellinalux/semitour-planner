@@ -1,6 +1,7 @@
 import { formatMoney } from "@/lib/currency";
 import { departurePrices } from "@/lib/pricing";
 import type { QuoteData, TripInput } from "@/types";
+import { priceIsGiven } from "@/lib/channels";
 
 interface Props {
   quote: QuoteData;
@@ -35,7 +36,7 @@ export function DeparturePricesPanel({ quote, input }: Props) {
   }
 
   const cheapest = rows.reduce((best, r) => (r.deal.price < best.deal.price ? r : best));
-  const isFixed = input.pricingMode === "fixed_price";
+  const isFixed = priceIsGiven(input.pricingMode);
 
   return (
     <div className="space-y-2">

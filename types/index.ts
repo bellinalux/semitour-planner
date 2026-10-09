@@ -159,7 +159,17 @@ export type LodgingType = "hotel" | "bnb" | "resort";
 export type HotelGrade = "any" | "3" | "4" | "5" | "resort";
 export type HotelPreference = "transit" | "airport" | "korean" | "breakfast" | "value";
 /** target_margin: 목표 마진으로 판매가 계산 / fixed_price: 판매가를 넣고 마진 확인 */
-export type PricingMode = "target_margin" | "fixed_price";
+/**
+ * 견적을 어디서 시작하는지
+ *  - target_margin: 원가 → 목표 마진 → 권장 판매가 (기본)
+ *  - fixed_price: 소비자 판매가를 정해 두고 → 플랫폼 수수료·회사 수익을 뺀 원가 예산 안에서 구성
+ *  - wholesale: 거래처(B2B)에 넘기는 도매가를 정해 두고 → 회사 수익을 뺀 원가 예산 안에서 구성
+ *  - supplier: 랜드사가 준 공급가(1인)를 원가로 두고 → 회사 수익을 더해 판매가
+ */
+export type PricingMode = "target_margin" | "fixed_price" | "wholesale" | "supplier";
+
+/** 2인 1실로 나누고 남는 인원(홀수)의 방: 싱글차지 따로 / 3인 1실(엑스트라베드) / 남는 방값을 모두에게 나눔 */
+export type OddRoomPolicy = "single" | "triple" | "share";
 
 export interface TripInput {
   /** ai: AI가 세미투어를 생성 / paste: 업체가 쓴 코스를 붙여넣어 구조화 */
@@ -208,8 +218,12 @@ export interface TripInput {
   lodgingRatePerNight: number;
   /** 도시별 1박 요금 (도시 이름 → 요금). 없거나 0이면 위의 기본 1박 요금을 쓴다 */
   lodgingCityRates: Record<string, number>;
-  /** 1실/1유닛에 묵는 인원. 필요한 방 수 = ceil(인원 ÷ 이 값) */
+  /** 1실/1유닛에 묵는 인원 (호텔 기본 2 = 2인 1실 기준 요금) */
   guestsPerUnit: number;
+  /** 홀수 인원으로 남는 방 처리 (호텔·리조트만) */
+  oddRoomPolicy: OddRoomPolicy;
+  /** 3인 1실일 때 엑스트라베드 1박 요금 */
+  extraBedPerNight: number;
   /** BnB 청소비 (유닛당 1회) */
   cleaningFeePerUnit: number;
   /** 숙박세 (1인 1박) */
@@ -223,8 +237,14 @@ export interface TripInput {
   costSource: Partial<Record<CostKey, CostSource>>;
 
   pricingMode: PricingMode;
-  /** pricingMode === "fixed_price"일 때 1인 판매가 */
+  /** pricingMode === "fixed_price"일 때 1인 판매가 (2인 1실 기준) */
   fixedPricePerPerson: number;
+  /** pricingMode === "wholesale"일 때 거래처에 넘기는 1인 도매가 (2인 1실 기준) */
+  wholesalePricePerPerson: number;
+  /** 거래처가 도매가에 붙일 마진율 (%) — 거래처 권장 소비자가 계산용 */
+  partnerMarginRate: number;
+  /** pricingMode === "supplier"일 때 랜드사 공급가 1인 (2인 1실 기준, 숙박·차량·가이드·일정 비용 포함) */
+  supplierPricePerPerson: number;
 
   /** ---- 판매 채널·가격 정책 ---- */
   /** 직판 외에 파는 플랫폼(채널)과 수수료. 비어 있으면 직판만 계산한다 */
@@ -240,8 +260,12 @@ export interface TripInput {
   childPriceRate: number;
   /** 유아 요금 비율 (성인 요금 대비 %) */
   infantPriceRate: number;
-  /** 인원 중 아동 수 (travelers에 포함) */
+  /** 인원 중 아동 수 — 침대 사용 (travelers에 포함) */
   childCount: number;
+  /** 인원 중 아동 수 — 침대 미사용(노베드, travelers에 포함). 방 인원에서 빠지고 노베드 요금을 받는다 */
+  childNoBedCount: number;
+  /** 아동 노베드 요금 비율 (성인 요금 대비 %) */
+  childNoBedPriceRate: number;
   /** 유아 수 (travelers에 포함하지 않는 별도 인원, 좌석·식사·숙박 원가 없음으로 계산) */
   infantCount: number;
   /** 환율 변동에 대비해 원가에 더하는 버퍼 (%, 견적 통화가 원화가 아닐 때만 적용) */
@@ -569,8 +593,14 @@ export interface QuoteData {
   groundDays: number;
   packageType: PackageType;
   pricingMode: PricingMode;
-  /** 필요한 숙소 수(방/유닛). 숙박이 없으면 0 */
+  /** 필요한 숙소 수(방/유닛, 실제로 예약할 수). 숙박이 없으면 0 */
   lodgingUnits: number;
+  /** 1실(1유닛) 전체 숙박 기간 요금 (도시별 요금 합, 청소비 포함). 싱글차지 계산용 */
+  roomCostPerUnit: number;
+  /** 2인 1실로 나누고 남아 1인실을 쓰는 인원 (싱글차지 대상) */
+  singleTravelers: number;
+  /** 도매가 모드: 거래처 권장 소비자가 (1인) */
+  partnerConsumerPrice: number | null;
   lines: CostLine[];
   /** 미정 항목(금액이 있는 것)을 포함했을 때의 시나리오. 미정 항목이 없으면 null */
   withUndecided: QuoteScenario | null;

@@ -22,7 +22,8 @@ export function RateStructurePanel({ quote, input, currency }: Props) {
           <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">+ {money(single.price)} <span className="text-[11px] font-normal text-slate-500">(1인)</span></p>
           <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
             한 방을 {single.guestsPerUnit}명이 나눠 쓰던 숙박비를 혼자 쓸 때 늘어나는 원가 {money(single.cost)}에 목표 마진·수수료를 반영한 권장 추가요금입니다.
-            {quote.travelers % single.guestsPerUnit !== 0 && ` 현재 ${quote.travelers}명은 방이 남아 한 명이 혼자 쓰게 되니, 그 한 명에게 이 금액을 받거나 평균 원가로 흡수할지 정하세요.`}
+            {single.travelers > 0 &&
+              ` 지금 ${quote.travelers}명은 2인 1실로 나누면 ${single.travelers}명이 1인실을 쓰게 되어, 그 ${single.travelers}명에게 1인 요금 + 이 금액(합계 ${money(quote.scenario.pricePerPerson + single.price)})을 받습니다.`}
           </p>
         </div>
       ) : (
@@ -51,10 +52,18 @@ export function RateStructurePanel({ quote, input, currency }: Props) {
                 </tr>
                 {comp.children > 0 && (
                   <tr>
-                    <td className="py-2 pl-2 pr-3">아동 ({input.childPriceRate}%)</td>
+                    <td className="py-2 pl-2 pr-3">아동 침대 사용 ({input.childPriceRate}%)</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{money(comp.childPrice)}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{comp.children}명</td>
                     <td className="py-2 text-right tabular-nums">{money(comp.children * comp.childPrice)}</td>
+                  </tr>
+                )}
+                {comp.childrenNoBed > 0 && (
+                  <tr>
+                    <td className="py-2 pl-2 pr-3">아동 노베드 ({input.childNoBedPriceRate}%)</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{money(comp.childNoBedPrice)}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{comp.childrenNoBed}명</td>
+                    <td className="py-2 text-right tabular-nums">{money(comp.childrenNoBed * comp.childNoBedPrice)}</td>
                   </tr>
                 )}
                 {comp.infants > 0 && (

@@ -1,4 +1,4 @@
-import { requiredPricePerPerson, profitAt, DIRECT_CHANNEL_ID, type FeeRow } from "@/lib/channels";
+import { requiredPricePerPerson, profitAt, priceIsGiven, DIRECT_CHANNEL_ID, type FeeRow } from "@/lib/channels";
 import { competitorPriceInOurScope, type OurPolicy } from "@/lib/competitorDiff";
 import { roundDownPrice, roundUnit } from "@/lib/priceRound";
 import type { ChannelResult, FlightDeal, QuoteData, QuoteScenario, TripInput } from "@/types";
@@ -154,35 +154,39 @@ export interface SingleSupplement {
   /** 원가로 본 추가 비용 (1인) */
   cost: number;
   guestsPerUnit: number;
+  /** 2인 1실로 나누고 남아 1인실을 쓰는 인원 (홀수 인원) */
+  travelers: number;
 }
 
 /**
- * 한 방을 나눠 쓰던 숙박비를 혼자 쓰면 늘어나는 비용을 목표 마진과 수수료까지 반영해 추가요금으로 환산한다.
- * 숙박이 없는 구성이거나 1실 인원이 1명 이하면 null.
+ * 싱글차지(1인실 추가요금) — 2인 1실 기준 1인 요금에는 방값의 반만 들어 있으므로, 혼자 쓰면 나머지 반(전체 숙박 기간)을
+ * 목표 마진과 수수료까지 반영해 더 받는다. 숙박이 없는 구성이거나 1실 인원이 1명 이하면 null.
  */
 export function singleSupplement(quote: QuoteData, input: TripInput): SingleSupplement | null {
   const guests = Math.max(1, Math.round(input.guestsPerUnit));
-  if (quote.lodgingUnits <= 0 || guests < 2) return null;
-  const perUnit = (key: string) => quote.lines.filter((l) => l.key === key).reduce((sum, l) => sum + l.amount, 0) / quote.lodgingUnits;
-  const roomCost = perUnit("lodging") + perUnit("lodging-cleaning");
-  const cost = roomCost * (1 - 1 / guests);
+  if (quote.lodgingUnits <= 0 || guests < 2 || quote.roomCostPerUnit <= 0) return null;
+  const cost = quote.roomCostPerUnit * (1 - 1 / guests);
   if (cost <= 0) return null;
 
   const binding = bindingChannel(quote, input);
   const denominator = 1 - input.targetMarginRate / 100 - binding.feeRate / 100;
   if (denominator <= 1e-9) return null;
   const unit = roundUnit(input.currency);
-  return { price: Math.ceil(cost / denominator / unit - 1e-9) * unit, cost, guestsPerUnit: guests };
+  return { price: Math.ceil(cost / denominator / unit - 1e-9) * unit, cost, guestsPerUnit: guests, travelers: quote.singleTravelers };
 }
 
 /** ---------- 아동·유아 요금 ---------- */
 
 export interface Composition {
   adults: number;
+  /** 아동 (침대 사용) */
   children: number;
+  /** 아동 (침대 미사용, 노베드) */
+  childrenNoBed: number;
   infants: number;
   adultPrice: number;
   childPrice: number;
+  childNoBedPrice: number;
   infantPrice: number;
   revenue: number;
   cost: number;
@@ -204,23 +208,31 @@ function roundNearest(value: number, unit: number): number {
 export function composition(quote: QuoteData, input: TripInput): Composition | null {
   const travelers = quote.travelers;
   const children = Math.min(Math.max(0, Math.round(input.childCount)), travelers);
+  const childrenNoBed = Math.min(Math.max(0, Math.round(input.childNoBedCount)), travelers - children);
   const infants = Math.max(0, Math.round(input.infantCount));
-  if (children === 0 && infants === 0) return null;
+  if (children === 0 && childrenNoBed === 0 && infants === 0) return null;
 
   const unit = roundUnit(input.currency);
   const adultPrice = quote.scenario.pricePerPerson;
   const childPrice = roundNearest((adultPrice * input.childPriceRate) / 100, unit);
+  const childNoBedPrice = roundNearest((adultPrice * input.childNoBedPriceRate) / 100, unit);
   const infantPrice = roundNearest((adultPrice * input.infantPriceRate) / 100, unit);
-  const adults = travelers - children;
-  const revenue = adults * adultPrice + children * childPrice + infants * infantPrice;
-  const cost = travelers * quote.scenario.costPerPerson;
-  const profit = revenue * (1 - input.cardFeeRate / 100) - cost;
+  const adults = travelers - children - childrenNoBed;
+  const revenue = adults * adultPrice + children * childPrice + childrenNoBed * childNoBedPrice + infants * infantPrice;
+  // 노베드 아동은 방을 쓰지 않으므로 그만큼(1인분 숙박비) 원가가 줄어든다
+  const guests = Math.max(1, Math.round(input.guestsPerUnit));
+  const noBedSaving = quote.roomCostPerUnit > 0 && input.lodgingType !== "bnb" ? childrenNoBed * (quote.roomCostPerUnit / guests) : 0;
+  const cost = travelers * quote.scenario.costPerPerson - noBedSaving;
+  // 도매가(거래처 B2B)는 카드 수수료가 없다
+  const profit = revenue * (1 - (quote.pricingMode === "wholesale" ? 0 : input.cardFeeRate) / 100) - cost;
   return {
     adults,
     children,
+    childrenNoBed,
     infants,
     adultPrice,
     childPrice,
+    childNoBedPrice,
     infantPrice,
     revenue,
     cost,
@@ -310,8 +322,8 @@ export function departurePrices(quote: QuoteData, input: TripInput): DeparturePr
     .map((deal) => {
       const cost = quote.scenario.baseCost + n * (deal.price - input.flightPricePerPerson) * buffer;
       const price =
-        input.pricingMode === "fixed_price"
-          ? input.fixedPricePerPerson
+        priceIsGiven(input.pricingMode)
+          ? quote.scenario.pricePerPerson
           : requiredPricePerPerson(cost, n, row, input.targetMarginRate / 100, input.currency);
       const current = quote.scenario.pricePerPerson;
       const sellAt = quote.scenario.pricePerPerson;

@@ -1,6 +1,7 @@
 import { costSourceLabel } from "@/lib/costSource";
 import { formatMoney } from "@/lib/currency";
 import type { CostLine, CurrencyCode, PricingMode, QuoteScenario } from "@/types";
+import { priceIsGiven } from "@/lib/channels";
 
 interface Props {
   lines: CostLine[];
@@ -75,7 +76,7 @@ export function CostBreakdownTable({ lines, scenario, currency, pricingMode, wit
           </tr>
           <tr className="bg-indigo-50 font-bold text-indigo-900">
             <td className="py-2.5 pl-2 pr-3" colSpan={2}>
-              {pricingMode === "fixed_price" ? "판매가 (입력값, 총액)" : "최종 판매가 (총액)"}
+              {priceIsGiven(pricingMode) ? "판매가 (입력값, 총액)" : "최종 판매가 (총액)"}
             </td>
             <td className="py-2.5 pr-2 text-right tabular-nums">{money(scenario.totalPrice)}</td>
           </tr>

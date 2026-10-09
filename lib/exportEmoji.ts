@@ -4,7 +4,7 @@ import { formatDuration } from "@/lib/format";
 import { ITEM_TYPE_META } from "@/lib/itemTypes";
 import { pickPmOption } from "@/lib/itinerary";
 import type { ItineraryItem, ItemType, TripInput } from "@/types";
-import { claimsNoOption, hotelLines as formatHotelLines, includedLabels, type ExportData } from "./exportText";
+import { claimsNoOption, hotelLines as formatHotelLines, includedLabels, singleChargeLine, type ExportData } from "./exportText";
 
 /**
  * 업체 코스표 스타일(이모지 + 번호 + 화살표) 고객용 텍스트.
@@ -143,7 +143,8 @@ export function buildEmojiCustomerText(data: ExportData): string {
 
   return [
     `${labels.length > 0 ? `[${labels.join("·")}] ` : ""}${input.destination} ${input.nights}박 ${input.days}일 패키지`,
-    `💰 ${quote.travelers}명 기준 1인 ${moneyWithKrw(s.pricePerPerson, input.currency, input.exchangeRateToKrw)} (총 ${moneyWithKrw(s.totalPrice, input.currency, input.exchangeRateToKrw)})`,
+    `💰 ${quote.travelers}명 기준 1인 ${moneyWithKrw(s.pricePerPerson, input.currency, input.exchangeRateToKrw)}${quote.lodgingUnits > 0 ? " (2인 1실 기준)" : ""} (총 ${moneyWithKrw(s.totalPrice, input.currency, input.exchangeRateToKrw)})`,
+    ...singleChargeLine(quote, input),
     ...(meta && meta.highlights.length > 0 ? [`★ ${meta.highlights.join(" + ")}`] : []),
     ...dayLines,
     ...optionLines,

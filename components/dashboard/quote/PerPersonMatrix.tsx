@@ -1,5 +1,6 @@
 import { formatMoney } from "@/lib/currency";
 import type { CurrencyCode, QuoteData } from "@/types";
+import { priceIsGiven } from "@/lib/channels";
 
 interface Props {
   quote: QuoteData;
@@ -15,7 +16,7 @@ function minTravelersText(n: number | null) {
 }
 
 export function PerPersonMatrix({ quote, currency, targetMarginRate, unitsFor, unitLabel }: Props) {
-  const isFixed = quote.pricingMode === "fixed_price";
+  const isFixed = priceIsGiven(quote.pricingMode);
   const money = (v: number) => formatMoney(v, currency);
 
   return (

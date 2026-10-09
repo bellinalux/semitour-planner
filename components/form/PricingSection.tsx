@@ -2,69 +2,31 @@ import { Percent } from "lucide-react";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { NumberField } from "@/components/ui/NumberField";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { currencySymbol } from "@/lib/currency";
-import type { PricingMode } from "@/types";
+import { priceIsGiven } from "@/lib/channels";
+import { PRICE_START_MODES, PriceStartFields } from "./PriceStartFields";
 import type { SectionProps } from "./types";
 
-const MODES: { id: PricingMode; label: string; hint: string }[] = [
-  { id: "target_margin", label: "목표 마진으로 계산", hint: "원가 + 마진율 → 권장 판매가" },
-  { id: "fixed_price", label: "판매가 직접 입력", hint: "판매가 → 실제 마진 확인" },
-];
-
 export function PricingSection({ input, onChange, openSignal }: SectionProps) {
-  const isFixed = input.pricingMode === "fixed_price";
+  const isFixed = priceIsGiven(input.pricingMode);
+  const mode = PRICE_START_MODES.find((m) => m.id === input.pricingMode);
 
   return (
     <SectionCard
       title="가격 정책"
-      description={
-        isFixed
-          ? "입력한 판매가로 팔 때의 마진을 계산합니다"
-          : "판매가 = 원가 ÷ (1 − 마진율 − 수수료율)로 역산합니다 (채널 수수료는 아래 '판매 채널'에서)"
-      }
+      description="견적 시작 방법(원가·판매가·B2B 도매가·랜드사 공급가)과 회사 수익·수수료를 정합니다. 모든 1인 가격은 2인 1실 기준"
       icon={Percent}
       collapsible
       defaultOpen={false}
       anchorId="settings-pricing"
       openSignal={openSignal}
-      summary={`목표 마진 ${input.targetMarginRate}% · 예비비 ${input.contingencyRate}% · 카드 수수료 ${input.cardFeeRate}%`}
+      summary={`${mode?.label ?? ""} · 회사 수익 ${input.targetMarginRate}% · 카드 수수료 ${input.cardFeeRate}%`}
     >
       <div className="space-y-4">
-        <div role="radiogroup" aria-label="가격 계산 방식" className="grid grid-cols-2 gap-2">
-          {MODES.map((mode) => {
-            const selected = input.pricingMode === mode.id;
-            return (
-              <button
-                key={mode.id}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                onClick={() => onChange({ pricingMode: mode.id })}
-                className={`rounded-lg border px-3 py-2 text-left transition-colors ${
-                  selected ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500" : "border-slate-200 bg-white hover:border-indigo-300"
-                }`}
-              >
-                <span className={`block text-xs font-semibold ${selected ? "text-indigo-800" : "text-slate-700"}`}>{mode.label}</span>
-                <span className="mt-0.5 block text-[10px] leading-3 text-slate-500">{mode.hint}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {isFixed && (
-          <NumberField
-            id="fixedPricePerPerson"
-            label="1인 판매가"
-            value={input.fixedPricePerPerson}
-            prefix={currencySymbol(input.currency)}
-            hint="패키지 가격이 이미 정해졌다면 입력하세요. 견적서에 실제 이익과 마진율이 나옵니다."
-            onChange={(fixedPricePerPerson) => onChange({ fixedPricePerPerson })}
-          />
-        )}
+        <PriceStartFields input={input} onChange={onChange} />
 
         <NumberField
           id="targetMarginRate"
-          label={isFixed ? "목표 마진율 (달성 최소 인원 계산용)" : "목표 마진율 (판매가 대비)"}
+          label={isFixed ? "회사 수익 (판매가 대비 %)" : "목표 마진율 (판매가 대비)"}
           value={input.targetMarginRate}
           suffix="%"
           min={0}
@@ -107,8 +69,12 @@ export function PricingSection({ input, onChange, openSignal }: SectionProps) {
 
         <Disclosure
           label="아동·유아 요금"
-          summary={input.childCount + input.infantCount > 0 ? `아동 ${input.childCount}명 · 유아 ${input.infantCount}명` : "아동·유아가 있을 때만 펼쳐서 입력"}
-          defaultOpen={input.childCount + input.infantCount > 0}
+          summary={
+            input.childCount + input.childNoBedCount + input.infantCount > 0
+              ? `아동 ${input.childCount}명 · 노베드 아동 ${input.childNoBedCount}명 · 유아 ${input.infantCount}명`
+              : "아동·유아가 있을 때만 펼쳐서 입력"
+          }
+          defaultOpen={input.childCount + input.childNoBedCount + input.infantCount > 0}
         >
           <p className="text-[11px] leading-4 text-slate-500">
             성인 요금 대비 비율입니다. 상품·항공사·숙소 정책에 따라 다르니 판매 조건에 맞게 고치세요. 인원을 넣으면 견적서에서 구성별 총액과 이익을 계산합니다.
@@ -116,12 +82,21 @@ export function PricingSection({ input, onChange, openSignal }: SectionProps) {
           <div className="grid grid-cols-2 gap-3">
             <NumberField
               id="childPriceRate"
-              label="아동 요금"
+              label="아동 요금 (침대 사용)"
               value={input.childPriceRate}
               suffix="%"
               max={100}
               hint="성인 요금 대비"
               onChange={(childPriceRate) => onChange({ childPriceRate })}
+            />
+            <NumberField
+              id="childNoBedPriceRate"
+              label="아동 요금 (노베드)"
+              value={input.childNoBedPriceRate}
+              suffix="%"
+              max={100}
+              hint="침대 없이 부모와 같은 방"
+              onChange={(childNoBedPriceRate) => onChange({ childNoBedPriceRate })}
             />
             <NumberField
               id="infantPriceRate"
@@ -134,13 +109,23 @@ export function PricingSection({ input, onChange, openSignal }: SectionProps) {
             />
             <NumberField
               id="childCount"
-              label="아동 인원"
+              label="아동 인원 (침대 사용)"
               value={input.childCount}
               suffix="명"
               step={1}
               max={Math.max(0, input.travelers)}
               hint="예상 인원에 포함"
               onChange={(childCount) => onChange({ childCount })}
+            />
+            <NumberField
+              id="childNoBedCount"
+              label="아동 인원 (노베드)"
+              value={input.childNoBedCount}
+              suffix="명"
+              step={1}
+              max={Math.max(0, input.travelers - input.childCount)}
+              hint="예상 인원에 포함, 방 인원에서 빠짐"
+              onChange={(childNoBedCount) => onChange({ childNoBedCount })}
             />
             <NumberField
               id="infantCount"

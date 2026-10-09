@@ -17,6 +17,8 @@ import type {
   TripInput,
   UspItem,
 } from "@/types";
+import { priceIsGiven, priceLabel } from "@/lib/channels";
+import { singleSupplement } from "@/lib/pricing";
 
 export interface ExportData {
   input: TripInput;
@@ -163,7 +165,7 @@ export function buildInternalText(data: ExportData): string {
       : []),
     `카드 수수료: ${money(s.cardFee)}`,
     `예상 이익: ${money(s.profit)} (마진율 ${s.actualMarginRate.toFixed(1)}%)`,
-    `▶ ${quote.pricingMode === "fixed_price" ? "판매가(직접 입력)" : "최종 권장 판매가"}: 1인 ${money(s.pricePerPerson)} / 총 ${money(s.totalPrice)}`,
+    `▶ ${priceLabel(quote.pricingMode)}: ${money(s.pricePerPerson)} / 총 ${money(s.totalPrice)}`,
     "",
     ...(quote.lodgingUnits > 0
       ? [
@@ -172,7 +174,7 @@ export function buildInternalText(data: ExportData): string {
           "",
         ]
       : [""]),
-    "인원별 1인 " + (quote.pricingMode === "fixed_price" ? "판매가" : "권장가"),
+    "인원별 1인 " + (priceIsGiven(quote.pricingMode) ? "판매가" : "권장가") + " (2인 1실 기준)",
     ...quote.matrix.map((m) => `- ${m.travelers}명: ${money(m.pricePerPerson)} (이익률 ${m.actualMarginRate.toFixed(1)}%)`),
     `손익분기 최소 인원: ${quote.breakEvenTravelers === null ? "달성 불가" : `${quote.breakEvenTravelers}명`}`,
     `목표 마진 ${input.targetMarginRate}% 달성 최소 인원: ${quote.targetMarginTravelers === null ? "달성 불가" : `${quote.targetMarginTravelers}명`}`,
@@ -279,7 +281,8 @@ export function buildCustomerText(data: ExportData): string {
 
   return [
     `${labels.length > 0 ? `[${labels.join("·")}] ` : ""}[${titleOf(input)}]`,
-    `${quote.travelers}명 기준 · 1인 ${moneyWithKrw(s.pricePerPerson, input.currency, input.exchangeRateToKrw)} (총 ${moneyWithKrw(s.totalPrice, input.currency, input.exchangeRateToKrw)})`,
+    `${quote.travelers}명 기준 · 1인 ${moneyWithKrw(s.pricePerPerson, input.currency, input.exchangeRateToKrw)}${quote.lodgingUnits > 0 ? " (2인 1실 기준)" : ""} (총 ${moneyWithKrw(s.totalPrice, input.currency, input.exchangeRateToKrw)})`,
+    ...singleChargeLine(quote, input),
     ...(isSemi ? ["오전에는 가이드와 함께, 오후에는 자유롭게 즐기는 세미투어입니다."] : []),
     ...(meta && meta.highlights.length > 0 ? ["", "★ " + meta.highlights.join(" + ")] : []),
     LINE,
@@ -310,4 +313,11 @@ export function buildCustomerText(data: ExportData): string {
   ]
     .join("\n")
     .trim();
+}
+
+/** 고객 문구용 싱글차지 안내 (2인 1실로 나누고 1인실을 쓰는 사람에게 더 받는 금액) */
+export function singleChargeLine(quote: QuoteData, input: TripInput): string[] {
+  const single = singleSupplement(quote, input);
+  if (!single) return [];
+  return [`싱글차지(1인실 사용) 1인 +${moneyWithKrw(single.price, input.currency, input.exchangeRateToKrw)}`];
 }

@@ -62,6 +62,8 @@ export const DEFAULT_INPUT: TripInput = {
   lodgingRatePerNight: 0,
   lodgingCityRates: {},
   guestsPerUnit: 2,
+  oddRoomPolicy: "single",
+  extraBedPerNight: 0,
   cleaningFeePerUnit: 0,
   cityTaxPerPersonPerNight: 0,
   flightPricePerPerson: 0,
@@ -76,6 +78,9 @@ export const DEFAULT_INPUT: TripInput = {
   costSource: {},
 
   pricingMode: "target_margin",
+  wholesalePricePerPerson: 0,
+  partnerMarginRate: 15,
+  supplierPricePerPerson: 0,
   fixedPricePerPerson: 0,
 
   channels: [],
@@ -86,6 +91,8 @@ export const DEFAULT_INPUT: TripInput = {
   childPriceRate: 80,
   infantPriceRate: 10,
   childCount: 0,
+  childNoBedCount: 0,
+  childNoBedPriceRate: 70,
   infantCount: 0,
   fxBufferRate: 0,
   compareBasis: "total",
