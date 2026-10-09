@@ -18,7 +18,10 @@ const SUFFIX_WORDS = /리조트|호텔|관광|투어|체험|카지노|방문|구
 /** 한 이름의 여러 표기 — 본 이름, 괄호 속 표기, 슬래시로 나눈 표기, 덧말을 뺀 이름 */
 export function placeAliases(name: string): string[] {
   const inner = [...name.matchAll(/\((.*?)\)|\[(.*?)\]/g)].map((m) => m[1] ?? m[2] ?? "");
-  const parts = [name, ...inner, ...name.split("/")];
+  // "육포&쿠키거리"·"A 및 B 광장"처럼 묶어 쓴 이름은 "육포거리"·"쿠키거리"로도 본다
+  const joined = /^(.+?)\s*(?:&|및|·)\s*(.+?)(거리|시장|광장|공원|타운|빌리지|성당|사원)$/.exec(name.trim());
+  const split = joined ? [`${joined[1]}${joined[3]}`, `${joined[2]}${joined[3]}`] : [];
+  const parts = [name, ...inner, ...name.split("/"), ...split];
   const keys = parts.map(placeKey).filter((k) => k.length >= 2);
   const core = keys.map((k) => k.replace(SUFFIX_WORDS, "")).filter((k) => k.length >= 3 && !GENERIC.has(k));
   return [...new Set([...keys, ...core])];

@@ -231,14 +231,16 @@ export function buildTourCompare(input: TripInput, days: DayPlan[], pmChoice: Pm
   const knowPlaces = competitors.some((c) => (c.places ?? []).length > 0);
   // 경쟁 상품 여러 곳(1~2곳 비교면 1곳, 그 이상이면 절반 이상)이 가는데 우리에겐 없는 곳
   const rivals = columns.filter((c) => !c.isOurs);
+  // 다른 지역을 함께 도는 상품(홍콩/마카오 등)의 방문지는 우리 여행지 밖일 수 있어 세지 않는다
+  const sameScope = rivals.filter((c) => c.extraRegions.length === 0);
   const popular: { name: string; count: number }[] = [];
-  for (const c of rivals)
+  for (const c of sameScope)
     for (const t of c.theirOnly) {
       const hit = popular.find((p) => samePlace(p.name, t));
       if (hit) hit.count += 1;
       else popular.push({ name: t, count: 1 });
     }
-  const need = rivals.length <= 2 ? 1 : Math.ceil(rivals.length / 2);
+  const need = sameScope.length <= 2 ? 1 : Math.ceil(sameScope.length / 2);
   const missingPopular = popular.filter((p) => p.count >= need).sort((a, b) => b.count - a.count).slice(0, 6);
 
   return {
@@ -303,7 +305,11 @@ function summarize(
     if (diff === 0) continue;
     const unpriced = k === "flight" && !ourIncludes.flight && rivals.some((c) => c.includes.flight && c.price === null);
     scopeNotes.push(
-      `${who(diff)} ${INCLUDE_LABELS[k]} ${ourIncludes[k] ? "불포함" : "포함"} 상품 — ${unpriced ? "항공료 시세가 없어 같은 조건 가격을 낼 수 없습니다 (시세 조회로 채우세요)" : `같은 조건 가격은 ${INCLUDE_LABELS[k]} 금액을 ${ourIncludes[k] ? "더해" : "빼고"} 견줬습니다`}`,
+      `${who(diff)} ${INCLUDE_LABELS[k]} ${ourIncludes[k] ? "불포함" : "포함"} 상품 — ${
+        unpriced
+          ? "항공료 시세가 없어 같은 조건 가격을 낼 수 없습니다 (시세 조회로 채우세요)"
+          : `같은 조건 가격은 ${INCLUDE_LABELS[k]} 금액${k === "flight" && input.flightPricePerPerson > 0 ? `(1인 ${input.flightPricePerPerson.toLocaleString("ko-KR")}${input.costStatus?.flight === "estimated" ? ", 시세 추정 — 실제 항공 요금으로 고치면 더 정확" : ""})` : ""}을 ${ourIncludes[k] ? "더해" : "빼고"} 견줬습니다`
+      }`,
     );
   }
   for (const k of INCLUDE_KEYS.filter((x) => !SCOPE_KEYS.has(x))) {

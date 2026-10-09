@@ -90,7 +90,10 @@ export function TourCompareTable({ compare, currency, refresh }: Props) {
         ) : c.theirOnly.length === 0 ? (
           <span className="text-emerald-700">없음</span>
         ) : (
-          <span className="text-pretty text-amber-800">{c.theirOnly.join(", ")}</span>
+          <span className="text-pretty text-amber-800">
+            {c.theirOnly.join(", ")}
+            {c.extraRegions.length > 0 && <span className="block text-slate-500">{c.extraRegions.join("·")} 일정 포함 상품</span>}
+          </span>
         ),
     },
     {

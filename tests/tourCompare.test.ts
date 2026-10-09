@@ -144,12 +144,34 @@ describe("투어 비교 — 상품 범위가 다른 경우", () => {
     // 항공료를 알면 빼고 견준다
     const known = compareFor({ flightPricePerPerson: 400_000, competitors: [competitor({ id: "a", name: "A", price: 9_000_000, includes: withAir })] });
     expect(known.cmp!.columns[1].price).toBe(9_000_000 - 400_000);
-    expect(known.cmp!.summary.scopeNotes.join()).toContain("항공 금액을 빼고 견줬습니다");
+    expect(known.cmp!.summary.scopeNotes.join()).toContain("항공 금액(1인 400,000)을 빼고 견줬습니다");
   });
 
   it("'베네시안 리조트'와 '베네시안 호텔 관광 및 카지노 체험'은 같은 곳", async () => {
     const { samePlace } = await import("@/lib/places");
     expect(samePlace("베네시안리조트", "베네시안 호텔 관광 및 카지노 체험")).toBe(true);
     expect(samePlace("마카오 타워", "마카오 에펠타워")).toBe(false);
+  });
+});
+
+describe("투어 비교 — 다른 지역 포함 상품의 방문지", () => {
+  it("홍콩 포함 상품에만 있는 곳(빅토리아 피크)은 '우리에겐 없는 곳'으로 세지 않는다", () => {
+    const { cmp } = compareFor({
+      destination: "다낭",
+      competitors: [
+        competitor({ id: "a", name: "A투어 홍콩/다낭 4일", price: 9_000_000, places: ["빅토리아 피크", "바나힐"] }),
+        competitor({ id: "b", name: "B투어 다낭 4일", price: 9_000_000, places: ["오행산", "바나힐"] }),
+      ],
+    });
+    expect(cmp!.missingPopular.map((p) => p.name)).toEqual(["오행산"]);
+    expect(cmp!.columns.find((c) => c.id === "a")!.extraRegions).toEqual(["홍콩"]);
+  });
+});
+
+describe("묶어 쓴 장소 이름", () => {
+  it("'육포&쿠키거리'는 '육포거리'와 같은 곳", async () => {
+    const { samePlace } = await import("@/lib/places");
+    expect(samePlace("육포&쿠키거리", "육포거리")).toBe(true);
+    expect(samePlace("육포&쿠키거리", "세나도 광장")).toBe(false);
   });
 });
