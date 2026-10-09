@@ -4,6 +4,11 @@ import type { FlightWebRequest } from "@/lib/schemas/flightSearch";
 export function buildFlightResearchPrompt(req: FlightWebRequest): string {
   return [
     `Google 검색 도구를 여러 번 사용해서, "${req.origin} → ${req.destination}" 왕복 항공권(이코노미, 성인 1인, ${req.days - 1}박 ${req.days}일 일정)의 실제 요금을 조사해 주세요.`,
+    ...(req.airline
+      ? [
+          `항공편은 ${req.airline}${req.flightNumber ? ` ${req.flightNumber}` : ""}${req.departTime ? ` (${req.departTime} 출발)` : ""}${req.departDate ? `, ${req.departDate} 출발` : ""} 기준으로 찾아 주세요 — 업체 상품에 들어간 항공편입니다.`,
+        ]
+      : []),
     "네이버 항공권, Google Flights, 스카이스캐너, 카약, 인터파크투어 항공 등 항공권 가격비교 사이트의 검색 결과 페이지에 실제로 표시된 요금을 찾으세요.",
     "기억에 의존해 요금을 지어내지 말고, 검색으로 확인한 범위만 적으세요. 확인하지 못했으면 '확인 못함'이라고 쓰세요.",
     "",

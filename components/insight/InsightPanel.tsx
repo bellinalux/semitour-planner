@@ -12,7 +12,7 @@ import type { VerifyPipelineView, VerifyStepStatus } from "@/hooks/useVerifyPipe
 import type { CourseEngineView } from "@/hooks/useCourseEngine";
 import type { DayTimeCheckView } from "@/hooks/useDayTimeCheck";
 import type { Insight, InsightAction, KeyNumbers } from "@/lib/insights";
-import type { TourCandidate, TripInput } from "@/types";
+import type { CostKey, TourCandidate, TripInput } from "@/types";
 
 interface Props {
   input: TripInput;
@@ -37,6 +37,8 @@ interface Props {
   competitorFind: CompetitorAutoFindView;
   /** 한 번에 검증 (시세 → 시간 검증 → 코스 점검 → 타업체 찾기 → 타업체 일정) */
   pipeline: VerifyPipelineView;
+  /** 추정 원가를 "확인함"으로 */
+  onConfirmCosts: (keys: CostKey[]) => void;
 }
 
 const STEP_MARK: Record<VerifyStepStatus, { mark: string; tone: string }> = {
@@ -146,7 +148,7 @@ function NumbersCard({ numbers, money }: { numbers: KeyNumbers; money: (v: numbe
  * 레이아웃3 — 요약·추천. 지금 견적의 핵심 숫자(판매가·원가·수익)를 위에 두고, 고치면 좋은 것을 중요한 순서로 보여 주며
  * 버튼으로 바로 적용한다(예산 맞추기·올리기·입력 폴더 열기·질문 복사). 자동 구성 진행도 여기서 본다.
  */
-export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight, dayTime, engine, competitorFind, pipeline }: Props) {
+export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight, dayTime, engine, competitorFind, pipeline, onConfirmCosts }: Props) {
   const [showAll, setShowAll] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const visible = showAll ? insights : insights.slice(0, SHOW);
@@ -164,6 +166,9 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
         break;
       case "fix-day-time":
         dayTime.run(action.days);
+        break;
+      case "confirm-costs":
+        onConfirmCosts(action.keys);
         break;
       case "find-competitors":
         competitorFind.run(input);
@@ -247,11 +252,14 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
           </p>
         ) : (
           <ul className="space-y-2">
-            {visible.map((insight) => {
+            {visible.map((insight, index) => {
               const tone = TONE[insight.tone];
               const Icon = tone.icon;
+              // 맨 위 하나는 "지금 할 일" — 초보자가 어디서 시작할지 바로 보이게
+              const first = index === 0;
               return (
-                <li key={insight.id} className={`rounded-lg border p-3 text-[11px] leading-4 ${tone.box}`}>
+                <li key={insight.id} className={`rounded-lg border p-3 text-[11px] leading-4 ${tone.box} ${first ? "ring-2 ring-indigo-300" : ""}`}>
+                  {first && <span className="mb-1 inline-block rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold text-white">지금 할 일</span>}
                   <p className={`flex items-start gap-1.5 font-semibold ${tone.text}`}>
                     <Icon className="mt-px size-3.5 shrink-0" aria-hidden />
                     <span className="text-pretty">{insight.title}</span>

@@ -4,7 +4,7 @@ import { TrendingDown, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { formatMoney } from "@/lib/currency";
 import type { PmChoice } from "@/lib/itinerary";
-import { buildPriceLevers, combinedLevers, type PriceLever } from "@/lib/priceLevers";
+import { buildPriceLevers, combinedLevers, gradeOptions, type PriceLever } from "@/lib/priceLevers";
 import type { CourseMeta, DayPlan, QuoteData, TripInput } from "@/types";
 
 interface Props {
@@ -119,6 +119,7 @@ export function PriceLeversPanel({ input, days, pmChoice, quote, meta, onInputCh
           </button>
         </div>
       )}
+      <GradeOptions input={input} days={days} pmChoice={pmChoice} quote={quote} meta={meta} total={total} onPick={(patch) => onInputChange(patch)} />
       {undo && (
         <p role="status" className="flex items-center gap-2 text-slate-600">
           <span className="flex-1">가격 낮추기를 적용했습니다.</span>
@@ -137,5 +138,65 @@ export function PriceLeversPanel({ input, days, pmChoice, quote, meta, onInputCh
         </p>
       )}
     </section>
+  );
+}
+
+/** 등급별 여러 안 — 3성~5성 각 안의 판매가·수익률·경쟁 순위 (고객에게 A/B/C안으로 제시) */
+function GradeOptions({
+  input,
+  days,
+  pmChoice,
+  quote,
+  meta,
+  total,
+  onPick,
+}: Omit<Props, "onInputChange" | "onReplaceDays"> & { total: number; onPick: (patch: Partial<TripInput>) => void }) {
+  const rows = gradeOptions(input, days, pmChoice, quote, meta);
+  if (rows.length === 0) return null;
+  const money = (v: number) => formatMoney(Math.round(v), input.currency);
+  const supplier = input.pricingMode === "supplier";
+  return (
+    <details className="rounded-md border border-slate-200 px-2.5 py-2">
+      <summary className="cursor-pointer font-semibold text-slate-800">등급별 여러 안 (A/B/C안으로 제시)</summary>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full min-w-[460px]">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-slate-500">
+              <th className="py-1 pr-2 font-medium">숙소 등급</th>
+              <th className="py-1 pr-2 text-right font-medium">1실 1박 (추정)</th>
+              <th className="py-1 pr-2 text-right font-medium">1인 판매가</th>
+              <th className="py-1 pr-2 text-right font-medium">수익률</th>
+              <th className="py-1 pr-2 text-right font-medium">경쟁 순위</th>
+              <th className="py-1" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 tabular-nums">
+            {rows.map((r) => (
+              <tr key={r.grade} className={r.isCurrent ? "bg-indigo-50/60 font-semibold" : ""}>
+                <td className="py-1 pr-2">
+                  {r.label}
+                  {r.isCurrent && <span className="ml-1 rounded bg-indigo-600 px-1 text-[10px] text-white">지금</span>}
+                </td>
+                <td className="py-1 pr-2 text-right">{money(r.ratePerNight)}</td>
+                <td className="py-1 pr-2 text-right">{r.salePrice === null ? "—" : money(r.salePrice)}</td>
+                <td className="py-1 pr-2 text-right">{r.marginRate === null ? "—" : `${r.marginRate.toFixed(1)}%`}</td>
+                <td className="py-1 pr-2 text-right">{r.rankAfter === null ? "—" : `${total}개 중 ${r.rankAfter}위`}</td>
+                <td className="py-1 text-right">
+                  {!r.isCurrent && !supplier && (
+                    <button type="button" onClick={() => onPick({ hotelGrade: r.grade, lodgingRatePerNight: r.ratePerNight })} className="font-semibold text-indigo-700 underline underline-offset-2">
+                      이 등급으로
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1 text-slate-400">
+        지금 숙박 요금에서 한 등급 차이를 약 30%로 추정했습니다. 실제 요금은 호텔 찾기·숙박 시세 조회로 확인하세요.
+        {supplier && " 업체 공급가 견적은 업체에 등급별 요금을 요청하세요 (숙박 차이만큼 공급가가 바뀐다고 가정)."}
+      </p>
+    </details>
   );
 }

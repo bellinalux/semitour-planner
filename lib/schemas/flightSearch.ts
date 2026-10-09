@@ -11,6 +11,14 @@ export const flightWebRequestSchema = z.object({
   /** 여행 일수 (귀국일 계산용) */
   days: z.number().int().min(2).max(31),
   currency: z.enum(CURRENCIES),
+  /** 업체 코스표에 적힌 항공편 — 있으면 그 항공사·편명·시각 기준 요금을 찾는다 */
+  airline: z.string().trim().max(40).optional(),
+  flightNumber: z.string().trim().max(20).optional(),
+  departDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  departTime: z.string().trim().max(10).optional(),
 });
 
 export type FlightWebRequest = z.infer<typeof flightWebRequestSchema>;

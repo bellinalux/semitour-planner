@@ -69,6 +69,8 @@ export interface Competitor {
   days?: number;
   /** 판매 페이지에서 읽은 날짜별 일정 (경쟁 상품 일정 가져오기). 못 읽었으면 found=false */
   itinerary?: CompetitorItinerary;
+  /** 가격 변동 기록 — 다시 조회해서 가격이 바뀔 때마다 이전 가격과 그 확인 시각을 쌓는다 (최근 10개) */
+  priceHistory?: { price: number; at: string }[];
 }
 
 /** 경쟁 상품의 날짜별 일정 — 코스를 날짜별로 견주는 데 쓴다 */

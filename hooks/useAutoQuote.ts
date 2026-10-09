@@ -4,11 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
 import { groundRequest, needsFlight, needsGround, needsInsurance, needsLodging, needsTip, travelRequest } from "@/lib/autoQuoteRequests";
 import { findCompetitorProducts, flightPriceForCompare } from "@/lib/competitorSearch";
+import { knownFlight } from "@/lib/flightRepair";
 import { reportPerf } from "@/lib/perf";
 import { fillFromMemory } from "@/lib/costMemory";
 import { estimateToPatch } from "@/lib/travelEstimate";
 import type { GroundCostResponse } from "@/lib/schemas/groundCost";
-import type { CostKey, CostSourceKind, LodgingWebEstimate, TravelEstimate, TripInput } from "@/types";
+import type { CostKey, CostSourceKind, DayPlan, LodgingWebEstimate, TravelEstimate, TripInput } from "@/types";
 
 export type AutoStepStatus = "pending" | "running" | "done" | "skipped" | "error";
 
@@ -280,7 +281,7 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary, itinerar
             if (found.length > 0) {
               apply({ competitors: found });
               // 경쟁 상품이 항공 포함이면 항공료 시세를 찾아 같은 조건(항공 뺀 가격)으로 견준다 (항공 불포함 상품의 원가에는 들어가지 않는다)
-              const flight = await flightPriceForCompare(working, found);
+              const flight = await flightPriceForCompare(working, found, knownFlight(Array.isArray(itinerary) ? (itinerary as DayPlan[]) : [], working, null));
               if (flight) apply({ flightPricePerPerson: flight }, { flight: "estimated" }, "web", "경쟁 상품 비교용 항공 시세");
               set("competitors", "done", `${found.map((c) => c.source?.agency || c.name).join(", ")} 추가`);
             } else set("competitors", "error", "가격이 확인된 상품을 찾지 못했습니다");
@@ -296,7 +297,7 @@ export function useAutoQuote({ input, update, verifyFees, hasItinerary, itinerar
       setRunning(false);
       reportPerf("auto-quote", Math.round(performance.now() - startedAt), durations, destination);
     }
-  }, [running, input, update, verifyFees, hasItinerary]);
+  }, [running, input, update, verifyFees, hasItinerary, itinerary]);
 
   // "코스를 만들면 자동 견적도 이어서" — 코스 생성이 끝나면 armAfterGenerate()로 걸어 두고,
   // 새 일정이 화면에 들어온 다음(입장료 확인이 새 일정을 보도록) 한 번 실행한다

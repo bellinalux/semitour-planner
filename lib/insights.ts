@@ -1,6 +1,7 @@
 import { budgetPlan } from "@/lib/budget";
 import { describeAction, type FitPlan, type Upgrade } from "@/lib/budgetFit";
 import { ourPolicy } from "@/lib/competitorDiff";
+import { lastPriceChange } from "@/lib/competitors";
 import type { DayMove } from "@/lib/dayBalance";
 import { calcDayLoad } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
@@ -11,7 +12,8 @@ import { setupChecklist, type SetupSection } from "@/lib/setupChecklist";
 import { supplierCuts, supplierTarget } from "@/lib/supplierCheck";
 import { subjectParticle, verifySupplierQuote } from "@/lib/supplierVerify";
 import { buildTourCompare } from "@/lib/tourCompare";
-import type { CourseMeta, DayPlan, QuoteResult, TripInput } from "@/types";
+import { unconfirmedCosts } from "@/lib/printChecks";
+import type { CostKey, CourseMeta, DayPlan, QuoteResult, TripInput } from "@/types";
 
 /**
  * 레이아웃3(요약·추천) — 지금 견적의 핵심 숫자와, 고치면 좋은 것을 중요한 순서로 모은다.
@@ -40,7 +42,8 @@ export type InsightAction =
   | { kind: "fix-day-time"; days: number[]; label: string }
   | { kind: "engine-move"; move: DayMove; label: string }
   | { kind: "group-areas"; day: number; label: string }
-  | { kind: "find-competitors"; label: string };
+  | { kind: "find-competitors"; label: string }
+  | { kind: "confirm-costs"; keys: CostKey[]; label: string };
 
 export interface Insight {
   id: string;
@@ -253,6 +256,31 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
       action: { kind: "scroll", target: "course-engine", label: "100점 만들기 보기" },
     });
   }
+
+  // ④-0 판매가에 들어간 추정 원가 — 업체·시세를 확인한 뒤 "확인함"으로 (인쇄 전 확인 창을 줄인다)
+  const estimatedCosts = quote?.ok ? unconfirmedCosts(quote) : [];
+  if (estimatedCosts.length > 0)
+    out.push({
+      id: "estimated-costs",
+      tone: "info",
+      title: `확인 안 한 추정 원가 ${estimatedCosts.length}개 — 판매가가 이 값으로 정해졌습니다`,
+      detail: estimatedCosts.map((c) => `${c.label} ${money(c.amount)}${c.from ? ` (${c.from})` : ""}`).join(" · "),
+      action: { kind: "confirm-costs", keys: estimatedCosts.map((c) => c.key), label: "확인했어요 (확인함으로)" },
+    });
+
+  // ④-2b 경쟁 상품 가격이 바뀌었으면 (다시 조회해서)
+  const changes = input.competitors.flatMap((c) => {
+    const ch = lastPriceChange(c);
+    return ch ? [{ name: c.name, ...ch }] : [];
+  });
+  if (changes.length > 0)
+    out.push({
+      id: "competitor-price-change",
+      tone: "info",
+      title: `경쟁 상품 가격 변동 ${changes.length}건`,
+      detail: changes.map((c) => `${c.name.slice(0, 20)} ${c.diff > 0 ? "▲" : "▼"}${money(Math.abs(c.diff))}`).join(" · "),
+      action: { kind: "scroll", target: "tour-compare", label: "투어 비교표 보기" },
+    });
 
   // ④-3 타업체 비교 — 아직 경쟁 상품이 없으면 찾아 비교하게, 있으면 우리가 나은 점 / 경쟁 상품이 나은 점 (투어 비교표 요약)
   if (quote?.ok && input.competitors.length === 0 && input.destination.trim() && days.length > 0) {

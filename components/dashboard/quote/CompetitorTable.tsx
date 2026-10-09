@@ -1,7 +1,7 @@
 import { Check, Minus, Swords } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { POLICY_LABELS, type OurPolicy } from "@/lib/competitorDiff";
-import { priceAgeDays, STALE_PRICE_DAYS } from "@/lib/competitors";
+import { lastPriceChange, priceAgeDays, STALE_PRICE_DAYS } from "@/lib/competitors";
 import { compareWithCompetitors } from "@/lib/cost";
 import { formatMoney } from "@/lib/currency";
 import type { Competitor, CompetitorIncludes, CurrencyCode, TourPolicy } from "@/types";
@@ -44,10 +44,18 @@ function PriceAge({ competitor }: { competitor: Competitor }) {
   const age = priceAgeDays(competitor);
   if (age === null) return <span className="mt-0.5 block text-[10px] font-normal text-slate-400">확인 시점 미상</span>;
   const stale = age > STALE_PRICE_DAYS;
+  const change = lastPriceChange(competitor);
   return (
-    <span className={`mt-0.5 block text-[10px] font-normal ${stale ? "font-medium text-amber-700" : "text-slate-400"}`}>
-      {stale ? `가격 확인 ${age}일 지남 · 재확인 필요` : age === 0 ? "오늘 확인" : `${age}일 전 확인`}
-    </span>
+    <>
+      <span className={`mt-0.5 block text-[10px] font-normal ${stale ? "font-medium text-amber-700" : "text-slate-400"}`}>
+        {stale ? `가격 확인 ${age}일 지남 · 재확인 필요` : age === 0 ? "오늘 확인" : `${age}일 전 확인`}
+      </span>
+      {change && (
+        <span className={`block text-[10px] font-semibold ${change.diff > 0 ? "text-red-600" : "text-emerald-700"}`}>
+          {change.diff > 0 ? "▲" : "▼"} {Math.abs(Math.round(change.diff)).toLocaleString("ko-KR")} ({change.at.slice(5, 10).replace("-", "/")} {change.from.toLocaleString("ko-KR")}에서)
+        </span>
+      )}
+    </>
   );
 }
 

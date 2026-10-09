@@ -88,3 +88,16 @@ describe("경쟁 상품 다시 조회", () => {
     expect(r.missing).toEqual(["하나투어 다낭 3일"]);
   });
 });
+
+describe("경쟁 가격 변동 추적", () => {
+  it("다시 조회해서 가격이 바뀌면 이전 가격·확인 시각을 기록하고 마지막 변동을 알려 준다", async () => {
+    const { lastPriceChange } = await import("@/lib/competitors");
+    const r = refreshCompetitors([found({ price: 500000 })], [candidate({ pricePerPerson: 470000 })], "2026-10-09T00:00:00Z");
+    const c = r.competitors[0];
+    expect(c.priceHistory).toEqual([{ price: 500000, at: "2026-09-01T00:00:00Z" }]);
+    expect(lastPriceChange(c)).toEqual({ from: 500000, diff: -30000, at: "2026-09-01T00:00:00Z" });
+    // 같은 가격이면 기록하지 않는다
+    const same = refreshCompetitors([c], [candidate({ pricePerPerson: 470000 })], "2026-10-10T00:00:00Z").competitors[0];
+    expect(same.priceHistory).toHaveLength(1);
+  });
+});

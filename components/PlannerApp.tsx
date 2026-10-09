@@ -1,5 +1,6 @@
 "use client";
 
+import { Undo2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TripInputForm } from "@/components/form/TripInputForm";
@@ -61,10 +62,12 @@ import { buildUspRequest } from "@/lib/uspRequest";
 import { suggestPlanName, type PlanSnapshot, type ResultSnapshot } from "@/lib/workspace";
 import type { CourseFile } from "@/lib/courseFile";
 import { supplierQuotePatch } from "@/lib/supplierQuote";
-import { repairFlightTimes } from "@/lib/flightRepair";
+import { knownFlight, repairFlightTimes } from "@/lib/flightRepair";
 import { useCompetitorAutoFind } from "@/hooks/useCompetitorAutoFind";
 import { CompetitorItinerariesContext, useCompetitorItineraries } from "@/hooks/useCompetitorItineraries";
 import { useVerifyPipeline, VerifyPipelineContext } from "@/hooks/useVerifyPipeline";
+import { useUndoHistory } from "@/hooks/useUndoHistory";
+import { TaskTray } from "@/components/layout/TaskTray";
 import { CourseEngineContext, useCourseEngine } from "@/hooks/useCourseEngine";
 import { DayTimeCheckContext, useDayTimeCheck } from "@/hooks/useDayTimeCheck";
 import type { DayPlan, FlightOption, ItineraryItem, TourCandidate, TripInput } from "@/types";
@@ -78,6 +81,8 @@ export function PlannerApp() {
   // 타업체 일정·선택관광 가져오기 (상품 비교 보기와 한 번에 검증이 같이 쓴다)
   const competitorItineraries = useCompetitorItineraries(input, update);
   const itinerary = useItinerary();
+  // 일정을 통째로 바꾸는 작업의 되돌리기 기록 (화면 오른쪽 아래 "되돌리기"·Ctrl+Z)
+  const history = useUndoHistory(itinerary.days, itinerary.replaceDays);
   const usp = useUsp();
   const [tab, setTab] = useState<PlannerTab>("input");
   const [settingsFocus, setSettingsFocus] = useState<SettingsFocus | null>(null);
@@ -99,7 +104,7 @@ export function PlannerApp() {
   const session = useSession();
 
   const { days, pmChoice, meta } = itinerary;
-  const webChecks = useWebChecks({ input, days, meta, replaceDays: itinerary.replaceDays });
+  const webChecks = useWebChecks({ input, days, meta, replaceDays: history.labeled("입장료·체류시간 확인") });
   const isReady = itinerary.state.status === "success";
   // 화면 오류를 오류 기록(/api/errors)으로 보낸다
   useEffect(() => listenErrors(), []);
@@ -190,7 +195,7 @@ export function PlannerApp() {
 
     // 타업체 상품을 자동으로 찾아 비교한다 — 자동 견적이 돌면 그쪽에서 찾으므로 그때는 건너뛴다
     const autoQuoteRuns = !options.fromAutoBuild && (autoQuote.afterGenerate || !!result.supplierQuote);
-    if (!options.fromAutoBuild && !autoQuoteRuns) competitorFind.run(nextInput);
+    if (!options.fromAutoBuild && !autoQuoteRuns) competitorFind.run(nextInput, knownFlight(result.days, nextInput, result.meta));
 
     // 일정이 만들어지면 세일즈 포인트도 이어서 생성한다 (실패해도 일정/견적에는 영향 없음)
     const firstQuote = calculateQuote(nextInput, result.days, result.pmChoice);
@@ -232,7 +237,7 @@ export function PlannerApp() {
       ...withSource(input, "flight", "flight", [flight.airline, flight.flightNumber].filter(Boolean).join(" ")),
       ...(span ? { departureDate: span.departureDate, days: span.days, nights: span.nights, includesFlights: true } : {}),
     });
-    itinerary.replaceDays(applyFlightWithMeals(days, flight));
+    history.labeled("항공편 적용")(applyFlightWithMeals(days, flight));
   };
 
   // 견적에 넣은 원가를 여행지별로 기억해, 다음에 같은 여행지 견적을 만들 때 자동 견적이 불러온다
@@ -259,7 +264,7 @@ export function PlannerApp() {
     pmChoice,
     meta,
     quote,
-    replaceDays: itinerary.replaceDays,
+    replaceDays: history.labeled("예산 맞추기"),
     hotelChoices: autoBuild.hotelChoices,
     tours: autoBuild.tours,
     insertTour,
@@ -268,7 +273,7 @@ export function PlannerApp() {
   });
 
   // 하루 일정 시간 검증 (구역 단위 웹 확인) — 요약·추천과 일정 카드의 '시간 검증'에서 쓴다
-  const dayTimeCheck = useDayTimeCheck({ input, days, pmChoice, replaceDays: itinerary.replaceDays });
+  const dayTimeCheck = useDayTimeCheck({ input, days, pmChoice, replaceDays: history.labeled("일정 시간 검증") });
 
   // 코스 엔진 점검 — 점검 상자·일정 카드 점수 배지·요약·추천이 같이 쓴다. 자동 점검을 켜면 코스를 만든 뒤 긴 날 시간 검증 → 엔진 점검
   const courseEngine = useCourseEngine({
@@ -279,7 +284,7 @@ export function PlannerApp() {
     travelType: input.travelType,
     currency: input.currency,
     tripScope: input.tripScope,
-    replaceDays: itinerary.replaceDays,
+    replaceDays: history.labeled("코스 점검 적용"),
     beforeAuto: { run: dayTimeCheck.run, busy: dayTimeCheck.running !== null },
   });
 
@@ -326,9 +331,10 @@ export function PlannerApp() {
       engine={courseEngine}
       competitorFind={competitorFind}
       pipeline={verifyPipeline}
+      onConfirmCosts={(keys) => update({ costStatus: { ...input.costStatus, ...Object.fromEntries(keys.map((k) => [k, "confirmed" as const])) } })}
       onFixFlight={() => {
         const fixed = repairFlightTimes(days, input, meta);
-        if (fixed) itinerary.replaceDays(fixed);
+        if (fixed) history.labeled("항공 시각 맞추기")(fixed);
       }}
     />
   );
@@ -363,6 +369,32 @@ export function PlannerApp() {
   return (
     <>
     <PrintDocuments kind={printKind} data={docData} />
+    <div className="screen-only pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40 flex flex-col items-end gap-2 [&>*]:pointer-events-auto">
+    {history.last && (
+      <button
+        type="button"
+        onClick={history.undo}
+        title="Ctrl+Z로도 되돌릴 수 있습니다"
+        className="inline-flex max-w-[calc(100vw-2rem)] items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-md hover:bg-slate-50"
+      >
+        <Undo2 className="size-3.5" aria-hidden />
+        <span className="truncate">되돌리기 — {history.last}</span>
+        {history.count > 1 && <span className="font-normal text-slate-400">({history.count})</span>}
+      </button>
+    )}
+    <TaskTray
+      tasks={[
+        { key: "generate", label: "코스 만들기 / 업체 견적서 읽기", running: itinerary.state.status === "loading", typical: "30초~1분" },
+        { key: "autobuild", label: "자동 구성", running: autoBuild.running, typical: "1~2분" },
+        { key: "autoquote", label: "시세 조회 (자동 견적)", running: autoQuote.running, typical: "30초~1분" },
+        { key: "fees", label: "입장료·체류시간 웹 확인", running: webChecks.feeCheck.state.status === "loading", typical: "30초~1분" },
+        { key: "daytime", label: `일정 시간 검증${dayTimeCheck.running ? ` (DAY ${dayTimeCheck.running.join(", ")})` : ""}`, running: dayTimeCheck.running !== null, typical: "1분 안팎" },
+        { key: "engine", label: "코스 점검", running: courseEngine.running, typical: "하루 10~40초" },
+        { key: "competitors", label: "타업체 상품 찾기", running: competitorFind.running, typical: "30초~1분" },
+        { key: "itineraries", label: `타업체 일정 가져오기 (${competitorItineraries.pending}개 남음)`, running: competitorItineraries.running.length > 0, typical: "상품당 30초" },
+      ]}
+    />
+    </div>
     <div className="screen-only flex h-dvh flex-col">
       <Header
         actions={
@@ -445,7 +477,7 @@ export function PlannerApp() {
             researchInfo={itinerary.researchInfo}
             onSelectPm={itinerary.selectPmOption}
             onInputChange={update}
-            onReplaceDays={itinerary.replaceDays}
+            onReplaceDays={history.labeled("가격 낮추기")}
             onOpenSettings={openSettings}
             autoQuote={{ running: autoQuote.running, run: () => void autoQuote.run() }}
             budgetFit={budgetFit}

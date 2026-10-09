@@ -153,12 +153,17 @@ test("지그재그 동선: 떠났던 구역으로 되돌아오는 날을 알리�
   await expect(day1.getByRole("button", { name: /이 날 확인할 것 \d+개/ })).toContainText("지그재그 동선");
   await day1.getByRole("button", { name: /이 날 확인할 것/ }).click();
   await expect(day1.getByText(/지그재그 동선 — 타이파 → 역사지구로 되돌아옴/)).toBeVisible();
+  // 동선 그림: 지역 흐름에서 되돌아온 곳은 ↩
+  await day1.getByText("동선 그림").click();
+  await expect(day1.getByLabel("지역 흐름")).toContainText("↩");
   await day1.getByRole("button", { name: "구역 순서대로 묶기" }).click();
   await expect(day1.getByText(/지그재그 동선/)).toHaveCount(0);
   const names = await day1.locator("ol > li").allInnerTexts();
   expect(names.findIndex((n) => n.includes("세나도 광장"))).toBeLessThan(names.findIndex((n) => n.includes("타이파 빌리지")));
 
-  await page.locator("#course-engine").getByRole("button", { name: "되돌리기" }).click();
+  // 화면 오른쪽 아래 공통 되돌리기에도 쌓인다 (Ctrl+Z)
+  await expect(page.getByRole("button", { name: /되돌리기 — 코스 점검 적용/ })).toBeVisible();
+  await page.keyboard.press("Control+z");
   await expect(day1.getByText(/지그재그 동선 —/)).toBeVisible();
 });
 
@@ -242,4 +247,64 @@ test("운영 지시서: 가격 없이 시각표·차량 하차/픽업·식사 �
   // 가격(원화 금액)은 넣지 않는다
   await expect(doc).not.toContainText("₩");
   await expect(doc).not.toContainText("원가");
+});
+
+test("상품 소개서: 추천 이유·포함·하이라이트·고를 때 확인할 점 — 경쟁사 이름은 넣지 않는다", async ({ page }) => {
+  await mockAi(page);
+  await page.addInitScript(() => {
+    window.print = () => undefined;
+  });
+  await page.addInitScript((w) => {
+    if (sessionStorage.getItem("e2e-seeded")) return;
+    sessionStorage.setItem("e2e-seeded", "1");
+    localStorage.setItem(
+      "semitour-planner:input:v1",
+      JSON.stringify({
+        mode: "paste",
+        destination: "마카오",
+        days: 1,
+        nights: 0,
+        travelers: 4,
+        vehicleCostPerDay: 100000,
+        guideCostPerDay: 80000,
+        tipPerPerson: 20000,
+        competitors: [{ id: "c", name: "하나투어 마카오 1일", price: 9_900_000, includes: { guide: true, meals: true, admission: true, vehicle: true, hotel: false, flight: false }, shopping: "some", optionTour: "some", note: "" }],
+      }),
+    );
+    localStorage.setItem("semitour-planner:work:v1", JSON.stringify(w));
+  }, work);
+  await page.goto("/");
+  await page.getByRole("button", { name: "상품 소개서" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "인쇄 전 확인" });
+  if (await confirm.isVisible().catch(() => false)) {
+    await confirm.getByRole("checkbox").check();
+    await confirm.getByRole("button", { name: "인쇄" }).click();
+  }
+  const doc = page.locator(".print-root");
+  await expect(doc).toContainText("이 상품을 추천하는 이유");
+  await expect(doc).toContainText("가이드·기사 경비 포함 — 현지에서 따로 내지 않습니다");
+  await expect(doc).toContainText("대형 여행사의 같은 조건 상품보다 합리적인 가격");
+  await expect(doc).toContainText("여행 상품을 고를 때 확인하세요");
+  await expect(doc).not.toContainText("하나투어");
+});
+
+test("코스 엔진: 출발일이 없으면 휴무·마감으로 뺄 곳을 안내하지 않고 모든 장소를 그대로 둔다", async ({ page }) => {
+  await mockAi(page);
+  await page.route("**/api/engine/plan", async (r) => {
+    const body = r.request().postDataJSON() as { places: { id: string; name: string; stayMin: number }[] };
+    const res = planResponse(body.places, 80);
+    const dropped = [{ id: body.places[0].id, name: body.places[0].name, reason: "이 요일 휴무" }];
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify({ ...res, best: { ...res.best, dropped } }) });
+  });
+  await page.addInitScript((w) => {
+    if (sessionStorage.getItem("e2e-seeded")) return;
+    sessionStorage.setItem("e2e-seeded", "1");
+    localStorage.setItem("semitour-planner:input:v1", JSON.stringify({ mode: "paste", destination: "마카오", days: 1, nights: 0, travelers: 4 }));
+    localStorage.setItem("semitour-planner:work:v1", JSON.stringify(w));
+  }, work);
+  await page.goto("/");
+  const engine = page.locator("#course-engine");
+  await engine.getByRole("button", { name: "점검하기" }).click();
+  await expect(engine.getByText(/출발일이 없어 요일별 휴무를 확인하지 않았습니다/)).toBeVisible();
+  await expect(engine.getByRole("button", { name: /빼기 \(이 요일 휴무\)/ })).toHaveCount(0);
 });

@@ -108,7 +108,8 @@ export function CourseEnginePanel({ days, departureDate, onDepartureDate }: Prop
               !!engineFix && !!dayPlan && dayPlan.kind === "linear" && reorderByEngine(dayPlan.items, res.best.order).some((it, i) => it.id !== dayPlan.items[i]?.id);
             const reorderFix = changesOrder ? engineFix : undefined;
             const startFix = q.fixes.find((f) => f.type === "shiftStart");
-            const dropFixes = res.best.dropped;
+            // 뺄 곳 안내(휴무·마감 등)는 출발일을 알 때만 — 출발일이 없으면 요일을 몰라 판단하지 않고 모든 장소를 그대로 둔다
+            const dropFixes = departureDate ? res.best.dropped : [];
             // 그 요일 휴무인 곳은 순서를 바꿔도 못 가므로 100점 만들기에서 함께 뺄 수 있게
             const closed = dropFixes.filter((dp) => /휴무/.test(dp.reason));
             // 100점 만들기 — 고를 수 있는 고칠 것
@@ -221,6 +222,11 @@ export function CourseEnginePanel({ days, departureDate, onDepartureDate }: Prop
                     </button>
                   ))}
                 </div>
+                {!departureDate && res.best.dropped.length > 0 && (
+                  <p className="mt-2 text-pretty text-slate-500">
+                    출발일이 없어 요일별 휴무를 확인하지 않았습니다 — 모든 장소를 그대로 둡니다. 출발일을 넣으면 그날 휴무·마감인 곳을 빼자고 알려 드립니다.
+                  </p>
+                )}
                 <AlternativeList state={alts[dayNo]} currentScore={q.score} onApply={(alt: Alternative) => applyAlt(dayNo, alt)} />
               </div>
             );

@@ -14,6 +14,7 @@ import { DayIssues } from "./DayIssues";
 import { MealRoutePanel } from "./MealRoutePanel";
 import { PmOptionSwitch } from "./PmOptionSwitch";
 import { RouteCheckPanel } from "./RouteCheckPanel";
+import { RouteSketch } from "./RouteSketch";
 import { SessionBlock } from "./SessionBlock";
 import { TimelineItem, type ItemPatch } from "./TimelineItem";
 
@@ -248,6 +249,7 @@ export function DayCard({
               />
             )}
             <RouteCheckPanel items={plan.items} destination={destination} city={city} onApply={onReorderItems} />
+            <RouteSketch plan={plan} items={plan.items} />
             <ol>
               {plan.items.map((item, index) => (
                 <TimelineItem

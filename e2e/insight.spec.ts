@@ -83,11 +83,12 @@ test("상품 비교 보기: 경쟁 상품 일정을 가져와 날짜별 코스·
   await expect(dialog.getByText("날짜별 일정을 아직 가져오지 않았습니다 — 주요 방문지:").first()).toBeVisible();
   await dialog.getByRole("button", { name: "경쟁 상품 일정 가져오기 (2개)" }).click();
   await expect(dialog.getByRole("status")).toContainText("경쟁 상품 2개 중 2개의 날짜별 일정을 읽었습니다");
-  await expect(dialog.getByText("자유일정").first()).toBeVisible();
-  await expect(dialog.getByText("린응사").first()).toBeVisible();
+  const course = dialog.getByRole("region", { name: "날짜별 코스" });
+  await expect(course.getByText("자유일정").first()).toBeVisible();
+  await expect(course.getByText("린응사").first()).toBeVisible();
   await expect(dialog.getByRole("row", { name: /가이드 경비\(팁\)/ })).toContainText("1인 USD 30 현지 지불");
   await expect(dialog.getByRole("row", { name: /^선택관광/ })).toContainText("바나힐 야경 투어 · 1인 US$60");
-  await expect(dialog.getByText("우리가 나은 점").first()).toBeVisible();
+  await expect(dialog.getByRole("region", { name: "상품별 정리" }).getByText("우리가 나은 점").first()).toBeVisible();
   const [download] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "엑셀(CSV) 저장" }).click()]);
   expect(download.suggestedFilename()).toContain("상품비교");
 });

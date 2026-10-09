@@ -9,6 +9,7 @@ import { quotePriceFor } from "@/lib/supplierQuote";
 import { verifySupplierQuote } from "@/lib/supplierVerify";
 import { SupplierVerifyTable } from "./SupplierVerifyTable";
 import { SupplierRequestBox } from "./SupplierRequestBox";
+import { SupplierWeekdayTable } from "./DeparturePricesPanel";
 import type { CourseMeta, DayPlan, QuoteData, SupplierQuote, TripInput } from "@/types";
 
 interface Props {
@@ -196,7 +197,10 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
   return (
     <div className="space-y-3">
       {input.supplierQuote ? (
-        <QuoteSummary q={input.supplierQuote} input={input} money={money} />
+        <>
+          <QuoteSummary q={input.supplierQuote} input={input} money={money} />
+          <SupplierWeekdayTable input={input} days={days} pmChoice={pmChoice} />
+        </>
       ) : (
         <p className="text-pretty text-[11px] text-slate-500">
           입력 화면의 &lsquo;업체 코스·견적&rsquo;에 업체 견적서(코스·요금)를 붙여넣거나 파일로 올리면 요금·포함·불포함을 읽어 여기에 보여 줍니다.

@@ -43,6 +43,13 @@ export function candidateToCompetitor(candidate: CompetitorCandidate, foundAt: s
   };
 }
 
+/** 마지막 가격 변동 — 직전 가격과 차이 (+면 올랐음). 기록이 없으면 null */
+export function lastPriceChange(c: Competitor): { from: number; diff: number; at: string } | null {
+  const prev = c.priceHistory?.[c.priceHistory.length - 1];
+  if (!prev || prev.price === c.price) return null;
+  return { from: prev.price, diff: c.price - prev.price, at: prev.at };
+}
+
 /** 경쟁사 가격이 이 일수보다 오래됐으면 "오래된 가격"으로 경고한다 (여행 상품 가격은 시즌·요일에 따라 자주 바뀐다) */
 export const STALE_PRICE_DAYS = 14;
 
@@ -106,8 +113,12 @@ export function refreshCompetitors(existing: Competitor[], products: CompetitorC
     updated.push(c.name);
     const editedByHand = Boolean(c.priceCheckedAt && Date.parse(c.priceCheckedAt) > Date.parse(c.source.foundAt));
     const keepPrice = editedByHand || found.pricePerPerson <= 0;
+    // 가격이 바뀌면 이전 가격을 기록에 남긴다 (가격 변동 추적)
+    const changed = !keepPrice && found.pricePerPerson !== c.price && c.price > 0;
+    const history = changed ? [...(c.priceHistory ?? []), { price: c.price, at: c.source.foundAt }].slice(-10) : c.priceHistory;
     return {
       ...c,
+      ...(history ? { priceHistory: history } : {}),
       price: keepPrice ? c.price : found.pricePerPerson,
       places: found.places.length > 0 ? found.places : c.places,
       hotelGrade: found.hotelGrade || c.hotelGrade,

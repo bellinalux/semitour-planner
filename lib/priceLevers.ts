@@ -1,7 +1,8 @@
 import { calculateQuote } from "@/lib/cost";
-import type { PmChoice } from "@/lib/itinerary";
+import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { documentQuote } from "@/lib/pricing";
 import { HOTEL_DOWN_RATE, supplierCuts, type SupplierCut } from "@/lib/supplierCheck";
+import { gradeMid, gradeRange, gradeText } from "@/lib/itemTypes";
 import { buildTourCompare } from "@/lib/tourCompare";
 import type { CourseMeta, DayPlan, HotelGrade, QuoteData, TripInput } from "@/types";
 
@@ -143,6 +144,87 @@ function cutLevers(input: TripInput, days: DayPlan[], pmChoice: PmChoice, meta: 
   });
 }
 
+const MAIN_MEAL = (i: DayPlan["items"][number]) => i.type === "meal" && i.payment !== "local" && i.mealCost > 0 && !/카페|간식|디저트|에그타르트|coffee|cafe/i.test(i.name);
+const isSight = (i: DayPlan["items"][number]) => !["meal", "transfer", "hotel", "flight", "free_time"].includes(i.type ?? "sightseeing");
+
+/**
+ * 경쟁 상품 구성에 맞추기 — 그 상품보다 자유일이 적으면 관광이 가장 적은 중간 날을 자유일로, 포함 식사가 많으면 비싼 식사부터 자유식으로.
+ * 우리 원가 견적은 바로 적용, 업체 공급가 견적은 업체가 그만큼(차량·가이드 1일·입장료·식대) 빼 준다고 보고 계산하는 시뮬레이션.
+ */
+function matchLevers(input: TripInput, days: DayPlan[], pmChoice: PmChoice): LeverDef[] {
+  const supplier = input.pricingMode === "supplier";
+  const n = Math.max(1, input.travelers);
+  const ourFree = days.filter((d) => {
+    const its = dayItems(d, pmChoice);
+    return its.some((i) => i.type === "free_time") && its.every((i) => !isSight(i) && i.type !== "meal");
+  }).length;
+  const ourMeals = days.flatMap((d) => dayItems(d, pmChoice)).filter(MAIN_MEAL);
+  const out: LeverDef[] = [];
+  for (const c of input.competitors) {
+    const it = c.itinerary;
+    if (!it?.found || it.days.some((d) => d.otherRegion)) continue;
+    const theirFree = it.days.filter((d) => d.free).length;
+    const addFree = Math.max(0, theirFree - ourFree);
+    const cutMeals = it.mealCount > 0 ? Math.max(0, ourMeals.length - it.mealCount) : 0;
+    if (addFree === 0 && cutMeals === 0) continue;
+    // 자유일로 바꿀 날: 첫날·마지막 날을 빼고, 관광이 가장 적은 날부터
+    const middle = days.slice(1, -1).filter((d) => d.kind === "linear" && dayItems(d, pmChoice).some(isSight));
+    const freeDays = [...middle].sort((a, b) => dayItems(a, pmChoice).filter(isSight).length - dayItems(b, pmChoice).filter(isSight).length).slice(0, addFree);
+    const freeIds = new Set(freeDays.map((d) => d.day));
+    // 자유식으로 바꿀 식사: 자유일로 바꾼 날 식사는 이미 빠지므로 빼고, 비싼 것부터
+    const mealIds = new Set(
+      ourMeals
+        .filter((m) => !freeDays.some((d) => d.items.some((i) => i.id === m.id)))
+        .sort((a, b) => b.mealCost - a.mealCost)
+        .slice(0, Math.max(0, cutMeals - freeDays.reduce((s, d) => s + d.items.filter(MAIN_MEAL).length, 0)))
+        .map((m) => m.id),
+    );
+    const groundPerPerson = (input.vehicleCostPerDay + input.guideCostPerDay) / n;
+    const dayCost = (d: DayPlan) => dayItems(d, pmChoice).reduce((s, i) => s + (i.payment === "local" ? 0 : i.entryFee + i.mealCost), 0);
+    const supplierSaving =
+      freeDays.reduce((s, d) => s + groundPerPerson + dayCost(d), 0) + ourMeals.filter((m) => mealIds.has(m.id)).reduce((s, m) => s + m.mealCost, 0);
+    const parts = [addFree > 0 ? `자유일 +${addFree}일 (DAY ${freeDays.map((d) => d.day).join(", ")})` : "", mealIds.size + freeDays.reduce((s, d) => s + d.items.filter(MAIN_MEAL).length, 0) > 0 ? `포함 식사 −${cutMeals}회` : ""].filter(Boolean);
+    out.push({
+      id: `match-${c.id}`,
+      label: `${c.name.slice(0, 24)} 구성에 맞추기 (${parts.join(" · ")})`,
+      detail: `그 상품: 자유일 ${theirFree}일 · 포함 식사 ${it.mealCount || "?"}회 / 우리: 자유일 ${ourFree}일 · 포함 식사 ${ourMeals.length}회 — 노쇼핑·노옵션 같은 우리 강점은 그대로`,
+      guide: "경쟁 상품처럼 자유일·식사를 줄이면 가격은 내려가지만 '포함이 많은 상품'이라는 차별점이 약해짐 — 판매 전략과 맞는지 판단",
+      mode: supplier ? "info" : "apply",
+      lose: [
+        ...(freeDays.length > 0 ? [`DAY ${freeDays.map((d) => d.day).join(", ")} 관광 ${freeDays.reduce((s, d) => s + dayItems(d, pmChoice).filter(isSight).length, 0)}곳이 빠지고 자유일정`] : []),
+        ...(mealIds.size > 0 ? [`식사 ${mealIds.size}회가 자유식(고객 부담)`] : []),
+      ],
+      transform: supplier
+        ? (s) => ({ ...s, input: { ...s.input, supplierPricePerPerson: Math.max(0, s.input.supplierPricePerPerson - supplierSaving) } })
+        : (s) => ({
+            ...s,
+            days: s.days.map((d) =>
+              freeIds.has(d.day)
+                ? {
+                    ...d,
+                    items: [
+                      {
+                        id: `free-${d.day}`,
+                        type: "free_time" as const,
+                        name: "자유 일정 (가이드/차량 미포함)",
+                        description: "경쟁 상품 구성에 맞춰 자유일로 바꿈",
+                        stayMinutes: 480,
+                        travelMinutesToNext: 0,
+                        entryFee: 0,
+                        mealCost: 0,
+                        isEstimated: false,
+                        admission: "none" as const,
+                      },
+                    ],
+                  }
+                : { ...d, items: d.items.map((i) => (mealIds.has(i.id) ? { ...i, payment: "local" as const, name: i.name.includes("자유식") ? i.name : `${i.name} (자유식)` } : i)) },
+            ),
+          }),
+    });
+  }
+  return out;
+}
+
 /** 모든 방법(계산 전) — 방법마다 입력·일정을 어떻게 바꾸는지 */
 function leverDefs(input: TripInput, days: DayPlan[], pmChoice: PmChoice, meta: CourseMeta | null): LeverDef[] {
   const supplier = input.pricingMode === "supplier";
@@ -186,6 +268,9 @@ function leverDefs(input: TripInput, days: DayPlan[], pmChoice: PmChoice, meta: 
         transform: (s) => ({ ...s, input: { ...s.input, supplierPricePerPerson: Math.round(cheapest.pricePerPerson) } }),
       });
   }
+
+  // 경쟁 상품 따라 하기 — 일정을 가져온 경쟁 상품의 구성(자유일·포함 식사·호텔 등급)에 맞추면 우리 가격은?
+  defs.push(...matchLevers(input, days, pmChoice));
 
   // 가이드·기사 팁을 현지 지불로 (표시 가격만 내려가고 고객 총비용은 같다)
   if (input.tipPerPerson > 0)
@@ -254,4 +339,92 @@ export function combinedLevers(input: TripInput, days: DayPlan[], pmChoice: PmCh
   const compare = buildTourCompare(input, days, pmChoice, quote, meta);
   const rivals = (compare?.columns ?? []).filter((c) => !c.isOurs && c.extraRegions.length === 0 && c.price !== null).map((c) => c.price!);
   return { ...state, price, rank: price === null ? null : rankOf(price, rivals) };
+}
+
+export interface WeekdayPriceRow {
+  label: string;
+  nights: number;
+  supplierPrice: number;
+  salePrice: number | null;
+  marginRate: number | null;
+  /** 이 요일의 가까운 출발일 (출발일이 있으면 그 날부터, 없으면 오늘부터) YYYY-MM-DD */
+  nextDates: string[];
+  isCurrent: boolean;
+}
+
+/**
+ * 출발일(요일)별 판매가 — 업체 요일별 공급가로 판매가·수익률을 계산하고, 그 요일의 가까운 출발일을 함께 보여 준다.
+ * 박수가 지금 일정과 같은 줄만 (박수 구분이 없으면 모두).
+ */
+export function weekdayPriceRows(input: TripInput, days: DayPlan[], pmChoice: PmChoice, today = new Date()): WeekdayPriceRow[] {
+  const q = input.supplierQuote;
+  const rows = (q?.datePrices ?? []).filter((d) => d.nights === 0 || d.nights === input.nights);
+  if (input.pricingMode !== "supplier" || rows.length < 2) return [];
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(input.departureDate) ? new Date(`${input.departureDate}T00:00:00Z`) : new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return rows.map((r) => {
+    const supplierPrice = Math.round(r.pricePerPerson);
+    const next: string[] = [];
+    for (let k = 0; k < 28 && next.length < 3; k += 1) {
+      const d = new Date(from.getTime() + k * 86_400_000);
+      if (r.weekdays.length === 0 || r.weekdays.includes(d.getUTCDay())) next.push(iso(d));
+    }
+    const qt = calculateQuote({ ...input, supplierPricePerPerson: supplierPrice }, days, pmChoice);
+    const sale = salePrice({ ...input, supplierPricePerPerson: supplierPrice }, days, pmChoice);
+    return {
+      label: r.label,
+      nights: r.nights,
+      supplierPrice,
+      salePrice: sale,
+      marginRate: qt.ok ? documentQuote(qt, input).scenario.actualMarginRate : null,
+      nextDates: next,
+      isCurrent: q?.picked?.label?.includes(r.label) ?? false,
+    };
+  });
+}
+
+export interface GradeOption {
+  grade: HotelGrade;
+  label: string;
+  salePrice: number | null;
+  marginRate: number | null;
+  rankAfter: number | null;
+  /** 1실 1박 숙박 요금 추정 */
+  ratePerNight: number;
+  isCurrent: boolean;
+}
+
+/**
+ * 등급별 여러 안 (A/B/C안) — 지금 숙박 요금을 기준으로 등급마다 1실 1박 요금을 추정해(한 등급 약 30%) 판매가·수익률·경쟁 순위를 한 번에.
+ * 업체 공급가 견적은 숙박 차이만큼 공급가가 바뀐다고 본다. 숙박이 없거나(랜드·BnB) 숙박 요금을 모르면 빈 목록.
+ */
+export function gradeOptions(input: TripInput, days: DayPlan[], pmChoice: PmChoice, quote: QuoteData, meta: CourseMeta | null): GradeOption[] {
+  const cur = gradeRange(input.hotelGrade);
+  if (input.packageType === "land" || input.lodgingType !== "hotel" || !cur || input.lodgingRatePerNight <= 0 || input.nights <= 0) return [];
+  const curMid = gradeMid(cur);
+  const guests = Math.max(1, Math.round(input.guestsPerUnit));
+  const compare = buildTourCompare(input, days, pmChoice, quote, meta);
+  const rivals = (compare?.columns ?? []).filter((c) => !c.isOurs && c.extraRegions.length === 0 && c.price !== null).map((c) => c.price!);
+  const grades: HotelGrade[] = ["3", "3-4", "4", "4-5", "5"];
+  return grades.map((g) => {
+    const mid = gradeMid(gradeRange(g)!);
+    const factor = Math.pow(1 - HOTEL_DOWN_RATE, curMid - mid);
+    const rate = Math.round(input.lodgingRatePerNight * factor);
+    const scale = (v: number) => Math.round(v * factor);
+    const next: TripInput =
+      input.pricingMode === "supplier"
+        ? { ...input, hotelGrade: g, supplierPricePerPerson: Math.max(0, Math.round(input.supplierPricePerPerson + ((rate - input.lodgingRatePerNight) * input.nights) / guests)) }
+        : { ...input, hotelGrade: g, lodgingRatePerNight: rate, lodgingCityRates: Object.fromEntries(Object.entries(input.lodgingCityRates).map(([k, v]) => [k, scale(v)])) };
+    const qt = calculateQuote(next, days, pmChoice);
+    const price = salePrice(next, days, pmChoice);
+    return {
+      grade: g,
+      label: gradeText(g),
+      salePrice: price,
+      marginRate: qt.ok ? documentQuote(qt, next).scenario.actualMarginRate : null,
+      rankAfter: price === null ? null : rankOf(price, rivals),
+      ratePerNight: rate,
+      isCurrent: g === input.hotelGrade,
+    };
+  });
 }

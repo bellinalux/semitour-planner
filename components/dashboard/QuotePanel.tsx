@@ -1,5 +1,5 @@
 import { AlertTriangle, Calculator } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChoiceGroup } from "@/components/ui/ChoiceGroup";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -20,6 +20,7 @@ import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PackageType, QuoteR
 import { ChannelTable } from "./quote/ChannelTable";
 import { CompetitorTable } from "./quote/CompetitorTable";
 import { PriceLeversPanel } from "./quote/PriceLeversPanel";
+import { priceAgeDays, STALE_PRICE_DAYS } from "@/lib/competitors";
 import { ProductCompareDialog } from "./quote/ProductCompareDialog";
 import { TourCompareTable } from "./quote/TourCompareTable";
 import { SupplierCheckPanel } from "./quote/SupplierCheckPanel";
@@ -120,6 +121,16 @@ function useQuoteView(): [QuoteView, (v: QuoteView) => void] {
 function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote, budgetFit, onReplaceDays }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
   const [view, setView] = useQuoteView();
   const competitorRefresh = useCompetitorRefresh(input, onInputChange);
+  // 경쟁 가격 변동 추적: 검색으로 넣은 경쟁 상품 가격이 오래됐으면(14일 넘음) 견적을 열 때 한 번 다시 조회한다
+  const staleChecked = useRef(false);
+  useEffect(() => {
+    if (staleChecked.current) return;
+    staleChecked.current = true;
+    const stale = input.competitors.some((c) => c.source && (priceAgeDays(c) ?? 0) > STALE_PRICE_DAYS);
+    if (stale) competitorRefresh.run();
+    // 처음 한 번만
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
 
   const policy = ourPolicy(days, pmChoice, input, meta);
@@ -333,7 +344,7 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
 
           <section>
             <SubHeading>출발일별 권장가</SubHeading>
-            <DeparturePricesPanel quote={quote} input={input} />
+            <DeparturePricesPanel quote={quote} input={input} days={days} pmChoice={pmChoice} />
           </section>
 
         </>

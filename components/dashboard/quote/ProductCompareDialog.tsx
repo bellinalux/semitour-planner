@@ -155,7 +155,50 @@ export function ProductCompareDialog({ input, days, pmChoice, quote, meta, onInp
               </p>
             )}
 
-            <section aria-label="금액·조건">
+            {/* 휴대폰: 넓은 표 대신 상품별 카드 */}
+            <section aria-label="상품별 카드" className="space-y-2 md:hidden">
+              {cmp.products.map((p) => (
+                <div key={p.id} className={`rounded-lg border p-2.5 ${p.isOurs ? "border-indigo-300 bg-indigo-50/40" : "border-slate-200"}`}>
+                  <p className="font-semibold text-slate-900">{p.name}</p>
+                  <dl className="mt-1 grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-0.5 tabular-nums">
+                    {rows.map((r) => (
+                      <div key={r.label} className="contents">
+                        <dt className="text-slate-500">{r.label}</dt>
+                        <dd className="min-w-0 text-slate-800">{r.cell(p)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {p.days ? (
+                    <ul className="mt-1.5 space-y-1">
+                      {p.days.map((d) => (
+                        <li key={d.day}>
+                          <b className="text-slate-700">DAY {d.day}</b>
+                          {d.free && <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-600">자유일정</span>}
+                          {d.otherRegion && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] text-amber-800">{d.otherRegion}</span>}
+                          <div className="mt-0.5">
+                            <Chips product={p} places={d.places} />
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    p.places.length > 0 && (
+                      <div className="mt-1.5">
+                        <Chips product={p} places={p.places} />
+                      </div>
+                    )
+                  )}
+                  {!p.isOurs && (
+                    <p className="mt-1.5 text-pretty">
+                      <span className="text-emerald-800">우리가 나은 점: {p.ourBetter.join(", ") || "—"}</span>
+                      <span className="block text-amber-800">그 상품이 나은 점: {p.theirBetter.join(", ") || "—"}</span>
+                    </p>
+                  )}
+                </div>
+              ))}
+            </section>
+
+            <section aria-label="금액·조건" className="hidden md:block">
               <h3 className="mb-1.5 text-xs font-semibold text-slate-800">① 금액·조건</h3>
               <div className="overflow-x-auto rounded-lg border border-slate-200">
                 <table className="w-full min-w-[640px]">
@@ -194,7 +237,7 @@ export function ProductCompareDialog({ input, days, pmChoice, quote, meta, onInp
               </div>
             </section>
 
-            <section aria-label="날짜별 코스">
+            <section aria-label="날짜별 코스" className="hidden md:block">
               <h3 className="mb-1.5 text-xs font-semibold text-slate-800">② 날짜별 코스</h3>
               <p className="mb-1.5 flex flex-wrap gap-2 text-[10.5px] text-slate-500">
                 <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-indigo-800 ring-1 ring-indigo-200">같은 곳</span>
@@ -258,7 +301,7 @@ export function ProductCompareDialog({ input, days, pmChoice, quote, meta, onInp
               </div>
             </section>
 
-            <section aria-label="상품별 정리">
+            <section aria-label="상품별 정리" className="hidden md:block">
               <h3 className="mb-1.5 text-xs font-semibold text-slate-800">③ 상품별 정리</h3>
               <div className="grid gap-2 md:grid-cols-2">
                 {cmp.products

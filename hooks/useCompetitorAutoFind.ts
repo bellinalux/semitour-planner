@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { findCompetitorProducts, flightPriceForCompare } from "@/lib/competitorSearch";
-import type { TripInput } from "@/types";
+import type { FlightOption, TripInput } from "@/types";
 
 export interface CompetitorAutoFindView {
   running: boolean;
   message: string | null;
   /** 경쟁 상품을 찾아 비어 있는 경쟁사 목록에 넣는다 (이미 있으면 그대로) */
-  run: (input: TripInput) => void;
+  run: (input: TripInput, flight?: FlightOption | null) => void;
 }
 
 /**
@@ -19,7 +19,7 @@ export function useCompetitorAutoFind(update: (patch: Partial<TripInput>) => voi
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const run = (input: TripInput) => {
+  const run = (input: TripInput, flightOption: FlightOption | null = null) => {
     if (running || !input.destination.trim() || input.competitors.length > 0) return;
     setRunning(true);
     setMessage(null);
@@ -30,7 +30,7 @@ export function useCompetitorAutoFind(update: (patch: Partial<TripInput>) => voi
           return;
         }
         // 경쟁 상품이 항공 포함이면 항공료 시세를 찾아 같은 조건(항공 뺀 가격)으로 견준다
-        const flight = await flightPriceForCompare(input, found);
+        const flight = await flightPriceForCompare(input, found, flightOption);
         update({
           competitors: found,
           ...(flight ? { flightPricePerPerson: flight, costStatus: { ...input.costStatus, flight: "estimated" as const } } : {}),
