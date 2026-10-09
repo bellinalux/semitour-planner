@@ -246,6 +246,7 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
             competitorP25={tiers.stats?.p25 ?? null}
             competitorCount={tiers.stats?.count ?? 0}
             onInputChange={onInputChange}
+            market={autoQuote}
           />
         </section>
       )}

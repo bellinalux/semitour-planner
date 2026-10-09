@@ -6,6 +6,8 @@ import { currencySymbol, formatMoney } from "@/lib/currency";
 import type { PmChoice } from "@/lib/itinerary";
 import { supplierAfterCuts, supplierCuts, supplierTarget } from "@/lib/supplierCheck";
 import { quotePriceFor } from "@/lib/supplierQuote";
+import { verifySupplierQuote } from "@/lib/supplierVerify";
+import { SupplierVerifyTable } from "./SupplierVerifyTable";
 import type { CourseMeta, DayPlan, QuoteData, SupplierQuote, TripInput } from "@/types";
 
 interface Props {
@@ -18,6 +20,8 @@ interface Props {
   competitorP25: number | null;
   competitorCount: number;
   onInputChange: (patch: Partial<TripInput>) => void;
+  /** 우리 시세 조회 (자동 견적) */
+  market: { run: () => void; running: boolean };
 }
 
 const ROOM_LABELS: Record<SupplierQuote["roomBasis"], string> = { twin: "2인 1실", single: "1인 1실", triple: "3인 1실", unknown: "객실 기준 안 적힘" };
@@ -103,7 +107,8 @@ function QuoteSummary({ q, input, money }: { q: SupplierQuote; input: TripInput;
 }
 
 /** 업체 견적 검증 — 목표 판매가에서 업체 공급가 상한을 거꾸로 계산하고, 넘으면 업체에 빼 달라고 할 일정을 고른다 */
-export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competitorP25, competitorCount, onInputChange }: Props) {
+export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competitorP25, competitorCount, onInputChange, market }: Props) {
+  const verify = verifySupplierQuote(input, days, pmChoice, quote);
   const money = (v: number) => formatMoney(Math.round(v), input.currency);
   const symbol = currencySymbol(input.currency);
   const target = supplierTarget(input, quote, competitorP25);
@@ -150,6 +155,11 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
           onChange={(supplierTargetPrice) => onInputChange({ supplierTargetPrice })}
         />
       </div>
+
+      <section aria-label="견적 검증표" className="space-y-1">
+        <p className="text-[11px] font-semibold text-slate-700">견적 검증표 — 우리 시세와 비교 (업체 마진 30%까지는 적정으로 봅니다)</p>
+        <SupplierVerifyTable verify={verify} currency={input.currency} market={market} />
+      </section>
 
       {target ? (
         <>
