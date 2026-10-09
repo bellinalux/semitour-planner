@@ -10,6 +10,7 @@ import type { DayPlan, CurrencyCode, ItineraryItem, OptionSuggestion, PmFreeOpti
 import { continuousDriving } from "@/lib/driverHours";
 import { offRouteMeals } from "@/lib/routeOrder";
 import { DayFillPanel } from "./DayFillPanel";
+import { DayIssues } from "./DayIssues";
 import { MealRoutePanel } from "./MealRoutePanel";
 import { PmOptionSwitch } from "./PmOptionSwitch";
 import { RouteCheckPanel } from "./RouteCheckPanel";
@@ -102,6 +103,17 @@ export function DayCard({
   const gap = calcDayGap(plan, pmChoiceForDay, isLastDay);
   const dayEnd = calcDayEnd(plan, pmChoiceForDay);
 
+  // 이 날 확인할 것 — 한 줄로 접어 두고 펼치면 설명과 고치기 버튼
+  const drives = continuousDriving(plan, pmChoiceForDay);
+  const offMeals = offRouteMeals(plan, pmChoiceForDay);
+  const issueLabels = [
+    ...(load.level === "overloaded" ? ["일정 과부하"] : load.level === "tight" ? ["일정 빠듯"] : []),
+    ...(engine?.zigzags[plan.day] ? ["지그재그 동선"] : []),
+    ...(drives.length > 0 ? ["기사 연속 운전"] : []),
+    ...(offMeals.length > 0 ? ["동선 밖 식당"] : []),
+    ...(dayEnd?.isLate ? [`늦은 종료 ${dayEnd.endTime}`] : []),
+  ];
+
   return (
     <article id={`day-${plan.day}`} className="scroll-mt-3 rounded-lg border border-slate-200">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-100 bg-slate-50/70 px-4 py-3">
@@ -172,6 +184,7 @@ export function DayCard({
           </button>
         )}
       </header>
+      <DayIssues labels={issueLabels}>
       {load.level !== "ok" && (
         <p className={`flex items-start gap-1.5 border-b border-slate-100 px-4 py-2 text-[11px] leading-4 ${load.level === "overloaded" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-800"}`}>
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -200,7 +213,7 @@ export function DayCard({
           )}
         </p>
       )}
-      {continuousDriving(plan, pmChoiceForDay).map((w) => (
+      {drives.map((w) => (
         <p key={`${w.from}-${w.to}`} className="flex items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
           <span className="text-pretty">
@@ -208,7 +221,7 @@ export function DayCard({
           </span>
         </p>
       ))}
-      {offRouteMeals(plan, pmChoiceForDay).map((m) => (
+      {offMeals.map((m) => (
         <MealRoutePanel key={m.mealId} meal={m} destination={destination} travelers={travelers} tripScope={tripScope} currency={currency} onReplace={onChangeItem} />
       ))}
       {dayEnd?.isLate && (
@@ -217,6 +230,7 @@ export function DayCard({
           이 날짜는 {dayEnd.endTime}에 끝나 표준 종료 시각({STANDARD_DAY_END})을 넘깁니다. 근교투어·야간투어처럼 늦게 복귀하는 일정이 아니라면 코스를 조정하세요.
         </p>
       )}
+      </DayIssues>
 
       <div className="space-y-5 p-4">
         {plan.kind === "linear" ? (

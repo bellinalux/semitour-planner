@@ -16,6 +16,8 @@ export interface DayTimeCheckView {
   error: string | null;
   canUndo: boolean;
   run: (dayNos: number[]) => void;
+  /** run과 같지만 끝날 때까지 기다릴 수 있다 (한 번에 검증에서 다음 단계로 넘어갈 때) */
+  runAsync: (dayNos: number[]) => Promise<void>;
   undo: () => void;
 }
 
@@ -88,7 +90,7 @@ export function useDayTimeCheck({
     setMessage("시간 검증 전으로 되돌렸습니다.");
   };
 
-  return { running, message, error, canUndo: snapshot !== null, run: (dayNos) => void run(dayNos), undo };
+  return { running, message, error, canUndo: snapshot !== null, run: (dayNos) => void run(dayNos), runAsync: run, undo };
 }
 
 /** 일정 카드에서 "시간 검증" 버튼을 쓰도록 나눠 준다 (여러 단계 아래 컴포넌트까지 props로 넘기지 않으려고) */

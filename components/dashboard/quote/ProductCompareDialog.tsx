@@ -1,8 +1,8 @@
 "use client";
 
 import { Columns3, Download, ExternalLink, Loader2, X } from "lucide-react";
-import { useRef } from "react";
-import { useCompetitorItineraries } from "@/hooks/useCompetitorItineraries";
+import { useContext, useRef } from "react";
+import { CompetitorItinerariesContext, useCompetitorItineraries } from "@/hooks/useCompetitorItineraries";
 import { formatMoney } from "@/lib/currency";
 import type { PmChoice } from "@/lib/itinerary";
 import { buildProductCompare, productCompareCsv, type CompareProduct, type PlaceMark } from "@/lib/productCompare";
@@ -42,7 +42,10 @@ function Chips({ product, places }: { product: CompareProduct; places: { name: s
  */
 export function ProductCompareDialog({ input, days, pmChoice, quote, meta, onInputChange }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const itineraries = useCompetitorItineraries(input, onInputChange);
+  // 앱 전체에서 쓰는 진행 상태가 있으면 그것을(한 번에 검증과 같이), 없으면 이 창의 것
+  const shared = useContext(CompetitorItinerariesContext);
+  const local = useCompetitorItineraries(input, onInputChange);
+  const itineraries = shared ?? local;
   const cmp = buildProductCompare(input, days, pmChoice, quote, meta);
   if (!cmp) return null;
   const money = (v: number | null) => (v === null ? "모름" : formatMoney(Math.round(v), input.currency));
@@ -127,7 +130,7 @@ export function ProductCompareDialog({ input, days, pmChoice, quote, meta, onInp
             {itineraries.pending > 0 && (
               <button
                 type="button"
-                onClick={itineraries.run}
+                onClick={() => void itineraries.run()}
                 disabled={itineraries.running.length > 0}
                 className="inline-flex items-center gap-1.5 rounded-md border border-indigo-300 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-800 hover:bg-indigo-100 disabled:opacity-60"
               >

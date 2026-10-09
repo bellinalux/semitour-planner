@@ -149,6 +149,9 @@ test("지그재그 동선: 떠났던 구역으로 되돌아오는 날을 알리�
   await page.goto("/");
 
   const day1 = page.locator("#day-1");
+  // 확인할 것은 한 줄로 접혀 있다 — 이름이 보이고, 펼치면 설명과 고치기 버튼
+  await expect(day1.getByRole("button", { name: /이 날 확인할 것 \d+개/ })).toContainText("지그재그 동선");
+  await day1.getByRole("button", { name: /이 날 확인할 것/ }).click();
   await expect(day1.getByText(/지그재그 동선 — 타이파 → 역사지구로 되돌아옴/)).toBeVisible();
   await day1.getByRole("button", { name: "구역 순서대로 묶기" }).click();
   await expect(day1.getByText(/지그재그 동선/)).toHaveCount(0);
@@ -156,7 +159,7 @@ test("지그재그 동선: 떠났던 구역으로 되돌아오는 날을 알리�
   expect(names.findIndex((n) => n.includes("세나도 광장"))).toBeLessThan(names.findIndex((n) => n.includes("타이파 빌리지")));
 
   await page.locator("#course-engine").getByRole("button", { name: "되돌리기" }).click();
-  await expect(day1.getByText(/지그재그 동선/)).toBeVisible();
+  await expect(day1.getByText(/지그재그 동선 —/)).toBeVisible();
 });
 
 test("동선상 식당: 다른 지역 식당에 갔다가 되돌아오면 알리고, 그 지역 식당으로 바꾼다", async ({ page }) => {
@@ -188,6 +191,7 @@ test("동선상 식당: 다른 지역 식당에 갔다가 되돌아오면 알리
   await page.goto("/");
 
   const day1 = page.locator("#day-1");
+  await day1.getByRole("button", { name: /이 날 확인할 것/ }).click();
   await expect(day1.getByText(/점심 식사 \(딤섬\)이\(가\) 코타이에 있어/)).toBeVisible();
   await day1.getByRole("button", { name: "콜로안 식당 찾기" }).click();
   await day1.getByRole("button", { name: "이 식당으로 바꾸기" }).click();

@@ -199,6 +199,11 @@ test("업체 코스표: 출발 요일별 요금을 골라 넣고, 금액 있는 
   await expect(check.getByText(/3박 목, 금 출발 요금을 넣었습니다/)).toBeVisible();
   await expect(check.getByText(/선택 옵션에 등록했습니다/)).toBeVisible();
 
+  // 견적서를 읽으면 한 번에 검증이 차례로 돈다 (시세 → 시간 검증 → 코스 점검 → 타업체 찾기 → 타업체 일정)
+  const pipeline = page.getByRole("region", { name: "한 번에 검증" });
+  await expect(pipeline.getByText("한 번에 검증 완료")).toBeVisible({ timeout: 60_000 });
+  await expect(pipeline.getByText("타업체 일정·선택관광 가져오기")).toBeVisible();
+
   // 시세 조회 버튼을 누르지 않아도 견적서 호텔 이름으로 숙박 시세를 찾는다
   await expect(check.getByText("후보 호텔 1박 시세 (2인 1실, 웹 공개 요금)")).toBeVisible({ timeout: 30_000 });
   await expect(check.getByText(/견적서 호텔 2곳의 웹 공개 요금 평균/)).toBeVisible({ timeout: 30_000 });

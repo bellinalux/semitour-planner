@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { createContext, useEffect, useRef, useState } from "react";
 import { fetchCompetitorItinerary } from "@/lib/competitorSearch";
 import type { TripInput } from "@/types";
 
@@ -10,8 +10,8 @@ export interface CompetitorItinerariesView {
   message: string | null;
   /** 일정을 아직 안 읽은 경쟁 상품 수 */
   pending: number;
-  /** 일정을 아직 안 읽은 경쟁 상품의 날짜별 일정을 판매 페이지에서 읽는다 (두 개씩 동시에) */
-  run: () => void;
+  /** 일정을 아직 안 읽은 경쟁 상품의 날짜별 일정을 판매 페이지에서 읽는다 (두 개씩 동시에). 끝나면 읽은 수 */
+  run: () => Promise<number>;
 }
 
 /** 경쟁 상품 일정 가져오기 — 상품 비교 보기에서 날짜별 코스를 견주려고 판매 페이지의 일정표를 읽어 경쟁 상품에 붙인다 */
@@ -24,10 +24,10 @@ export function useCompetitorItineraries(input: TripInput, update: (patch: Parti
   }, [input]);
   const pending = input.competitors.filter((c) => !c.itinerary).length;
 
-  const run = () => {
-    if (running.length > 0) return;
+  const run = async (): Promise<number> => {
+    if (running.length > 0) return 0;
     const targets = latest.current.competitors.filter((c) => !c.itinerary);
-    if (targets.length === 0) return;
+    if (targets.length === 0) return 0;
     setMessage(null);
     let found = 0;
     let failed = 0;
@@ -50,12 +50,15 @@ export function useCompetitorItineraries(input: TripInput, update: (patch: Parti
         }
       }
     };
-    void Promise.all([worker(), worker()]).then(() =>
-      setMessage(
-        `경쟁 상품 ${targets.length}개 중 ${found}개의 날짜별 일정을 읽었습니다${targets.length - found - failed > 0 ? ` (${targets.length - found - failed}개는 판매 페이지에서 일정표를 찾지 못해 주요 방문지로 비교)` : ""}${failed > 0 ? ` · ${failed}개는 오류` : ""}.`,
-      ),
+    await Promise.all([worker(), worker()]);
+    setMessage(
+      `경쟁 상품 ${targets.length}개 중 ${found}개의 날짜별 일정을 읽었습니다${targets.length - found - failed > 0 ? ` (${targets.length - found - failed}개는 판매 페이지에서 일정표를 찾지 못해 주요 방문지로 비교)` : ""}${failed > 0 ? ` · ${failed}개는 오류` : ""}.`,
     );
+    return found;
   };
 
   return { running, message, pending, run };
 }
+
+/** 상품 비교 보기와 한 번에 검증이 같은 진행 상태를 쓴다 */
+export const CompetitorItinerariesContext = createContext<CompetitorItinerariesView | null>(null);

@@ -8,6 +8,7 @@ import type { AutoBuild } from "@/hooks/useAutoBuild";
 import type { AutoQuote } from "@/hooks/useAutoQuote";
 import type { BudgetFitView } from "@/hooks/useBudgetFit";
 import type { CompetitorAutoFindView } from "@/hooks/useCompetitorAutoFind";
+import type { VerifyPipelineView, VerifyStepStatus } from "@/hooks/useVerifyPipeline";
 import type { CourseEngineView } from "@/hooks/useCourseEngine";
 import type { DayTimeCheckView } from "@/hooks/useDayTimeCheck";
 import type { Insight, InsightAction, KeyNumbers } from "@/lib/insights";
@@ -34,6 +35,62 @@ interface Props {
   engine: CourseEngineView;
   /** 타업체 상품 자동 찾기 */
   competitorFind: CompetitorAutoFindView;
+  /** 한 번에 검증 (시세 → 시간 검증 → 코스 점검 → 타업체 찾기 → 타업체 일정) */
+  pipeline: VerifyPipelineView;
+}
+
+const STEP_MARK: Record<VerifyStepStatus, { mark: string; tone: string }> = {
+  pending: { mark: "○", tone: "text-slate-400" },
+  running: { mark: "…", tone: "text-indigo-700 font-semibold" },
+  done: { mark: "✓", tone: "text-emerald-700" },
+  skipped: { mark: "–", tone: "text-slate-500" },
+  error: { mark: "!", tone: "text-red-600" },
+};
+
+/** 한 번에 검증 진행 — 단계별 상태와 결과 한 줄 */
+function PipelineCard({ pipeline, canStart }: { pipeline: VerifyPipelineView; canStart: boolean }) {
+  if (pipeline.steps.length === 0) {
+    if (!canStart) return null;
+    return (
+      <button
+        type="button"
+        onClick={pipeline.start}
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-left text-[11px] text-indigo-900 hover:bg-indigo-100"
+      >
+        <span>
+          <b className="block text-xs">한 번에 검증</b>
+          시세 조회 → 시간 검증 → 코스 점검 → 타업체 찾기 → 타업체 일정까지 차례로
+        </span>
+        <span className="shrink-0 rounded-md bg-indigo-600 px-2 py-1 font-semibold text-white">시작</span>
+      </button>
+    );
+  }
+  const finished = !pipeline.running;
+  return (
+    <section aria-label="한 번에 검증" className="rounded-xl border border-indigo-200 bg-white p-3 text-[11px] leading-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-indigo-950">{finished ? "한 번에 검증 완료" : "한 번에 검증 중… (몇 분 걸립니다, 다른 작업을 해도 됩니다)"}</p>
+        {finished && (
+          <button type="button" onClick={pipeline.dismiss} className="font-semibold text-slate-500 underline underline-offset-2">
+            닫기
+          </button>
+        )}
+      </div>
+      <ol className="mt-1.5 space-y-1">
+        {pipeline.steps.map((s) => (
+          <li key={s.key} className="flex gap-1.5">
+            <span className={`w-3 shrink-0 text-center ${STEP_MARK[s.status].tone}`} aria-hidden>
+              {STEP_MARK[s.status].mark}
+            </span>
+            <span className={`min-w-0 flex-1 text-pretty ${STEP_MARK[s.status].tone}`}>
+              {s.label}
+              {s.message && <span className="block font-normal text-slate-500">{s.message}</span>}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
 }
 
 /** 한 번에 보여 줄 추천 수 — 처음 쓰는 사람이 부담스럽지 않게 */
@@ -89,7 +146,7 @@ function NumbersCard({ numbers, money }: { numbers: KeyNumbers; money: (v: numbe
  * 레이아웃3 — 요약·추천. 지금 견적의 핵심 숫자(판매가·원가·수익)를 위에 두고, 고치면 좋은 것을 중요한 순서로 보여 주며
  * 버튼으로 바로 적용한다(예산 맞추기·올리기·입력 폴더 열기·질문 복사). 자동 구성 진행도 여기서 본다.
  */
-export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight, dayTime, engine, competitorFind }: Props) {
+export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight, dayTime, engine, competitorFind, pipeline }: Props) {
   const [showAll, setShowAll] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const visible = showAll ? insights : insights.slice(0, SHOW);
@@ -139,6 +196,7 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
 
   return (
     <div className="space-y-3">
+      <PipelineCard pipeline={pipeline} canStart={numbers !== null} />
       {numbers ? (
         <NumbersCard numbers={numbers} money={money} />
       ) : (

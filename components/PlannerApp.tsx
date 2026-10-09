@@ -63,6 +63,8 @@ import type { CourseFile } from "@/lib/courseFile";
 import { supplierQuotePatch } from "@/lib/supplierQuote";
 import { repairFlightTimes } from "@/lib/flightRepair";
 import { useCompetitorAutoFind } from "@/hooks/useCompetitorAutoFind";
+import { CompetitorItinerariesContext, useCompetitorItineraries } from "@/hooks/useCompetitorItineraries";
+import { useVerifyPipeline, VerifyPipelineContext } from "@/hooks/useVerifyPipeline";
 import { CourseEngineContext, useCourseEngine } from "@/hooks/useCourseEngine";
 import { DayTimeCheckContext, useDayTimeCheck } from "@/hooks/useDayTimeCheck";
 import type { DayPlan, FlightOption, ItineraryItem, TourCandidate, TripInput } from "@/types";
@@ -73,6 +75,8 @@ export function PlannerApp() {
   const { input, update, reset, replace } = usePlannerInput();
   // 타업체 상품 자동 찾기 (코스를 만들면 비교표를 바로 채운다)
   const competitorFind = useCompetitorAutoFind(update);
+  // 타업체 일정·선택관광 가져오기 (상품 비교 보기와 한 번에 검증이 같이 쓴다)
+  const competitorItineraries = useCompetitorItineraries(input, update);
   const itinerary = useItinerary();
   const usp = useUsp();
   const [tab, setTab] = useState<PlannerTab>("input");
@@ -156,7 +160,8 @@ export function PlannerApp() {
     if (!result) return null;
     // 업체 견적서는 아래에서 견적서 내용을 넣은 다음에 자동 견적을 건다 (호텔 이름별 시세를 찾도록)
     if (autoQuote.afterGenerate && !options.fromAutoBuild && !result.supplierQuote) autoQuote.armAfterGenerate();
-    if (courseEngine.autoCheck) courseEngine.armAfterGenerate();
+    // 업체 견적서는 아래 '한 번에 검증'에서 시간 검증·코스 점검까지 하므로 따로 걸지 않는다
+    if (courseEngine.autoCheck && !result.supplierQuote) courseEngine.armAfterGenerate();
 
     // 붙여넣은 코스에서 읽은 기간/도시를 입력 폼에 반영한다 (박수는 코스 원문이 기준이다)
     let nextInput: TripInput = input;
@@ -179,7 +184,8 @@ export function PlannerApp() {
       update(patch);
       nextInput = { ...nextInput, ...patch };
       // 업체 견적서를 읽었으면 우리 시세(견적서 호텔별 숙박·차량·가이드·팁·보험)를 바로 조회해 업체 몫 추정까지 보여 준다
-      if (!options.fromAutoBuild) autoQuote.armAfterGenerate();
+      // 업체 견적서를 읽었으면 한 번에 검증: 시세 → 시간 검증 → 코스 점검 → 타업체 찾기 → 타업체 일정 가져오기
+      if (!options.fromAutoBuild) verifyPipeline.start();
     }
 
     // 타업체 상품을 자동으로 찾아 비교한다 — 자동 견적이 돌면 그쪽에서 찾으므로 그때는 건너뛴다
@@ -277,6 +283,17 @@ export function PlannerApp() {
     beforeAuto: { run: dayTimeCheck.run, busy: dayTimeCheck.running !== null },
   });
 
+  // 한 번에 검증 (업체 견적서를 올리면 자동, 요약·추천의 버튼으로도)
+  const verifyPipeline = useVerifyPipeline({
+    days,
+    pmChoice,
+    competitorCount: input.competitors.length,
+    autoQuote,
+    dayTime: dayTimeCheck,
+    engine: { run: () => courseEngine.run() },
+    itineraries: competitorItineraries,
+  });
+
   // 레이아웃3(요약·추천): 핵심 숫자와 고치면 좋은 것
   const money = (v: number) => formatMoney(Math.round(v), input.currency);
   const insightArgs = { input, days, pmChoice, meta, quote, budgetFit, money, engine: { scores: courseEngine.scores, moves: courseEngine.moves, zigzags: courseEngine.zigzags, zigzagFixable: courseEngine.zigzagFixable } };
@@ -308,6 +325,7 @@ export function PlannerApp() {
       dayTime={dayTimeCheck}
       engine={courseEngine}
       competitorFind={competitorFind}
+      pipeline={verifyPipeline}
       onFixFlight={() => {
         const fixed = repairFlightTimes(days, input, meta);
         if (fixed) itinerary.replaceDays(fixed);
@@ -414,6 +432,8 @@ export function PlannerApp() {
           )}
           <DayTimeCheckContext.Provider value={dayTimeCheck}>
           <CourseEngineContext.Provider value={courseEngine}>
+          <CompetitorItinerariesContext.Provider value={competitorItineraries}>
+          <VerifyPipelineContext.Provider value={verifyPipeline}>
           <Dashboard
             itinerary={itinerary.state}
             days={days}
@@ -474,6 +494,8 @@ export function PlannerApp() {
               onPrint: printDocument,
             }}
           />
+          </VerifyPipelineContext.Provider>
+          </CompetitorItinerariesContext.Provider>
           </CourseEngineContext.Provider>
           </DayTimeCheckContext.Provider>
         </section>
