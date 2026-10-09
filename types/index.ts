@@ -90,6 +90,8 @@ export interface CompetitorItinerary {
   mealCount: number;
   /** 가이드·기사 경비(팁) — 원문 짧게 (예: 1인 50달러 현지 지불, 포함) */
   tipNote: string;
+  /** 선택관광 목록 — 이름과 가격 원문 (예: 1인 US$80). 예전에 가져온 일정에는 없을 수 있다 */
+  optionTours?: { name: string; priceText: string }[];
   sourceName: string;
   checkedAt: string;
 }

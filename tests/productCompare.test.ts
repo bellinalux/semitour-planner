@@ -63,3 +63,29 @@ describe("상품 비교 보기", () => {
     expect(csv).toContain("[자유]");
   });
 });
+
+describe("상품 비교 — 선택관광 내용", () => {
+  it("경쟁 상품 일정에서 읽은 선택관광 이름·가격을 보여 주고, 우리가 노옵션이면 강점으로", () => {
+    const cmp = build({
+      options: [],
+      competitors: [comp({ optionTour: "unknown", itinerary: itinerary({ optionTours: [{ name: "마카오 타워 번지점프", priceText: "1인 US$400" }, { name: "하우스 오브 댄싱 워터", priceText: "1인 US$120" }] }) })],
+    });
+    const theirs = cmp.products[1];
+    expect(theirs.optionTours).toEqual([
+      { name: "마카오 타워 번지점프", price: "1인 US$400" },
+      { name: "하우스 오브 댄싱 워터", price: "1인 US$120" },
+    ]);
+    expect(theirs.optionTour).toBe("some");
+    expect(theirs.ourBetter).toContain("노옵션 (그 상품 선택관광 2개)");
+    expect(productCompareCsv(cmp)).toContain("마카오 타워 번지점프 1인 US$400");
+  });
+
+  it("우리 선택관광은 입력한 옵션(이름·1인 요금), 일정을 안 가져온 경쟁 상품은 내용 모름(null)", () => {
+    const cmp = build({
+      options: [{ id: "o", name: "홍콩 데이투어", description: "", durationMinutes: 600, dayNo: 3, costPerPerson: 240000, pricePerPerson: 295000, minParticipants: 8, participationRate: 30, note: "" }],
+      competitors: [comp({})],
+    });
+    expect(cmp.products[0].optionTours).toEqual([{ name: "홍콩 데이투어", price: "1인 295,000" }]);
+    expect(cmp.products[1].optionTours).toBeNull();
+  });
+});

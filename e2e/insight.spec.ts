@@ -66,6 +66,7 @@ test("상품 비교 보기: 경쟁 상품 일정을 가져와 날짜별 코스·
           ],
           mealCount: 1,
           tipNote: "1인 USD 30 현지 지불",
+          optionTours: [{ name: "바나힐 야경 투어", priceText: "1인 US$60" }],
           sourceName: "하나투어",
           checkedAt: new Date().toISOString(),
         },
@@ -85,6 +86,7 @@ test("상품 비교 보기: 경쟁 상품 일정을 가져와 날짜별 코스·
   await expect(dialog.getByText("자유일정").first()).toBeVisible();
   await expect(dialog.getByText("린응사").first()).toBeVisible();
   await expect(dialog.getByRole("row", { name: /가이드 경비\(팁\)/ })).toContainText("1인 USD 30 현지 지불");
+  await expect(dialog.getByRole("row", { name: /^선택관광/ })).toContainText("바나힐 야경 투어 · 1인 US$60");
   await expect(dialog.getByText("우리가 나은 점").first()).toBeVisible();
   const [download] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "엑셀(CSV) 저장" }).click()]);
   expect(download.suggestedFilename()).toContain("상품비교");

@@ -78,7 +78,24 @@ export function TourCompareTable({ compare, currency, refresh }: Props) {
       ),
     },
     { label: "쇼핑", cell: (c) => <Policy value={c.shopping} /> },
-    { label: "선택관광", cell: (c) => <Policy value={c.optionTour} /> },
+    {
+      label: "선택관광",
+      cell: (c) => (
+        <span className="space-y-0.5">
+          <Policy value={c.optionTours && c.optionTours.length > 0 && !c.isOurs ? "some" : c.optionTour} />
+          {c.optionTours && c.optionTours.length > 0 && (
+            <ul className="mt-0.5 space-y-0.5">
+              {c.optionTours.map((o) => (
+                <li key={o.name} className="text-pretty">
+                  {o.name}
+                  {o.price && <span className="text-slate-500"> · {o.price}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </span>
+      ),
+    },
     { label: "방문지", cell: (c) => <Places column={c} sharedByOthers={shared} /> },
     {
       label: "우리에겐 없는 곳",

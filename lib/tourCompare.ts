@@ -30,6 +30,8 @@ export interface CompareColumn {
   theirOnly: string[];
   /** 상품 특징 한 줄 */
   highlight?: string;
+  /** 선택관광 내용 (이름·가격) — 우리는 입력한 옵션, 경쟁 상품은 일정을 가져왔을 때만 */
+  optionTours?: { name: string; price: string }[];
   /** 우리 여행지 밖에 함께 도는 지역 (예: 마카오 상품과 비교하는데 "홍콩/마카오") — 코스 범위가 다르다 */
   extraRegions: string[];
   link?: string;
@@ -141,6 +143,7 @@ export function buildTourCompare(input: TripInput, days: DayPlan[], pmChoice: Pm
     overlap: [],
     theirOnly: [],
     extraRegions: [],
+    optionTours: input.options.map((o) => ({ name: o.name, price: o.pricePerPerson > 0 ? `1인 ${Math.round(o.pricePerPerson).toLocaleString("ko-KR")}` : "" })),
   };
 
   const columns: CompareColumn[] = [ours];
@@ -165,6 +168,7 @@ export function buildTourCompare(input: TripInput, days: DayPlan[], pmChoice: Pm
       theirOnly: theirPlaces.filter((t) => !places.some((p) => samePlace(p, t))),
       extraRegions: extraRegionsOf(c.name, input.destination),
       ...(c.highlight ? { highlight: c.highlight } : {}),
+      ...(c.itinerary?.found && c.itinerary.optionTours ? { optionTours: c.itinerary.optionTours.map((o) => ({ name: o.name, price: o.priceText })) } : {}),
       link: c.source?.url,
     });
 

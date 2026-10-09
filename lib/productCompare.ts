@@ -42,6 +42,8 @@ export interface CompareProduct {
   mealCount: number | null;
   freeDays: number | null;
   tipNote: string;
+  /** 선택관광 목록 (이름·가격). 경쟁 상품 일정을 안 가져왔으면 null */
+  optionTours: { name: string; price: string }[] | null;
   otherRegions: string[];
   /** 날짜별 코스 — 경쟁 상품 일정을 못 가져왔으면 null (주요 방문지만 places에) */
   days: CompareDay[] | null;
@@ -107,6 +109,7 @@ export function buildProductCompare(input: TripInput, days: DayPlan[], pmChoice:
     mealCount: ourMeals,
     freeDays: ourFree,
     tipNote: input.tipPerPerson > 0 ? `팁 1인 ${won(input.tipPerPerson)} 포함` : "",
+    optionTours: input.options.map((o) => ({ name: o.name, price: o.pricePerPerson > 0 ? `1인 ${won(o.pricePerPerson)}` : "" })),
     otherRegions: [],
     days: ourDays.map((d) => ({ day: d.day, places: d.names.map((n) => ({ name: n, mark: markOurs(n) })), meals: d.meals, free: d.free, otherRegion: "" })),
     places: ourAll.map((n) => ({ name: n, mark: markOurs(n) })),
@@ -140,7 +143,9 @@ export function buildProductCompare(input: TripInput, days: DayPlan[], pmChoice:
     }
     if (policy.shopping === "none" && c.shopping === "some") ourBetter.push("노쇼핑");
     if (policy.shopping === "some" && c.shopping === "none") theirBetter.push("노쇼핑");
-    if (policy.optionTour === "none" && c.optionTour === "some") ourBetter.push("노옵션");
+    const theirOptions = it?.found ? (it.optionTours ?? []) : [];
+    if (policy.optionTour === "none" && (c.optionTour === "some" || theirOptions.length > 0))
+      ourBetter.push(theirOptions.length > 0 ? `노옵션 (그 상품 선택관광 ${theirOptions.length}개)` : "노옵션");
     if (policy.optionTour === "some" && c.optionTour === "none") theirBetter.push("노옵션");
     if (ourGrade && theirGrade) {
       if (gradeMid(ourGrade) - gradeMid(theirGrade) >= 0.5) ourBetter.push(`호텔 ${rt(ourGrade)} (그 상품 ${rt(theirGrade)})`);
@@ -183,10 +188,12 @@ export function buildProductCompare(input: TripInput, days: DayPlan[], pmChoice:
       hotel: c.hotelGrade ?? "",
       includes: c.includes,
       shopping: c.shopping,
-      optionTour: c.optionTour,
+      // 일정표에서 선택관광 목록을 찾았으면 그걸 따른다
+      optionTour: it?.found && it.optionTours && it.optionTours.length > 0 ? "some" : c.optionTour,
       mealCount: theirMeals,
       freeDays: theirFree,
       tipNote: it?.tipNote ?? "",
+      optionTours: it?.found && it.optionTours ? it.optionTours.map((o) => ({ name: o.name, price: o.priceText })) : null,
       otherRegions,
       days: itDays
         ? itDays.map((d) => ({ day: d.day, places: d.places.map((n) => ({ name: n, mark: markTheirs(n) })), meals: d.meals, free: d.free, otherRegion: d.otherRegion }))
@@ -216,7 +223,7 @@ export function productCompareCsv(cmp: ProductCompare): string {
     const s = v === null ? "" : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const head = ["상품", "표시 가격", "같은 조건 가격", "우리와 차이", "조정", "일정", "호텔", "식사(회)", "자유일", "쇼핑", "선택관광", "팁", "다른 지역"];
+  const head = ["상품", "표시 가격", "같은 조건 가격", "우리와 차이", "조정", "일정", "호텔", "식사(회)", "자유일", "쇼핑", "선택관광", "선택관광 내용", "팁", "다른 지역"];
   for (let d = 1; d <= cmp.maxDays; d += 1) head.push(`DAY ${d}`);
   head.push("우리가 나은 점", "그 상품이 나은 점", "가격 차이");
   const policy = (p: TourPolicy) => (p === "none" ? "없음" : p === "some" ? "있음" : "모름");
@@ -233,6 +240,7 @@ export function productCompareCsv(cmp: ProductCompare): string {
       p.freeDays,
       policy(p.shopping),
       policy(p.optionTour),
+      p.optionTours ? p.optionTours.map((o) => [o.name, o.price].filter(Boolean).join(" ")).join(" / ") : "",
       p.tipNote,
       p.otherRegions.join("·"),
     ];

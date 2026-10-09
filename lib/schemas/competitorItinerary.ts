@@ -31,6 +31,9 @@ export const competitorItineraryResultSchema = z.object({
     .describe("날짜별 일정 (첫날부터 순서대로). 일정표를 못 찾았으면 빈 배열"),
   mealCount: z.number().describe("포함된 식사 횟수 (조식 제외, 중식+석식). 모르면 0"),
   tipNote: z.string().describe("가이드·기사 경비(팁) 조건 원문 짧게. 모르면 빈 문자열"),
+  optionTours: z
+    .array(z.object({ name: z.string().describe("선택관광 이름"), priceText: z.string().describe("가격 원문 (예: 1인 US$80, 성인 50,000원). 모르면 빈 문자열") }))
+    .describe("상품에 적힌 선택관광(옵션) 목록. 없거나 모르면 빈 배열"),
   sourceName: z.string().describe("일정표를 확인한 사이트 이름. 없으면 빈 문자열"),
 });
 
@@ -54,6 +57,10 @@ export function toCompetitorItinerary(raw: z.infer<typeof competitorItineraryRes
     days,
     mealCount: Math.max(0, Math.round(raw.mealCount)),
     tipNote: t(raw.tipNote, 80),
+    optionTours: raw.optionTours
+      .map((o) => ({ name: t(o.name, 60), priceText: t(o.priceText, 40) }))
+      .filter((o) => o.name)
+      .slice(0, 12),
     sourceName: t(raw.sourceName, 60),
     checkedAt: new Date().toISOString(),
   };

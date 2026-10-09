@@ -76,7 +76,26 @@ export function ProductCompareDialog({ input, days, pmChoice, quote, meta, onInp
     { label: "호텔", cell: (p) => p.hotel || "모름" },
     { label: "식사 포함(조식 제외)", cell: (p) => (p.mealCount === null ? "일정 가져오면 표시" : `${p.mealCount}회`) },
     { label: "자유일", cell: (p) => (p.freeDays === null ? "일정 가져오면 표시" : `${p.freeDays}일`) },
-    { label: "쇼핑 / 선택관광", cell: (p) => `${policy(p.shopping)} / ${policy(p.optionTour)}` },
+    { label: "쇼핑", cell: (p) => policy(p.shopping) },
+    {
+      label: "선택관광",
+      cell: (p) =>
+        p.optionTours && p.optionTours.length > 0 ? (
+          <ul className="space-y-0.5">
+            {p.optionTours.map((o) => (
+              <li key={o.name}>
+                {o.name}
+                {o.price && <span className="text-slate-500"> · {o.price}</span>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <span>
+            {policy(p.optionTour)}
+            {!p.isOurs && p.optionTours === null && p.optionTour !== "none" && <span className="block text-slate-400">일정 가져오면 내용 표시</span>}
+          </span>
+        ),
+    },
     { label: "가이드 경비(팁)", cell: (p) => p.tipNote || "—" },
     { label: "다른 지역", cell: (p) => (p.otherRegions.length > 0 ? <span className="text-amber-700">{p.otherRegions.join("·")} 포함</span> : "—") },
   ];

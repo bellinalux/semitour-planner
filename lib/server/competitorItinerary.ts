@@ -15,7 +15,7 @@ function researchPrompt(req: CompetitorItineraryRequest): string {
     "3. 숙박 호텔",
     "4. 자유일정인지",
     `5. ${req.destination} 밖 지역을 도는 날이면 그 지역 (예: 홍콩)`,
-    "그리고 포함 식사 횟수(조식 제외), 가이드·기사 경비(팁) 조건, 확인한 사이트 이름을 적어 주세요.",
+    "그리고 포함 식사 횟수(조식 제외), 가이드·기사 경비(팁) 조건, 선택관광(옵션) 이름과 가격 목록, 확인한 사이트 이름을 적어 주세요.",
     "일정표를 확인하지 못했으면 '확인 못함'이라고 쓰세요. 기억이나 추측으로 일정을 만들지 마세요.",
   ].join("\n");
 }
@@ -33,12 +33,12 @@ const SYSTEM = `당신은 여행사 상품 일정표 조사 메모를 JSON으로
 /** 경쟁 상품의 날짜별 일정을 웹 검색 근거로 읽는다. 같은 상품은 7일 동안 다시 쓴다(일정을 찾은 결과만) */
 export function fetchCompetitorItinerary(req: CompetitorItineraryRequest): Promise<CompetitorItinerary> {
   return cached(
-    "competitor-itinerary",
+    "competitor-itinerary-v2",
     req,
     7 * DAY,
     async () => {
       const research = await generateGroundedText({ user: researchPrompt(req), fast: true });
-      if (!research.searched) return toCompetitorItinerary({ found: false, days: [], mealCount: 0, tipNote: "", sourceName: "" }, false);
+      if (!research.searched) return toCompetitorItinerary({ found: false, days: [], mealCount: 0, tipNote: "", optionTours: [], sourceName: "" }, false);
       const structured = await generateJson({
         fast: true,
         system: SYSTEM,
