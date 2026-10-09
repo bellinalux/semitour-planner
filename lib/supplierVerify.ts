@@ -1,5 +1,6 @@
 import { calculateQuote } from "@/lib/cost";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
+import { quoteItemState, type QuoteItemKey } from "@/lib/supplierQuote";
 import type { DayPlan, QuoteData, SupplierQuote, TripInput } from "@/types";
 
 /**
@@ -84,30 +85,29 @@ export function linePerPerson(line: SupplierQuote["lines"][number], ctx: { trave
 }
 
 /** 꼭 확인할 포함·불포함 항목 */
-const CHECKS: { key: string; label: string; re: RegExp; when?: (i: TripInput) => boolean }[] = [
-  { key: "lodging", label: "숙박", re: /호텔|숙박|리조트|hotel|resort|accommodation/i, when: (i) => i.packageType !== "land" },
-  { key: "vehicle", label: "전용 차량", re: /차량|버스|밴|전용차|vehicle|bus|van|transport/i },
-  { key: "guide", label: "가이드", re: /가이드(?!\s*(팁|경비))|guide(?!\s*tip)/i },
-  { key: "admission", label: "입장료", re: /입장|관광지|티켓|admission|entrance|ticket/i },
-  { key: "meal", label: "일정 중 식사", re: /식사|중식|석식|meal|lunch|dinner/i },
-  { key: "tip", label: "가이드·기사 팁(경비)", re: /팁|경비|tip|gratuit/i },
-  { key: "transfer", label: "공항 픽업·샌딩", re: /픽업|샌딩|공항|pick\s*up|airport|transfer/i },
-  { key: "insurance", label: "여행자 보험", re: /보험|insurance/i },
+const CHECKS: { key: QuoteItemKey; label: string; when?: (i: TripInput) => boolean }[] = [
+  { key: "lodging", label: "숙박", when: (i) => i.packageType !== "land" },
+  { key: "vehicle", label: "전용 차량" },
+  { key: "guide", label: "가이드" },
+  { key: "admission", label: "입장료" },
+  { key: "meal", label: "일정 중 식사" },
+  { key: "tip", label: "가이드·기사 팁(경비)" },
+  { key: "transfer", label: "공항 픽업·샌딩" },
+  { key: "insurance", label: "여행자 보험" },
 ];
+
+/** 호텔이 확정되지 않은 표기 (후보 여럿·동급) */
+const UNDECIDED_HOTEL = /중\s*(하나|택)|또는|혹은|동급|\bor\b|\//i;
 
 /** 받침이 있으면 "이", 없으면 "가" (한글이 아니면 "이(가)") */
 export function subjectParticle(word: string): string {
   const ch = word
     .trim()
-    .replace(/[)]]+$/, "")
+    .replace(/[)\]]+$/, "")
     .slice(-1);
   const code = ch.charCodeAt(0) - 0xac00;
   if (code < 0 || code > 11171) return "이(가)";
   return code % 28 === 0 ? "가" : "이";
-}
-
-function findIn(list: string[], re: RegExp): string | undefined {
-  return list.find((x) => re.test(x));
 }
 
 export function verifySupplierQuote(input: TripInput, days: DayPlan[], pmChoice: PmChoice, quote: QuoteData): SupplierVerify {
@@ -120,18 +120,35 @@ export function verifySupplierQuote(input: TripInput, days: DayPlan[], pmChoice:
 
   // ③ 포함·불포함 체크 (견적서를 읽었을 때만)
   const checklist: CheckItem[] = q
-    ? CHECKS.filter((c) => !c.when || c.when(input)).map((c) => {
-        const ex = findIn(q.excludes, c.re);
-        const inc = findIn(q.includes, c.re);
-        // 같은 말이 양쪽에 있으면(예: "가이드" 포함, "가이드 팁" 불포함) 더 구체적인 쪽(불포함 문구가 팁 등)을 따른다
-        const state: CheckItem["state"] = ex && (!inc || c.key === "tip") ? "excluded" : inc ? "included" : "missing";
-        return { key: c.key, label: c.label, state, evidence: (state === "excluded" ? ex : inc) ?? "" };
-      })
+    ? CHECKS.filter((c) => !c.when || c.when(input)).map((c) => ({ key: c.key, label: c.label, ...quoteItemState(q, c.key) }))
     : [];
   const excluded = new Set(checklist.filter((c) => c.state === "excluded").map((c) => c.key));
 
   // ① 계산·기준 확인
   if (q) {
+    if ((q.suspectPrice ?? 0) > 0) {
+      calcIssues.push(
+        `견적서에서 읽은 금액 ${(q.suspectPrice ?? 0).toLocaleString("ko-KR")} ${q.originalCurrency}는 불포함·선택관광 요금으로 보여 공급가로 넣지 않았습니다 — 상품 1인 요금을 확인해 직접 넣어 주세요.`,
+      );
+    }
+    if (q.pricePerPerson <= 0 && input.supplierPricePerPerson <= 0) questions.push("이 상품의 1인 요금(2인 1실 기준)을 알려 주세요.");
+    const min = q.minTravelers ?? 0;
+    if (min > 0 && n < min) {
+      calcIssues.push(`견적서의 최소 출발 인원은 ${min}명인데 지금 ${n}명입니다 — 이 인원으로는 출발하지 못하거나 요금이 달라집니다.`);
+      questions.push(`${n}명으로 출발할 수 있는지, 가능하면 그때 1인 요금을 알려 주세요 (최소 ${min}명 조건).`);
+    }
+    if (q.hotels && UNDECIDED_HOTEL.test(q.hotels)) questions.push(`호텔이 확정되지 않았습니다 (${q.hotels.slice(0, 60)}). 확정 호텔 이름을 알려 주세요.`);
+    // 요일·시즌별 요금이 메모에 따로 있으면(예: 일~화 4780 / 수 4880 / 토 4980) 1인 요금은 그중 하나일 뿐이다
+    const notePrices = (q.notes.match(/\d[\d,]{2,}/g) ?? []).length;
+    if (notePrices >= 2 && /요일|월|화|수|목|금|토|일|시즌|성수기|비수기|주말|평일/.test(q.notes)) {
+      calcIssues.push(
+        `요일·시즌별 요금이 따로 있습니다 (${q.notes.slice(0, 80)}${q.notes.length > 80 ? "…" : ""}) — 출발 요일·시즌 요금으로 공급가를 맞췄는지 확인하세요.`,
+      );
+      questions.push("출발일(요일·시즌)에 맞는 1인 요금을 확정해 주세요.");
+    }
+    // 코스에 항공편이 있는데 견적서에 항공 포함 여부가 없으면
+    const hasFlight = days.some((d) => dayItems(d, pmChoice).some((i) => i.type === "flight"));
+    if (hasFlight && quoteItemState(q, "flight").state === "missing") questions.push("코스의 항공편(항공권)이 요금에 포함인가요, 불포함인가요?");
     if (q.basisTravelers === 0) questions.push("견적이 몇 명 기준인지 알려 주세요.");
     else if (q.basisTravelers !== n && q.tiers.length === 0) {
       calcIssues.push(`견적은 ${q.basisTravelers}명 기준인데 지금 ${n}명입니다 — 인원이 다르면 1인 요금이 달라집니다.`);
@@ -233,6 +250,9 @@ export function verifySupplierQuote(input: TripInput, days: DayPlan[], pmChoice:
             : "공급가가 없습니다",
   };
   if (totalLevel === "low") questions.push("요금이 시세보다 낮은데, 쇼핑·선택관광이나 현지에서 따로 받는 경비가 있나요?");
+  if (totalLevel === "low" && supplierTotal !== null && supplierTotal < marketTotal * 0.5) {
+    calcIssues.push("1인 공급가가 우리 시세 원가의 절반도 안 됩니다 — 옵션·불포함 요금이나 다른 인원 기준 요금을 상품 요금으로 잘못 넣지 않았는지 확인하세요.");
+  }
 
   return { calcIssues, rows, total, marketReady, checklist, questions: [...new Set(questions)] };
 }

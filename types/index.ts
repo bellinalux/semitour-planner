@@ -538,6 +538,12 @@ export interface SupplierQuote {
   pricePerPerson: number;
   /** 몇 명 기준 요금인지 (모르면 0) */
   basisTravelers: number;
+  /** 최소 출발 인원 (모르면 0) */
+  minTravelers?: number;
+  /** 원문의 호텔 표기 (후보가 여럿이면 모두) */
+  hotels?: string;
+  /** 상품 요금이 아니라고 보고 뺀 금액 (원문 통화, 예: 불포함 옵션 요금) */
+  suspectPrice?: number;
   /** 객실 기준 */
   roomBasis: "twin" | "single" | "triple" | "unknown";
   /** 싱글차지 1인 (모르면 0) */

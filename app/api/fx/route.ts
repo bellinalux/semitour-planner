@@ -1,8 +1,7 @@
 import { isAuthed } from "@/lib/server/access";
 import { errorResponse } from "@/lib/server/external";
 import { krwPerUnit } from "@/lib/server/fx";
-
-const CODES = new Set(["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD", "AUD"]);
+import { FX_CODES as CODES } from "@/lib/fxCodes";
 
 /** GET /api/fx?code=THB → 1 THB가 몇 원인지 (AI를 쓰지 않는 조회라 호출 횟수 제한은 두지 않고 접근 코드만 확인한다) */
 export async function GET(request: Request) {

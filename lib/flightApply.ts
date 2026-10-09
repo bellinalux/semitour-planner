@@ -4,7 +4,8 @@ import { addDays, isBreakfastItem, parseDate } from "@/lib/documents";
 import { mapDayItems } from "@/lib/itinerary";
 import type { DayPlan, FlightOption, ItineraryItem, TripInput } from "@/types";
 
-const stopsText = (stops: number) => (stops === 0 ? "직항" : `경유 ${stops}회`);
+/** 경유 횟수를 모르면(-1, 업체 코스표에서 읽은 항공편) 표시하지 않는다 */
+const stopsText = (stops: number) => (stops < 0 ? "" : stops === 0 ? "직항" : `경유 ${stops}회`);
 
 /** "23:45 (또는 익일 00:25)"처럼 설명이 붙어 오는 항공 시각에서 첫 HH:mm만 뽑는다. 없으면 빈 문자열 */
 function firstClock(text: string): string {
@@ -37,8 +38,8 @@ interface FlightLeg {
 function legLine(leg: FlightLeg): string {
   const parts = [
     [leg.airline, leg.flightNumber].filter(Boolean).join(" "),
-    leg.departAirport && leg.departTime ? `${leg.departAirport} ${leg.departTime} 출발` : "",
-    leg.arriveAirport && leg.arriveTime ? `${leg.arriveAirport} ${leg.arriveTime} 도착` : "",
+    leg.departTime ? `${leg.departAirport ? `${leg.departAirport} ` : ""}${leg.departTime} 출발` : "",
+    leg.arriveTime ? `${leg.arriveAirport ? `${leg.arriveAirport} ` : ""}${leg.arriveTime} 도착` : "",
     stopsText(leg.stops),
     leg.duration,
   ].filter(Boolean);
@@ -163,13 +164,14 @@ export function applyFlightToDays(days: DayPlan[], flight: FlightOption): DayPla
   const patches = new Map<string, Partial<ItineraryItem>>();
 
   function applyLeg(group: FlightGroup | null, leg: FlightLeg) {
-    if (!group || !leg.departAirport) return; // 이 편 정보를 확인하지 못했으면 건드리지 않는다
+    if (!group || (!leg.departAirport && !leg.departTime)) return; // 이 편 정보를 확인하지 못했으면 건드리지 않는다
     const line = legLine(leg);
     const gap = leg.departTime && leg.arriveTime ? clockDiffMinutes(leg.departTime, leg.arriveTime) : null;
     if (group.items.length >= 2) {
       const [dep, arr] = group.items;
-      patches.set(dep.id, { name: `${leg.departAirport} 출발`, description: line, stayMinutes: 0, travelMinutesToNext: gap ?? dep.travelMinutesToNext });
-      patches.set(arr.id, { name: `${leg.arriveAirport} 도착`, description: line });
+      // 공항 이름을 모르면(업체 코스표) 원래 항목 이름을 그대로 둔다
+      patches.set(dep.id, { name: leg.departAirport ? `${leg.departAirport} 출발` : dep.name, description: line, stayMinutes: 0, travelMinutesToNext: gap ?? dep.travelMinutesToNext });
+      patches.set(arr.id, { name: leg.arriveAirport ? `${leg.arriveAirport} 도착` : arr.name, description: line });
     } else {
       const only = group.items[0];
       patches.set(only.id, { description: line, travelMinutesToNext: gap ?? only.travelMinutesToNext });

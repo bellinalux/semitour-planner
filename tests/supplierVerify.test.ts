@@ -114,3 +114,45 @@ describe("업체 견적 검증표", () => {
     );
   });
 });
+
+describe("업체 견적 검증표 — 요금 없음·옵션 요금·최소 인원·미확정 호텔", () => {
+  it("빼 둔 옵션 요금, 최소 인원 미달, 미확정 호텔, 요금 문의를 알린다", () => {
+    const v = verify(
+      base({
+        travelers: 3,
+        supplierPricePerPerson: 0,
+        pricingMode: "target_margin",
+        supplierQuote: sq({
+          pricePerPerson: 0,
+          originalPrice: 0,
+          suspectPrice: 180,
+          originalCurrency: "USD",
+          minTravelers: 4,
+          hotels: "골든드래곤(4성), 리젠시 아트(5성) 중 하나",
+        }),
+      }),
+    );
+    expect(v.calcIssues.join(" ")).toContain("180 USD는 불포함·선택관광 요금으로 보여 공급가로 넣지 않았습니다");
+    expect(v.calcIssues.join(" ")).toContain("최소 출발 인원은 4명인데 지금 3명");
+    expect(v.questions).toEqual(
+      expect.arrayContaining([
+        "이 상품의 1인 요금(2인 1실 기준)을 알려 주세요.",
+        "3명으로 출발할 수 있는지, 가능하면 그때 1인 요금을 알려 주세요 (최소 4명 조건).",
+        "호텔이 확정되지 않았습니다 (골든드래곤(4성), 리젠시 아트(5성) 중 하나). 확정 호텔 이름을 알려 주세요.",
+      ]),
+    );
+  });
+});
+
+describe("업체 견적 검증표 — 요일별 요금·항공 포함 여부", () => {
+  it("메모에 요일별 요금이 있으면 확인을 알리고, 코스에 항공편이 있는데 포함 여부가 없으면 묻는다", () => {
+    const withFlight = [linearDay(1, [item("f", { name: "인천 출발", type: "flight" }), item("a", { name: "바나힐", entryFee: 50000 })]), ...days.slice(1)];
+    const i = base({ supplierQuote: sq({ notes: "3박 4일(일,월,화 4780HKD / 수 4880HKD / 토 4980HKD)" }) });
+    const q = calculateQuote(i, withFlight, {});
+    if (!q.ok) throw new Error(q.error);
+    const v = verifySupplierQuote(i, withFlight, {}, q);
+    expect(v.calcIssues.join(" ")).toContain("요일·시즌별 요금이 따로 있습니다");
+    expect(v.questions).toContain("출발일(요일·시즌)에 맞는 1인 요금을 확정해 주세요.");
+    expect(v.questions).toContain("코스의 항공편(항공권)이 요금에 포함인가요, 불포함인가요?");
+  });
+});

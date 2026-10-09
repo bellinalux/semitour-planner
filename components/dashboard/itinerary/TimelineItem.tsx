@@ -312,7 +312,9 @@ export function TimelineItem({
         {!isLast && item.travelMinutesToNext !== null && item.travelMinutesToNext > 0 && (
           <p className="mt-2.5 flex items-center gap-1.5 text-[11px] text-slate-400">
             <Bus className="h-3 w-3" aria-hidden />
-            다음 장소까지 이동 {formatDuration(item.travelMinutesToNext)}
+            {item.type === "flight"
+              ? `비행 ${formatDuration(item.travelMinutesToNext)} (현지 시각 기준, 시차 포함)`
+              : `다음 장소까지 이동 ${formatDuration(item.travelMinutesToNext)}`}
           </p>
         )}
       </div>

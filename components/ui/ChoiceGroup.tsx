@@ -27,7 +27,7 @@ const GRID = { 2: "grid-cols-2", 3: "grid-cols-3" } as const;
 export function ChoiceGroup<T extends string>({ name, label, value, options, onChange, variant = "cards", columns = 2 }: Props<T>) {
   if (variant === "segmented") {
     return (
-      <fieldset className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white">
+      <fieldset className="relative inline-flex overflow-hidden rounded-md border border-slate-300 bg-white">
         <legend className="sr-only">{label}</legend>
         {options.map((o) => (
           <label
@@ -43,7 +43,7 @@ export function ChoiceGroup<T extends string>({ name, label, value, options, onC
     );
   }
   return (
-    <fieldset className={`grid ${GRID[columns]} gap-2`}>
+    <fieldset className={`relative grid ${GRID[columns]} gap-2`}>
       <legend className="sr-only">{label}</legend>
       {options.map((o) => (
         <label

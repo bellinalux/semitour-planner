@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { calculateQuote } from "@/lib/cost";
 import { toSupplierQuote } from "@/lib/schemas/course";
 import { competitorCaps, cutLabel, supplierAfterCuts, supplierCuts, supplierTarget } from "@/lib/supplierCheck";
-import { conversionRate, quotePriceFor, supplierQuotePatch, toAppQuote } from "@/lib/supplierQuote";
+import { conversionRate, gradeFromText, packageFromQuote, quotePriceFor, supplierIncludes, supplierQuotePatch, toAppQuote } from "@/lib/supplierQuote";
 import type { Competitor, TripInput } from "@/types";
 import { input, item, linearDay } from "./fixtures";
 
@@ -101,6 +101,9 @@ describe("빼면 좋은 일정", () => {
     expect(
       supplierCuts(base({ hotelGrade: "3", packageType: "land_hotel", lodgingRatePerNight: 200000 }), days, {}, null, 1).some((c) => c.kind === "hotel-down"),
     ).toBe(false);
+    // 업체가 이미 "가이드/차량 미포함"이라고 적은 자유일정 날은 제안하지 않는다 (절감을 두 번 세지 않는다)
+    const offDay = [...days, linearDay(3, [item("f", { name: "자유 일정 (가이드/차량 미포함)", type: "free_time" })])];
+    expect(supplierCuts(i, offDay, {}, null, 1_000_000).some((c) => c.kind === "ground-day")).toBe(false);
   });
 
   it("경쟁 상품에 없는 유료 일정 → 그 밖 → 경쟁 상품 대부분이 넣는 일정 → 대표 일정 순, 현지 지불은 빼고 비싼 식사는 낮추기", () => {
@@ -133,6 +136,8 @@ describe("업체 견적서 금액 읽기", () => {
     currency: "usd",
     pricePerPerson: 0,
     basisTravelers: 4,
+    minTravelers: 0,
+    hotels: "",
     roomBasis: "twin",
     singleSupplement: 120,
     tiers: [
@@ -162,12 +167,67 @@ describe("업체 견적서 금액 읽기", () => {
     expect(q.singleSupplement).toBe(168000);
   });
 
-  it("통화를 못 바꾸면 공급가는 비워 두고, 업체 공급가 모드로 바꾸며 쓰던 판매가를 목표로", async () => {
+  it("통화를 못 바꾸면 견적 방식은 그대로 두고 견적서 내용만 남긴다 — 요금을 바꾸면 업체 공급가 모드, 쓰던 판매가는 목표로", async () => {
     const i = input({ pricingMode: "fixed_price", fixedPricePerPerson: 700000, travelers: 4, currency: "KRW" });
     const patch = await supplierQuotePatch(raw, i, async () => null);
-    expect(patch).toMatchObject({ pricingMode: "supplier", supplierTargetPrice: 700000, supplierQuote: { rate: null } });
+    expect(patch).toMatchObject({ supplierTargetPrice: 700000, supplierQuote: { rate: null } });
+    expect(patch.pricingMode).toBeUndefined();
     expect(patch.supplierPricePerPerson).toBeUndefined();
     const ok = await supplierQuotePatch(raw, i, async () => 1400);
-    expect(ok.supplierPricePerPerson).toBe(560000);
+    expect(ok).toMatchObject({ pricingMode: "supplier", supplierPricePerPerson: 560000 });
+  });
+});
+
+describe("견적서 내용으로 판매 구성·확인할 것", () => {
+  const quoteRaw = (patch: Record<string, unknown>) =>
+    toSupplierQuote({
+      found: true,
+      currency: "USD",
+      pricePerPerson: 0,
+      basisTravelers: 0,
+      minTravelers: 4,
+      hotels: "골든드래곤 호텔(4성), 리젠시 아트 호텔(5성) 중 하나",
+      roomBasis: "twin",
+      singleSupplement: 0,
+      tiers: [],
+      lines: [],
+      includes: ["차량", "가이드", "단체 식사", "마카오 타워"],
+      excludes: ["홍콩 데이투어 (최소 8인, 인당 180USD)"],
+      shopping: "",
+      options: "",
+      notes: "",
+      ...patch,
+    })!;
+
+  it("요금이 없어도 인원·객실·호텔·포함·불포함은 남기고, 불포함 옵션 요금을 상품 요금으로 읽었으면 뺀다", () => {
+    expect(quoteRaw({})).toMatchObject({ pricePerPerson: 0, minTravelers: 4, roomBasis: "twin", suspectPrice: 0 });
+    expect(quoteRaw({ pricePerPerson: 180 })).toMatchObject({ pricePerPerson: 0, suspectPrice: 180 });
+    expect(quoteRaw({ pricePerPerson: 1800 })).toMatchObject({ pricePerPerson: 1800, suspectPrice: 0 });
+  });
+
+  it("호텔이 적혀 있으면 랜드+숙박, 등급은 낮은 쪽(4·5성 → 4성)", async () => {
+    const i = input({ packageType: "land", hotelGrade: "any", currency: "KRW" });
+    const patch = await supplierQuotePatch(quoteRaw({}), i, async () => 1400);
+    expect(patch).toMatchObject({ packageType: "land_hotel", hotelGrade: "4" });
+    expect(patch.pricingMode).toBeUndefined(); // 요금이 없으면 견적 방식은 그대로
+  });
+});
+
+describe("견적서 표기 해석", () => {
+  it("호텔 등급·판매 구성·포함 항목", () => {
+    expect(gradeFromText("4·5성 호텔")).toBe("4");
+    expect(gradeFromText("5성급 리조트")).toBe("5");
+    expect(gradeFromText("풀빌라 리조트")).toBe("resort");
+    expect(packageFromQuote({ includes: ["왕복 항공권", "호텔"], excludes: [] })).toBe("full");
+    expect(packageFromQuote({ includes: ["제주항공 09:50 출발"], excludes: ["호텔"] })).toBe("land");
+    const inc = supplierIncludes({ includes: ["호텔", "차량", "가이드"], excludes: ["입장료", "가이드 팁"] } as never, {
+      guide: false,
+      vehicle: false,
+      admission: true,
+      meals: true,
+      hotel: false,
+      flight: false,
+    });
+    expect(inc).toEqual({ guide: true, vehicle: true, admission: false, meals: true, hotel: true, flight: false });
   });
 });

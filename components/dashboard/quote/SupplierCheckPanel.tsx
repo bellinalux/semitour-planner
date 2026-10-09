@@ -47,16 +47,24 @@ function QuoteSummary({ q, input, money }: { q: SupplierQuote; input: TripInput;
   return (
     <div className="space-y-2 rounded-lg border border-slate-200 p-3 text-[11px] leading-5 text-slate-700">
       <p>
-        1인{" "}
-        <span className="font-semibold tabular-nums text-slate-900">
-          {q.originalPrice.toLocaleString("ko-KR")} {q.originalCurrency || input.currency}
-        </span>
-        {q.rate !== null && q.originalCurrency && q.originalCurrency !== input.currency && <> (≈ {money(q.pricePerPerson)})</>}
+        {q.originalPrice > 0 ? (
+          <>
+            1인{" "}
+            <span className="font-semibold tabular-nums text-slate-900">
+              {q.originalPrice.toLocaleString("ko-KR")} {q.originalCurrency || input.currency}
+            </span>
+            {q.rate !== null && q.originalCurrency && q.originalCurrency !== input.currency && <> (≈ {money(q.pricePerPerson)})</>}
+          </>
+        ) : (
+          <span className="font-semibold text-amber-800">상품 요금 안 적힘</span>
+        )}
         {" · "}
         {q.basisTravelers > 0 ? `${q.basisTravelers}명 기준` : "인원 기준 안 적힘"} · {ROOM_LABELS[q.roomBasis]}
+        {(q.minTravelers ?? 0) > 0 && <> · 최소 {q.minTravelers}명 출발</>}
         {q.singleSupplement > 0 && <> · 싱글차지 {orig(q.singleSupplement)}</>}
       </p>
-      {q.rate === null && (
+      {q.hotels && <p className="text-pretty">호텔: {q.hotels}</p>}
+      {q.rate === null && q.originalPrice > 0 && (
         <p role="alert" className="flex items-start gap-1 text-amber-800">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           통화({q.originalCurrency || "모름"})를 {input.currency}로 바꾸지 못했습니다. 아래 업체 공급가에 직접 넣어 주세요.
@@ -147,7 +155,7 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
           label="업체 공급가 (1인, 2인 1실 기준)"
           value={input.supplierPricePerPerson}
           prefix={symbol}
-          onChange={(supplierPricePerPerson) => onInputChange({ supplierPricePerPerson })}
+          onChange={(supplierPricePerPerson) => onInputChange(supplierPricePerPerson > 0 ? { supplierPricePerPerson, pricingMode: "supplier" } : { supplierPricePerPerson })}
         />
         <NumberField
           id="supplierTargetPrice"
@@ -332,7 +340,11 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
           )}
         </>
       ) : (
-        <p className="text-[11px] text-slate-500">목표 판매가를 넣거나 경쟁 상품을 찾으면 업체 공급가 상한을 계산합니다.</p>
+        <p className="text-pretty text-[11px] text-slate-500">
+          {input.pricingMode !== "supplier"
+            ? "견적서에 상품 요금이 없습니다. 업체에 받은 1인 공급가를 위에 넣으면 '업체 공급가에서 시작'으로 바꿔 목표 원가를 계산합니다."
+            : "목표 판매가를 넣거나 경쟁 상품을 찾으면 업체 공급가 상한을 계산합니다."}
+        </p>
       )}
 
       <SupplierRequestBox ctx={{ input, meta, target, cuts: chosen, verify, money, caps }} />

@@ -234,7 +234,7 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
         </p>
       )}
 
-      {input.pricingMode === "supplier" && (
+      {(input.pricingMode === "supplier" || input.supplierQuote) && (
         <section>
           <SubHeading>업체 견적 검증 · 목표 원가</SubHeading>
           <SupplierCheckPanel

@@ -2,8 +2,9 @@ import { z } from "zod";
 import { ITEM_TYPES } from "@/lib/itemTypes";
 import { isSupportedCourseFile, MAX_COURSE_FILE_BYTES } from "@/lib/courseFile";
 import { roundMinutes } from "@/lib/format";
+import { applyFlightToDays } from "@/lib/flightApply";
 import { enforceMealWindows } from "@/lib/mealTiming";
-import type { CourseMeta, DayPlan, ItineraryItem } from "@/types";
+import type { CourseMeta, DayPlan, FlightOption, ItineraryItem } from "@/types";
 
 /** ---------- 클라이언트 → 서버 요청 ---------- */
 
@@ -68,10 +69,16 @@ const LINE_UNITS = ["per_person", "per_group", "per_day", "per_room_night", "unk
 
 /** 업체 견적서의 금액 — 원문에 적힌 것만 옮긴다 (금액을 지어내지 않는다) */
 const quoteSchema = z.object({
-  found: z.boolean().describe("원문에 이 상품의 요금(견적 금액)이 적혀 있으면 true. 없으면 false이고 나머지는 0·빈 값"),
+  found: z.boolean().describe("원문에 이 상품의 요금이나 견적 조건(인원·객실 기준, 포함·불포함, 호텔)이 하나라도 있으면 true. 아무것도 없으면 false"),
   currency: z.string().describe("요금 통화 코드 (KRW, USD, VND, THB, JPY, EUR, CNY 등). '원'은 KRW, '$'·'불'은 USD. 없으면 빈 문자열"),
-  pricePerPerson: z.number().describe("성인 1인 요금 (원문 통화 그대로). 인원별 요금표만 있으면 원문이 기준으로 삼은 인원의 요금. 없으면 0"),
+  pricePerPerson: z
+    .number()
+    .describe(
+      "이 패키지 상품 자체의 성인 1인 요금 (원문 통화 그대로). 인원별 요금표만 있으면 원문이 기준으로 삼은 인원의 요금. 불포함·선택관광·옵션·추가 데이투어·싱글차지·팁·가이드 경비 금액은 절대 넣지 않는다. 상품 요금이 없으면 0",
+    ),
   basisTravelers: z.number().describe("몇 명 기준 요금인지 (예: 성인 4명 기준이면 4). 원문에 없으면 0"),
+  minTravelers: z.number().describe("최소 출발 인원 (예: 최소 성인 4인 이상이면 4). 원문에 없으면 0"),
+  hotels: z.string().describe("원문에 적힌 호텔 이름·등급 표기 그대로 (후보가 여럿이면 모두, 예: 골든드래곤(4성), 리젠시 아트(5성) 중 하나). 없으면 빈 문자열"),
   roomBasis: z.enum(["twin", "single", "triple", "unknown"]).describe("객실 기준: 2인 1실이면 twin, 1인 1실이면 single, 3인 1실이면 triple, 원문에 없으면 unknown"),
   singleSupplement: z.number().describe("싱글차지(1인실 추가요금) 1인 금액 (원문 통화). 없으면 0"),
   tiers: z.array(z.object({ travelers: z.number(), pricePerPerson: z.number() })).describe("인원별 1인 요금표 (예: 2명 600, 4명 450). 없으면 빈 배열"),
@@ -85,7 +92,22 @@ const quoteSchema = z.object({
   notes: z.string().describe("견적 조건·유효기간·시즌 할증 등 원문 메모. 없으면 빈 문자열"),
 });
 
-export type ParsedSupplierQuote = Omit<z.infer<typeof quoteSchema>, "found">;
+/** 원문에 적힌 항공편 한 편 — 시각은 각 공항의 현지 시각 그대로 */
+const flightLegSchema = z.object({
+  airline: z.string().describe("항공사 (예: 제주항공). 없으면 빈 문자열"),
+  flightNumber: z.string().describe("편명 (예: 7C2401). 없으면 빈 문자열"),
+  departAirport: z.string().describe("출발 공항·도시 (예: 인천). 없으면 빈 문자열"),
+  departTime: z.string().describe("출발 시각 HH:mm (원문 그대로, 현지 시각). 없으면 빈 문자열"),
+  arriveAirport: z.string().describe("도착 공항·도시 (예: 마카오). 없으면 빈 문자열"),
+  arriveTime: z.string().describe("도착 시각 HH:mm (원문 그대로, 현지 시각, 다음날이면 +1 표기). 없으면 빈 문자열"),
+});
+
+export type ParsedFlightLeg = z.infer<typeof flightLegSchema>;
+
+export type ParsedSupplierQuote =Omit<z.infer<typeof quoteSchema>, "found"> & {
+  /** 상품 요금이 아니라고 보고 뺀 금액 (원문 통화, 없으면 0) */
+  suspectPrice: number;
+};
 
 export const courseResponseSchema = z.object({
   packageName: z.string().describe("상품명. 원문에 없으면 빈 문자열"),
@@ -96,7 +118,10 @@ export const courseResponseSchema = z.object({
   noOption: z.boolean().describe("원문이 노옵션을 명시한 경우에만 true"),
   hotelGrade: z.string().describe("원문에 적힌 호텔 등급/유형. 없으면 빈 문자열"),
   highlights: z.array(z.string()).describe("원문의 핵심 포인트 요약 목록. 없으면 빈 배열"),
-  quote: quoteSchema.describe("원문(업체 견적서)에 적힌 요금. 코스만 있고 요금이 없으면 found=false"),
+  quote: quoteSchema.describe("원문(업체 견적서·코스표)에 적힌 요금과 견적 조건. 아무것도 없으면 found=false"),
+  flights: z
+    .object({ outbound: flightLegSchema.describe("가는 편 (첫날)"), inbound: flightLegSchema.describe("오는 편 (마지막 날)") })
+    .describe("원문에 적힌 항공편. 원문에 없는 값은 빈 문자열 (지어내지 않는다)"),
   days: z.array(
     z.object({
       day: z.number(),
@@ -132,29 +157,85 @@ function toItem(raw: ParsedCourse["days"][number]["items"][number], id: string):
   };
 }
 
-/** 검증된 LLM 응답을 앱 내부 타입으로 변환한다 (하루 전체를 순서대로 나열하는 linear 일정). */
-/** 견적 금액을 정리한다. 원문에 요금이 없으면 null */
+/**
+ * 견적서 내용을 정리한다. 요금이 없어도 인원·객실 기준, 포함·불포함, 호텔이 있으면 남긴다 (검증표·질문에 쓴다).
+ * 읽은 1인 요금이 불포함·옵션 문구에 적힌 금액과 같으면(예: 불포함 "홍콩 데이투어 인당 180USD") 상품 요금이 아니라고 보고 뺀다.
+ * 아무 내용도 없으면 null.
+ */
 export function toSupplierQuote(raw: ParsedCourse["quote"] | undefined): ParsedSupplierQuote | null {
   if (!raw || !raw.found) return null;
   const amount = (v: number) => (Number.isFinite(v) && v > 0 ? v : 0);
   const tiers = raw.tiers.filter((t) => amount(t.travelers) > 0 && amount(t.pricePerPerson) > 0).map((t) => ({ travelers: Math.round(t.travelers), pricePerPerson: t.pricePerPerson }));
-  const price = amount(raw.pricePerPerson) || tiers[0]?.pricePerPerson || 0;
-  if (price <= 0) return null;
   const text = (s: string) => s.trim().slice(0, 300);
   const list = (xs: string[]) => xs.map((x) => x.trim()).filter(Boolean).slice(0, 20).map((x) => x.slice(0, 120));
+  const includes = list(raw.includes);
+  const excludes = list(raw.excludes);
+  let price = amount(raw.pricePerPerson) || tiers[0]?.pricePerPerson || 0;
+  let suspectPrice = 0;
+  if (price > 0) {
+    const digits = String(price);
+    // 숫자 앞뒤가 다른 숫자면(예: 180 ⊂ 1800) 같은 금액으로 보지 않는다
+    const same = new RegExp(`(^|[^0-9])${digits.replace(".", "\\.")}([^0-9]|$)`);
+    if ([...excludes, raw.options].some((s) => same.test(s.replace(/[,\s]/g, "")))) {
+      suspectPrice = price;
+      price = 0;
+    }
+  }
+  const hasInfo = price > 0 || includes.length > 0 || excludes.length > 0 || raw.basisTravelers > 0 || raw.minTravelers > 0 || raw.roomBasis !== "unknown" || raw.hotels.trim() !== "";
+  if (!hasInfo) return null;
   return {
     currency: raw.currency.trim().toUpperCase().slice(0, 3),
     pricePerPerson: price,
+    suspectPrice,
     basisTravelers: Math.max(0, Math.round(raw.basisTravelers)),
+    minTravelers: Math.max(0, Math.round(raw.minTravelers)),
+    hotels: text(raw.hotels),
     roomBasis: raw.roomBasis,
     singleSupplement: amount(raw.singleSupplement),
     tiers,
     lines: raw.lines.filter((l) => l.label.trim() && amount(l.amount) > 0).slice(0, 30).map((l) => ({ label: l.label.trim().slice(0, 80), amount: l.amount, unit: l.unit })),
-    includes: list(raw.includes),
-    excludes: list(raw.excludes),
+    includes,
+    excludes,
     shopping: text(raw.shopping),
     options: text(raw.options),
     notes: text(raw.notes),
+  };
+}
+
+const HHMM = /(\d{1,2}):(\d{2})/;
+
+/**
+ * 원문에 적힌 항공편을 일정에 반영할 항공편으로 — 출발 시각을 모르면 반영하지 않는다.
+ * 경유·소요시간은 원문에 없으면 모르는 값으로 둔다(stops = -1).
+ */
+export function courseFlightOption(f: ParsedCourse["flights"] | undefined): FlightOption | null {
+  if (!f) return null;
+  const out = f.outbound;
+  const back = f.inbound;
+  if (!HHMM.test(out.departTime) && !HHMM.test(back.departTime)) return null;
+  const t = (s: string) => s.trim();
+  return {
+    airline: t(out.airline) || t(back.airline),
+    flightNumber: t(out.flightNumber),
+    departDate: "",
+    departAirport: t(out.departAirport),
+    departTime: t(out.departTime),
+    arriveAirport: t(out.arriveAirport),
+    arriveTime: t(out.arriveTime),
+    stops: -1,
+    duration: "",
+    price: 0,
+    basis: "estimated",
+    sourceName: "업체 코스표",
+    link: "",
+    returnFlightNumber: t(back.flightNumber),
+    returnDepartDate: "",
+    returnDepartAirport: t(back.departAirport),
+    returnDepartTime: t(back.departTime),
+    returnArriveAirport: t(back.arriveAirport),
+    returnArriveTime: t(back.arriveTime),
+    returnStops: -1,
+    returnDuration: "",
   };
 }
 
@@ -165,7 +246,7 @@ export function toCoursePlan(parsed: ParsedCourse): {
   totalDays: number;
   quote: ParsedSupplierQuote | null;
 } {
-  const days: DayPlan[] = parsed.days.map((day, index) => {
+  const rawDays: DayPlan[] = parsed.days.map((day, index) => {
     const dayNo = index + 1;
     return {
       day: dayNo,
@@ -177,6 +258,10 @@ export function toCoursePlan(parsed: ParsedCourse): {
       items: enforceMealWindows(day.items.map((item, i) => toItem(item, `d${dayNo}-i${i + 1}`))),
     };
   });
+
+  // 원문에 항공편 시각이 있으면: 비행 항목의 이동 시간 = 출발→도착(현지 시각 차이), 그날 일정은 출발 시각에 맞춰 시작
+  const flight = courseFlightOption(parsed.flights);
+  const days = flight ? applyFlightToDays(rawDays, flight) : rawDays;
 
   // 도시 순서는 일차별 숙박 도시에서 직접 계산한다 (AI가 도착 도시를 앞에 두는 경우가 있다)
   const stayCities = [...new Set(days.map((d) => d.overnightCity ?? "").filter(Boolean))];

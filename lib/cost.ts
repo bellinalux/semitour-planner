@@ -3,7 +3,9 @@ import { formatMoney } from "@/lib/currency";
 import { dayItems, groundDays, overnightNights, type PmChoice } from "@/lib/itinerary";
 import { lodgingCostPerUnit, lodgingSegments } from "@/lib/lodging";
 import { roundUpPrice } from "@/lib/priceRound";
+import { supplierIncludes } from "@/lib/supplierQuote";
 import type {
+  CompetitorIncludes,
   CostKey,
   CostLine,
   DayPlan,
@@ -416,14 +418,18 @@ export function calculateQuote(input: TripInput, days: DayPlan[], pmChoice: PmCh
     matrix,
     breakEvenTravelers: minTravelersFor(scenario.pricePerPerson, 0, ctx),
     targetMarginTravelers: minTravelersFor(scenario.pricePerPerson, margin, ctx),
-    ourIncludes: {
-      guide: input.guideCostPerDay > 0,
-      vehicle: input.vehicleCostPerDay > 0,
-      admission: admissionPerPerson > 0,
-      meals: mealPerPerson > 0,
-      hotel: ctx.includeLodging,
-      flight: ctx.includeFlight,
-    },
+    ourIncludes: ((): CompetitorIncludes => {
+      const base = {
+        guide: input.guideCostPerDay > 0,
+        vehicle: input.vehicleCostPerDay > 0,
+        admission: admissionPerPerson > 0,
+        meals: mealPerPerson > 0,
+        hotel: ctx.includeLodging,
+        flight: ctx.includeFlight,
+      };
+      // 업체 공급가로 파는 상품은 업체 견적서의 포함·불포함이 기준 (안 적힌 항목만 우리 입력으로)
+      return input.pricingMode === "supplier" && input.supplierQuote ? supplierIncludes(input.supplierQuote, base) : base;
+    })(),
     channels,
     warnings,
   };

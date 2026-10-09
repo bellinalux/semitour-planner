@@ -157,7 +157,7 @@ export function PlannerApp() {
 
     // 업체 견적서였으면 읽은 금액으로 "업체 공급가에서 시작"하는 견적으로 바꾼다 (목표 판매가는 그때까지 쓰던 판매가)
     if (result.supplierQuote) {
-      const patch = await supplierQuotePatch(result.supplierQuote, nextInput);
+      const patch = await supplierQuotePatch(result.supplierQuote, nextInput, undefined, result.meta);
       update(patch);
       nextInput = { ...nextInput, ...patch };
     }
@@ -293,13 +293,13 @@ export function PlannerApp() {
       {/* 좁은 화면: 탭 하나씩 / lg: 왼쪽에 입력+설정을 쌓고 오른쪽에 결과 / 넓은 화면(1400px~): 입력 | 결과 | 설정 3열 고정 */}
       <main className="grid min-h-0 flex-1 lg:grid-cols-[400px_minmax(0,1fr)] wide:grid-cols-[380px_minmax(0,1fr)_420px]">
         <div
-          className={`min-h-0 overflow-y-auto border-slate-200 bg-slate-50 lg:block lg:border-r wide:contents ${
+          className={`relative min-h-0 overflow-y-auto border-slate-200 bg-slate-50 lg:block lg:border-r wide:contents ${
             tab === "result" ? "hidden" : "block"
           }`}
         >
         <aside
           aria-label="입력"
-          className={`bg-slate-50 lg:block wide:order-1 wide:min-h-0 wide:overflow-y-auto wide:border-r wide:border-slate-200 ${
+          className={`relative bg-slate-50 lg:block wide:order-1 wide:min-h-0 wide:overflow-y-auto wide:border-r wide:border-slate-200 ${
             tab === "input" ? "block" : "hidden"
           }`}
         >
@@ -325,7 +325,7 @@ export function PlannerApp() {
         </aside>
         <aside
           aria-label="설정"
-          className={`border-t border-slate-200 bg-slate-50 lg:block wide:order-3 wide:min-h-0 wide:overflow-y-auto wide:border-l wide:border-t-0 ${
+          className={`relative border-t border-slate-200 bg-slate-50 lg:block wide:order-3 wide:min-h-0 wide:overflow-y-auto wide:border-l wide:border-t-0 ${
             tab === "settings" ? "block" : "hidden"
           }`}
         >
@@ -345,7 +345,7 @@ export function PlannerApp() {
         </div>
         <section
           aria-label="결과"
-          className={`min-h-0 overflow-y-auto bg-slate-100/60 lg:block wide:order-2 ${
+          className={`relative min-h-0 overflow-y-auto bg-slate-100/60 lg:block wide:order-2 ${
             tab === "result" ? "block" : "hidden"
           }`}
         >

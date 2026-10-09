@@ -237,7 +237,9 @@ export function supplierCuts(input: TripInput, days: DayPlan[], pmChoice: PmChoi
   if (groundPerDay > 0) {
     for (const d of days) {
       const its = dayItems(d, pmChoice);
-      if (its.length > 0 && its.every((i) => REST_TYPES.has(i.type ?? ""))) {
+      // 업체가 이미 "가이드/차량 미포함"이라고 적은 자유일정 날은 줄일 것이 없다 (절감을 두 번 세지 않는다)
+      const alreadyOff = its.some((i) => /(가이드|차량|기사)[^\n]*(미포함|불포함|없음|제외)/.test(`${i.name} ${i.description}`));
+      if (its.length > 0 && !alreadyOff && its.every((i) => REST_TYPES.has(i.type ?? ""))) {
         cuts.push({
           id: `ground-${d.day}`,
           kind: "ground-day",
