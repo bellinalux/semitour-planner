@@ -20,7 +20,11 @@ import { StepGuide } from "@/components/layout/StepGuide";
 import { StudioNotices } from "@/components/layout/StudioNotices";
 import { MobileTabs, type PlannerTab } from "@/components/layout/MobileTabs";
 import type { SettingsFocus, SettingsSection } from "@/components/form/settingsFocus";
-import { BuildProgress, progressStarted } from "@/components/dashboard/BuildProgress";
+import { InsightPanel } from "@/components/insight/InsightPanel";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { buildInsights, keyNumbers } from "@/lib/insights";
+import { formatMoney } from "@/lib/currency";
 import { useItinerary } from "@/hooks/useItinerary";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { usePrintDocument } from "@/hooks/usePrintDocument";
@@ -238,6 +242,37 @@ export function PlannerApp() {
     onHotelRestore: autoBuild.restoreHotelPicks,
   });
 
+  // 레이아웃3(요약·추천): 핵심 숫자와 고치면 좋은 것
+  const money = (v: number) => formatMoney(Math.round(v), input.currency);
+  const insightArgs = { input, days, pmChoice, meta, quote, budgetFit, money };
+  const numbers = keyNumbers(insightArgs);
+  const insights = buildInsights(insightArgs);
+  const urgentCount = insights.filter((i) => i.tone === "warn").length;
+  // 요약·추천은 한 곳에만 그린다: lg~1400px는 결과 위 접이, 그 밖(넓은 화면의 3칸째·좁은 화면의 추천 탭)은 오른쪽 칸
+  const isLg = useMediaQuery("(min-width: 64rem)");
+  const isWide = useMediaQuery("(min-width: 87.5rem)");
+  const insightInResult = isLg && !isWide;
+  /** 결과 화면의 이 id로 이동 (좁은 화면이면 결과 탭으로 바꾼 뒤) */
+  const scrollToResult = (id: string) => {
+    setTab("result");
+    window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "smooth" }), 80);
+  };
+  const insightPanel = (
+    <InsightPanel
+      input={input}
+      numbers={numbers}
+      insights={insights}
+      budgetFit={budgetFit}
+      build={autoBuild}
+      auto={autoQuote}
+      money={money}
+      onFocus={openSettings}
+      onScrollTo={scrollToResult}
+      onAddTourOption={(tour) => update({ options: [...input.options, tourToOption(tour, 0, input)] })}
+      onInsertTour={insertTour}
+    />
+  );
+
   const { exporter, printDocument } = useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quoteLog, author: session.user?.name || quoteLog.author, print });
 
   // 화면 위 진행 안내 (① 입력 → ② 코스 → ③ 견적 → ④ 문서)
@@ -290,9 +325,9 @@ export function PlannerApp() {
         }
       />
       <StepGuide steps={guideSteps} />
-      <MobileTabs active={tab} onChange={setTab} />
-      {/* 좁은 화면: 탭 하나씩(입력·결과) / lg 이상: 왼쪽 입력 폴더 | 오른쪽 결과 */}
-      <main className="grid min-h-0 flex-1 lg:grid-cols-[420px_minmax(0,1fr)] wide:grid-cols-[460px_minmax(0,1fr)]">
+      <MobileTabs active={tab} onChange={setTab} counts={{ insight: urgentCount }} />
+      {/* 좁은 화면: 탭 하나씩(입력·결과·추천) / lg: 입력 | 결과(위에 요약·추천 접이) / 넓은 화면(1400px~): 입력 | 결과 | 요약·추천 */}
+      <main className="grid min-h-0 flex-1 lg:grid-cols-[400px_minmax(0,1fr)] wide:grid-cols-[400px_minmax(0,1fr)_360px]">
         <aside
           aria-label="입력"
           className={`relative min-h-0 overflow-y-auto border-slate-200 bg-slate-50 lg:block lg:border-r ${tab === "input" ? "block" : "hidden"}`}
@@ -314,7 +349,7 @@ export function PlannerApp() {
             autoBuilding={autoBuild.running}
             autoStatus={autoBuildStatus(autoBuild)}
             onShowProgress={() => {
-              setTab("result");
+              setTab(insightInResult ? "result" : "insight");
               window.setTimeout(() => document.getElementById("build-progress")?.scrollIntoView({ block: "start", behavior: "smooth" }), 60);
             }}
           />
@@ -323,18 +358,18 @@ export function PlannerApp() {
           aria-label="결과"
           className={`relative min-h-0 overflow-y-auto bg-slate-100/60 lg:block ${tab === "result" ? "block" : "hidden"}`}
         >
-          {progressStarted(autoBuild, autoQuote) ? (
-            <div className="p-4 pb-0">
-              <BuildProgress
-                input={input}
-                build={autoBuild}
-                auto={autoQuote}
-                onAddTourOption={(tour) => update({ options: [...input.options, tourToOption(tour, 0, input)] })}
-                onInsertTour={insertTour}
-                onFocus={openSettings}
-              />
-            </div>
-          ) : null}
+          {/* lg~1400px: 레이아웃3이 들어갈 자리가 없어 결과 위에 접이로 둔다 */}
+          {insightInResult && (
+          <div className="p-4 pb-0">
+            <SectionCard
+              title={`요약 · 추천${insights.length > 0 ? ` ${insights.length}건` : ""}`}
+              collapsible
+              summary={numbers ? `1인 ${money(numbers.pricePerPerson)} · 수익률 ${numbers.marginRate.toFixed(1)}%${urgentCount > 0 ? ` · 확인 ${urgentCount}건` : ""}` : "견적 전"}
+            >
+              {insightPanel}
+            </SectionCard>
+          </div>
+          )}
           <Dashboard
             itinerary={itinerary.state}
             days={days}
@@ -397,6 +432,12 @@ export function PlannerApp() {
             }}
           />
         </section>
+        <aside
+          aria-label="요약 · 추천"
+          className={`relative min-h-0 overflow-y-auto border-slate-200 bg-slate-50 p-4 lg:hidden wide:block wide:border-l ${tab === "insight" ? "block" : "hidden"}`}
+        >
+          {!insightInResult && insightPanel}
+        </aside>
       </main>
     </div>
     </>

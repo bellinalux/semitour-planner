@@ -77,7 +77,7 @@ test("업체 견적서: 요금을 읽어 공급가로 넣고, 목표 판매가�
 
   // 검증표: 우리 시세와 비교하고, 견적서에 안 적힌 것·불포함 팁을 업체에 물어볼 질문으로
   await expect(page.locator("table", { has: page.locator("caption", { hasText: "업체 견적 시세 비교" }) })).toBeVisible();
-  await expect(page.getByText(/업체에 물어볼 것/)).toBeVisible();
+  await expect(page.locator("#supplier-check").getByText(/업체에 물어볼 것/)).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: "가이드·기사 팁(경비)은 1인 얼마이고, 고객이 현지에서 내는 건가요?" })).toBeVisible();
 
   // 우리 시세를 조회하면 1인 공급가 전체를 시세 원가와 비교한다

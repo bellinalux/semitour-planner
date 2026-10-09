@@ -13,7 +13,6 @@ import { lodgingRoomsFor } from "@/lib/cost";
 import { formatMoney } from "@/lib/currency";
 import { BudgetPanel } from "./quote/BudgetPanel";
 import { CostSheetPanel } from "./quote/CostSheetPanel";
-import { BudgetFitBox } from "./quote/BudgetFitBox";
 import type { BudgetFitView } from "@/hooks/useBudgetFit";
 import { bindingChannel, buildPriceTiers, singleSupplement } from "@/lib/pricing";
 import type { PmChoice } from "@/lib/itinerary";
@@ -235,7 +234,7 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
       )}
 
       {(input.pricingMode === "supplier" || input.supplierQuote) && (
-        <section>
+        <section id="supplier-check" className="scroll-mt-3">
           <SubHeading>업체 견적 검증 · 목표 원가</SubHeading>
           <SupplierCheckPanel
             input={input}
@@ -255,10 +254,10 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
         <section>
           <SubHeading>예산 사용표 (1인, 2인 1실 기준)</SubHeading>
           <BudgetPanel plan={budget} currency={input.currency} />
-          {budgetFit && (
-            <div className="mt-2">
-              <BudgetFitBox fit={budgetFit} />
-            </div>
+          {budgetFit && (budgetFit.plan || budgetFit.upgrades.length > 0 || budgetFit.applied.length > 0) && (
+            <p className="mt-2 text-pretty text-[11px] text-slate-500">
+              예산 맞추기(넘으면 줄이기 · 남으면 올리기 · 되돌리기)는 &lsquo;요약 · 추천&rsquo;에서 바로 적용합니다.
+            </p>
           )}
         </section>
       )}

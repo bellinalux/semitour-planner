@@ -80,10 +80,10 @@ export function DayCard({
   const dayEnd = calcDayEnd(plan, pmChoiceForDay);
 
   return (
-    <article className="rounded-lg border border-slate-200">
+    <article id={`day-${plan.day}`} className="scroll-mt-3 rounded-lg border border-slate-200">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-100 bg-slate-50/70 px-4 py-3">
         <span className="rounded-md bg-slate-900 px-2 py-1 text-xs font-bold text-white">DAY {plan.day}</span>
-        <h3 className="min-w-0 flex-1 text-sm font-semibold text-slate-900">{plan.theme}</h3>
+        <h3 className="min-w-0 flex-1 basis-40 text-balance text-sm font-semibold text-slate-900">{plan.theme}</h3>
         {plan.overnightCity && (
           <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
             <BedDouble className="h-3 w-3" aria-hidden />
