@@ -33,6 +33,8 @@ export interface EnginePlace {
   meal?: "lunch" | "dinner" | "cafe";
   /** 걸어서 함께 도는 구역 이름 — 같은 구역은 명소 하나로 센다 */
   area?: string;
+  /** 구역이 속한 큰 지역 (예: 마카오 반도) — 떠났던 지역으로 되돌아오면 지그재그 */
+  region?: string;
 }
 
 export type MoveMode = "car" | "walk" | "public";
@@ -78,6 +80,8 @@ export interface ScheduleResult {
   timeline: TimelineStop[];
   /** 지켜야 하는 조건을 어긴 것(휴무·마감 뒤 도착 등) */
   violations: string[];
+  /** 떠났던 구역으로 되돌아온 곳 (지그재그 동선) */
+  zigzag?: string[];
   /** 넣지 못해 뺀 곳과 이유 */
   dropped: { id: string; name: string; reason: string }[];
   totalTravel: number;

@@ -151,7 +151,8 @@ export function PlannerApp() {
     prewarmEstimates(input);
     const result = await timed("generate", input.destination.trim(), () => itinerary.generate(input, courseFile));
     if (!result) return null;
-    if (autoQuote.afterGenerate && !options.fromAutoBuild) autoQuote.armAfterGenerate();
+    // 업체 견적서는 아래에서 견적서 내용을 넣은 다음에 자동 견적을 건다 (호텔 이름별 시세를 찾도록)
+    if (autoQuote.afterGenerate && !options.fromAutoBuild && !result.supplierQuote) autoQuote.armAfterGenerate();
     if (courseEngine.autoCheck) courseEngine.armAfterGenerate();
 
     // 붙여넣은 코스에서 읽은 기간/도시를 입력 폼에 반영한다 (박수는 코스 원문이 기준이다)
@@ -174,6 +175,8 @@ export function PlannerApp() {
       const patch = extra.length > 0 ? { ...quotePatch, options: [...nextInput.options, ...extra] } : quotePatch;
       update(patch);
       nextInput = { ...nextInput, ...patch };
+      // 업체 견적서를 읽었으면 우리 시세(견적서 호텔별 숙박·차량·가이드·팁·보험)를 바로 조회해 업체 몫 추정까지 보여 준다
+      if (!options.fromAutoBuild) autoQuote.armAfterGenerate();
     }
 
     // 일정이 만들어지면 세일즈 포인트도 이어서 생성한다 (실패해도 일정/견적에는 영향 없음)
@@ -269,7 +272,7 @@ export function PlannerApp() {
 
   // 레이아웃3(요약·추천): 핵심 숫자와 고치면 좋은 것
   const money = (v: number) => formatMoney(Math.round(v), input.currency);
-  const insightArgs = { input, days, pmChoice, meta, quote, budgetFit, money, engine: { scores: courseEngine.scores, moves: courseEngine.moves } };
+  const insightArgs = { input, days, pmChoice, meta, quote, budgetFit, money, engine: { scores: courseEngine.scores, moves: courseEngine.moves, zigzags: courseEngine.zigzags, zigzagFixable: courseEngine.zigzagFixable } };
   const numbers = keyNumbers(insightArgs);
   const insights = buildInsights(insightArgs);
   const urgentCount = insights.filter((i) => i.tone === "warn").length;

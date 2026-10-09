@@ -21,6 +21,7 @@ export const enginePlaceSchema = z.object({
   name: z.string().max(200),
   nameEn: z.string().max(200).optional(),
   area: z.string().max(120).optional(),
+  region: z.string().max(60).optional(),
   lat: z.number().optional(), lng: z.number().optional(),
   stayMin: z.number().int().min(0).max(720),
   kind: z.enum(["sight", "meal", "meeting", "end", "free", "transfer"]).optional(),
@@ -227,6 +228,7 @@ export async function planCourse(req: PlanRequest): Promise<PlanResponse> {
       open: p.open ?? k?.open, lastEntry: p.lastEntry ?? k?.lastEntry, best: p.best ?? k?.best,
       ...(p.meal ? { meal: p.meal } : {}),
       ...(p.area ? { area: p.area } : {}),
+      ...(p.region ? { region: p.region } : {}),
       ...(k ? { knowledge: k } : {}),
     };
     return merged;

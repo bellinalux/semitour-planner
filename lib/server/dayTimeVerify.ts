@@ -22,7 +22,8 @@ function researchPrompt(destination: string, day: DayTimeRequest["days"][number]
     "2. 구역마다 관광객이 보통 쓰는 총 시간(분) — 구역 안 도보 이동은 포함하고, 점심·저녁 식사 시간은 뺍니다.",
     "3. 구역 안 장소 사이 보통 도보 시간(분)",
     "4. 그 구역 마지막 장소에서 다음 항목까지 이동 수단과 시간(분) (예: 택시 15~20분)",
-    "5. 근거 출처 이름",
+    "5. 구역마다 속한 큰 지역 (예: 마카오 반도 / 타이파 / 코타이 / 콜로안 — 같은 지역이면 같은 이름으로)",
+    "6. 근거 출처 이름",
     "확인하지 못한 값은 '확인 못함'이라고 쓰세요. 기억이나 추측으로 시간을 만들지 마세요.",
   ].join("\n");
 }
@@ -58,6 +59,7 @@ async function verifyDay(
       itemIds.forEach((id) => used.add(id));
       return {
         name: a.name.trim().slice(0, 60),
+        region: a.region.trim().slice(0, 40),
         itemIds,
         totalMinutes: roundMinutes(Math.max(0, a.totalMinutes)),
         walkMinutes: Math.max(0, Math.min(60, Math.round(a.walkMinutes))),
@@ -74,7 +76,7 @@ export async function verifyDayTimes(req: DayTimeRequest): Promise<DayTimeRespon
     req.days.map((day) =>
       // 같은 항목·순서면 7일 동안 다시 쓴다 (검색 근거가 있고 구역을 찾은 결과만). 결과가 항목 ID를 쓰므로 키에도 ID를 넣는다
       cached(
-        "day-time",
+        "day-time-v2",
         { destination: req.destination, city: day.city, items: day.items.map((i) => [i.id, i.name, i.type]) },
         7 * DAY,
         () => verifyDay(req.destination, day),

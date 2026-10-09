@@ -172,6 +172,28 @@ export function DayCard({
           {LOAD_WARNING[load.level]}
         </p>
       )}
+      {engine?.zigzags[plan.day] && (
+        <p className="flex flex-wrap items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1 text-pretty">
+            지그재그 동선 — {engine.zigzags[plan.day].map((z) => `${z.from} → ${z.area}로 되돌아옴`).join(", ")}. 구역을 한 방향으로 돌아야 이동이 줄어듭니다.
+            {!engine.zigzagFixable[plan.day] && " 식당 위치 때문이라 코스 엔진 점검에서 점심 자리까지 함께 순서를 바꾸세요."}
+          </span>
+          {engine.zigzagFixable[plan.day] ? (
+            <button type="button" onClick={() => engine.groupAreas(plan.day)} className="shrink-0 rounded border border-amber-400 bg-white px-2 py-0.5 font-semibold hover:bg-amber-100">
+              구역 순서대로 묶기
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => document.getElementById("course-engine")?.scrollIntoView({ block: "start", behavior: "smooth" })}
+              className="shrink-0 rounded border border-amber-400 bg-white px-2 py-0.5 font-semibold hover:bg-amber-100"
+            >
+              코스 엔진 점검 보기
+            </button>
+          )}
+        </p>
+      )}
       {dayEnd?.isLate && (
         <p className="flex items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />

@@ -451,7 +451,14 @@ export interface ItineraryItem {
    * 체류·이동 시간을 어디서 확인했는지. area: 하루 일정 시간 검증(구역 단위, 걸어서 함께 도는 장소 묶음) /
    * place: 장소별 웹 확인. 없으면 AI 추정.
    */
-  timeCheck?: { basis: "area" | "place"; area?: string; sourceName?: string; checkedAt: string };
+  timeCheck?: {
+    basis: "area" | "place";
+    area?: string;
+    /** 구역이 속한 큰 지역 (예: 마카오 반도, 타이파) — 지그재그 동선을 볼 때 쓴다 */
+    region?: string;
+    sourceName?: string;
+    checkedAt: string;
+  };
   /** 체류 시간을 사람이 직접 고쳤으면 true — 웹 시간 확인이 덮어쓰지 않는다 */
   stayEdited?: boolean;
 }

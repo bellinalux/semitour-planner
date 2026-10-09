@@ -71,6 +71,7 @@ function fitList(items: ItineraryItem[], areas: DayTimeArea[], checkedAt: string
       m.timeCheck = {
         basis: "area",
         area: area.name,
+        ...(area.region ? { region: area.region } : {}),
         sourceName:
           [area.sourceName, foldWalk && area.walkMinutes > 0 ? `구역 안 도보 ${area.walkMinutes}분 포함` : ""].filter(Boolean).join(" · ") || undefined,
         checkedAt,

@@ -124,3 +124,37 @@ test("코스 엔진: 점수 배지, 날짜 사이 옮기기·휴식을 한 번�
   await expect(day1).toContainText("콜로안 빌리지");
   await expect(day1).not.toContainText("휴식 · 카페");
 });
+
+test("지그재그 동선: 떠났던 구역으로 되돌아오는 날을 알리고, 구역 순서대로 묶고, 되돌릴 수 있다", async ({ page }) => {
+  await mockAi(page);
+  const zigWork = {
+    ...work,
+    days: [
+      {
+        ...work.days[0],
+        items: [
+          area("a1", "탑석광장", "역사지구", 40, 25),
+          area("t1", "타이파 빌리지", "타이파", 60, 25),
+          area("a2", "세나도 광장", "역사지구", 40, 0),
+        ],
+      },
+    ],
+  };
+  await page.addInitScript((w) => {
+    if (sessionStorage.getItem("e2e-seeded")) return;
+    sessionStorage.setItem("e2e-seeded", "1");
+    localStorage.setItem("semitour-planner:input:v1", JSON.stringify({ mode: "paste", destination: "마카오", days: 1, nights: 0, travelers: 4 }));
+    localStorage.setItem("semitour-planner:work:v1", JSON.stringify(w));
+  }, zigWork);
+  await page.goto("/");
+
+  const day1 = page.locator("#day-1");
+  await expect(day1.getByText(/지그재그 동선 — 타이파 → 역사지구로 되돌아옴/)).toBeVisible();
+  await day1.getByRole("button", { name: "구역 순서대로 묶기" }).click();
+  await expect(day1.getByText(/지그재그 동선/)).toHaveCount(0);
+  const names = await day1.locator("ol > li").allInnerTexts();
+  expect(names.findIndex((n) => n.includes("세나도 광장"))).toBeLessThan(names.findIndex((n) => n.includes("타이파 빌리지")));
+
+  await page.locator("#course-engine").getByRole("button", { name: "되돌리기" }).click();
+  await expect(day1.getByText(/지그재그 동선/)).toBeVisible();
+});

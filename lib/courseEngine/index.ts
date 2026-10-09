@@ -31,7 +31,7 @@ export function estimateMatrix(places: EnginePlace[], mode: MoveMode): number[][
 /** 지금 순서 그대로 하루를 흘려 본 결과 (빼기·순서 바꾸기 없음) */
 export function scheduleAsIs(places: EnginePlace[], M: number[][], o: EngineOptions): ScheduleResult {
   const s = simulate(places.map((_, i) => i), places, M, o);
-  return { order: places.map(p => p.id), timeline: s.stops, violations: s.violations, dropped: [], totalTravel: s.travel, totalWait: s.wait, endTime: s.end, savedTravel: 0, method: "exhaustive" };
+  return { order: places.map(p => p.id), timeline: s.stops, violations: s.violations, zigzag: s.zigzag, dropped: [], totalTravel: s.travel, totalWait: s.wait, endTime: s.end, savedTravel: 0, method: "exhaustive" };
 }
 
 export interface PlanResult { current: ScheduleResult; best: ScheduleResult; quality: QualityReport; bestQuality: QualityReport }

@@ -80,8 +80,7 @@ test("업체 견적서: 요금을 읽어 공급가로 넣고, 목표 판매가�
   await expect(page.locator("#supplier-check").getByText(/업체에 물어볼 것/)).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: "가이드·기사 팁(경비)은 1인 얼마이고, 고객이 현지에서 내는 건가요?" })).toBeVisible();
 
-  // 우리 시세를 조회하면 1인 공급가 전체를 시세 원가와 비교한다
-  await page.getByRole("button", { name: "시세 조회" }).click();
+  // 견적서를 읽으면 우리 시세를 바로 조회해 1인 공급가 전체를 시세 원가와 비교한다
   const verifyTable = page.locator("table", { has: page.locator("caption", { hasText: "업체 견적 시세 비교" }) });
   await expect(verifyTable.getByRole("row", { name: /1인 공급가 전체/ })).not.toContainText("모름", { timeout: 30_000 });
   await expect(page.locator("#supplier-check").getByText(/업체 몫 추정|우리 시세 원가가 공급가보다/)).toBeVisible();
@@ -184,7 +183,7 @@ test("업체 코스표: 출발 요일별 요금을 골라 넣고, 금액 있는 
   await expect(check.getByText(/3박 목, 금 출발 요금을 넣었습니다/)).toBeVisible();
   await expect(check.getByText(/선택 옵션에 등록했습니다/)).toBeVisible();
 
-  await check.getByRole("button", { name: "시세 조회" }).click();
+  // 시세 조회 버튼을 누르지 않아도 견적서 호텔 이름으로 숙박 시세를 찾는다
   await expect(check.getByText("후보 호텔 1박 시세 (2인 1실, 웹 공개 요금)")).toBeVisible({ timeout: 30_000 });
   await expect(check.getByText(/견적서 호텔 2곳의 웹 공개 요금 평균/)).toBeVisible({ timeout: 30_000 });
 });

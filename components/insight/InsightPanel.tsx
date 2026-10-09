@@ -105,6 +105,9 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
       case "fix-day-time":
         dayTime.run(action.days);
         break;
+      case "group-areas":
+        engine.groupAreas(action.day);
+        break;
       case "engine-move":
         engine.fix(action.move.fromDay, { reorder: false, move: action.move, addBreak: false });
         break;

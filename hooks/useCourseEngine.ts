@@ -3,6 +3,7 @@
 import { createContext, useEffect, useRef, useState } from "react";
 import { calcDayLoad } from "@/lib/dayLoad";
 import { dayItems } from "@/lib/itinerary";
+import { findZigzag, groupByArea, type Zigzag } from "@/lib/routeOrder";
 import { applyDayMove, insertBreak, refitDay, suggestDayMoves, type DayMove } from "@/lib/dayBalance";
 import { applyAlternative, applyDayResult, buildDayRequest } from "@/lib/engineDay";
 import type { PmChoice } from "@/lib/itinerary";
@@ -50,6 +51,12 @@ export interface CourseEngineView {
   fix: (dayNo: number, choice: FixChoice) => void;
   canUndo: boolean;
   undo: () => void;
+  /** 떠났던 구역으로 되돌아오는 날 (지그재그 동선) */
+  zigzags: Record<number, Zigzag[]>;
+  /** 지그재그를 "구역 순서대로 묶기"로 고칠 수 있는 날 (아니면 식당 위치 등 때문이라 엔진 순서 바꾸기로) */
+  zigzagFixable: Record<number, boolean>;
+  /** 그날 장소를 구역 순서대로 묶는다 (되돌리기 가능) */
+  groupAreas: (dayNo: number) => void;
   /** 고친 뒤 다시 채점했더니 점수가 내려간 날 — 되돌리기를 권한다 */
   regressed: { day: number; before: number; after: number }[];
   /** 코스를 만들면 시간 검증 + 엔진 점검까지 이어서 할지 (브라우저에 기억) */
@@ -222,6 +229,17 @@ export function useCourseEngine({ days, pmChoice, destination, departureDate, tr
     if (choice.move && !scores[choice.move.toDay]) window.setTimeout(() => void run([choice.move!.toDay]), 1600);
   };
 
+  const groupAreas: CourseEngineView["groupAreas"] = (dayNo) => {
+    const next = latest.current.map((d) => (d.day === dayNo ? groupByArea(d) : d));
+    if (next.every((d, i) => d === latest.current[i])) return;
+    keepSnapshot([dayNo]);
+    replaceDays(next);
+  };
+  const zigzags: Record<number, Zigzag[]> = Object.fromEntries(days.map((d) => [d.day, findZigzag(d, pmChoice)]).filter(([, z]) => (z as Zigzag[]).length > 0));
+  const zigzagFixable: Record<number, boolean> = Object.fromEntries(
+    days.filter((d) => zigzags[d.day]).map((d) => [d.day, findZigzag(groupByArea(d), pmChoice).length < zigzags[d.day].length]),
+  );
+
   const undo = () => {
     if (!snapshot) return;
     replaceDays(snapshot);
@@ -289,6 +307,9 @@ export function useCourseEngine({ days, pmChoice, destination, departureDate, tr
     canUndo: snapshot !== null,
     undo,
     regressed,
+    zigzags,
+    zigzagFixable,
+    groupAreas,
     autoCheck,
     setAutoCheck,
     armAfterGenerate: () => {

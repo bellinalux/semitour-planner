@@ -48,6 +48,7 @@ function mealKind(i: ItineraryItem, start: number | undefined): "lunch" | "dinne
 
 /** 저녁에 하는 일정 (이런 일정이 있으면 하루 끝을 늦게 본다) */
 const EVENING = /야경|야시장|야간|분수쇼|나이트|night|저녁|석식|디너|dinner/i;
+const NIGHT = /야경|야시장|야간|분수쇼|나이트|night/i;
 const AUD:Partial<Record<TravelType, EngineDayRequest["audience"]>> = { senior: "senior", honeymoon: "couple", package: "group", accessible: "senior" };
 
 /** 엔진에 보낼 그날의 항목 (항공은 뺀다) */
@@ -83,8 +84,13 @@ export function buildDayRequest(day: DayPlan, pmChoice: PmChoice, o: { destinati
       return {
         id: i.id, name: i.name, stayMin: Math.max(0, Math.min(720, i.stayMinutes || 0)), kind, priority: kind === "sight" ? 2 : 1,
         ...(kind === "end" ? { fixedOrder: "last" as const } : {}),
+        // 하루를 여는 가이드 미팅·공항 이동은 맨 앞에서 움직이지 않는다
+        ...(kind === "transfer" && items.slice(0, items.indexOf(i)).every((x) => kindOf(x) === "transfer") ? { fixedOrder: "first" as const } : {}),
         ...(kind === "meal" ? { meal: mealKind(i, start) } : {}),
         ...(i.timeCheck?.basis === "area" && i.timeCheck.area ? { area: i.timeCheck.area } : {}),
+        ...(i.timeCheck?.basis === "area" && i.timeCheck.region ? { region: i.timeCheck.region } : {}),
+        // 야경·분수쇼 같은 밤 일정 — 숙소 쪽으로 돌아가며 하는 일정이라 지나온 구역이어도 지그재그로 보지 않는다
+        ...(kind === "sight" && NIGHT.test(`${i.name} ${i.description}`) ? { best: "night" as const } : {}),
       };
     }),
     legs,
@@ -109,13 +115,11 @@ export function cautionFrom(k?: PlaceKnowledge): string {
  *  useBest: 엔진 추천 순서·시간 / 아니면 지금 순서에 이동 시간·주의만
  *  drop: 뺄 항목 id
  */
-/** 순서를 바꾸지 않는 항목 — 항공·이동·숙소·점심·저녁·자유시간은 제자리(시간대가 정해진 일정)에 두고 관광지만 바꾼다 */
+/** 순서를 바꾸지 않는 항목 — 항공·이동·숙소·자유시간, 저녁 식사·야경 같은 저녁 일정은 제자리에 둔다 */
 const ANCHOR_TYPES = new Set(["flight", "transfer", "hotel", "free_time"]);
-// 카페·간식(예: 콜로안의 에그타르트 가게)은 시간대가 없고 그 동네에 붙어 있어 관광지와 함께 옮긴다.
-// 야경·분수쇼 같은 저녁 일정도 시간대가 정해져 있어 옮기지 않는다
+// 점심·카페는 엔진이 점심 시간대를 지키며 정한 자리를 따른다 — 제자리에 두면 다른 지역 식당을 사이에 두고 구역이 쪼개진다(지그재그).
 export const isCafeMeal = (it: ItineraryItem) => kindOf(it) === "meal" && mealKind(it, undefined) === "cafe";
-const isAnchor = (it: ItineraryItem) =>
-  ANCHOR_TYPES.has(it.type ?? "sightseeing") || isFixedMove(it) || (kindOf(it) === "meal" && !isCafeMeal(it)) || EVENING.test(it.name);
+const isAnchor = (it: ItineraryItem) => ANCHOR_TYPES.has(it.type ?? "sightseeing") || isFixedMove(it) || EVENING.test(it.name);
 
 /**
  * 엔진 추천 순서를 하루 목록에 넣는다 — 엔진이 순서를 정한 관광지들만 자기들 자리 안에서 추천 순서대로 바꾸고,

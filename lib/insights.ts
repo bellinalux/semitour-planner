@@ -38,7 +38,8 @@ export type InsightAction =
   | { kind: "copy"; text: string; label: string }
   | { kind: "fix-flight"; label: string }
   | { kind: "fix-day-time"; days: number[]; label: string }
-  | { kind: "engine-move"; move: DayMove; label: string };
+  | { kind: "engine-move"; move: DayMove; label: string }
+  | { kind: "group-areas"; day: number; label: string };
 
 export interface Insight {
   id: string;
@@ -58,7 +59,13 @@ export interface InsightInput {
   budgetFit: { plan: FitPlan | null; upgrades: Upgrade[]; applied: string[] } | null;
   money: (v: number) => string;
   /** 코스 엔진 점수(점검한 날)와 날짜 사이 옮기기 제안 */
-  engine?: { scores: Record<number, { score: number; grade: string; top: string; best: number }>; moves: DayMove[] };
+  engine?: {
+    scores: Record<number, { score: number; grade: string; top: string; best: number }>;
+    moves: DayMove[];
+    /** 떠났던 구역으로 되돌아오는 날 */
+    zigzags?: Record<number, { area: string; from: string }[]>;
+    zigzagFixable?: Record<number, boolean>;
+  };
 }
 
 export function keyNumbers({ input, days, pmChoice, meta, quote, money }: InsightInput): KeyNumbers | null {
@@ -211,6 +218,25 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
         : checked
           ? { kind: "scroll", target: `day-${day.day}`, label: "일정 보기" }
           : { kind: "fix-day-time", days: [day.day], label: "일정 시간 검증으로 맞추기" },
+    });
+  }
+
+  // ④-1 지그재그 동선 — 떠났던 구역으로 되돌아오는 날 (복귀 이동·식사·밤 일정은 제외)
+  for (const [k, zig] of Object.entries(engine?.zigzags ?? {})) {
+    if (zig.length === 0) continue;
+    out.push({
+      id: `zigzag-${k}`,
+      tone: "warn",
+      title: `DAY ${k} 동선이 지그재그입니다`,
+      ...(engine?.zigzagFixable?.[Number(k)] === false
+        ? {
+            detail: `${zig.map((z) => `${z.from} → ${z.area}로 되돌아옴`).join(", ")} — 식당 위치 때문이라 코스 엔진 점검에서 점심 자리까지 함께 순서를 바꾸세요`,
+            action: { kind: "scroll" as const, target: "course-engine", label: "코스 엔진 점검 보기" },
+          }
+        : {
+            detail: `${zig.map((z) => `${z.from} → ${z.area}로 되돌아옴`).join(", ")} — 구역을 한 방향으로 돌도록 같은 지역 장소를 붙입니다 (식사·밤 일정·숙소 복귀는 제자리)`,
+            action: { kind: "group-areas" as const, day: Number(k), label: "구역 순서대로 묶기" },
+          }),
     });
   }
 

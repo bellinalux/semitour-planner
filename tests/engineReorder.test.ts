@@ -24,11 +24,12 @@ const day = () =>
   );
 
 describe("코스 엔진 추천 순서 적용", () => {
-  it("관광지 자리만 추천 순서로 바꾸고 항공·식사·호텔은 제자리, 엔진이 뺀 곳은 원래 앞 장소 뒤에", () => {
+  it("관광지와 점심은 추천 순서대로, 항공·저녁·야경·호텔은 제자리, 엔진이 뺀 곳은 원래 앞 장소 뒤에", () => {
     // 엔진이 저녁·야경 시간대를 못 맞춰 일부를 빼고(s5, night) 저녁을 점심 뒤로 당긴 추천 순서
     const order = ["s4", "s2", "s1", "lunch", "dinner", "s3", "hotel"];
     const next = reorderByEngine(day().items, order);
-    expect(next.map((i) => i.id)).toEqual(["f1", "f2", "lunch", "s4", "s2", "s1", "s3", "s5", "dinner", "night", "hotel"]);
+    // 점심은 엔진이 점심 시간대에 맞춰 정한 자리(s1 다음)로, 저녁은 제자리
+    expect(next.map((i) => i.id)).toEqual(["f1", "f2", "s4", "s2", "s1", "lunch", "s3", "s5", "dinner", "night", "hotel"]);
   });
 
   it("카페·간식(에그타르트 가게)은 제자리에 묶지 않고 관광지와 함께 추천 순서를 따른다", () => {

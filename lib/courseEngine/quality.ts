@@ -34,12 +34,16 @@ export function scoreCourse(places: EnginePlace[], current: ScheduleResult, o: E
   const rIssues: string[] = [];
   let rScore = 25;
   if (ratio > 0.3) { rScore -= Math.min(15, Math.round((ratio - 0.3) * 50)); rIssues.push(`이동이 일정의 ${Math.round(ratio * 100)}% — 30% 이하가 좋습니다`); }
+  // 지그재그: 떠났던 구역으로 되돌아오면 한 번에 8점 (숙소·공항 복귀와 밤 일정은 괜찮다)
+  const zig = current.zigzag ?? [];
+  if (zig.length) { rScore -= Math.min(16, zig.length * 8); rIssues.push(`지그재그 이동 — ${zig.join(", ")}`); }
   if (best && best.order.join() !== current.order.join()) {
     const save = current.totalTravel - best.totalTravel;
     const solved = current.violations.length - best.violations.length;
-    if (save >= 10 || solved > 0) {
+    const unzig = zig.length - (best.zigzag ?? []).length;
+    if (save >= 10 || solved > 0 || unzig > 0) {
       if (save >= 10) { rScore -= Math.min(10, Math.round(save / 6)); rIssues.push(`순서를 바꾸면 이동이 ${save}분 줄어듭니다`); }
-      const why = [solved > 0 ? `시간 문제 ${solved}건 해결` : "", save >= 10 ? `이동 ${save}분 절약` : ""].filter(Boolean).join(", ");
+      const why = [solved > 0 ? `시간 문제 ${solved}건 해결` : "", unzig > 0 ? "지그재그 없이 한 방향으로" : "", save >= 10 ? `이동 ${save}분 절약` : ""].filter(Boolean).join(", ");
       fixes.unshift({ type: "reorder", label: `엔진 추천 순서로 바꾸기 (${why})`, order: best.order });
     }
   }
