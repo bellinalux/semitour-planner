@@ -63,6 +63,32 @@ function flightItemsOfDay(day: DayPlan): ItineraryItem[] {
   return [...day.items, ...day.amGuided, ...day.pmFreeOptions.flatMap((o) => o.items)].filter(looksLikeFlightItem);
 }
 
+/** "도착"만 적힌 비행 항목 (출발 쪽이 빠진 것) */
+const isArrivalOnly = (item: ItineraryItem) => item.name.includes("도착") && !item.name.includes("출발");
+
+/**
+ * 그날 비행 항목이 하나뿐이고 출발·도착 시각을 모두 알면, 빠진 쪽 항목을 만들어 넣는다.
+ *  - 도착 항목만 있으면 그 앞에 "○○ 출발"을 넣는다 (도착 항목의 체류·다음 이동은 그대로)
+ *  - 출발 항목만 있으면 그 뒤에 "○○ 도착"을 넣고, 원래 다음 장소까지 이동 시간은 도착 항목으로 옮긴다
+ * 하루 전체 목록(linear)에 있는 경우만 다룬다.
+ */
+function splitLoneFlight(days: DayPlan[], dayIndex: number, leg: FlightLeg): DayPlan[] {
+  const day = days[dayIndex];
+  if (!leg.departTime || !leg.arriveTime) return days;
+  const flights = day.items.filter(looksLikeFlightItem);
+  if (flights.length !== 1 || flightItemsOfDay(day).length !== 1) return days;
+  const only = flights[0];
+  const base: ItineraryItem = { id: "", type: "flight", name: "", description: "", stayMinutes: 0, travelMinutesToNext: null, entryFee: 0, mealCost: 0, isEstimated: false, admission: "none" };
+  const index = day.items.indexOf(only);
+  const items = [...day.items];
+  if (isArrivalOnly(only)) {
+    items.splice(index, 0, { ...base, id: `${only.id}-dep`, name: leg.departAirport ? `${leg.departAirport} 출발` : "항공 출발" });
+  } else {
+    items.splice(index, 1, { ...only, travelMinutesToNext: null }, { ...base, id: `${only.id}-arr`, name: leg.arriveAirport ? `${leg.arriveAirport} 도착` : "항공 도착", travelMinutesToNext: only.travelMinutesToNext });
+  }
+  return days.map((d, i) => (i === dayIndex ? { ...d, items } : d));
+}
+
 interface FlightGroup {
   dayIndex: number;
   items: ItineraryItem[];
@@ -130,15 +156,9 @@ function anchorMeetingTime(days: DayPlan[], dayIndex: number, itemId: string, an
  *    계산된 시작 시각이 실제 출발 시각과 맞도록 맞춘다. 앞에 체크아웃·공항 이동처럼 다른 항목이 있어도 된다.
  *  - 항공 항목이 없는 일정은 아무것도 바뀌지 않는다.
  */
-export function applyFlightToDays(days: DayPlan[], flight: FlightOption): DayPlan[] {
-  if (days.length === 0) return days;
-  const lastIndex = days.length - 1;
-  const outboundItems = flightItemsOfDay(days[0]);
-  const returnItems = lastIndex > 0 ? flightItemsOfDay(days[lastIndex]) : [];
-  if (outboundItems.length === 0 && returnItems.length === 0) return days;
-
-  const outboundGroup: FlightGroup | null = outboundItems.length > 0 ? { dayIndex: 0, items: outboundItems } : null;
-  const returnGroup: FlightGroup | null = returnItems.length > 0 ? { dayIndex: lastIndex, items: returnItems } : null;
+export function applyFlightToDays(inputDays: DayPlan[], flight: FlightOption): DayPlan[] {
+  if (inputDays.length === 0) return inputDays;
+  const lastIndex = inputDays.length - 1;
 
   const outboundLeg: FlightLeg = {
     airline: flight.airline,
@@ -161,6 +181,18 @@ export function applyFlightToDays(days: DayPlan[], flight: FlightOption): DayPla
     duration: flight.returnDuration,
   };
 
+  // 그날 비행 항목이 하나뿐이면(예: "마카오 공항 도착 (12:50), 가이드 미팅" 하나, 또는 "인천 도착" 하나) 빠진 출발·도착 항목을 만들어
+  // 출발 → 도착이 실제 시각대로 이어지게 한다. 하나만 두면 도착 항목이 출발 시각에 놓이는 문제가 생긴다.
+  let days = splitLoneFlight(inputDays, 0, outboundLeg);
+  if (lastIndex > 0) days = splitLoneFlight(days, lastIndex, returnLeg);
+
+  const outboundItems = flightItemsOfDay(days[0]);
+  const returnItems = lastIndex > 0 ? flightItemsOfDay(days[lastIndex]) : [];
+  if (outboundItems.length === 0 && returnItems.length === 0) return inputDays;
+
+  const outboundGroup: FlightGroup | null = outboundItems.length > 0 ? { dayIndex: 0, items: outboundItems } : null;
+  const returnGroup: FlightGroup | null = returnItems.length > 0 ? { dayIndex: lastIndex, items: returnItems } : null;
+
   const patches = new Map<string, Partial<ItineraryItem>>();
 
   function applyLeg(group: FlightGroup | null, leg: FlightLeg) {
@@ -169,9 +201,16 @@ export function applyFlightToDays(days: DayPlan[], flight: FlightOption): DayPla
     const gap = leg.departTime && leg.arriveTime ? clockDiffMinutes(leg.departTime, leg.arriveTime) : null;
     if (group.items.length >= 2) {
       const [dep, arr] = group.items;
-      // 공항 이름을 모르면(업체 코스표) 원래 항목 이름을 그대로 둔다
-      patches.set(dep.id, { name: leg.departAirport ? `${leg.departAirport} 출발` : dep.name, description: line, stayMinutes: 0, travelMinutesToNext: gap ?? dep.travelMinutesToNext });
-      patches.set(arr.id, { name: leg.arriveAirport ? `${leg.arriveAirport} 도착` : arr.name, description: line });
+      // 이름에 이미 출발·도착이 적혀 있으면(업체 코스표 원문) 그대로 두고, 원래 설명(가이드 미팅 등)도 남긴다
+      const keepName = (item: ItineraryItem, word: string) => item.name.includes(word) || !(word === "출발" ? leg.departAirport : leg.arriveAirport);
+      const withLine = (item: ItineraryItem) => (item.description && !item.description.includes(line) ? `${line} · ${item.description}` : line);
+      patches.set(dep.id, {
+        name: keepName(dep, "출발") ? dep.name : `${leg.departAirport} 출발`,
+        description: withLine(dep),
+        stayMinutes: 0,
+        travelMinutesToNext: gap ?? dep.travelMinutesToNext,
+      });
+      patches.set(arr.id, { name: keepName(arr, "도착") ? arr.name : `${leg.arriveAirport} 도착`, description: withLine(arr) });
     } else {
       const only = group.items[0];
       patches.set(only.id, { description: line, travelMinutesToNext: gap ?? only.travelMinutesToNext });

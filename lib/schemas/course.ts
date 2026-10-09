@@ -208,10 +208,33 @@ const HHMM = /(\d{1,2}):(\d{2})/;
  * 원문에 적힌 항공편을 일정에 반영할 항공편으로 — 출발 시각을 모르면 반영하지 않는다.
  * 경유·소요시간은 원문에 없으면 모르는 값으로 둔다(stops = -1).
  */
-export function courseFlightOption(f: ParsedCourse["flights"] | undefined): FlightOption | null {
-  if (!f) return null;
-  const out = f.outbound;
-  const back = f.inbound;
+/** 비행 항목 글에서 "09:50 ~ 12:50" 같은 출발~도착 시각 범위 */
+const TIME_RANGE = /(\d{1,2}:\d{2})\s*(?:~|〜|∼|-|–|—|→)\s*(\d{1,2}:\d{2})/;
+
+/** 그날 비행 항목(이름·설명)에 적힌 출발~도착 시각. 없으면 null */
+export function flightTimesInDay(day: DayPlan | undefined): { depart: string; arrive: string } | null {
+  if (!day) return null;
+  for (const item of day.items) {
+    if (item.type !== "flight") continue;
+    const m = TIME_RANGE.exec(`${item.name} ${item.description}`);
+    if (m) return { depart: m[1].padStart(5, "0"), arrive: m[2].padStart(5, "0") };
+  }
+  return null;
+}
+
+/**
+ * 원문 항공편을 일정에 반영할 항공편으로. AI가 항공편 칸을 비웠어도 첫날·마지막 날 비행 항목 글에
+ * "제주항공 (09:50 ~ 12:50)"처럼 시각이 적혀 있으면 그 시각을 쓴다(출발·도착 모두 원문 시각 — 검증되지 않은 추정은 쓰지 않는다).
+ */
+export function courseFlightOption(raw: ParsedCourse["flights"] | undefined, days: DayPlan[] = []): FlightOption | null {
+  const empty = { airline: "", flightNumber: "", departAirport: "", departTime: "", arriveAirport: "", arriveTime: "" };
+  const f = raw ?? { outbound: empty, inbound: empty };
+  const fill = (leg: typeof empty, found: { depart: string; arrive: string } | null) =>
+    found && (!HHMM.test(leg.departTime) || !HHMM.test(leg.arriveTime))
+      ? { ...leg, departTime: HHMM.test(leg.departTime) ? leg.departTime : found.depart, arriveTime: HHMM.test(leg.arriveTime) ? leg.arriveTime : found.arrive }
+      : leg;
+  const out = fill(f.outbound, flightTimesInDay(days[0]));
+  const back = days.length > 1 ? fill(f.inbound, flightTimesInDay(days[days.length - 1])) : f.inbound;
   if (!HHMM.test(out.departTime) && !HHMM.test(back.departTime)) return null;
   const t = (s: string) => s.trim();
   return {
@@ -260,7 +283,7 @@ export function toCoursePlan(parsed: ParsedCourse): {
   });
 
   // 원문에 항공편 시각이 있으면: 비행 항목의 이동 시간 = 출발→도착(현지 시각 차이), 그날 일정은 출발 시각에 맞춰 시작
-  const flight = courseFlightOption(parsed.flights);
+  const flight = courseFlightOption(parsed.flights, rawDays);
   const days = flight ? applyFlightToDays(rawDays, flight) : rawDays;
 
   // 도시 순서는 일차별 숙박 도시에서 직접 계산한다 (AI가 도착 도시를 앞에 두는 경우가 있다)

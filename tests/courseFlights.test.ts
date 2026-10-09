@@ -114,3 +114,24 @@ describe("업체 코스표의 항공편 시각", () => {
     expect(plan.days[0].meetingTime).toBeUndefined();
   });
 });
+
+describe("항공편 칸이 비어도 비행 항목 글의 시각으로", () => {
+  it("'제주항공 (09:50 ~ 12:50)'이 적힌 도착 항목 하나뿐이면 출발 항목을 넣고 12:50 도착에 맞춘다", () => {
+    const p = parsed({ outbound: leg(), inbound: leg() });
+    p.days[0].items = [
+      raw("flight", "마카오 공항 도착 ( 12:50 ), 가이드 미팅", {
+        description: "제주항공 (09:50 ~ 12:50) 이용 마카오 공항 도착 후 가이드 미팅",
+        stayMinutes: 40,
+        travelMinutesToNext: 20,
+      }),
+      raw("free_time", "자유시간", { stayMinutes: 60 }),
+    ];
+    const plan = toCoursePlan(p);
+    const d1 = plan.days[0];
+    expect(d1.items.map((i) => i.name)).toEqual(["항공 출발", "마카오 공항 도착 ( 12:50 ), 가이드 미팅", "자유시간"]);
+    const slots = walkTimeline(d1.items, d1.meetingTime ?? "08:00");
+    expect(slots[0].start).toBe(9 * 60 + 50);
+    expect(slots[1].start).toBe(12 * 60 + 50);
+    expect(slots[2].start).toBeGreaterThanOrEqual(13 * 60 + 30); // 도착 후 미팅 40분 + 이동 20분 뒤
+  });
+});

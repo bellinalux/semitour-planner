@@ -3,7 +3,7 @@ import { describeAction, type FitPlan, type Upgrade } from "@/lib/budgetFit";
 import { ourPolicy } from "@/lib/competitorDiff";
 import { calcDayLoad } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
-import type { PmChoice } from "@/lib/itinerary";
+import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { buildPriceTiers, documentQuote } from "@/lib/pricing";
 import { setupChecklist, type SetupSection } from "@/lib/setupChecklist";
 import { supplierCuts, supplierTarget } from "@/lib/supplierCheck";
@@ -192,6 +192,25 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
       title: `DAY ${day.day} 일정이 너무 깁니다`,
       detail: `체류 ${formatDuration(load.stayMinutes)} + 이동 ${formatDuration(load.travelMinutes)} — 항목을 줄이거나 코스 엔진 점검으로 순서를 고치세요`,
       action: { kind: "scroll", target: `day-${day.day}`, label: "일정 보기" },
+    });
+  }
+
+  // ⑤ 비행 시간이 비었거나 너무 짧은 날 (검증되지 않은 시각으로 일정이 짜이지 않게)
+  for (const day of days) {
+    const items = dayItems(day, pmChoice);
+    items.forEach((item, i) => {
+      if (item.type !== "flight" || i === items.length - 1) return;
+      const departure = item.name.includes("출발") || items[i + 1]?.type === "flight";
+      if (!departure) return;
+      const minutes = item.travelMinutesToNext ?? 0;
+      if (minutes >= 50) return;
+      out.push({
+        id: `flight-${day.day}-${item.id}`,
+        tone: minutes > 0 ? "warn" : "info",
+        title: minutes > 0 ? `DAY ${day.day} 비행 시간이 ${minutes}분으로 되어 있습니다` : `DAY ${day.day} 비행 시간을 아직 모릅니다`,
+        detail: "항공편을 고르거나(2. 상품 구성) 업체 코스표의 출발·도착 시각을 확인하면 실제 시각으로 일정을 맞춥니다",
+        action: { kind: "scroll", target: `day-${day.day}`, label: "일정 보기" },
+      });
     });
   }
 

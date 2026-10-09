@@ -51,3 +51,25 @@ describe("요약 · 추천", () => {
     expect(list.findIndex((x) => x.tone === "info")).toBeGreaterThan(list.findIndex((x) => x.id === "day-1"));
   });
 });
+
+describe("요약 · 추천 — 비행 시간", () => {
+  it("출발 비행 항목의 비행 시간이 50분 미만이면 경고, 비어 있으면 안내", () => {
+    const short = [
+      linearDay(1, [
+        item("f", { type: "flight", name: "인천 출발", stayMinutes: 0, travelMinutesToNext: 20 }),
+        item("a", { type: "flight", name: "마카오 도착" }),
+      ]),
+    ];
+    const i = input({ customerName: "A" });
+    const list = buildInsights({ input: i, days: short, pmChoice: {}, meta: null, quote: calculateQuote(i, short, {}), budgetFit: null, money });
+    expect(list.find((x) => x.id.startsWith("flight-1"))).toMatchObject({ tone: "warn", title: "DAY 1 비행 시간이 20분으로 되어 있습니다" });
+    const unknown = [
+      linearDay(1, [
+        item("f", { type: "flight", name: "인천 출발", travelMinutesToNext: null }),
+        item("t", { type: "transfer", name: "다낭 도착 · 호텔 이동" }),
+      ]),
+    ];
+    const list2 = buildInsights({ input: i, days: unknown, pmChoice: {}, meta: null, quote: calculateQuote(i, unknown, {}), budgetFit: null, money });
+    expect(list2.find((x) => x.id.startsWith("flight-1"))).toMatchObject({ tone: "info", title: "DAY 1 비행 시간을 아직 모릅니다" });
+  });
+});
