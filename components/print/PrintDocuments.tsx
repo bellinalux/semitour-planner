@@ -4,11 +4,12 @@ import { ContractDoc } from "./ContractDoc";
 import { InternalQuoteDoc } from "./InternalQuoteDoc";
 import { InvoiceDoc } from "./InvoiceDoc";
 import { ItineraryDoc } from "./ItineraryDoc";
+import { OperationDoc } from "./OperationDoc";
 import { QuoteDoc } from "./QuoteDoc";
 import type { DocProps } from "./DocShell";
 
 /** 인쇄할 수 있는 문서 종류 */
-export type DocKind = "itinerary" | "quote" | "invoice" | "contract" | "internal";
+export type DocKind = "itinerary" | "quote" | "invoice" | "contract" | "internal" | "operation";
 
 export const DOC_LABELS: Record<DocKind, string> = {
   itinerary: "여행일정표",
@@ -16,6 +17,7 @@ export const DOC_LABELS: Record<DocKind, string> = {
   invoice: "청구서",
   contract: "여행계약서",
   internal: "원가·마진 검토서 (내부용)",
+  operation: "운영 지시서 (가이드·기사용)",
 };
 
 interface Props {
@@ -37,6 +39,7 @@ export function PrintDocuments({ kind, data }: Props) {
       {kind === "invoice" && <InvoiceDoc {...data} />}
       {kind === "contract" && <ContractDoc {...data} />}
       {kind === "internal" && <InternalQuoteDoc {...data} />}
+      {kind === "operation" && <OperationDoc {...data} />}
     </div>
   );
 }

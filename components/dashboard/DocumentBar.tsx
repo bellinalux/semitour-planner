@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Calculator, FileSignature, FileText, Printer, Receipt } from "lucide-react";
+import { AlertTriangle, Bus, Calculator, FileSignature, FileText, Printer, Receipt } from "lucide-react";
 import { useState } from "react";
 import { DOC_LABELS, type DocKind } from "@/components/print/PrintDocuments";
 
@@ -117,6 +117,21 @@ export function DocumentBar({ disabled, missingLegal, unconfirmed, onPrint }: Pr
           원가·마진 검토서
         </button>
         <span className="text-[11px] text-slate-500">원가·마진이 들어 있어 고객에게 전달하면 안 됩니다.</span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-medium text-slate-500">현지용</span>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onPrint("operation")}
+          title="날짜별 시각표·차량 하차/픽업·식사 예약·입장권·주의사항·운전 휴게 (판매가·원가 없음)"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Bus className="h-4 w-4 text-slate-400" aria-hidden />
+          운영 지시서
+        </button>
+        <span className="text-[11px] text-slate-500">가이드·기사·랜드사에 넘기는 현장용 (가격 없음)</span>
       </div>
 
       <p className="text-[10px] leading-4 text-slate-400">

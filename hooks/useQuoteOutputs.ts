@@ -57,7 +57,7 @@ export function useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quot
 
   const printDocument = (kind: DocKind) => {
     print(kind);
-    if (kind !== "internal") logIssued("print", DOC_LABELS[kind]);
+    if (kind !== "internal" && kind !== "operation") logIssued("print", DOC_LABELS[kind]);
   };
 
   return { exporter, printDocument };

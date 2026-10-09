@@ -195,3 +195,47 @@ test("동선상 식당: 다른 지역 식당에 갔다가 되돌아오면 알리
   await expect(day1.getByText(/코타이에 있어/)).toHaveCount(0);
   await expect(day1.getByText(/지그재그 동선/)).toHaveCount(0);
 });
+
+test("운영 지시서: 가격 없이 시각표·차량 하차/픽업·식사 예약·운영 경고를 담는다", async ({ page }) => {
+  await mockAi(page);
+  await page.addInitScript(() => {
+    window.print = () => undefined;
+  });
+  const walk = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
+    ...area(id, name, "역사지구", 40, 0),
+    timeCheck: { basis: "area", area: "역사지구", region: "마카오 반도", checkedAt: "2026-10-09T00:00:00Z", ...extra },
+  });
+  const opWork = {
+    ...work,
+    days: [
+      {
+        ...work.days[0],
+        items: [
+          walk("a1", "탑석광장", { dropOff: "탑석광장 대로변", pickUp: "세나도 광장 맞은편" }),
+          walk("a2", "세나도 광장"),
+          { ...area("l", "점심 식사 (딤섬)", "역사지구", 60, 20), type: "meal", cuisine: "딤섬", payment: "local" },
+        ],
+      },
+    ],
+  };
+  await page.addInitScript((w) => {
+    if (sessionStorage.getItem("e2e-seeded")) return;
+    sessionStorage.setItem("e2e-seeded", "1");
+    localStorage.setItem(
+      "semitour-planner:input:v1",
+      JSON.stringify({ mode: "paste", destination: "마카오", days: 1, nights: 0, travelers: 6, vehicleCostPerDay: 100000, guideCostPerDay: 80000 }),
+    );
+    localStorage.setItem("semitour-planner:work:v1", JSON.stringify(w));
+  }, opWork);
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "운영 지시서" }).click();
+  const doc = page.locator(".print-root");
+  await expect(doc).toContainText("운영 지시서");
+  await expect(doc).toContainText("차량 하차: 탑석광장 대로변 → 걸어서 → 픽업: 세나도 광장 맞은편");
+  await expect(doc).toContainText("6명 식사 예약 확인 (딤섬)");
+  await expect(doc).toContainText("식대 현지 지불(고객 부담)");
+  // 가격(원화 금액)은 넣지 않는다
+  await expect(doc).not.toContainText("₩");
+  await expect(doc).not.toContainText("원가");
+});
