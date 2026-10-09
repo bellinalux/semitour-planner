@@ -19,6 +19,7 @@ import type { PmChoice } from "@/lib/itinerary";
 import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PackageType, QuoteResult, TripInput } from "@/types";
 import { ChannelTable } from "./quote/ChannelTable";
 import { CompetitorTable } from "./quote/CompetitorTable";
+import { ProductCompareDialog } from "./quote/ProductCompareDialog";
 import { TourCompareTable } from "./quote/TourCompareTable";
 import { SupplierCheckPanel } from "./quote/SupplierCheckPanel";
 import { useCompetitorRefresh } from "@/hooks/useCompetitorRefresh";
@@ -338,6 +339,11 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
       {tourCompare && (
         <section id="tour-compare" className="scroll-mt-4">
           <SubHeading>투어 비교표 (우리 vs 경쟁 상품)</SubHeading>
+          {quote?.ok && (
+            <div className="mb-2">
+              <ProductCompareDialog input={input} days={days} pmChoice={pmChoice} quote={quote} meta={meta} onInputChange={onInputChange} />
+            </div>
+          )}
           <TourCompareTable
             compare={tourCompare}
             currency={input.currency}

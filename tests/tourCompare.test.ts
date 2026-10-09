@@ -175,3 +175,13 @@ describe("묶어 쓴 장소 이름", () => {
     expect(samePlace("육포&쿠키거리", "세나도 광장")).toBe(false);
   });
 });
+
+describe("한 글자 다른 표기", () => {
+  it("'세나도 광장' = '세나두 광장', 짧은 이름이나 일반 이름은 한 글자 차이로 같다고 하지 않는다", async () => {
+    const { samePlace } = await import("@/lib/places");
+    expect(samePlace("세나도 광장", "세나두 광장")).toBe(true);
+    expect(samePlace("몬테요새", "몬테요세")).toBe(true);
+    expect(samePlace("야시장", "야사장")).toBe(false);
+    expect(samePlace("마카오 타워", "마카오 사원")).toBe(false);
+  });
+});

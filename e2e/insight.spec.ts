@@ -45,7 +45,47 @@ test("코스를 만들면 타업체 상품을 자동으로 찾아 비교하고, 
   await expect(panel.getByRole("listitem").filter({ hasText: /타업체 2곳 비교 — 우리가 나은 점 \d+개 · 경쟁 상품이 나은 점 \d+개/ })).toBeVisible();
 
   const compare = page.locator("#tour-compare");
-  await expect(compare.getByText("우리가 나은 점", { exact: true })).toBeVisible();
-  await expect(compare.getByText("경쟁 상품이 나은 점 (보완할 곳)")).toBeVisible();
+  const summary = compare.getByRole("group", { name: "우리 vs 경쟁 상품 정리" });
+  await expect(summary.getByText("우리가 나은 점", { exact: true })).toBeVisible();
+  await expect(summary.getByText("경쟁 상품이 나은 점 (보완할 곳)")).toBeVisible();
   await expect(compare.getByRole("row", { name: /우리에겐 없는 곳/ })).toBeVisible();
+});
+
+test("상품 비교 보기: 경쟁 상품 일정을 가져와 날짜별 코스·금액·나은 점을 한 화면에서 본다", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await mockAi(page);
+  await page.route("**/api/competitor-itinerary", (r) =>
+    r.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        itinerary: {
+          found: true,
+          days: [
+            { day: 1, title: "", places: ["바나힐 테마파크", "린응사"], meals: { breakfast: "", lunch: "현지식", dinner: "불포함" }, hotel: "", free: false, otherRegion: "" },
+            { day: 2, title: "", places: [], meals: { breakfast: "호텔식", lunch: "불포함", dinner: "불포함" }, hotel: "", free: true, otherRegion: "" },
+          ],
+          mealCount: 1,
+          tipNote: "1인 USD 30 현지 지불",
+          sourceName: "하나투어",
+          checkedAt: new Date().toISOString(),
+        },
+      }),
+    }),
+  );
+  await page.goto("/");
+  await page.getByLabel("여행지").fill("다낭");
+  await page.getByRole("button", { name: "코스만" }).click();
+  await expect(page.locator("#tour-compare")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "상품 비교 보기 (코스·금액 한눈에)" }).click();
+  const dialog = page.getByRole("dialog", { name: /상품 비교 — 우리 vs 경쟁 상품 2개/ });
+  await expect(dialog.getByText("날짜별 일정을 아직 가져오지 않았습니다 — 주요 방문지:").first()).toBeVisible();
+  await dialog.getByRole("button", { name: "경쟁 상품 일정 가져오기 (2개)" }).click();
+  await expect(dialog.getByRole("status")).toContainText("경쟁 상품 2개 중 2개의 날짜별 일정을 읽었습니다");
+  await expect(dialog.getByText("자유일정").first()).toBeVisible();
+  await expect(dialog.getByText("린응사").first()).toBeVisible();
+  await expect(dialog.getByRole("row", { name: /가이드 경비\(팁\)/ })).toContainText("1인 USD 30 현지 지불");
+  await expect(dialog.getByText("우리가 나은 점").first()).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "엑셀(CSV) 저장" }).click()]);
+  expect(download.suggestedFilename()).toContain("상품비교");
 });

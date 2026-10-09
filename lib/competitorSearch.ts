@@ -2,7 +2,7 @@ import { postJson } from "@/lib/api";
 import { travelRequest } from "@/lib/autoQuoteRequests";
 import { candidateToCompetitor, pickComparableCompetitors } from "@/lib/competitors";
 import { midpoint } from "@/lib/travelEstimate";
-import type { Competitor, CompetitorCandidate, TravelEstimate, TripInput } from "@/types";
+import type { Competitor, CompetitorCandidate, CompetitorItinerary, TravelEstimate, TripInput } from "@/types";
 
 /**
  * 대형 여행사의 같은 여행지·기간 상품을 웹에서 찾아 경쟁사 목록 형태로 돌려준다 (가격이 확인된 비교할 만한 상품만).
@@ -34,4 +34,17 @@ export async function flightPriceForCompare(input: TripInput, competitors: Compe
   } catch {
     return null;
   }
+}
+
+/** 경쟁 상품 하나의 날짜별 일정을 판매 페이지에서 읽는다 (서버가 같은 상품은 7일 동안 다시 쓴다) */
+export async function fetchCompetitorItinerary(c: Competitor, input: TripInput): Promise<CompetitorItinerary> {
+  const r = await postJson<{ itinerary: CompetitorItinerary }>("/api/competitor-itinerary", {
+    agency: c.source?.agency ?? "",
+    productName: c.name.slice(0, 160),
+    url: c.source?.url ?? "",
+    destination: input.destination.trim(),
+    nights: c.nights ?? 0,
+    days: c.days ?? 0,
+  });
+  return r.itinerary;
 }

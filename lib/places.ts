@@ -62,8 +62,33 @@ const GENERIC = new Set(
   ].map(placeKey),
 );
 
+/** 한 글자만 다른지 (바꿈·넣음·뺌 한 번) — "세나도 광장" = "세나두 광장" 같은 표기 차이 */
+function oneEditApart(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    if (++edits > 1) return false;
+    if (a.length > b.length) i += 1;
+    else if (b.length > a.length) j += 1;
+    else {
+      i += 1;
+      j += 1;
+    }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
 function keysMatch(x: string, y: string): boolean {
   if (x === y) return true;
+  // 4글자 이상 이름이 한 글자만 다르면 표기 차이로 본다 (일반 이름은 빼고)
+  if (x.length >= 4 && y.length >= 4 && !GENERIC.has(x) && !GENERIC.has(y) && oneEditApart(x, y)) return true;
   const [short, long] = x.length <= y.length ? [x, y] : [y, x];
   // 짧은 이름이 일반 이름이거나 너무 짧으면(2글자 이하) 포함 관계로 보지 않는다
   if (short.length < 3 || GENERIC.has(short)) return false;

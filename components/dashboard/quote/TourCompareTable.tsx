@@ -119,7 +119,7 @@ export function TourCompareTable({ compare, currency, refresh }: Props) {
         {compare.onlyOurs.length > 0 && <> 경쟁 상품에 없는 우리만의 방문지: {compare.onlyOurs.join(", ")}.</>}
       </p>
       {(compare.summary.strengths.length > 0 || compare.summary.weaknesses.length > 0) && (
-        <div className="grid gap-2 text-[11px] leading-4 sm:grid-cols-2">
+        <div role="group" aria-label="우리 vs 경쟁 상품 정리" className="grid gap-2 text-[11px] leading-4 sm:grid-cols-2">
           <div className="rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2">
             <p className="font-semibold text-emerald-900">우리가 나은 점</p>
             {compare.summary.strengths.length === 0 ? (

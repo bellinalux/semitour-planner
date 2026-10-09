@@ -67,6 +67,31 @@ export interface Competitor {
   /** 숙박 수·총 일수 (모르면 0) */
   nights?: number;
   days?: number;
+  /** 판매 페이지에서 읽은 날짜별 일정 (경쟁 상품 일정 가져오기). 못 읽었으면 found=false */
+  itinerary?: CompetitorItinerary;
+}
+
+/** 경쟁 상품의 날짜별 일정 — 코스를 날짜별로 견주는 데 쓴다 */
+export interface CompetitorItinerary {
+  found: boolean;
+  days: {
+    day: number;
+    title: string;
+    places: string[];
+    /** 조·중·석: 포함(식당·메뉴) / 불포함 / 자유식 / 기내식 등 원문 짧게 */
+    meals: { breakfast: string; lunch: string; dinner: string };
+    hotel: string;
+    /** 자유일정 날 */
+    free: boolean;
+    /** 우리 여행지 밖 지역 (예: 홍콩) — 없으면 빈 문자열 */
+    otherRegion: string;
+  }[];
+  /** 포함 식사 횟수 (조식 제외), 모르면 0 */
+  mealCount: number;
+  /** 가이드·기사 경비(팁) — 원문 짧게 (예: 1인 50달러 현지 지불, 포함) */
+  tipNote: string;
+  sourceName: string;
+  checkedAt: string;
 }
 
 /**
