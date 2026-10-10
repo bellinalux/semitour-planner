@@ -6,9 +6,60 @@ import type { DayPlan, ItineraryItem } from "@/types";
 /** 오전 미팅(투어 시작) 시각의 기본값. 호텔 조식 이후 실제 투어가 시작되는 시각이다. */
 export const DEFAULT_MEETING_TIME = "08:00";
 
-/** 그날의 오전 미팅 시각. 지정하지 않았으면 기본값(08:00)을 쓴다. */
-export function dayMeetingTime(day: Pick<DayPlan, "meetingTime">): string {
-  return day.meetingTime?.trim() || DEFAULT_MEETING_TIME;
+type MeetingDay = Pick<DayPlan, "meetingTime"> & Partial<Pick<DayPlan, "kind" | "items" | "amGuided" | "hotelLeadMinutes">>;
+
+/**
+ * 그날의 오전 미팅 시각. 지정했으면 그 시각, 오전 자유인 날은 자유시간 뒤 미팅(아래 morningMeeting),
+ * 그 밖에는 기본값(08:00).
+ */
+export function dayMeetingTime(day: MeetingDay): string {
+  return day.meetingTime?.trim() || morningMeeting(day) || DEFAULT_MEETING_TIME;
+}
+
+/** 관광·식사처럼 가이드와 함께 하는 일정 — 오전 자유 뒤에 이런 항목이 오면 그 앞에서 미팅한다 */
+const GUIDED_TYPES = new Set(["sightseeing", "experience", "meal", "shopping", "massage"]);
+const LUNCH_NAME = /중식|점심|런치|lunch/i;
+/** 오전 자유 뒤 첫 일정이 점심이면 이 시각에 식당 도착 (업계 점심 시간대 시작) */
+const MORNING_FREE_LUNCH = 11 * 60 + 30;
+/** 오전 자유 뒤 첫 일정이 관광이면 이 시각에 미팅 (늦은 출발과 같은 값) */
+const MORNING_FREE_MEETING = "10:00";
+
+/**
+ * 오전 자유 — 조식 다음 첫 항목들이 자유시간이고 그 뒤에 가이드 일정(관광·식사 등)이 이어지면,
+ * 그 자유시간은 미팅 전 시간이다. 업계 일정표처럼 "호텔 조식 후 자유시간"으로 쓰고 시각을 매기지 않는다.
+ * 전일 자유(자유시간만 있는 날)·체크아웃 뒤 공항 이동처럼 가이드 일정이 이어지지 않으면 빈 배열.
+ */
+export function morningFreeItems(items: ItineraryItem[]): ItineraryItem[] {
+  const list = items.filter((i) => !isBreakfastItem(i));
+  let n = 0;
+  while (n < list.length && list[n].type === "free_time") n++;
+  if (n === 0 || n >= list.length) return [];
+  return GUIDED_TYPES.has(list[n].type ?? "sightseeing") ? list.slice(0, n) : [];
+}
+
+const tourList = (day: Partial<Pick<DayPlan, "kind" | "items" | "amGuided">>) => (day.kind === "semi" ? day.amGuided : day.items) ?? [];
+
+/** 오전 자유 뒤 호텔에서 첫 일정까지 이동(분) — 직접 넣은 값, 없으면 자유시간 항목의 이동 시간, 그것도 없으면 30분 */
+function morningLead(day: Partial<Pick<DayPlan, "hotelLeadMinutes">>, free: ItineraryItem[]): number {
+  if (typeof day.hotelLeadMinutes === "number" && Number.isFinite(day.hotelLeadMinutes)) return Math.max(0, Math.round(day.hotelLeadMinutes));
+  // 자유시간이 여러 줄이면(앱이 끼운 식사 맞춤 자유시간 등) 이동 시간이 적힌 마지막 줄 것
+  const known = free.map((i) => i.travelMinutesToNext).filter((t): t is number => typeof t === "number" && Number.isFinite(t));
+  if (known.length === 0) return DEFAULT_HOTEL_LEAD;
+  return Math.max(0, [...known].reverse().find((t) => t > 0) ?? 0);
+}
+
+/**
+ * 오전 자유인 날의 미팅 시각 (오전 자유가 아니면 null) — 첫 일정이 점심이면 11:30에 식당에 닿도록
+ * 이동 시간만큼 앞(10분 단위 내림, 예: 이동 20분 → 11:10 미팅), 관광이면 10:00.
+ */
+export function morningMeeting(day: Partial<Pick<DayPlan, "kind" | "items" | "amGuided" | "hotelLeadMinutes">>): string | null {
+  const list = tourList(day);
+  const free = morningFreeItems(list);
+  if (free.length === 0) return null;
+  const next = list.filter((i) => !isBreakfastItem(i))[free.length];
+  if (!(next.type === "meal" && LUNCH_NAME.test(`${next.name} ${next.description ?? ""}`))) return MORNING_FREE_MEETING;
+  const at = MORNING_FREE_LUNCH - morningLead(day, free);
+  return formatClock(Math.floor(at / TIME_STEP) * TIME_STEP);
 }
 
 /** 호텔 미팅 → 첫 장소 이동 기본값(분) — 시내 관광 차량 이동의 흔한 값 */
@@ -20,6 +71,9 @@ const NO_LEAD_TYPES = new Set(["flight", "transfer", "hotel", "free_time"]);
  * 없으면 둘째 날부터(전날 호텔에서 출발) 첫 항목이 관광지·식당이고 이름이 미팅·출발 안내가 아닐 때 30분.
  */
 export function hotelLeadMinutes(day: Pick<DayPlan, "day" | "kind" | "items" | "amGuided" | "hotelLeadMinutes">): number {
+  // 오전 자유인 날: 자유시간 뒤 호텔 로비에서 미팅하고 첫 일정으로 이동한다 (첫날 포함)
+  const free = morningFreeItems(tourList(day));
+  if (free.length > 0) return morningLead(day, free);
   if (typeof day.hotelLeadMinutes === "number" && Number.isFinite(day.hotelLeadMinutes)) return Math.max(0, Math.round(day.hotelLeadMinutes));
   if (day.day <= 1) return 0;
   const list = (day.kind === "semi" ? day.amGuided : day.items).filter((i) => !isBreakfastItem(i));
@@ -113,8 +167,10 @@ export function walkTimeline(items: ItineraryItem[], meetingTime: string): Timel
   if (start === null) return [];
   const slots: TimelineSlot[] = [];
   let clock = start;
+  // 오전 자유(미팅 전 자유시간)는 조식처럼 시각을 매기지 않는다 — 시작 시각(미팅 + 호텔에서 이동)이 이미 그 뒤다
+  const beforeMeeting = new Set(morningFreeItems(items));
   for (const item of items) {
-    if (isBreakfastItem(item)) continue;
+    if (isBreakfastItem(item) || beforeMeeting.has(item)) continue;
     const flight = item.type === "flight";
     // 원문에 시작 시각이 적힌 곳(예: 가이드 미팅 11:30, 분수쇼 20:00)은 그 시각까지 기다린다 (늦으면 그대로 — 점검에서 알린다)
     const fixed = item.fixedTime ? parseClock(item.fixedTime) : null;
@@ -175,8 +231,11 @@ export function dayLoadLevel(totalMinutes: number): DayLoadLevel {
 export function calcDayLoad(day: DayPlan, pmChoice: PmChoice): DayLoad {
   let stayMinutes = 0;
   let travelMinutes = 0;
-  for (const item of dayItems(day, pmChoice)) {
-    if (isBreakfastItem(item)) continue;
+  const list = dayItems(day, pmChoice);
+  // 오전 자유는 투어 시간이 아니다 (호텔에서 첫 일정까지 이동은 아래 미팅 이동으로 센다)
+  const beforeMeeting = new Set(morningFreeItems(list));
+  for (const item of list) {
+    if (isBreakfastItem(item) || beforeMeeting.has(item)) continue;
     stayMinutes += Math.max(0, item.stayMinutes);
     travelMinutes += Math.max(0, item.travelMinutesToNext ?? 0);
   }

@@ -1,5 +1,6 @@
 import { AlertCircle, BookmarkPlus, Bus, Check, ChevronDown, ChevronUp, Clock, ExternalLink, Eye, Ticket, Trash2, Utensils, Wallet } from "lucide-react";
 import { photoOf } from "@/lib/photo";
+import { isBreakfastItem } from "@/lib/documents";
 import { useState } from "react";
 import { DurationInput } from "@/components/ui/DurationInput";
 import { MoneyInput } from "@/components/ui/MoneyInput";
@@ -23,6 +24,8 @@ interface Props {
   isLast: boolean;
   /** 오전 미팅 시각부터 계산한 이 코스의 시작·종료 시각 (조식 등 타임라인에서 제외된 항목은 없음) */
   timing?: ItemTiming;
+  /** 오전 자유(미팅 전 자유시간) — 시각 대신 "호텔 조식 후", 마지막 줄 밑에 미팅 시각·호텔에서 이동 */
+  beforeMeeting?: { last: boolean; meeting: string; lead: number };
   currency: CurrencyCode;
   /** 이 항목이 속한 일차 (추천 옵션을 "선택 옵션"으로 추가할 때 필요) */
   dayNo: number;
@@ -67,6 +70,7 @@ export function TimelineItem({
   order,
   isLast,
   timing,
+  beforeMeeting,
   currency,
   dayNo,
   days,
@@ -87,6 +91,8 @@ export function TimelineItem({
   const showEstimateTag = fee || meal;
   const localPay = isLocalPay(item);
   const check = item.feeCheck;
+  // 자유시간·조식은 장소가 아니다 — 사진·즐겨찾기·AI 추정 표시를 두지 않는다
+  const notPlace = item.type === "free_time" || isBreakfastItem(item);
 
   return (
     <li className="flex gap-3">
@@ -101,10 +107,16 @@ export function TimelineItem({
       </div>
 
       <div className={`min-w-0 flex-1 ${isLast ? "" : "pb-3"}`}>
-        {timing && (
-          <p className="mb-0.5 text-[11px] font-semibold tabular-nums text-indigo-600" title="오전 미팅 시각부터 계산한 예상 시작·종료 시각">
-            {timeRange(timing)}
+        {beforeMeeting ? (
+          <p className="mb-0.5 text-[11px] font-semibold text-indigo-600" title="오전 자유 — 미팅 전 시간이라 시각을 매기지 않습니다 (업계 일정표 표기)">
+            호텔 조식 후
           </p>
+        ) : (
+          timing && (
+            <p className="mb-0.5 text-[11px] font-semibold tabular-nums text-indigo-600" title="오전 미팅 시각부터 계산한 예상 시작·종료 시각">
+              {timeRange(timing)}
+            </p>
+          )
         )}
         {editing ? (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -178,7 +190,7 @@ export function TimelineItem({
           // eslint-disable-next-line @next/next/no-img-element -- 직접 올린 사진 data URL
           <img src={photoOf(item)!.src} alt={`${item.name} 사진`} title={photoOf(item)!.credit} className="mt-1 h-20 w-32 rounded-md object-cover ring-1 ring-slate-200" />
         )}
-        {editing && (
+        {editing && !notPlace && (
           <div className="mt-1 flex items-center gap-2 text-[11px]">
             <label className="cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-50">
               {item.photo ? "사진 바꾸기" : "사진 올리기"}
@@ -253,6 +265,7 @@ export function TimelineItem({
           ) : (
             item.isEstimated &&
             item.stayMinutes > 0 &&
+            !notPlace &&
             !["flight", "transfer", "hotel"].includes(item.type ?? "") && (
               <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500" title="AI가 추정한 시간 — 일정 카드의 '시간 검증'으로 확인할 수 있습니다">
                 AI 추정
@@ -262,7 +275,7 @@ export function TimelineItem({
           {item.fromCatalog && (
             <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">투어 카탈로그</span>
           )}
-          {favorited ? (
+          {notPlace ? null : favorited ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
               <Check className="h-3 w-3" aria-hidden />
               즐겨찾기됨
@@ -385,7 +398,13 @@ export function TimelineItem({
 
         <SuggestedOptions item={item} dayNo={dayNo} currency={currency} rate={rate} onAddSuggestedOption={onAddSuggestedOption} />
 
-        {!isLast && item.travelMinutesToNext !== null && item.travelMinutesToNext > 0 && (
+        {beforeMeeting?.last && (
+          <p className="mt-2.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
+            <Bus className="h-3 w-3" aria-hidden />
+            <span className="tabular-nums">{beforeMeeting.meeting}</span> 호텔 로비 미팅{beforeMeeting.lead > 0 ? ` → 다음 장소까지 이동 ${formatDuration(beforeMeeting.lead)}` : ""}
+          </p>
+        )}
+        {!beforeMeeting && !isLast && item.travelMinutesToNext !== null && item.travelMinutesToNext > 0 && (
           <p className="mt-2.5 flex items-center gap-1.5 text-[11px] text-slate-400">
             <Bus className="h-3 w-3" aria-hidden />
             {item.type === "flight"

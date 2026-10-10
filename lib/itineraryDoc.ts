@@ -1,7 +1,7 @@
 import { ourPolicy } from "@/lib/competitorDiff";
 import { dayMeals, documentItems, isBreakfastItem, type MealSlot } from "@/lib/documents";
 import { isOvernightStay } from "@/lib/dayTidy";
-import { dayMeetingTime, hotelLeadMinutes, parseClock } from "@/lib/dayLoad";
+import { dayMeetingTime, hotelLeadMinutes, morningFreeItems, parseClock } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
 import { gradeText } from "@/lib/itemTypes";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
@@ -267,17 +267,35 @@ export function dayTable(
   let first = true;
   // 호텔에서 미팅하고 첫 장소로 이동하는 날: 미팅 줄 + 이동 줄을 먼저 (첫 장소 시각 = 미팅 + 이동)
   const lead = hotelLeadMinutes(day);
-  const meetingKnown = Boolean(day.meetingTime?.trim());
+  // 오전 자유(조식 뒤 자유시간 → 미팅)인 날은 미팅 시각을 앱이 정한다 (자유시간 뒤, 점심이면 11:30 도착)
+  const morningFree = morningFreeItems(flat);
+  const meetingKnown = Boolean(day.meetingTime?.trim()) || morningFree.length > 0;
   // 일부러 늦게 출발하는 날(오전 자유)은 미팅 앞에 한 줄
-  if (day.rest === "late") rows.push({ key: "rest-late", kind: "label", label: "오전 자유 (호텔 휴식·개별 시간)", ...blank });
-  if (lead > 0) {
+  if (day.rest === "late" && morningFree.length === 0) rows.push({ key: "rest-late", kind: "label", label: "오전 자유 (호텔 휴식·개별 시간)", ...blank });
+  // 오전 자유 줄은 시각 없이 "호텔 조식 후"로, 미팅 줄보다 먼저
+  for (const [k, it] of morningFree.entries()) rows.push({ key: it.id, kind: "item", item: it, ...blank, afterBreakfast: k === 0 });
+  if (morningFree.length > 0) first = false;
+  // 미팅 뒤 첫 일정 (오전 자유가 있으면 그 다음 항목)
+  const firstTour = morningFree.length > 0 ? flat.indexOf(morningFree[morningFree.length - 1]) + 1 : 0;
+  if (lead > 0 || morningFree.length > 0) {
     rows.push({ key: "meeting", kind: "meeting", ...blank, transport: opts.vehicle ? "vehicle" : "", start: dayMeetingTime(day), end: dayMeetingTime(day), keyTime: true, afterBreakfast: !meetingKnown });
-    rows.push({ key: "meeting-move", kind: "move", minutes: lead, ...blank });
+    if (lead > 0) rows.push({ key: "meeting-move", kind: "move", minutes: lead, ...blank });
     first = false;
   }
   for (const block of blocks) {
     if (block.label) rows.push({ key: `b-${block.label}`, kind: "label", label: block.label, ...blank });
+    let afterMorningFree = false;
     for (const [n, r] of docRows(block.items, opts.vehicle).entries()) {
+      // 오전 자유 줄(위에 이미 씀)과 그 뒤 이동 줄(미팅 이동 줄로 대신)은 건너뛴다
+      if (r.kind === "item" && r.item && morningFree.includes(r.item)) {
+        afterMorningFree = true;
+        continue;
+      }
+      if (afterMorningFree && r.kind === "move") {
+        afterMorningFree = false;
+        continue;
+      }
+      afterMorningFree = false;
       if (r.kind === "move") {
         rows.push({ key: `m-${block.label}-${n}`, kind: "move", minutes: r.minutes, moveName: r.moveName, ...blank });
         continue;
@@ -295,7 +313,7 @@ export function dayTable(
         start: t?.start ?? "",
         end: t?.end ?? "",
         // 미팅 시각을 모르는 날은 첫 장소 시각도 적지 않는다 (기본 08:00 기준이라 맞지 않을 수 있다)
-        keyTime: lead > 0 && idx === 0 ? meetingKnown : showsTime(it, idx),
+        keyTime: (lead > 0 || morningFree.length > 0) && idx === firstTour ? meetingKnown : showsTime(it, idx),
         afterBreakfast: first && !day.meetingTime?.trim() && it.type !== "flight",
         returnFlight: lastDay && it.type === "flight",
       });

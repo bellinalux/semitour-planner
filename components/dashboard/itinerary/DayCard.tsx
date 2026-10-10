@@ -1,12 +1,13 @@
 import { REST_LABEL } from "@/lib/pace";
 import { dayMealIssues, fitCourse } from "@/lib/courseFit";
+import { dayStructureIssues, fixDayStructure } from "@/lib/dayStructure";
 import { ReorderButton } from "./ReorderButton";
 import { dayIntensity, INTENSITY_LABEL } from "@/lib/intensity";
 import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Compass, Flag, Plus, Sun, Sunset, Timer } from "lucide-react";
 import { useContext } from "react";
 import { CourseEngineContext } from "@/hooks/useCourseEngine";
 import { DayTimeCheckContext } from "@/hooks/useDayTimeCheck";
-import { calcDayEnd, calcDayGap, calcDayLoad, computeItemTimings, dayMeetingTime, dayTourStart, hotelLeadMinutes, STANDARD_DAY_END, timelineEndTime, type DayLoadLevel } from "@/lib/dayLoad";
+import { calcDayEnd, calcDayGap, calcDayLoad, computeItemTimings, dayMeetingTime, dayTourStart, hotelLeadMinutes, morningFreeItems, STANDARD_DAY_END, timelineEndTime, type DayLoadLevel } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
 import { dayItems } from "@/lib/itinerary";
 import type { SegmentKind } from "@/lib/segmentLibrary";
@@ -120,7 +121,12 @@ export function DayCard({
   // 출발 요일 기준 휴무인 곳
   const closedHere = (engine?.closed ?? []).filter((c) => c.day === plan.day);
   const mealFit = mealIssues.length > 0 ? fitCourse([plan], { walk: false }) : null;
+  // 구성 점검 — 코스에 든 호텔 조식, 이어진 자유시간, 오전 자유인데 이른 미팅
+  const structureIssues = dayStructureIssues(plan);
+  // 오전 자유(조식 뒤 자유시간 → 미팅) — 시각 대신 "호텔 조식 후", 마지막 줄 밑에 미팅·이동
+  const morningFree = plan.kind === "linear" ? morningFreeItems(plan.items) : [];
   const issueLabels = [
+    ...(structureIssues.length > 0 ? ["일정 구성"] : []),
     ...(closedHere.length > 0 ? ["휴무일"] : []),
     ...(mealIssues.length > 0 ? ["식사 시간"] : []),
     ...(load.level === "overloaded" ? ["일정 과부하"] : load.level === "tight" ? ["일정 빠듯"] : []),
@@ -245,6 +251,26 @@ export function DayCard({
           )}
         </div>
       ))}
+      {structureIssues.length > 0 && (
+        <div className="flex flex-wrap items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          <ul aria-label="일정 구성 점검" className="min-w-0 flex-1 space-y-0.5 text-pretty">
+            {structureIssues.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => {
+              const fixed = fixDayStructure(plan);
+              onChangeDay(plan.day, { items: fixed.items, amGuided: fixed.amGuided, meetingTime: fixed.meetingTime });
+            }}
+            className="shrink-0 rounded border border-amber-400 bg-white px-2 py-0.5 font-semibold hover:bg-amber-100"
+          >
+            구성 정리하기
+          </button>
+        </div>
+      )}
       {mealIssues.length > 0 && (
         <div className="flex flex-wrap items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -337,6 +363,7 @@ export function DayCard({
                   order={index + 1}
                   isLast={index === plan.items.length - 1}
                   timing={timings.get(item.id)}
+                  beforeMeeting={morningFree.includes(item) ? { last: item === morningFree[morningFree.length - 1], meeting: meetingTime, lead } : undefined}
                   currency={currency}
                   dayNo={plan.day}
                   days={days}

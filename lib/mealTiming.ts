@@ -1,4 +1,4 @@
-import { clockMinutes, DEFAULT_MEETING_TIME, snapUp } from "@/lib/dayLoad";
+import { clockMinutes, DEFAULT_MEETING_TIME, morningFreeItems, snapUp } from "@/lib/dayLoad";
 import { isBreakfastItem } from "@/lib/documents";
 import type { ItineraryItem } from "@/types";
 
@@ -43,6 +43,8 @@ function freeTimeItem(id: string, minutes: number): ItineraryItem {
  * "중식 09:00", "석식 14:53"처럼 실제로 그 시각에 문을 열지 않는 결과가 나온다. 식사가 시간대보다
  * 일찍 계산되면, 그 앞에 "자유시간" 항목을 끼워 넣어 식사 시각이 시간대 안으로 들어오게 한다.
  * 이미 시간대를 지났으면(식당 폐점 임박 등) 억지로 당기지 않고 그대로 둔다 — 원문 순서를 지키기 위함이다.
+ * 식사 바로 앞이 이미 자유시간이면 새 줄을 끼우지 않고 그 자유시간을 늘린다 (업계 일정표는 자유시간을 한 줄로 쓴다).
+ * 오전 자유(미팅 전 자유시간)는 시각을 매기지 않으므로 늘리지도 끼우지도 않는다 — 미팅 시각으로 맞춘다.
  */
 export function enforceMealWindows(items: ItineraryItem[], meetingTime: string = DEFAULT_MEETING_TIME): ItineraryItem[] {
   const start = clockMinutes(meetingTime);
@@ -51,9 +53,10 @@ export function enforceMealWindows(items: ItineraryItem[], meetingTime: string =
   const result: ItineraryItem[] = [];
   let clock = start;
   let freeTimeSeq = 0;
+  const beforeMeeting = new Set(morningFreeItems(items));
 
   for (const item of items) {
-    if (isBreakfastItem(item)) {
+    if (isBreakfastItem(item) || beforeMeeting.has(item)) {
       result.push(item);
       continue;
     }
@@ -66,8 +69,16 @@ export function enforceMealWindows(items: ItineraryItem[], meetingTime: string =
       const windowStartMinutes = clockMinutes(windowStart);
       if (windowStartMinutes !== null && windowStartMinutes - clock > MEAL_EARLY_OK) {
         const gap = windowStartMinutes - clock;
-        result.push(freeTimeItem(`${item.id}-free-${freeTimeSeq++}`, gap));
-        clock = windowStartMinutes;
+        const prev = result.at(-1);
+        if (prev && beforeMeeting.has(prev)) {
+          // 오전 자유 바로 뒤 — 미팅 시각을 고칠 일이다 (일정 카드 점검에 나온다)
+        } else if (prev?.type === "free_time" && !isBreakfastItem(prev)) {
+          result[result.length - 1] = { ...prev, stayMinutes: prev.stayMinutes + gap, mealPadMinutes: (prev.mealPadMinutes ?? 0) + gap };
+          clock = windowStartMinutes;
+        } else {
+          result.push(freeTimeItem(`${item.id}-free-${freeTimeSeq++}`, gap));
+          clock = windowStartMinutes;
+        }
       }
     }
     result.push(item);
@@ -85,10 +96,18 @@ export const isMealFiller = (item: ItineraryItem) => item.type === "free_time" &
  * 예전 시각 기준으로 넣어 둔 자유시간은 빼고, 지금 미팅 시각으로 다시 넣는다.
  */
 export function refitMealWindows(items: ItineraryItem[], meetingTime: string): ItineraryItem[] {
-  return enforceMealWindows(
-    items.filter((i) => !isMealFiller(i)),
-    meetingTime,
-  );
+  return enforceMealWindows(stripMealPads(items), meetingTime);
+}
+
+/** 앱이 식사 시간대에 맞추려고 넣은 것을 되돌린다 — 끼운 자유시간은 빼고, 늘린 자유시간은 원래 길이로 */
+export function stripMealPads(items: ItineraryItem[]): ItineraryItem[] {
+  return items
+    .filter((i) => !isMealFiller(i))
+    .map((i) => {
+      if (!i.mealPadMinutes) return i;
+      const { mealPadMinutes, ...rest } = i;
+      return { ...rest, stayMinutes: Math.max(0, i.stayMinutes - mealPadMinutes) };
+    });
 }
 
 /** 점심·저녁 식사인지 (이름·설명으로) — 아니면 카페·디저트·간식으로 본다 */

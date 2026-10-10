@@ -153,7 +153,8 @@ export function toDayPlans(
       };
     }
     const items = list(full.length > 0 ? full : [...day.amGuided, ...(day.pmFreeOptions[0]?.items ?? [])], "it");
-    if (style === "late") return linearDay(base, items, { meetingTime: "13:00", rest: "late" });
+    // 오전 자유 뒤 점심부터 시작하면 11:00 미팅 (호텔에서 30분 이동해 11:30 점심), 아니면 13:00 출발
+    if (style === "late") return linearDay(base, items, { meetingTime: items[0]?.type === "meal" && /중식|점심|런치|lunch/i.test(`${items[0].name} ${items[0].description}`) ? "11:00" : "13:00", rest: "late" });
     if (style === "pmfree") {
       const last = items[items.length - 1];
       return linearDay(base, [...items.slice(0, -1), ...(last ? [{ ...last, travelMinutesToNext: 10 }] : []), freeItem(`d${dayNo}-pmfree`, "오후 자유시간", 210, "호텔 휴식 또는 개별 관광 (가이드·차량 없음)")], { rest: "pmfree" });

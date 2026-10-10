@@ -1,8 +1,9 @@
 import { refitDay } from "@/lib/dayBalance";
 import { dayTourStart, formatClock, parseClock, walkTimeline } from "@/lib/dayLoad";
 import { isBreakfastItem } from "@/lib/documents";
+import { dayStructureIssues, fixDayStructure } from "@/lib/dayStructure";
 import { isCafeMeal } from "@/lib/engineDay";
-import { isMealFiller } from "@/lib/mealTiming";
+import { stripMealPads } from "@/lib/mealTiming";
 import { estimateTravel, km } from "@/lib/courseEngine/time";
 import { formatDuration } from "@/lib/format";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
@@ -195,7 +196,7 @@ const DINNER_TARGET = 18 * 60 + 30;
 export function slotMeals(day: DayPlan): { day: DayPlan; note: string | null } {
   if (day.kind !== "linear") return { day, note: null };
   // 식사를 기다리려고 넣었던 자유시간은 빼고 계산한다 (옮긴 뒤 다시 맞춘다)
-  let items = day.items.filter((x) => !isMealFiller(x));
+  let items = stripMealPads(day.items);
   const notes: string[] = [];
   for (const slot of ["lunch", "dinner"] as MealSlot[]) {
     const meal = items.find((x) => mealSlotOf(x) === slot);
@@ -282,8 +283,15 @@ export interface FitChange {
   note: string;
 }
 
+/** ⓪ 구성 정리 — 호텔 조식 빼기·이어진 자유시간 합치기·오전 자유 뒤 미팅 (lib/dayStructure) */
+function structure(day: DayPlan): { day: DayPlan; note: string | null } {
+  const issues = dayStructureIssues(day);
+  if (issues.length === 0) return { day, note: null };
+  return { day: fixDayStructure(day), note: issues.map((t) => t.split(" — ")[0]).join(" · ") + " 정리" };
+}
+
 /**
- * 업체 코스를 읽은 직후 — 도보 구역 압축(업체 코스만) → 같은 식사 합치기 → 늦은 식사 당기기.
+ * 업체 코스를 읽은 직후 — 구성 정리 → 도보 구역 압축(업체 코스만) → 같은 식사 합치기 → 늦은 식사 당기기.
  * slot이면(코스 재정렬) 늦은 식사 당기기 대신 식사 자리 맞추기(이르면 뒤로·늦으면 앞으로)
  */
 export function fitCourse(days: DayPlan[], o: { walk: boolean; slot?: boolean }): { days: DayPlan[]; changes: FitChange[] } {
@@ -291,7 +299,7 @@ export function fitCourse(days: DayPlan[], o: { walk: boolean; slot?: boolean })
   const next = days.map((d) => {
     let cur = d;
     const notes: string[] = [];
-    for (const step of [...(o.walk ? [compressWalkRuns] : []), mergeMeals, o.slot ? slotMeals : pullMeals]) {
+    for (const step of [structure, ...(o.walk ? [compressWalkRuns] : []), mergeMeals, o.slot ? slotMeals : pullMeals]) {
       const r = step(cur);
       cur = r.day;
       if (r.note) notes.push(r.note);

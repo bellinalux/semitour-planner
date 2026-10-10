@@ -502,6 +502,8 @@ export interface ItineraryItem {
   /** 장소 사진 링크·출처 (위키미디어 공용 등 무료 라이선스) — 직접 올린 사진(photo)이 없을 때 쓴다 */
   photoUrl?: string;
   photoCredit?: string;
+  /** 식사 시간대에 맞추려고 앱이 이 자유시간에 더한 분 — 다시 맞출 때 먼저 뺀다 (자유시간을 두 줄로 나누지 않으려고) */
+  mealPadMinutes?: number;
   /** 현지 통화로 확인한 입장·체험 요금 (웹 확인 결과). 견적 통화와 다를 수 있다 */
   local?: { currency: CurrencyCode; amount: number };
   /** 입장료 웹 확인 결과 */

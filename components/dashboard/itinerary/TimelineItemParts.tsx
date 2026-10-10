@@ -55,7 +55,7 @@ export function RelocateControls({
       >
         {otherDays.map((d) => (
           <option key={d.day} value={d.day}>
-            DAY {d.day} · {d.theme.slice(0, 12)}
+            DAY {d.day} · {d.theme.length > 12 ? `${d.theme.slice(0, 12)}…` : d.theme}
           </option>
         ))}
       </select>
