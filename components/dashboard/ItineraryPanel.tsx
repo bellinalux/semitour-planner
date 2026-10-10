@@ -1,6 +1,9 @@
 "use client";
 
 import { ReorderButton } from "./itinerary/ReorderButton";
+import { VariantButton } from "./itinerary/VariantButton";
+import { NightsButton } from "./itinerary/NightsButton";
+import { PhotoFillButton } from "./itinerary/PhotoFillButton";
 import { Accessibility, CalendarDays, Check, Info, Loader2, Pencil, PlaneLanding, PlaneTakeoff, SearchCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -63,6 +66,10 @@ interface Props {
   travelers?: number;
   /** 국내(한국 방문 외국인 대상)/해외 여행. 추천일정 검색 대상 관광객을 정한다 */
   tripScope: TripScope;
+  /** 박수 바꾸기 */
+  nights?: { nights: number; days: number; onChange: (delta: number) => Promise<string> };
+  /** 고객 유형별 변형 (AI로 만든 일정일 때) */
+  onVariant?: (patch: Partial<import("@/types").TripInput>, label: string) => Promise<string>;
   researchInfo: { sources: SearchSource[]; researched: boolean; knowledge?: { city: string; places: number; researched: boolean }[]; fits?: { day: number; note: string }[] };
   pickupNote: string;
   sendingNote: string;
@@ -103,6 +110,8 @@ export function ItineraryPanel({
   tripScope,
   engine,
   researchInfo,
+  onVariant,
+  nights,
   pickupNote,
   sendingNote,
   selectedHotels,
@@ -193,6 +202,9 @@ export function ItineraryPanel({
       action={
         <div className="flex flex-wrap justify-end gap-2">
           {state.status === "success" && days.length > 0 && <ReorderButton />}
+          {(state.status === "success" || state.status === "loading") && days.length > 0 && onVariant && <VariantButton onMake={onVariant} />}
+          {state.status === "success" && days.length > 0 && <PhotoFillButton days={days} pmChoice={pmChoice} city={destination.split(/[,·]/)[0]?.trim() ?? ""} onChangeItem={onChangeItem} />}
+          {state.status === "success" && days.length > 1 && nights && <NightsButton nights={nights.nights} days={nights.days} onChange={nights.onChange} />}
           {verifyButton}
           {suggestButton}
           {accessibilityButton}

@@ -73,9 +73,9 @@ export default async function SharedItineraryPage({ params }: { params: Promise<
                   <span className="min-w-0">
                     {KIND_MARK[lang][item.kind] && <span className="mr-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">{KIND_MARK[lang][item.kind]}</span>}
                     <span className="font-medium">{item.name}</span>
-                    {item.photo && (
+                    {(item.photo || (item.photoUrl && /^https:\/\/upload\.wikimedia\.org\//.test(item.photoUrl))) && (
                       // eslint-disable-next-line @next/next/no-img-element -- 여행사가 올린 사진 data URL
-                      <img src={item.photo} alt="" className="mt-1 block max-h-48 w-full rounded-lg object-cover" />
+                      <img src={item.photo || item.photoUrl} alt="" title={item.photoCredit} className="mt-1 block max-h-48 w-full rounded-lg object-cover" />
                     )}
                     {item.note && <span className="block text-pretty text-xs text-slate-500">{item.note}</span>}
                   </span>

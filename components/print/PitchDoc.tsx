@@ -5,6 +5,8 @@ import { gradeText } from "@/lib/itemTypes";
 import { dayItems } from "@/lib/itinerary";
 import { buildTourCompare } from "@/lib/tourCompare";
 import { DocCover, DocCoverPage, DocSection, DocShell, type DocProps } from "./DocShell";
+import { dayIntensity, INTENSITY_LABEL, intensityText } from "@/lib/intensity";
+import { photoOf } from "@/lib/photo";
 
 const SKIP = new Set(["meal", "transfer", "hotel", "flight", "free_time"]);
 
@@ -43,7 +45,7 @@ export function PitchDoc({ input, days, pmChoice, quote, meta, company }: DocPro
   }
   for (const h of meta?.highlights ?? []) if (h.trim() && points.length < 9) points.push(h.trim());
 
-  const photos = days.flatMap((d) => dayItems(d, pmChoice)).filter((i) => i.photo).slice(0, 6);
+  const photos = days.flatMap((d) => dayItems(d, pmChoice)).filter((i) => photoOf(i)).map((i) => ({ ...i, photo: photoOf(i)!.src, credit: photoOf(i)!.credit })).slice(0, 6);
   return (
     <>
     {input.customerName.trim() && (
@@ -64,6 +66,7 @@ export function PitchDoc({ input, days, pmChoice, quote, meta, company }: DocPro
               {/* eslint-disable-next-line @next/next/no-img-element -- 직접 올린 사진 data URL */}
               <img src={p.photo} alt="" aria-hidden className="h-28 w-full rounded object-cover" />
               <figcaption className="mt-0.5 truncate text-[10px] text-slate-600">{p.name}</figcaption>
+              {p.credit && <figcaption className="truncate text-[8px] text-slate-400">{p.credit}</figcaption>}
             </figure>
           ))}
         </div>
@@ -101,6 +104,11 @@ export function PitchDoc({ input, days, pmChoice, quote, meta, company }: DocPro
         </div>
       </DocSection>
 
+      {intensityText(days, pmChoice) && (
+        <p className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
+          <b>활동 강도</b> {intensityText(days, pmChoice)}
+        </p>
+      )}
       <DocSection title="날짜별 하이라이트">
         <ol className="space-y-1">
           {days.map((d) => {
@@ -113,6 +121,7 @@ export function PitchDoc({ input, days, pmChoice, quote, meta, company }: DocPro
               <li key={d.day}>
                 <b className="text-emerald-800">DAY {d.day}</b> {d.theme && <span className="text-slate-600">{d.theme} — </span>}
                 {free ? "자유 일정" : names.join(" · ") || "이동"}
+                {!free && dayIntensity(d, pmChoice).km > 0 && <span className="ml-1 text-[10px] text-slate-500">({INTENSITY_LABEL[dayIntensity(d, pmChoice).level]} · 약 {dayIntensity(d, pmChoice).km}km 걷기)</span>}
               </li>
             );
           })}

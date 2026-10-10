@@ -4,6 +4,7 @@ import { createContext, useEffect, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
 import { calcDayLoad } from "@/lib/dayLoad";
 import { dayItems } from "@/lib/itinerary";
+import { closedIssues, type ClosedIssue } from "@/lib/closedDays";
 import { fitCourse, nearestOrder } from "@/lib/courseFit";
 import { planRegions, withCoords } from "@/lib/regionPlan";
 import { diffDays, type DayDiff } from "@/lib/reorder";
@@ -75,6 +76,8 @@ export interface CourseEngineView {
   reorder: (dayNos?: number[]) => Promise<{ days: DayPlan[]; diffs: DayDiff[] }>;
   /** 재정렬 결과 적용 (되돌리기 기록에 '코스 재정렬'로) */
   applyReorder: (days: DayPlan[]) => void;
+  /** 출발 요일 기준 휴무인 곳과 옮길 날 (코스 점검이 찾은 영업시간) */
+  closed: ClosedIssue[];
 }
 
 interface Args {
@@ -348,6 +351,14 @@ export function useCourseEngine({ days, pmChoice, destination, departureDate, tr
     const note = (day: number, text: string) => (notes[day] = [...(notes[day] ?? []), text]);
     let work = before;
     try {
+      // ⓪ 휴무인 곳은 문을 여는 날로 (출발일·영업시간을 알 때)
+      for (let guard = 0; guard < 10; guard++) {
+        const c = closedIssues({ departureDate: departureDate ?? "" }, work, pmChoice).find((x) => x.days && (!dayNos || targets.includes(x.day)));
+        if (!c) break;
+        work = c.days!;
+        note(c.day, `${c.name} (${c.weekday}요일 휴무) → DAY ${c.toDay}`);
+        note(c.toDay!, `${c.name} ← DAY ${c.day} (휴무 피하기)`);
+      }
       // ① 전체 재정렬이면 같은 지역을 여러 날 나눠 가는 곳을 한 날로
       if (!dayNos && work.length > 1) {
         const rp = planRegions(work, pmChoice);
@@ -405,6 +416,7 @@ export function useCourseEngine({ days, pmChoice, destination, departureDate, tr
   return {
     reorder,
     applyReorder,
+    closed: closedIssues({ departureDate: departureDate ?? "" }, days, pmChoice),
     byDay,
     alts,
     scores,

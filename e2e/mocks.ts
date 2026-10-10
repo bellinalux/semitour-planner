@@ -55,6 +55,8 @@ export async function mockAi(page: Page) {
   await page.addInitScript(() => {
     try {
       if (!sessionStorage.getItem("e2e-show-welcome")) localStorage.setItem("semitour-planner:welcomeSeen", "1");
+      // 운영 기능(예약 관리·출발 준비)은 기본으로 숨겨져 있다 — 그 기능 테스트를 위해 켠다
+      localStorage.setItem("semitour-planner:showOps", "1");
     } catch {
       /* 무시 */
     }

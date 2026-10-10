@@ -1,4 +1,5 @@
 import { AlertCircle, BookmarkPlus, Bus, Check, ChevronDown, ChevronUp, Clock, ExternalLink, Eye, Ticket, Trash2, Utensils, Wallet } from "lucide-react";
+import { photoOf } from "@/lib/photo";
 import { useState } from "react";
 import { DurationInput } from "@/components/ui/DurationInput";
 import { MoneyInput } from "@/components/ui/MoneyInput";
@@ -173,9 +174,9 @@ export function TimelineItem({
         )}
 
         {editing && <RelocateControls item={item} dayNo={dayNo} days={days} onRelocateItem={onRelocateItem} />}
-        {item.photo && (
+        {photoOf(item) && (
           // eslint-disable-next-line @next/next/no-img-element -- 직접 올린 사진 data URL
-          <img src={item.photo} alt={`${item.name} 사진`} className="mt-1 h-20 w-32 rounded-md object-cover ring-1 ring-slate-200" />
+          <img src={photoOf(item)!.src} alt={`${item.name} 사진`} title={photoOf(item)!.credit} className="mt-1 h-20 w-32 rounded-md object-cover ring-1 ring-slate-200" />
         )}
         {editing && (
           <div className="mt-1 flex items-center gap-2 text-[11px]">

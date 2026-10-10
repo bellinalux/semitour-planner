@@ -1,5 +1,10 @@
 "use client";
 
+import { useShowOps } from "@/hooks/useShowOps";
+import { OpsToggle } from "@/components/layout/OpsToggle";
+import { insertDays, placeNames, shiftOptions, shortenOne } from "@/lib/nightsChange";
+import { fitCourse } from "@/lib/courseFit";
+import { tidyDays } from "@/lib/dayTidy";
 import { Undo2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Dashboard } from "@/components/dashboard/Dashboard";
@@ -79,7 +84,8 @@ import { applyFlightWithMeals, tripSpanFromFlight } from "@/lib/flightApply";
 import { dayItems, overnightNights } from "@/lib/itinerary";
 import { supplierOptions, tourToOption } from "@/lib/options";
 import { buildUspRequest } from "@/lib/uspRequest";
-import { suggestPlanName, type PlanSnapshot, type ResultSnapshot } from "@/lib/workspace";
+import { newPlanId, suggestPlanName, type PlanSnapshot, type ResultSnapshot } from "@/lib/workspace";
+import { useSavedPlans } from "@/hooks/useSavedPlans";
 import type { CourseFile } from "@/lib/courseFile";
 import { supplierQuotePatch } from "@/lib/supplierQuote";
 import { knownFlight, repairFlightTimes } from "@/lib/flightRepair";
@@ -195,7 +201,10 @@ export function PlannerApp() {
   };
 
   /** 코스를 만든다. 만든 일정을 돌려준다(실패하면 null). 자동 구성에서 부르면 자동 견적은 자동 구성이 직접 돌린다 */
-  const handleGenerate = async (options: { fromAutoBuild?: boolean } = {}): Promise<DayPlan[] | null> => {
+  const currentInput = input;
+  const handleGenerate = async (options: { fromAutoBuild?: boolean; override?: Partial<TripInput> } = {}): Promise<DayPlan[] | null> => {
+    // 고객 유형별 변형처럼 입력 일부를 바꿔 바로 만들 때 (상태가 바뀌기 전이라 직접 합친다)
+    const input: TripInput = options.override ? { ...currentInput, ...options.override } : currentInput;
     setTab("result");
     webChecks.clear();
     usp.reset();
@@ -264,6 +273,63 @@ export function PlannerApp() {
     if (error) window.alert(error);
   };
 
+  // 고객 유형별 변형 — 지금 상품을 이 브라우저에 저장해 두고, 동반자·강도·여행 유형을 바꿔 코스를 다시 만든다
+  const localPlans = useSavedPlans();
+  const makeVariant = async (patch: Partial<TripInput>, label: string): Promise<string> => {
+    const name = `${suggestPlanName(input, meta)} (원본)`.slice(0, 60);
+    const saved = localPlans.save({ id: newPlanId(), name, snapshot });
+    update(patch);
+    const days = await handleGenerate({ override: patch });
+    if (!days) return `${label}을(를) 만들지 못했습니다. 잠시 뒤 다시 시도해 주세요.`;
+    return saved.ok ? `${label}을(를) 만들었습니다. 원래 상품은 "${name}"으로 저장해 두었습니다 (저장·불러오기 → 이 브라우저).` : `${label}을(를) 만들었습니다 (원래 상품 저장은 실패 — ${saved.error}).`;
+  };
+
+  // 박수 바꾸기 — 줄이면 가벼운 날을 빼고 장소는 다른 날로, 늘리면 새 날을 만들어 마지막 날 앞에
+  const changeNights = async (delta: number): Promise<string> => {
+    const label = `${input.nights + delta}박 ${input.days + delta}일`;
+    if (delta < 0) {
+      let work = days;
+      let options = input.options;
+      const moved: string[] = [];
+      const dropped: string[] = [];
+      for (let k = 0; k < -delta; k++) {
+        const r = shortenOne(work, pmChoice);
+        if (!r) return `더 줄일 수 있는 날이 없습니다 (첫날·마지막 날·항공일은 빼지 않음).`;
+        work = r.days;
+        options = shiftOptions(options, r.removedDay, null);
+        moved.push(...r.moved);
+        dropped.push(...r.dropped);
+      }
+      history.labeled("박수 바꾸기")(work);
+      update({ days: input.days + delta, nights: input.nights + delta, options });
+      return `${label}로 줄였습니다.${moved.length ? ` 옮긴 곳: ${moved.join(", ")}.` : ""}${dropped.length ? ` 빠진 곳: ${dropped.join(", ")}.` : ""}`;
+    }
+    try {
+      const r = await postJson<{ days: DayPlan[] }>("/api/generate-itinerary", {
+        destination: input.destination,
+        days: delta,
+        travelers: input.travelers,
+        currency: input.currency,
+        themes: input.themes,
+        notes: `${input.notes}\n이미 일정에 있는 곳은 넣지 않습니다: ${placeNames(days).join(", ")}`.slice(0, 500),
+        travelType: input.travelType,
+        tripScope: input.tripScope,
+        regionPlan: "",
+        pace: input.pace,
+        companions: input.companions,
+        mustHave: "",
+        avoid: input.avoid,
+      });
+      const fresh = fitCourse(tidyDays(r.days), { walk: false }).days;
+      const { days: next, insertedAt } = insertDays(days, fresh);
+      history.labeled("박수 바꾸기")(next);
+      update({ days: input.days + delta, nights: input.nights + delta, options: shiftOptions(input.options, null, insertedAt, delta) });
+      return `${label}로 늘렸습니다. 새 날: DAY ${insertedAt}${delta > 1 ? `~${insertedAt + delta - 1}` : ""} (지금 없는 인기 장소로).`;
+    } catch (e) {
+      return e instanceof Error ? e.message : "새 날을 만들지 못했습니다.";
+    }
+  };
+
   const handleGenerateUsp = () => {
     if (uspRequest) void usp.generate(uspRequest);
   };
@@ -321,6 +387,9 @@ export function PlannerApp() {
   const dayTimeCheck = useDayTimeCheck({ input, days, pmChoice, replaceDays: history.labeled("일정 시간 검증") });
 
   // 코스 엔진 점검 — 점검 상자·일정 카드 점수 배지·요약·추천이 같이 쓴다. 자동 점검을 켜면 코스를 만든 뒤 긴 날 시간 검증 → 엔진 점검
+  // 운영 기능(예약 관리·출발 준비·출발 전 안내문)은 기본으로 숨긴다 — 이 앱은 패키지·코스 만들기용
+  const [showOps] = useShowOps();
+
   // 지식 창고 미리 조사 — 여행지를 적으면 그 도시를, 하루 한 번 최근 견적 여행지를 (오래된 것만 실제로 조사)
   usePreResearch({
     destination: input.destination,
@@ -554,7 +623,7 @@ export function PlannerApp() {
               })}
             />
             <SavedPlansMenu snapshot={snapshot} onLoad={handleLoadPlan} onImportDay={itinerary.appendDayFromSegment} />
-            <BookingsMenu
+            {showOps && <BookingsMenu
               author={session.user?.name || quoteLog.author}
               companyName={company.name}
               onFillInput={(patch) => {
@@ -565,7 +634,7 @@ export function PlannerApp() {
                 quote?.ok ? { ...bookingFromQuote(input, documentQuote(quote, input)), planName: suggestPlanName(input, meta), city: citiesOf(input.destination)[0] ?? "", places: coursePlaces(days, pmChoice) } : null
               }
               buttonClassName="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 [&>span]:hidden sm:[&>span]:inline"
-            />
+            />}
             <DayTourMenu
               input={input}
               company={{ name: company.name, phone: company.phone, email: company.email }}
@@ -583,6 +652,7 @@ export function PlannerApp() {
               <HistoryMenu log={quoteLog} teamSync={teamSync} />
               <KnowledgeMenu defaultCity={citiesOf(input.destination)[0] ?? ""} travelType={input.travelType} tripScope={input.tripScope} />
               <RateBookMenu defaultCity={citiesOf(input.destination)[0] ?? ""} />
+              <OpsToggle />
               <SendToTourdesign getProduct={getProduct} />
               <FeedbackButton where={`${feedbackStage} 단계 · ${tab} 탭`} />
               <ErrorLogMenu />
@@ -654,6 +724,9 @@ export function PlannerApp() {
             onReplaceDays={history.labeled("가격 낮추기")}
             onRegroupDays={history.labeled("지역 묶기")}
             onPaceDays={history.labeled("쉬는 날")}
+            onProductDays={history.labeled("상품 등급·변형")}
+            onVariant={makeVariant}
+            onNights={changeNights}
             onOpenSettings={openSettings}
             autoQuote={{ running: autoQuote.running, run: () => void autoQuote.run() }}
             budgetFit={budgetFit}
@@ -704,9 +777,9 @@ export function PlannerApp() {
               onGenerate: handleGenerateUsp,
             }}
             exporter={exporter}
-            ops={{ ...ops, title: planKey, companyName: company.name, guide: { planKey, city: citiesOf(input.destination)[0] ?? "", build: (withNames) => (docData ? buildGuideSheet(docData, withNames ? ops.data.participants : []) : null) } }}
+            ops={!showOps ? undefined : { ...ops, title: planKey, companyName: company.name, guide: { planKey, city: citiesOf(input.destination)[0] ?? "", build: (withNames) => (docData ? buildGuideSheet(docData, withNames ? ops.data.participants : []) : null) } }}
             versions={{ versions, currency: input.currency, customer: input.customerName.trim(), onSaveNow: () => saveVersion("직접 저장") }}
-            notice={{
+            notice={!showOps ? undefined : {
               buildNotice: async () => (docData ? departureNotice(docData, await ensureTravelInfo(), season.result) : null),
               buildPacking: async () => (docData ? packingText(packingList(input, days, pmChoice, await ensureTravelInfo(), season.result)) : null),
               onPrintPacking: () => void printDocument("packing"),

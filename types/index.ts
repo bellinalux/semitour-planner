@@ -497,6 +497,11 @@ export interface ItineraryItem {
   reason?: string;
   /** 원문에 적힌 시작 시각 "HH:mm" (예: 가이드 미팅 11:30) — 그 시각까지 기다려 시작한다 */
   fixedTime?: string;
+  /** 요일별 영업시간 (코스 점검이 찾은 값, "closed"면 휴무) — 휴무일 피하기에 쓴다 */
+  openHours?: Partial<Record<"sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat", string>>;
+  /** 장소 사진 링크·출처 (위키미디어 공용 등 무료 라이선스) — 직접 올린 사진(photo)이 없을 때 쓴다 */
+  photoUrl?: string;
+  photoCredit?: string;
   /** 현지 통화로 확인한 입장·체험 요금 (웹 확인 결과). 견적 통화와 다를 수 있다 */
   local?: { currency: CurrencyCode; amount: number };
   /** 입장료 웹 확인 결과 */

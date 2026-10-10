@@ -21,6 +21,9 @@ import { DocumentBar } from "./DocumentBar";
 import { ShareLinkBox } from "./ShareLinkBox";
 import { CourseMapPanel } from "./CourseMapPanel";
 import { PacePanel } from "./PacePanel";
+import { LineupPanel } from "./LineupPanel";
+import { FreeTimeOptionsPanel } from "./FreeTimeOptionsPanel";
+import { DifferentiationPanel } from "./DifferentiationPanel";
 import { QualityScoreCard } from "./QualityScoreCard";
 import { CustomerNoticeBox } from "./CustomerNoticeBox";
 import { OpsPanel } from "./OpsPanel";
@@ -121,6 +124,12 @@ interface Props {
   onRegroupDays?: (days: DayPlan[]) => void;
   /** 일정 강도 — 쉬는 날 제안 적용 (되돌리기 기록) */
   onPaceDays?: (days: DayPlan[]) => void;
+  /** 상품 등급·변형 적용 (되돌리기 기록) */
+  onProductDays?: (days: DayPlan[]) => void;
+  /** 고객 유형별 변형 (AI 일정) */
+  onVariant?: (patch: Partial<TripInput>, label: string) => Promise<string>;
+  /** 박수 바꾸기 (+/- 일) */
+  onNights?: (delta: number) => Promise<string>;
   /** 견적 경고에서 입력 화면의 해당 폴더로 이동한다 */
   onOpenSettings: (section: SettingsSection) => void;
   /** 견적 경고에서 바로 실행하는 자동 견적 */
@@ -158,6 +167,9 @@ export function Dashboard({
   onReplaceDays,
   onRegroupDays,
   onPaceDays,
+  onProductDays,
+  onVariant,
+  onNights,
   onOpenSettings,
   autoQuote,
   budgetFit,
@@ -179,6 +191,8 @@ export function Dashboard({
         engine={{ departureDate: input.departureDate || undefined, onDepartureDate: (departureDate) => onInputChange({ departureDate }) }}
         tripScope={input.tripScope}
         researchInfo={researchInfo}
+        onVariant={input.mode === "ai" ? onVariant : undefined}
+        nights={onNights ? { nights: input.nights, days: input.days, onChange: onNights } : undefined}
         pickupNote={input.pickupNote}
         sendingNote={input.sendingNote}
         selectedHotels={input.selectedHotels}
@@ -209,6 +223,19 @@ export function Dashboard({
           }}
         />
       )}
+      {itinerary.status === "success" && days.length > 0 && quote?.ok && onProductDays && (
+        <LineupPanel
+          input={input}
+          days={days}
+          pmChoice={pmChoice}
+          onApply={(patch, next) => {
+            onInputChange(patch);
+            onProductDays(next);
+          }}
+        />
+      )}
+      {itinerary.status === "success" && days.length > 0 && onProductDays && <DifferentiationPanel input={input} days={days} pmChoice={pmChoice} onApply={onProductDays} />}
+      {itinerary.status === "success" && days.length > 0 && <FreeTimeOptionsPanel input={input} days={days} pmChoice={pmChoice} onOptions={optionActions.onChangeOptions} />}
       {itinerary.status === "success" && days.length > 1 && onPaceDays && <PacePanel days={days} pmChoice={pmChoice} pace={input.pace} needs={input} onApply={onPaceDays} />}
       {itinerary.status === "success" && days.length > 0 && (
         <TourCatalogPanel

@@ -1,4 +1,5 @@
 import { computeItemTimings, dayTourStart } from "@/lib/dayLoad";
+import { photoOf } from "@/lib/photo";
 import { dayMeals, documentItems, includeLists } from "@/lib/documents";
 import { docTitle } from "@/lib/englishDoc";
 import { DICT, foreignDate, foreignDayDate, foreignDuration, foreignMeal, foreignMoney, foreignPeriod, foreignTags, type DocLang } from "@/lib/foreignDoc";
@@ -63,9 +64,9 @@ export function EnglishDoc({ input, days, pmChoice, quote, meta, company, transl
     const desc = shortDescription(it.description);
     return (
       <>
-        {it.photo && (
+        {photoOf(it) && (
           // eslint-disable-next-line @next/next/no-img-element -- 직접 올린 사진 data URL
-          <img src={it.photo} alt="" aria-hidden className="float-right ml-2 h-14 w-20 rounded object-cover" />
+          <img src={photoOf(it)!.src} alt="" aria-hidden className="float-right ml-2 h-14 w-20 rounded object-cover" />
         )}
         <span className="mr-1 text-[9.5px] text-slate-400">{L.kinds[it.type ?? "sightseeing"] ?? ""}</span>
         <span className="font-medium">{t(it.name)}</span>

@@ -1,4 +1,6 @@
 import { isCoord } from "@/lib/coords";
+import { photoOf } from "@/lib/photo";
+import { INTENSITY_LABEL, tripIntensity } from "@/lib/intensity";
 import { z } from "zod";
 import { computeItemTimings, dayMeetingTime, dayTourStart, hotelLeadMinutes } from "@/lib/dayLoad";
 import { dayDate, includeLists, tripPeriod } from "@/lib/documents";
@@ -36,7 +38,7 @@ export const sharedItinerarySchema = z.object({
         hotel: str(120),
         /** 조·중·석 표기 한 줄 */
         meals: str(160).default(""),
-        items: z.array(z.object({ time: str(20), name: str(160), kind: z.enum(["sight", "meal", "move", "hotel", "free", "flight", "other"]), note: str(200), photo: z.string().max(120_000).optional(), lat: z.number().min(-90).max(90).optional(), lng: z.number().min(-180).max(180).optional() })).max(40),
+        items: z.array(z.object({ time: str(20), name: str(160), kind: z.enum(["sight", "meal", "move", "hotel", "free", "flight", "other"]), note: str(200), photo: z.string().max(120_000).optional(), photoUrl: z.string().max(500).optional(), photoCredit: z.string().max(160).optional(), lat: z.number().min(-90).max(90).optional(), lng: z.number().min(-180).max(180).optional() })).max(40),
       }),
     )
     .max(60),
@@ -138,7 +140,7 @@ export function buildSharedItinerary(
             time: t ? t.start : "",
             name: cut(it.name, 160),
             kind: KIND[it.type ?? "sightseeing"] ?? "other",
-            ...(isPhotoData(it.photo, 120_000) ? { photo: it.photo } : {}),
+            ...(isPhotoData(it.photo, 120_000) ? { photo: it.photo } : !it.photo && photoOf(it) ? { photoUrl: photoOf(it)!.src.slice(0, 500), photoCredit: photoOf(it)!.credit.slice(0, 160) } : {}),
             ...(isCoord(it.lat, it.lng) ? { lat: it.lat, lng: it.lng } : {}),
             note: (it.payment === "local" ? `${en ? "Paid locally" : D ? D.paidLocally : "현지 지불"}${it.description ? ` · ${tr(it.description.slice(0, 160))}` : ""}` : tr(it.description?.slice(0, 160))).slice(0, 200),
           };
@@ -176,7 +178,7 @@ export function buildSharedItinerary(
     company: { name: cut(company.name, 80), phone: company.phone.trim().slice(0, 40), email: company.email.trim().slice(0, 120) },
     updatedAt: now.toISOString(),
     lang: en ? "en" : fl ?? "ko",
-    tags: en || fl ? [] : conditionTags(input, days, pmChoice, meta, quote).map((t) => t.slice(0, 40)).slice(0, 10),
+    tags: en || fl ? [] : [...conditionTags(input, days, pmChoice, meta, quote), ...(tripIntensity(days, pmChoice).days.length ? [`활동 강도 ${INTENSITY_LABEL[tripIntensity(days, pmChoice).level]}`] : [])].map((t) => t.slice(0, 40)).slice(0, 10),
     packing: en || fl ? [] : packingList(input, days, pmChoice).flatMap((g) => g.items.map((i) => `${g.title} · ${i}`.slice(0, 200))).slice(0, 40),
     // 선택관광 (요금을 보일 때만 요금) — 고객이 예약 요청에서 고른다
     options: input.options.slice(0, 30).map((o) => ({

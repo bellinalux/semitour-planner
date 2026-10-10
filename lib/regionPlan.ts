@@ -48,16 +48,21 @@ const namedRegion = (i: ItineraryItem) => (i.timeCheck?.basis === "area" ? i.tim
 const centroid = (pts: { lat: number; lng: number }[]) => ({ lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length, lng: pts.reduce((s, p) => s + p.lng, 0) / pts.length });
 
 /** 코스 점검 결과의 좌표를 일정 항목에 넣는다 (사람이 고친 좌표는 그대로). 바뀐 게 없으면 같은 배열 */
-export function withCoords(days: DayPlan[], places: { id: string; lat?: number; lng?: number }[]): DayPlan[] {
+export function withCoords(days: DayPlan[], places: { id: string; lat?: number; lng?: number; open?: Partial<Record<string, string>> }[]): DayPlan[] {
   const found = new Map(places.filter((p) => isCoord(p.lat, p.lng)).map((p) => [p.id, { lat: p.lat!, lng: p.lng! }]));
-  if (found.size === 0) return days;
+  // 요일별 영업시간도 함께 (휴무일 피하기)
+  const hours = new Map(places.filter((p) => p.open && Object.values(p.open).some((v) => (v ?? "").trim())).map((p) => [p.id, p.open!]));
+  if (found.size === 0 && hours.size === 0) return days;
   let changed = false;
   const next = days.map((d) =>
     mapDayItems(d, (it) => {
       const c = found.get(it.id);
-      if (!c || it.coordEdited || (it.lat === c.lat && it.lng === c.lng)) return it;
+      const h = hours.get(it.id);
+      const newCoord = c && !it.coordEdited && (it.lat !== c.lat || it.lng !== c.lng);
+      const newHours = h && JSON.stringify(h) !== JSON.stringify(it.openHours ?? null);
+      if (!newCoord && !newHours) return it;
       changed = true;
-      return { ...it, lat: c.lat, lng: c.lng };
+      return { ...it, ...(newCoord ? { lat: c!.lat, lng: c!.lng } : {}), ...(newHours ? { openHours: h as ItineraryItem["openHours"] } : {}) };
     }),
   );
   return changed ? next : days;

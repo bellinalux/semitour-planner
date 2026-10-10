@@ -1,6 +1,7 @@
 import { REST_LABEL } from "@/lib/pace";
 import { dayMealIssues, fitCourse } from "@/lib/courseFit";
 import { ReorderButton } from "./ReorderButton";
+import { dayIntensity, INTENSITY_LABEL } from "@/lib/intensity";
 import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Compass, Flag, Plus, Sun, Sunset, Timer } from "lucide-react";
 import { useContext } from "react";
 import { CourseEngineContext } from "@/hooks/useCourseEngine";
@@ -115,8 +116,12 @@ export function DayCard({
   const offMeals = offRouteMeals(plan, pmChoiceForDay);
   // 식사 시간 점검 — 늦은 식사·저녁 두 번·같은 식당 두 줄·저녁 전 밤 일정·원문 시각
   const mealIssues = dayMealIssues(plan, pmChoiceForDay);
+  const intensity = dayIntensity(plan, pmChoiceForDay);
+  // 출발 요일 기준 휴무인 곳
+  const closedHere = (engine?.closed ?? []).filter((c) => c.day === plan.day);
   const mealFit = mealIssues.length > 0 ? fitCourse([plan], { walk: false }) : null;
   const issueLabels = [
+    ...(closedHere.length > 0 ? ["휴무일"] : []),
     ...(mealIssues.length > 0 ? ["식사 시간"] : []),
     ...(load.level === "overloaded" ? ["일정 과부하"] : load.level === "tight" ? ["일정 빠듯"] : []),
     ...(engine?.zigzags[plan.day] ? ["지그재그 동선"] : []),
@@ -132,6 +137,14 @@ export function DayCard({
         <h3 className="min-w-0 flex-1 basis-40 text-balance text-sm font-semibold text-slate-900">
           {plan.theme}
           {plan.rest && <span className="ml-1.5 rounded-full bg-emerald-50 px-2 py-0.5 align-middle text-[10.5px] font-medium text-emerald-700 ring-1 ring-emerald-200">{REST_LABEL[plan.rest]}</span>}
+          {intensity.km > 0 && (
+            <span
+              title={`걷는 거리 약 ${intensity.km}km${intensity.stairs.length ? ` · 계단·오르막: ${intensity.stairs.join(", ")}` : ""}`}
+              className={`ml-1.5 rounded-full px-2 py-0.5 align-middle text-[10.5px] font-medium ring-1 ${intensity.level === "hard" ? "bg-rose-50 text-rose-700 ring-rose-200" : intensity.level === "moderate" ? "bg-amber-50 text-amber-800 ring-amber-200" : "bg-slate-50 text-slate-600 ring-slate-200"}`}
+            >
+              {INTENSITY_LABEL[intensity.level]} · 약 {intensity.km}km
+            </span>
+          )}
         </h3>
         {plan.overnightCity && (
           <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
@@ -219,6 +232,19 @@ export function DayCard({
         )}
       </header>
       <DayIssues labels={issueLabels}>
+      {closedHere.map((c) => (
+        <div key={c.itemId} className="flex flex-wrap items-start gap-1.5 border-b border-slate-100 bg-rose-50 px-4 py-2 text-[11px] leading-4 text-rose-800">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1 text-pretty">
+            {c.name} — DAY {c.day}은(는) {c.weekday}요일 휴무입니다{c.blocked ? `. ${c.blocked}` : ""}
+          </span>
+          {c.days && engine && (
+            <button type="button" onClick={() => engine.applyReorder(c.days!)} className="shrink-0 rounded border border-rose-300 bg-white px-2 py-0.5 font-semibold hover:bg-rose-100">
+              DAY {c.toDay}로 옮기기
+            </button>
+          )}
+        </div>
+      ))}
       {mealIssues.length > 0 && (
         <div className="flex flex-wrap items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />

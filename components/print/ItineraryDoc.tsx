@@ -6,6 +6,8 @@ import { gradeText } from "@/lib/itemTypes";
 import { conditionTags, dayRegion, dayTable, defaultAlternative, mealLabel, shoppingStops, shortDescription, stayText, visitStyle } from "@/lib/itineraryDoc";
 import { singleSupplement } from "@/lib/pricing";
 import type { ItineraryItem } from "@/types";
+import { intensityText } from "@/lib/intensity";
+import { photoCredits, photoOf } from "@/lib/photo";
 import { hotelPins, mapPoints } from "@/lib/regionPlan";
 import { RouteFigure } from "./RouteFigure";
 import { DocCover, DocCoverPage, DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
@@ -23,9 +25,9 @@ function ItemCell({ item, input }: { item: ItineraryItem; input: DocProps["input
   const desc = shortDescription(item.description);
   return (
     <>
-      {item.photo && (
+      {photoOf(item) && (
         // eslint-disable-next-line @next/next/no-img-element -- 직접 올린 사진 data URL
-        <img src={item.photo} alt="" aria-hidden className="float-right ml-2 h-14 w-20 rounded object-cover" />
+        <img src={photoOf(item)!.src} alt="" aria-hidden title={photoOf(item)!.credit} className="float-right ml-2 h-14 w-20 rounded object-cover" />
       )}
       {KIND_MARK[item.type ?? ""] && <span className="mr-1" aria-hidden>{KIND_MARK[item.type ?? ""]}</span>}
       <span className="font-medium">{item.name}</span>
@@ -74,7 +76,8 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
     { label: "여행사 비상연락", value: company.emergencyContact.trim() },
   ].filter((r) => r.value);
 
-  const heroPhoto = days.flatMap((d) => documentItems(d, pmChoice).flatMap((b) => b.items)).find((i) => i.photo)?.photo;
+  const heroItem = days.flatMap((d) => documentItems(d, pmChoice).flatMap((b) => b.items)).find((i) => photoOf(i));
+  const heroPhoto = heroItem ? photoOf(heroItem)!.src : undefined;
   return (
     <>
     {input.customerName.trim() && (
@@ -113,6 +116,7 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
             ...(input.minTravelers > 0 ? [{ label: "최저 행사인원", value: `${input.minTravelers}명 (미달 시 출발 7일 전까지 통보)` }] : []),
             { label: "여행경비", value: `1인 ${money(quote.scenario.pricePerPerson)} (총 ${money(quote.scenario.totalPrice)})` },
             ...(grade && quote.lodgingUnits > 0 ? [{ label: "숙소", value: `${grade} (2인 1실 기준)` }] : []),
+            ...(intensityText(days, pmChoice) ? [{ label: "활동 강도", value: intensityText(days, pmChoice) }] : []),
             {
               label: "여행경보단계",
               value: input.travelAlert
@@ -423,6 +427,7 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
         </ul>
         {company.emergencyContact.trim() && <p className="mt-1.5 font-medium">비상연락처: {company.emergencyContact.trim()}</p>}
       </DocSection>
+      {photoCredits(days, pmChoice).length > 0 && <p className="text-[9px] text-slate-400">사진 출처 — {photoCredits(days, pmChoice).join(" / ")}</p>}
     </DocShell>
     </>
   );
