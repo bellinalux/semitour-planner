@@ -3,7 +3,7 @@
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatMoney } from "@/lib/currency";
-import { loadSupplierHistory, removeSupplierRecord, sameDestination, supplierTrends, updateSupplierRecord, type SupplierRecord } from "@/lib/supplierHistory";
+import { loadSupplierHistory, removeSupplierRecord, sameDestination, supplierTrends, syncSupplierHistory, updateSupplierRecord, type SupplierRecord } from "@/lib/supplierHistory";
 import type { TripInput } from "@/types";
 
 /** 업체 견적 기록이 바뀌면 (새로 읽음) 화면을 다시 읽게 알린다 */
@@ -15,12 +15,29 @@ export const SUPPLIER_HISTORY_EVENT = "semitour:supplier-history";
  */
 export function SupplierHistoryPanel({ input }: { input: TripInput }) {
   const [list, setList] = useState<SupplierRecord[]>([]);
+  const [shared, setShared] = useState(false);
   useEffect(() => {
-    const load = () => setList(loadSupplierHistory());
+    let alive = true;
+    // 먼저 이 브라우저 기록을 보여 주고, 팀 서버와 맞춘 뒤 다시 그린다
+    const load = () => {
+      setList(loadSupplierHistory());
+      void syncSupplierHistory().then((r) => {
+        if (!alive) return;
+        setList(r.list);
+        setShared(r.shared);
+      });
+    };
     load();
     window.addEventListener(SUPPLIER_HISTORY_EVENT, load);
-    return () => window.removeEventListener(SUPPLIER_HISTORY_EVENT, load);
+    return () => {
+      alive = false;
+      window.removeEventListener(SUPPLIER_HISTORY_EVENT, load);
+    };
   }, []);
+  const change = (next: SupplierRecord[], removed: string[] = []) => {
+    setList(next);
+    void syncSupplierHistory(removed).then((r) => setList(r.list));
+  };
   const rows = sameDestination(list, input.destination);
   if (rows.length === 0) return null;
   const trends = supplierTrends(rows).filter((t) => t.changePct !== 0);
@@ -31,7 +48,7 @@ export function SupplierHistoryPanel({ input }: { input: TripInput }) {
   return (
     <section aria-label="업체 견적 기록" className="space-y-2 rounded-lg border border-slate-200 p-3 text-[11px] leading-4">
       <p className="font-semibold text-slate-800">
-        업체 견적 기록 · 비교 <span className="font-normal text-slate-500">— {input.destination} 관련 {rows.length}건 (이 브라우저)</span>
+        업체 견적 기록 · 비교 <span className="font-normal text-slate-500">— {input.destination} 관련 {rows.length}건 ({shared ? "팀 공용" : "이 브라우저"})</span>
       </p>
       {trends.length > 0 && (
         <ul className="space-y-0.5">
@@ -69,7 +86,7 @@ export function SupplierHistoryPanel({ input }: { input: TripInput }) {
                       defaultValue={r.supplier}
                       onBlur={(e) => {
                         const v = e.target.value.trim();
-                        if (v && v !== r.supplier) setList(updateSupplierRecord(list, r.id, { supplier: v }));
+                        if (v && v !== r.supplier) change(updateSupplierRecord(list, r.id, { supplier: v }));
                       }}
                       className="w-28 rounded border border-transparent bg-transparent px-1 py-0.5 font-semibold text-slate-800 hover:border-slate-200 focus:border-indigo-400 focus:bg-white focus:outline-none"
                     />
@@ -105,7 +122,7 @@ export function SupplierHistoryPanel({ input }: { input: TripInput }) {
                     <button
                       type="button"
                       onClick={() => {
-                        if (window.confirm(`${r.supplier} 견적 기록을 지울까요?`)) setList(removeSupplierRecord(list, r.id));
+                        if (window.confirm(`${r.supplier} 견적 기록을 지울까요?`)) change(removeSupplierRecord(list, r.id), [r.id]);
                       }}
                       aria-label={`${r.supplier} 기록 지우기`}
                       className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-600"

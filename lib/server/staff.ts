@@ -4,7 +4,8 @@ import { getKv } from "./planStore";
  * 직원 계정 — 관리자가 이름·권한·개인 접속 코드를 만들어 준다.
  * 코드는 원문을 저장하지 않고 작업공간별 해시만 저장한다. 관리자(공용 접속 코드)는 이 목록과 별개로 항상 들어올 수 있다.
  */
-export type StaffRole = "admin" | "staff";
+/** sales: 영업 — 원가·마진을 화면에서 숨기고 판매가만 본다 */
+export type StaffRole = "admin" | "staff" | "sales";
 
 export interface StaffMember {
   id: string;
@@ -35,7 +36,7 @@ export const hashStaffCode = (ws: string, code: string) => sha256Hex(`semitour-s
 function isMember(v: unknown): v is StaffMember {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
-  return typeof o.id === "string" && typeof o.name === "string" && (o.role === "admin" || o.role === "staff") && typeof o.codeHash === "string" && typeof o.active === "boolean";
+  return typeof o.id === "string" && typeof o.name === "string" && (o.role === "admin" || o.role === "staff" || o.role === "sales") && typeof o.codeHash === "string" && typeof o.active === "boolean";
 }
 
 /** 같은 서버 안에서 잠깐 기억해 매 요청마다 저장소를 읽지 않는다 (권한 변경은 최대 30초 뒤 반영) */

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 
@@ -18,6 +18,8 @@ export const metadata: Metadata = {
   title: "세미투어 플래너",
   description: "세미투어 기획 및 견적 자동화 — 일정 생성, 원가 계산, 경쟁사 비교, USP 추출",
 };
+
+export const viewport: Viewport = { themeColor: "#4f46e5" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

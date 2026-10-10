@@ -3,6 +3,7 @@ import { computeItemTimings, dayMeetingTime } from "@/lib/dayLoad";
 import { dayDate, includeLists, tripPeriod } from "@/lib/documents";
 import { localPayRows, moneyWithKrw } from "@/lib/fees";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
+import { docTitle, englishDayDate, englishMoney, englishPeriod } from "@/lib/englishDoc";
 import type { CompanyProfile, CourseMeta, DayPlan, QuoteData, TripInput } from "@/types";
 
 /**
@@ -35,6 +36,8 @@ export const sharedItinerarySchema = z.object({
   notices: z.array(str(300)).max(20),
   company: z.object({ name: str(80), phone: str(40), email: str(120) }),
   updatedAt: str(40),
+  /** 화면 글자 언어 (영문 링크면 en) */
+  lang: z.enum(["ko", "en"]).default("ko"),
 });
 export type SharedItinerary = z.infer<typeof sharedItinerarySchema>;
 
@@ -60,24 +63,37 @@ export function buildSharedItinerary(
   data: { input: TripInput; days: DayPlan[]; pmChoice: PmChoice; quote: QuoteData; meta: CourseMeta | null; company: CompanyProfile },
   showPrice: boolean,
   now = new Date(),
+  extraNotices: string[] = [],
+  /** 영문 링크 — 한글 글을 바꿀 번역표 */
+  english?: Record<string, string>,
 ): SharedItinerary {
   const { input, days, pmChoice, quote, meta, company } = data;
   const localPay = localPayRows(days, pmChoice);
   const { included, excluded } = includeLists(quote, input, localPay.rows.length > 0);
   const price = quote.partnerConsumerPrice ?? quote.scenario.pricePerPerson;
-  const cut = (s: string | undefined, n: number) => (s ?? "").trim().slice(0, n);
+  const en = !!english;
+  const tr = (s: string | undefined) => {
+    const k = (s ?? "").trim();
+    return english ? (english[k] ?? english[k.slice(0, 400)] ?? k) : k;
+  };
+  const cut = (s: string | undefined, n: number) => tr(s).slice(0, n);
+  const nightsDays = en ? `${input.nights}N ${input.days}D` : `${input.nights}박 ${input.days}일`;
   return {
-    title: cut(meta?.packageName, 120) || `${input.destination} ${input.nights}박 ${input.days}일`.slice(0, 120),
+    title: cut(docTitle({ input, meta }), 120),
     destination: cut(input.destination, 100),
-    period: `${tripPeriod(input)} (${input.nights}박 ${input.days}일)`.slice(0, 80),
+    period: `${en ? englishPeriod(input) : tripPeriod(input)} (${nightsDays})`.slice(0, 80),
     travelers: quote.travelers,
-    priceLine: showPrice ? `1인 ${moneyWithKrw(price, input.currency, input.exchangeRateToKrw)}${quote.lodgingUnits > 0 ? " (2인 1실 기준)" : ""}`.slice(0, 120) : "",
+    priceLine: !showPrice
+      ? ""
+      : en
+        ? `Per person ${englishMoney(price, input.currency)}${quote.lodgingUnits > 0 ? " (twin sharing)" : ""}`.slice(0, 120)
+        : `1인 ${moneyWithKrw(price, input.currency, input.exchangeRateToKrw)}${quote.lodgingUnits > 0 ? " (2인 1실 기준)" : ""}`.slice(0, 120),
     days: days.slice(0, 60).map((d) => {
       const items = dayItems(d, pmChoice);
       const timings = computeItemTimings(items, dayMeetingTime(d));
       return {
         day: d.day,
-        date: dayDate(input, d.day) ?? "",
+        date: (en ? englishDayDate(input, d.day) : dayDate(input, d.day)) ?? "",
         theme: cut(d.theme, 120),
         hotel: cut(d.overnightCity ? (input.selectedHotels[d.overnightCity.trim()]?.name ?? d.overnightCity) : "", 120),
         items: items.slice(0, 40).map((it) => {
@@ -86,18 +102,28 @@ export function buildSharedItinerary(
             time: t ? t.start : "",
             name: cut(it.name, 160),
             kind: KIND[it.type ?? "sightseeing"] ?? "other",
-            note: cut(it.payment === "local" ? `현지 지불${it.description ? ` · ${it.description}` : ""}` : it.description, 200),
+            note: (it.payment === "local" ? `${en ? "Paid locally" : "현지 지불"}${it.description ? ` · ${tr(it.description.slice(0, 160))}` : ""}` : tr(it.description?.slice(0, 160))).slice(0, 200),
           };
         }),
       };
     }),
-    included: included.slice(0, 40).map((s) => s.slice(0, 120)),
-    excluded: excluded.slice(0, 40).map((s) => s.slice(0, 120)),
-    notices: [
-      ...(localPay.rows.length > 0 ? [`현지에서 내는 비용: ${localPay.rows.map((r) => r.name).join(", ")}`] : []),
-      "일정은 현지 사정(교통·날씨·운영 시간)에 따라 순서·시각이 바뀔 수 있습니다.",
-    ].map((s) => s.slice(0, 300)),
-    company: { name: cut(company.name, 80), phone: cut(company.phone, 40), email: cut(company.email, 120) },
+    included: included.slice(0, 40).map((s) => cut(s, 120)),
+    excluded: excluded.slice(0, 40).map((s) => cut(s, 120)),
+    notices: (en
+      ? [
+          ...(localPay.rows.length > 0 ? [`Paid locally: ${localPay.rows.map((r) => tr(r.name)).join(", ")}`] : []),
+          "The order and times may change due to local traffic, weather or opening hours.",
+        ]
+      : [
+          ...(localPay.rows.length > 0 ? [`현지에서 내는 비용: ${localPay.rows.map((r) => r.name).join(", ")}`] : []),
+          ...(showPrice ? extraNotices : []),
+          "일정은 현지 사정(교통·날씨·운영 시간)에 따라 순서·시각이 바뀔 수 있습니다.",
+        ]
+    )
+      .slice(0, 20)
+      .map((s) => s.slice(0, 300)),
+    company: { name: cut(company.name, 80), phone: company.phone.trim().slice(0, 40), email: company.email.trim().slice(0, 120) },
     updatedAt: now.toISOString(),
+    lang: en ? "en" : "ko",
   };
 }

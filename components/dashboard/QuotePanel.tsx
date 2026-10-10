@@ -1,5 +1,6 @@
 import { AlertTriangle, Calculator } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useHideCosts } from "@/components/SessionContext";
 import { ChoiceGroup } from "@/components/ui/ChoiceGroup";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -14,13 +15,12 @@ import { formatMoney } from "@/lib/currency";
 import { BudgetPanel } from "./quote/BudgetPanel";
 import { CostSheetPanel } from "./quote/CostSheetPanel";
 import type { BudgetFitView } from "@/hooks/useBudgetFit";
-import { bindingChannel, buildPriceTiers, singleSupplement } from "@/lib/pricing";
+import { bindingChannel, buildPriceTiers, documentQuote, singleSupplement } from "@/lib/pricing";
 import type { PmChoice } from "@/lib/itinerary";
 import type { AsyncState, CourseMeta, CurrencyCode, DayPlan, PackageType, QuoteResult, TripInput } from "@/types";
 import { ChannelTable } from "./quote/ChannelTable";
 import { CompetitorTable } from "./quote/CompetitorTable";
 import { PriceLeversPanel } from "./quote/PriceLeversPanel";
-import { priceAgeDays, STALE_PRICE_DAYS } from "@/lib/competitors";
 import { ProductCompareDialog } from "./quote/ProductCompareDialog";
 import { TourCompareTable } from "./quote/TourCompareTable";
 import { SupplierCheckPanel } from "./quote/SupplierCheckPanel";
@@ -31,6 +31,7 @@ import { DiscountSimulator } from "./quote/DiscountSimulator";
 import { FxSensitivityPanel } from "./quote/FxSensitivityPanel";
 import { PerPersonMatrix } from "./quote/PerPersonMatrix";
 import { CustomerPricePanel } from "./quote/CustomerPricePanel";
+import { SeriesPanel } from "./quote/SeriesPanel";
 import { PriceGapAnalysis } from "./quote/PriceGapAnalysis";
 import { PriceTiersCard } from "./quote/PriceTiersCard";
 import { QuoteKpis } from "./quote/QuoteKpis";
@@ -121,18 +122,35 @@ function useQuoteView(): [QuoteView, (v: QuoteView) => void] {
 
 function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, onInputChange, onOpenSettings, autoQuote, budgetFit, onReplaceDays }: Omit<Props, "state" | "quote"> & { quote: QuoteResult }) {
   const [view, setView] = useQuoteView();
+  const hideCosts = useHideCosts();
+  // 경쟁 가격 정기 확인(일주일)은 화면 전체에서 한 번 돈다 (useCompetitorWatch). 여기서는 비교표의 '다시 조회' 버튼만
   const competitorRefresh = useCompetitorRefresh(input, onInputChange);
-  // 경쟁 가격 변동 추적: 검색으로 넣은 경쟁 상품 가격이 오래됐으면(14일 넘음) 견적을 열 때 한 번 다시 조회한다
-  const staleChecked = useRef(false);
-  useEffect(() => {
-    if (staleChecked.current) return;
-    staleChecked.current = true;
-    const stale = input.competitors.some((c) => c.source && (priceAgeDays(c) ?? 0) > STALE_PRICE_DAYS);
-    if (stale) competitorRefresh.run();
-    // 처음 한 번만
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   if (!quote.ok) return <ErrorBanner title="견적을 계산할 수 없습니다" message={quote.error} />;
+  // 영업 권한: 판매가와 고객 제시용 가격만 (원가·마진·업체 공급가·경쟁 분석은 숨김)
+  if (hideCosts) {
+    const sale = documentQuote(quote, input);
+    const price = sale.partnerConsumerPrice ?? sale.scenario.pricePerPerson;
+    return (
+      <div className="space-y-6">
+        <section aria-label="판매가" className="rounded-lg bg-indigo-50 p-4 ring-1 ring-indigo-200">
+          <p className="text-[11px] text-slate-500">1인 판매가 (2인 1실)</p>
+          <p className="text-2xl font-bold tabular-nums text-indigo-900">{formatMoney(Math.round(price), input.currency)}</p>
+          <p className="text-xs tabular-nums text-slate-600">
+            {sale.travelers}명 합계 {formatMoney(Math.round(price * sale.travelers), input.currency)}
+          </p>
+          <p className="mt-1 text-[11px] text-slate-500">영업 권한이라 원가·마진·업체 공급가는 보이지 않습니다.</p>
+        </section>
+        <section id="customer-prices" className="scroll-mt-4">
+          <SubHeading>고객 제시용 가격 (A/B/C안 · 인원별)</SubHeading>
+          <CustomerPricePanel input={input} days={days} pmChoice={pmChoice} quote={quote} meta={meta} />
+        </section>
+        <section id="series-prices" className="scroll-mt-4">
+          <SubHeading>시리즈 출발 (회차별 판매가) · 할인 규칙</SubHeading>
+          <SeriesPanel input={input} days={days} pmChoice={pmChoice} />
+        </section>
+      </div>
+    );
+  }
 
   const policy = ourPolicy(days, pmChoice, input, meta);
   const tourCompare = buildTourCompare(input, days, pmChoice, quote, meta);
@@ -311,6 +329,11 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
       <section id="customer-prices" className="scroll-mt-4">
         <SubHeading>고객 제시용 가격 (A/B/C안 · 인원별)</SubHeading>
         <CustomerPricePanel input={input} days={days} pmChoice={pmChoice} quote={quote} meta={meta} />
+      </section>
+
+      <section id="series-prices" className="scroll-mt-4">
+        <SubHeading>시리즈 출발 (회차별 판매가) · 할인 규칙</SubHeading>
+        <SeriesPanel input={input} days={days} pmChoice={pmChoice} />
       </section>
 
       {detail && (

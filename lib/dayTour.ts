@@ -3,6 +3,7 @@ import { fmt, hm, km as straightKm } from "@/lib/courseEngine/time";
 import { MAX_CONTINUOUS_DRIVE, REQUIRED_REST } from "@/lib/driverHours";
 import { roundUpPrice } from "@/lib/priceRound";
 import type { DayTourLeg, DayTourRequest, DayTourResponse, DayTourStop, DayTourTransport, LegMode } from "@/lib/schemas/dayTour";
+import type { SharedItinerary } from "@/lib/shareItinerary";
 import type { CurrencyCode, TourCandidate } from "@/types";
 
 /**
@@ -545,7 +546,7 @@ export function marketPosition(salePrice: number, market: DayTourResponse["marke
 
 /* ── 내보내기 ── */
 
-export function operationText(c: DayTourCostInput, title: string, cost: DayTourCost): string {
+export function operationText(c: DayTourCostInput, title: string, cost: DayTourCost, withCosts = true): string {
   const tl = dayTourTimeline(c.baseName, c.stops, c.legs, c.start);
   const lines = [
     `[운영] ${title}`,
@@ -560,10 +561,14 @@ export function operationText(c: DayTourCostInput, title: string, cost: DayTourC
       return `  └ ${legModeText(leg.mode)} ${leg.km}km ${leg.minutes}분${leg.route ? ` · ${leg.route}` : ""}${leg.toll ? ` · 통행료 ${leg.toll.toLocaleString()}` : ""}${leg.transitFare ? ` · 1인 ${leg.transitFare.toLocaleString()}` : ""}`;
     }),
     `${fmt(tl.endMin)}  ${c.baseName} 도착 (해산)`,
-    "",
-    "원가",
-    ...cost.lines.map((l) => `- ${l.label}: ${l.amount.toLocaleString()}${l.per === "person" ? " (1인)" : ""} — ${l.note}`),
-    `1인 원가 ${Math.round(cost.costPerPerson).toLocaleString()} · 판매가 ${cost.salePrice.toLocaleString()} ${c.currency}`,
+    ...(withCosts
+      ? [
+          "",
+          "원가",
+          ...cost.lines.map((l) => `- ${l.label}: ${l.amount.toLocaleString()}${l.per === "person" ? " (1인)" : ""} — ${l.note}`),
+          `1인 원가 ${Math.round(cost.costPerPerson).toLocaleString()} · 판매가 ${cost.salePrice.toLocaleString()} ${c.currency}`,
+        ]
+      : []),
   ];
   return lines.join("\n");
 }
@@ -612,5 +617,53 @@ export function toTourCandidate(c: DayTourCostInput, title: string, summary: str
     operator: "",
     sourceName: "근교 투어 만들기",
     searchUrl: "",
+  };
+}
+
+/* ── 고객용 웹 일정표 ── */
+
+const SHARE_KIND: Record<string, "sight" | "meal"> = { sight: "sight", activity: "sight", meal: "meal" };
+
+/** 근교 투어를 고객용 웹 일정표(링크) 형식으로 — 원가 없이 일정·포함 사항·요금 */
+export function dayTourShare(
+  c: DayTourCostInput,
+  title: string,
+  summary: string,
+  cost: DayTourCost,
+  company: { name: string; phone: string; email: string },
+  showPrice: boolean,
+  now = new Date(),
+): SharedItinerary {
+  const tl = dayTourTimeline(c.baseName, c.stops, c.legs, c.start);
+  const includes = [
+    cost.vehicle ? "전용 차량" : "",
+    cost.guides > 0 ? "가이드" : "",
+    c.stops.some((s) => s.kind !== "meal" && s.entryFee > 0) ? "입장료" : "",
+    c.stops.some((s) => s.kind === "meal") ? "식사" : "",
+    c.legs.some((l) => l.mode === "transit") ? "대중교통 요금" : "",
+    c.settings.insurancePerPerson > 0 ? "여행자보험" : "",
+  ].filter(Boolean);
+  const items = tl.rows.map((r) => {
+    if (r.kind === "stop") {
+      const s = c.stops[r.index];
+      return { time: fmt(r.start), name: s.name.slice(0, 160), kind: SHARE_KIND[s.kind] ?? "sight", note: [s.area, s.note].filter(Boolean).join(" · ").slice(0, 200) };
+    }
+    const l = c.legs[r.index];
+    const to = r.index < c.stops.length ? c.stops[r.index].name : c.baseName;
+    return { time: fmt(r.start), name: `${legModeText(l.mode)}으로 ${to}`.slice(0, 160), kind: "move" as const, note: `${l.minutes}분${l.route ? ` · ${l.route}` : ""}`.slice(0, 200) };
+  });
+  return {
+    title: title.slice(0, 120),
+    destination: c.baseName.slice(0, 100),
+    period: `${c.length === "full" ? "당일" : "반일"} · ${fmt(tl.startMin)} 출발 ~ ${fmt(tl.endMin)} 도착`.slice(0, 80),
+    travelers: c.travelers,
+    priceLine: showPrice ? `1인 ${cost.salePrice.toLocaleString()} ${c.currency}`.slice(0, 120) : "",
+    days: [{ day: 1, date: "", theme: summary.slice(0, 120), hotel: "", items: [{ time: fmt(tl.startMin), name: `${c.baseName} 출발`.slice(0, 160), kind: "move" as const, note: "" }, ...items].slice(0, 40) }],
+    included: includes,
+    excluded: ["개인 경비", ...(c.stops.some((s) => s.kind === "meal") ? [] : ["식사"])],
+    notices: ["현지 교통·날씨에 따라 순서·시각이 바뀔 수 있습니다."],
+    company: { name: company.name.slice(0, 80), phone: company.phone.slice(0, 40), email: company.email.slice(0, 120) },
+    updatedAt: now.toISOString(),
+    lang: "ko",
   };
 }

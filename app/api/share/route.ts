@@ -1,5 +1,5 @@
 import { shareRequestSchema } from "@/lib/shareItinerary";
-import { guardRequest } from "@/lib/server/guard";
+import { isAuthed } from "@/lib/server/access";
 import { newShareId, putShared } from "@/lib/server/shareStore";
 
 function errorResponse(code: string, message: string, status: number) {
@@ -8,8 +8,8 @@ function errorResponse(code: string, message: string, status: number) {
 
 /** 고객용 웹 일정표 링크 만들기·고치기 (직원만 — 접근 코드 확인). 보는 쪽(/t/아이디)은 링크만 있으면 열린다 */
 export async function POST(request: Request) {
-  const blocked = await guardRequest(request);
-  if (blocked) return blocked;
+  // AI를 쓰지 않는 저장이라 호출 수 제한 없이 접근 코드만 확인한다
+  if (!(await isAuthed(request))) return errorResponse("UNAUTHORIZED", "접근 코드가 필요합니다.", 401);
 
   let body: unknown;
   try {

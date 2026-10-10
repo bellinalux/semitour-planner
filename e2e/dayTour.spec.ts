@@ -29,8 +29,11 @@ const RESPONSE = {
   sources: [],
 };
 
-test("근교 투어: 만들기 → 원가·판매가 → 구간 수단 바꾸기 → 저장", async ({ page }) => {
+test("근교 투어: 만들기 → 원가·판매가 → 구간 수단 바꾸기 → 저장 → 운영표 인쇄·고객 링크", async ({ page }) => {
   await mockAi(page);
+  await page.addInitScript(() => {
+    window.print = () => undefined;
+  });
   let body: Record<string, unknown> | null = null;
   await page.route("**/api/day-tour", async (r) => {
     body = r.request().postDataJSON();
@@ -68,6 +71,20 @@ test("근교 투어: 만들기 → 원가·판매가 → 구간 수단 바꾸기
 
   await dialog.getByRole("button", { name: "저장", exact: true }).click();
   await expect(dialog.getByText("저장한 근교 투어 (1)")).toBeVisible();
+
+  // 운영표 인쇄 (가격 없음)
+  await dialog.getByRole("button", { name: "운영표 인쇄" }).click();
+  const doc = page.locator(".print-root").filter({ hasText: "근교 투어 운영표" });
+  await expect(doc).toContainText("남이섬");
+  await expect(doc).not.toContainText("원가");
+
+  // 고객용 웹 링크
+  await dialog.getByRole("button", { name: "고객용 웹 링크" }).click();
+  const link = dialog.getByRole("status").filter({ hasText: "/t/" }).getByRole("link");
+  await expect(link).toBeVisible();
+  await page.goto((await link.getAttribute("href"))!);
+  await expect(page.getByRole("heading", { name: "가평 남이섬·쁘띠프랑스 당일 투어" })).toBeVisible();
+  await expect(page.getByText("쁘띠프랑스", { exact: true })).toBeVisible();
 });
 
 test("근교 투어: 도보 투어는 차량·차고지 칸이 없다", async ({ page }) => {

@@ -77,6 +77,8 @@ export interface InsightInput {
   fx?: FxDrift | null;
   /** 출발 시기 확인 (날씨·공휴일·축제·휴관·혼잡) */
   season?: SeasonResponse | null;
+  /** 출발 준비 체크리스트 중 기한이 지난 항목 수 */
+  opsOverdue?: number;
 }
 
 export function keyNumbers({ input, days, pmChoice, meta, quote, money }: InsightInput): KeyNumbers | null {
@@ -121,7 +123,7 @@ export function keyNumbers({ input, days, pmChoice, meta, quote, money }: Insigh
 
 const TONE_ORDER = { warn: 0, info: 1, good: 2 } as const;
 
-export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, money, engine, fx, season }: InsightInput): Insight[] {
+export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, money, engine, fx, season, opsOverdue = 0 }: InsightInput): Insight[] {
   const out: Insight[] = [];
 
   if (quote && !quote.ok)
@@ -177,6 +179,15 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
       });
     }
   }
+
+  if (opsOverdue > 0)
+    out.push({
+      id: "ops-overdue",
+      tone: "warn",
+      title: `출발 준비 기한 지난 항목 ${opsOverdue}개`,
+      detail: "숙소·식당·입장권 등 예약 확인 기한이 지났습니다. 확정하고 체크하세요.",
+      action: { kind: "scroll", target: "ops-panel", label: "출발 준비 보기" },
+    });
 
   // 출발 시기 (날씨·현지 공휴일·축제·휴관·성수기) — 영향이 큰 것은 하나씩, 참고는 묶어서
   if (season && (season.notes.length > 0 || season.weather)) {

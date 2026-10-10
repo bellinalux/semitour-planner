@@ -1,7 +1,10 @@
 "use client";
 
-import { AlertTriangle, Bus, Footprints, Info, Plus, Save, TrainFront, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { AlertTriangle, Bus, Footprints, Info, Link2, Plus, Printer, Save, TrainFront, Trash2 } from "lucide-react";
+import { useCallback, useState } from "react";
+import { useHideCosts } from "@/components/SessionContext";
+import { postJson } from "@/lib/api";
+import { DayTourPrint } from "./DayTourPrint";
 import { CopyButton } from "@/components/dashboard/CopyButton";
 import { useNumberText } from "@/hooks/useNumberText";
 import { fmt } from "@/lib/courseEngine/time";
@@ -11,6 +14,7 @@ import {
   changeLegMode,
   customerText,
   dayTourCost,
+  dayTourShare,
   dayTourTimeline,
   dayTourWarnings,
   legEnds,
@@ -37,6 +41,8 @@ interface Props {
   onAddOption: (tour: TourCandidate, dayNo: number, price: { cost: number; sale: number }) => void;
   onSave: () => void;
   notice: string;
+  /** 고객 웹 일정표·운영표에 넣을 회사 정보 */
+  company: { name: string; phone: string; email: string };
 }
 
 const MODE_ICON: Record<LegMode, typeof Bus> = { vehicle: Bus, transit: TrainFront, walk: Footprints };
@@ -81,10 +87,14 @@ function SettingRow({ label, children, hint }: { label: string; children: React.
   );
 }
 
-export function DayTourResult({ work, onChange, dayCount, currencyMismatch, onAddOption, onSave, notice }: Props) {
+export function DayTourResult({ work, onChange, dayCount, currencyMismatch, onAddOption, onSave, notice, company }: Props) {
   const { request: req, response: res, stops, legs, settings } = work;
   const [optionDay, setOptionDay] = useState(1);
   const [added, setAdded] = useState("");
+  const [printing, setPrinting] = useState(false);
+  const hideCosts = useHideCosts();
+  const [link, setLink] = useState<{ url: string; error: string }>({ url: "", error: "" });
+  const stopPrint = useCallback(() => setPrinting(false), []);
   const money = (v: number) => formatMoney(Math.round(v), req.currency);
   const c: DayTourCostInput = {
     stops,
@@ -141,12 +151,14 @@ export function DayTourResult({ work, onChange, dayCount, currencyMismatch, onAd
         />
         <div className="grid gap-2 sm:grid-cols-5" role="group" aria-label="핵심 숫자">
           {[
-            { k: "1인 원가", v: money(cost.costPerPerson) },
+            { k: "1인 원가", v: money(cost.costPerPerson), cost: true },
             { k: "1인 판매가", v: money(cost.salePrice), strong: true },
-            { k: "1인 이익", v: `${money(cost.profitPerPerson)} (${settings.marginRate}%)` },
-            { k: "손익분기", v: even === null ? "—" : `${even}명부터` },
+            { k: "1인 이익", v: `${money(cost.profitPerPerson)} (${settings.marginRate}%)`, cost: true },
+            { k: "손익분기", v: even === null ? "—" : `${even}명부터`, cost: true },
             { k: "시장 순위", v: pos.total > 1 ? `${pos.total}개 중 ${pos.rank}위 (싼 순)` : "비교 없음" },
-          ].map((x) => (
+          ]
+            .filter((x) => !(hideCosts && "cost" in x && x.cost))
+            .map((x) => (
             <div key={x.k} className="rounded-md bg-white px-2.5 py-2 ring-1 ring-slate-200">
               <p className="text-[10px] text-slate-500">{x.k}</p>
               <p className={`tabular-nums ${x.strong ? "text-sm font-bold text-indigo-700" : "font-semibold text-slate-800"}`}>{x.v}</p>
@@ -249,6 +261,7 @@ export function DayTourResult({ work, onChange, dayCount, currencyMismatch, onAd
         </ol>
       </section>
 
+      {!hideCosts && (
       <div className="grid gap-3 lg:grid-cols-2">
         <section aria-label="원가" className="rounded-lg border border-slate-200 p-3">
           <h3 className="mb-2 font-semibold text-slate-800">원가 ({req.travelers}명 기준)</h3>
@@ -382,6 +395,7 @@ export function DayTourResult({ work, onChange, dayCount, currencyMismatch, onAd
           )}
         </section>
       </div>
+      )}
 
       <section aria-label="인원별 가격표" className="rounded-lg border border-slate-200 p-3">
         <h3 className="mb-2 font-semibold text-slate-800">인원별 1인 가격 (마진 {settings.marginRate}%)</h3>
@@ -391,7 +405,7 @@ export function DayTourResult({ work, onChange, dayCount, currencyMismatch, onAd
               <tr className="border-b border-slate-200 text-left text-slate-500">
                 <th className="py-1 pr-2 font-medium">인원</th>
                 <th className="py-1 pr-2 font-medium">차량·가이드</th>
-                <th className="py-1 pr-2 text-right font-medium">1인 원가</th>
+                {!hideCosts && <th className="py-1 pr-2 text-right font-medium">1인 원가</th>}
                 <th className="py-1 text-right font-medium">1인 판매가</th>
               </tr>
             </thead>
@@ -405,7 +419,7 @@ export function DayTourResult({ work, onChange, dayCount, currencyMismatch, onAd
                     {[r.vehicle, r.guides > 0 ? `가이드 ${r.guides}` : ""].filter(Boolean).join(" · ") || "—"}
                     {r.step && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-800">차종·가이드 바뀜</span>}
                   </td>
-                  <td className="py-1 pr-2 text-right">{money(r.costPerPerson)}</td>
+                  {!hideCosts && <td className="py-1 pr-2 text-right">{money(r.costPerPerson)}</td>}
                   <td className="py-1 text-right">{money(r.salePrice)}</td>
                 </tr>
               ))}
@@ -452,8 +466,29 @@ export function DayTourResult({ work, onChange, dayCount, currencyMismatch, onAd
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <CopyButton label="운영표 복사" variant="secondary" disabled={false} getText={() => operationText(c, work.title, cost)} />
+        <CopyButton label="운영표 복사" variant="secondary" disabled={false} getText={() => operationText(c, work.title, cost, !hideCosts)} />
         <CopyButton label="고객 안내문 복사" variant="secondary" disabled={false} getText={() => customerText(c, work.title, work.summary, cost)} />
+        <button type="button" onClick={() => setPrinting(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">
+          <Printer className="h-3.5 w-3.5" aria-hidden />
+          운영표 인쇄
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              // 같은 투어(저장 id)는 같은 링크를 고친다
+              const res = await postJson<{ id: string; path: string }>("/api/share", { ...(work.shareId ? { id: work.shareId } : {}), itinerary: dayTourShare(c, work.title, work.summary, cost, company, true) });
+              onChange({ shareId: res.id });
+              setLink({ url: `${window.location.origin}${res.path}`, error: "" });
+            } catch (e) {
+              setLink({ url: "", error: e instanceof Error ? e.message : "링크를 만들지 못했습니다." });
+            }
+          }}
+          className="inline-flex items-center gap-1 rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 font-semibold text-indigo-800 hover:bg-indigo-100"
+        >
+          <Link2 className="h-3.5 w-3.5" aria-hidden />
+          {work.shareId ? "고객 링크 고치기" : "고객용 웹 링크"}
+        </button>
         <button type="button" onClick={onSave} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">
           <Save className="h-3.5 w-3.5" aria-hidden />
           저장
@@ -475,6 +510,17 @@ export function DayTourResult({ work, onChange, dayCount, currencyMismatch, onAd
         )}
         {currencyMismatch && <span className="text-[11px] text-slate-500">견적 통화와 달라 선택관광으로 넣을 수 없습니다.</span>}
       </div>
+      {link.url && (
+        <p role="status" className="flex flex-wrap items-center gap-2 text-emerald-800">
+          고객용 링크:
+          <a href={link.url} target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2">
+            {link.url}
+          </a>
+          <CopyButton label="링크 복사" variant="secondary" disabled={false} getText={() => link.url} />
+        </p>
+      )}
+      {link.error && <p className="text-red-600">{link.error}</p>}
+      {printing && <DayTourPrint c={c} title={work.title} cost={cost} company={company.name} onDone={stopPrint} />}
       {(notice || added) && (
         <p role="status" className="text-emerald-700">
           {notice || added}

@@ -7,7 +7,7 @@ import { buttonClass, fieldClass, when } from "./shared";
 interface StaffView {
   id: string;
   name: string;
-  role: "admin" | "staff";
+  role: "admin" | "staff" | "sales";
   active: boolean;
   createdAt: string;
   lastLoginAt?: string;
@@ -106,6 +106,7 @@ export function StaffManager({ openSignal, isMaster }: { openSignal: number; isM
             <span className="text-[11px] text-slate-500">권한</span>
             <select value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value as StaffView["role"] })} className={fieldClass}>
               <option value="staff">직원</option>
+              <option value="sales">영업 (원가 숨김)</option>
               <option value="admin">관리자</option>
             </select>
           </label>
@@ -143,6 +144,7 @@ export function StaffManager({ openSignal, isMaster }: { openSignal: number; isM
                     className={fieldClass}
                   >
                     <option value="staff">직원</option>
+                    <option value="sales">영업 (원가 숨김)</option>
                     <option value="admin">관리자</option>
                   </select>
                   <span className="text-[11px] text-slate-400">마지막 접속 {when(m.lastLoginAt)}</span>

@@ -19,6 +19,8 @@ import type { SettingsSection } from "@/components/form/settingsFocus";
 import { ExportBar } from "./ExportBar";
 import { DocumentBar } from "./DocumentBar";
 import { ShareLinkBox } from "./ShareLinkBox";
+import { OpsPanel } from "./OpsPanel";
+import type { OpsData } from "@/lib/opsStore";
 import type { BudgetFitView } from "@/hooks/useBudgetFit";
 import { ItineraryPanel, type AccessibilityCheckView, type FeeCheckView, type OptionSuggestView } from "./ItineraryPanel";
 import { CourseLibraryPanel } from "./library/CourseLibraryPanel";
@@ -41,6 +43,8 @@ interface ExportView {
   getInternalText: () => string;
   getCustomerText: () => string;
   getEmojiText: () => string;
+  getListingText?: () => string;
+  getListingCsv?: () => string;
 }
 
 interface ItemActions {
@@ -98,6 +102,8 @@ interface Props {
   documents: React.ComponentProps<typeof DocumentBar>;
   /** 고객용 웹 일정표 링크 */
   share?: React.ComponentProps<typeof ShareLinkBox>;
+  /** 출발 준비·명단·정산 */
+  ops?: { data: OpsData; change: (next: OpsData) => void };
   /** 견적 화면에서 입력값(할인 시나리오·가격안 등)을 바꾼다 */
   onInputChange: (patch: Partial<TripInput>) => void;
   /** 가격 낮추기에서 일정을 바꿀 때 */
@@ -132,6 +138,7 @@ export function Dashboard({
   library,
   documents,
   share,
+  ops,
   onInputChange,
   onReplaceDays,
   onOpenSettings,
@@ -205,6 +212,7 @@ export function Dashboard({
         budgetFit={budgetFit}
         onReplaceDays={onReplaceDays}
       />
+      {ops && quote?.ok && days.length > 0 && <OpsPanel input={input} days={days} pmChoice={pmChoice} quote={quote} ops={ops.data} onChange={ops.change} />}
       <UspPanel {...usp} />
       <ExportBar {...exporter} />
       <DocumentBar {...documents} />

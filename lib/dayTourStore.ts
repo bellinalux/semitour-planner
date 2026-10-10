@@ -20,6 +20,7 @@ export interface SavedDayTour {
   stops: DayTourStop[];
   legs: DayTourLeg[];
   settings: DayTourSettings;
+  shareId?: string;
 }
 
 function read<T>(key: string, fallback: T): T {

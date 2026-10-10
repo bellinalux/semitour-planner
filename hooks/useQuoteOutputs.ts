@@ -3,6 +3,7 @@
 import { DOC_LABELS, type DocKind } from "@/components/print/PrintDocuments";
 import { buildEmojiCustomerText } from "@/lib/exportEmoji";
 import { buildCustomerText, buildInternalText } from "@/lib/exportText";
+import { buildListing, listingCsv, listingText } from "@/lib/channelExport";
 import type { PmChoice } from "@/lib/itinerary";
 import { documentQuote } from "@/lib/pricing";
 import { buildQuoteLogEntry, type QuoteLogAction } from "@/lib/quoteLog";
@@ -43,6 +44,14 @@ export function useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quot
   const exporter = {
     disabled: !quote?.ok,
     getInternalText: () => buildInternalText(exportData()),
+    /** 판매 채널 등록용 (항목별 글) */
+    getListingText: () => {
+      const text = listingText(buildListing(customerExportData()));
+      logIssued("copy", "채널 등록용 상품 정보");
+      return text;
+    },
+    /** 판매 채널 등록용 CSV 내용 */
+    getListingCsv: () => listingCsv(buildListing(customerExportData())),
     getCustomerText: () => {
       const text = buildCustomerText(customerExportData());
       logIssued("copy", "고객용 문구");

@@ -7,10 +7,10 @@ import { isQuoteLogEntry, MAX_QUOTE_LOG, type QuoteLogEntry } from "@/lib/quoteL
 /**
  * 팀 공용 데이터 — 같은 접속 코드를 쓰는 직원끼리 함께 쓰는 값.
  *   GET  /api/team?kind=defaults|cost-memory|quote-log   조회
- *   PUT  /api/team?kind=defaults|cost-memory             통째로 저장 (회사 기본값, 여행지별 원가 기억)
+ *   PUT  /api/team?kind=defaults|cost-memory|supplier-quotes   통째로 저장 (회사 기본값, 여행지별 원가 기억, 업체 견적 기록)
  *   POST /api/team?kind=quote-log                        견적 이력 한 건 추가 (최근 MAX_QUOTE_LOG건만 남긴다)
  */
-const KINDS = ["defaults", "cost-memory", "quote-log"] as const;
+const KINDS = ["defaults", "cost-memory", "quote-log", "supplier-quotes"] as const;
 type Kind = (typeof KINDS)[number];
 const MAX_BYTES = 256 * 1024;
 

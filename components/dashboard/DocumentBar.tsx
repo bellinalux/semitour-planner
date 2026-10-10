@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Bus, Calculator, Columns3, Languages, FileSignature, FileText, Printer, Receipt, Sparkles } from "lucide-react";
 import { useState } from "react";
+import { useHideCosts } from "@/components/SessionContext";
 import { DOC_LABELS, type DocKind } from "@/components/print/PrintDocuments";
 
 interface Props {
@@ -32,6 +33,7 @@ const INTERNAL: { kind: DocKind; icon: typeof FileText; description: string } = 
 /** 고객용 문서를 브라우저 인쇄로 PDF 저장한다 */
 export function DocumentBar({ disabled, missingLegal, unconfirmed, onPrint }: Props) {
   const [pending, setPending] = useState<DocKind | null>(null);
+  const hideCosts = useHideCosts();
   const [checked, setChecked] = useState(false);
   const askOrPrint = (kind: DocKind) => {
     if (unconfirmed.length === 0) return onPrint(kind);
@@ -107,6 +109,7 @@ export function DocumentBar({ disabled, missingLegal, unconfirmed, onPrint }: Pr
         </div>
       )}
 
+      {!hideCosts && (
       <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2.5">
         <span className="text-[11px] font-medium text-slate-500">내부용</span>
         <button
@@ -121,6 +124,7 @@ export function DocumentBar({ disabled, missingLegal, unconfirmed, onPrint }: Pr
         </button>
         <span className="text-[11px] text-slate-500">원가·마진이 들어 있어 고객에게 전달하면 안 됩니다.</span>
       </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[11px] font-medium text-slate-500">현지용</span>

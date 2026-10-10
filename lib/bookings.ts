@@ -168,6 +168,11 @@ export interface BookingAlert {
 
 const dayDiff = (from: Date, to: Date) => Math.round((to.getTime() - from.getTime()) / 86_400_000);
 
+/** 견적을 보낸 뒤 이만큼 답이 없으면 연락 (일) */
+export const FOLLOW_UP_DAYS = 3;
+/** 견적 유효기간 (일) — 지나면 요금(항공·환율·호텔)이 바뀌었을 수 있어 다시 견적 */
+export const QUOTE_VALID_DAYS = 14;
+
 /** 입금 기한·출발일 기준 알림 (취소·출발 완료는 없음) */
 export function bookingAlerts(b: Booking, today: Date = new Date()): BookingAlert[] {
   if (b.status === "cancelled" || b.status === "departed") return [];
@@ -188,6 +193,13 @@ export function bookingAlerts(b: Booking, today: Date = new Date()): BookingAler
     const d = dayDiff(t, balanceDue);
     if (d < 0) out.push({ level: "danger", text: `잔금 기한 ${-d}일 지남` });
     else if (d <= 3) out.push({ level: "warn", text: d === 0 ? "잔금 기한 오늘" : `잔금 기한 D-${d}` });
+  }
+  // 견적 후속: 견적 발송 상태로 머문 날 (마지막 수정 기준)
+  const touched = b.updatedAt ? new Date(b.updatedAt) : null;
+  if (b.status === "quoted" && touched && !Number.isNaN(touched.getTime())) {
+    const waited = dayDiff(new Date(touched.getFullYear(), touched.getMonth(), touched.getDate()), t);
+    if (waited >= QUOTE_VALID_DAYS) out.push({ level: "warn", text: `견적 ${waited}일 지남 — 유효기간(${QUOTE_VALID_DAYS}일)이 지나 다시 견적` });
+    else if (waited >= FOLLOW_UP_DAYS) out.push({ level: "warn", text: `견적 후 ${waited}일 답 없음 — 고객 연락` });
   }
   if (departure) {
     const d = dayDiff(t, departure);

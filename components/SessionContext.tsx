@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from "react";
 
-export type UserRole = "admin" | "staff";
+export type UserRole = "admin" | "staff" | "sales";
 
 export interface SessionUser {
   name: string;
@@ -24,6 +24,11 @@ export interface SessionInfo {
 const SessionContext = createContext<SessionInfo>({ user: null, accounts: false, isAdmin: true, logout: async () => undefined });
 
 export const SessionProvider = SessionContext.Provider;
+
+/** 영업 권한이면 원가·마진·업체 공급가를 화면에서 숨긴다 (화면 표시만 — 판매가·고객 문서는 그대로) */
+export function useHideCosts(): boolean {
+  return useContext(SessionContext).user?.role === "sales";
+}
 
 /** 지금 로그인한 사람과 권한 (AccessGate 안에서만 의미가 있다) */
 export function useSession(): SessionInfo {

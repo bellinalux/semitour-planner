@@ -60,3 +60,8 @@ export async function allowAiCall(request: Request): Promise<boolean> {
 export function allowLoginAttempt(request: Request): boolean {
   return memoryAllow(`login:${clientKey(request)}`, LOGIN_ATTEMPTS_PER_MINUTE);
 }
+
+/** 로그인 없이 쓰는 공개 쓰기(고객 후기 등) — 한 곳에서 1분에 5번까지 */
+export function allowPublicWrite(request: Request): boolean {
+  return memoryAllow(`pub:${clientKey(request)}`, 5);
+}

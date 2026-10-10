@@ -18,7 +18,7 @@ async function open(request: Request) {
   return { ws, session: await getSession(request) } as const;
 }
 
-const ROLES: StaffRole[] = ["admin", "staff"];
+const ROLES: StaffRole[] = ["admin", "staff", "sales"];
 const cleanName = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 30) : "");
 
 async function checkCode(ws: string, code: unknown, list: StaffMember[], exceptId?: string): Promise<string | null> {

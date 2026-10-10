@@ -44,6 +44,7 @@ export function englishTexts(d: Data): string[] {
   for (const h of Object.values(d.input.selectedHotels)) add(h.name);
   const { included, excluded } = includeLists(d.quote, d.input, localPayRows(d.days, d.pmChoice).rows.length > 0);
   for (const s of [...included, ...excluded]) add(s);
+  for (const r of localPayRows(d.days, d.pmChoice).rows) add(r.name);
   return [...out].slice(0, 300);
 }
 

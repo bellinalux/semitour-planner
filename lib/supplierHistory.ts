@@ -141,3 +141,30 @@ export function supplierTrends(list: SupplierRecord[]): SupplierTrend[] {
   }
   return out;
 }
+
+/** 두 목록을 합친다 (같은 id는 한 번, 최근 순, 최대 MAX_RECORDS) */
+export function mergeSupplierRecords(a: SupplierRecord[], b: SupplierRecord[]): SupplierRecord[] {
+  const byId = new Map<string, SupplierRecord>();
+  for (const r of [...a, ...b]) if (!byId.has(r.id)) byId.set(r.id, r);
+  return [...byId.values()].sort((x, y) => y.at.localeCompare(x.at)).slice(0, MAX_RECORDS);
+}
+
+/**
+ * 팀 공용으로 맞춘다 — 서버 저장(같은 접속 코드)을 쓸 수 있으면 서버 목록과 합쳐 양쪽에 저장한다.
+ * 서버를 못 쓰면 이 브라우저 목록 그대로. 지운 기록은 removed로 넘기면 서버에서도 뺀다.
+ */
+export async function syncSupplierHistory(removed: string[] = []): Promise<{ list: SupplierRecord[]; shared: boolean }> {
+  const local = loadSupplierHistory();
+  try {
+    const res = await fetch("/api/team?kind=supplier-quotes");
+    if (!res.ok) return { list: local, shared: false };
+    const server = ((await res.json()) as { data: { records?: SupplierRecord[] } | null }).data?.records ?? [];
+    const merged = mergeSupplierRecords(local, Array.isArray(server) ? server : []).filter((r) => !removed.includes(r.id));
+    save(merged);
+    const changed = merged.length !== server.length || merged.some((r, i) => server[i]?.id !== r.id || server[i]?.supplier !== r.supplier);
+    if (changed) await fetch("/api/team?kind=supplier-quotes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: { records: merged } }) });
+    return { list: merged, shared: true };
+  } catch {
+    return { list: local, shared: false };
+  }
+}

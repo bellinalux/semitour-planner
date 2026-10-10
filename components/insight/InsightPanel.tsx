@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, ClipboardCopy, Info, Lightbulb } from "lucide-react";
 import { useState } from "react";
+import { useHideCosts } from "@/components/SessionContext";
 import { BuildProgress } from "@/components/dashboard/BuildProgress";
 import type { SettingsSection } from "@/components/form/settingsFocus";
 import type { AutoBuild } from "@/hooks/useAutoBuild";
@@ -112,10 +113,12 @@ const TONE = {
 } as const;
 
 function NumbersCard({ numbers, money }: { numbers: KeyNumbers; money: (v: number) => string }) {
+  const hideCosts = useHideCosts();
   return (
     <section aria-label="핵심 숫자" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <p className="text-[11px] font-medium text-slate-500">{numbers.priceLabel} (1인, 2인 1실)</p>
       <p className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900">{money(numbers.pricePerPerson)}</p>
+      {!hideCosts && (
       <dl className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
         <div>
           <dt className="text-slate-500">1인 원가</dt>
@@ -130,6 +133,7 @@ function NumbersCard({ numbers, money }: { numbers: KeyNumbers; money: (v: numbe
           <dd className={`font-semibold tabular-nums ${numbers.marginRate < 0 ? "text-red-600" : "text-slate-800"}`}>{numbers.marginRate.toFixed(1)}%</dd>
         </div>
       </dl>
+      )}
       {numbers.status.length > 0 && (
         <ul className="mt-3 space-y-1 border-t border-slate-100 pt-2 text-[11px] leading-4">
           {numbers.status.map((s) => (

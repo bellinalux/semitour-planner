@@ -2,6 +2,7 @@ import { priceGrid, pricePlans } from "@/lib/customerPrices";
 import { includeLists, tripPeriod } from "@/lib/documents";
 import { localPayRows, moneyWithKrw } from "@/lib/fees";
 import { gradeText } from "@/lib/itemTypes";
+import { loadPriceRules, ruleNotices } from "@/lib/seriesPricing";
 import { DocCover, DocSection, DocShell, type DocProps } from "./DocShell";
 
 /**
@@ -127,6 +128,16 @@ export function OptionsDoc({ input, days, pmChoice, quote, meta, company }: DocP
           </div>
         </div>
       </DocSection>
+
+      {ruleNotices(loadPriceRules()).length > 0 && (
+        <DocSection title="할인 안내">
+          <ul className="list-disc pl-5">
+            {ruleNotices(loadPriceRules()).map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        </DocSection>
+      )}
 
       <p className="mt-2 text-[10px] text-slate-500">
         {input.hotelGrade !== "any" && plans.length > 0 && `등급별 요금은 ${gradeText(input.hotelGrade)} 견적을 기준으로 산출한 안내 금액이며, `}

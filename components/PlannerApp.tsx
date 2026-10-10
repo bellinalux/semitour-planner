@@ -17,6 +17,8 @@ import { BookingsMenu } from "@/components/layout/BookingsMenu";
 import { DayTourMenu } from "@/components/daytour/DayTourMenu";
 import { MoreMenu } from "@/components/layout/MoreMenu";
 import { WelcomeGuide } from "@/components/layout/WelcomeGuide";
+import { CommandPalette, plannerCommands } from "@/components/layout/CommandPalette";
+import { InstallApp } from "@/components/layout/InstallApp";
 import { bookingFromQuote } from "@/lib/bookings";
 import { useSession } from "@/components/SessionContext";
 import { StepGuide } from "@/components/layout/StepGuide";
@@ -43,6 +45,7 @@ import { useStudioProductReceive } from "@/hooks/useStudioProductReceive";
 import { useStudioProductProvide } from "@/hooks/useStudioProductProvide";
 import { planToProduct } from "@/lib/planToProduct";
 import { buildSharedItinerary } from "@/lib/shareItinerary";
+import { loadPriceRules, ruleNotices } from "@/lib/seriesPricing";
 import { englishTexts } from "@/lib/englishDoc";
 import { postJson } from "@/lib/api";
 import type { DocKind } from "@/components/print/PrintDocuments";
@@ -75,6 +78,11 @@ import { useVerifyPipeline, VerifyPipelineContext } from "@/hooks/useVerifyPipel
 import { useUndoHistory } from "@/hooks/useUndoHistory";
 import { useFxDrift } from "@/hooks/useFxDrift";
 import { useSeasonCheck } from "@/hooks/useSeasonCheck";
+import { useOps } from "@/hooks/useOps";
+import { useCompetitorRefresh } from "@/hooks/useCompetitorRefresh";
+import { useCompetitorWatch } from "@/hooks/useCompetitorWatch";
+import { dueChecklist } from "@/lib/opsStore";
+import { bookingChecklist } from "@/lib/bookingChecklist";
 import { applyFxPatch } from "@/lib/fxDrift";
 import { addSupplierRecord, loadSupplierHistory, recordFromQuote } from "@/lib/supplierHistory";
 import { SUPPLIER_HISTORY_EVENT } from "@/components/dashboard/quote/SupplierHistoryPanel";
@@ -318,6 +326,15 @@ export function PlannerApp() {
     itineraries: competitorItineraries,
   });
 
+  // 경쟁 상품 가격 정기 확인 (마지막 확인 7일 뒤 화면을 열면 백그라운드로)
+  const competitorWatch = useCompetitorRefresh(input, update);
+  useCompetitorWatch(input, competitorWatch, isReady);
+
+  // 출발 준비·명단·정산 (상품 이름별 저장)
+  const planKey = suggestPlanName(input, meta);
+  const ops = useOps(planKey);
+  const opsOverdue = quote?.ok && days.length > 0 ? dueChecklist(bookingChecklist(input, days, pmChoice, quote.travelers), ops.data.checklist).overdue.length : 0;
+
   // 외화 업체 견적: 받을 때 환율과 지금 환율 비교
   const fx = useFxDrift(input);
   // 출발 시기 확인: 출발일이 정해지고 일정이 있으면 날씨·현지 공휴일·축제·휴관·혼잡을 확인
@@ -329,9 +346,10 @@ export function PlannerApp() {
 
   // 레이아웃3(요약·추천): 핵심 숫자와 고치면 좋은 것
   const money = (v: number) => formatMoney(Math.round(v), input.currency);
-  const insightArgs = { input, days, pmChoice, meta, quote, budgetFit, money, engine: { scores: courseEngine.scores, moves: courseEngine.moves, zigzags: courseEngine.zigzags, zigzagFixable: courseEngine.zigzagFixable }, fx: fx.drift, season: season.result };
+  const insightArgs = { input, days, pmChoice, meta, quote, budgetFit, money, engine: { scores: courseEngine.scores, moves: courseEngine.moves, zigzags: courseEngine.zigzags, zigzagFixable: courseEngine.zigzagFixable }, fx: fx.drift, season: season.result, opsOverdue };
   const numbers = keyNumbers(insightArgs);
-  const insights = buildInsights(insightArgs);
+  // 영업 권한은 원가·공급가·예산 관련 추천을 숨긴다
+  const insights = buildInsights(insightArgs).filter((i) => session.user?.role !== "sales" || !/^(supplier-|fx-drift|budget-|upgrade-)/.test(i.id));
   const urgentCount = insights.filter((i) => i.tone === "warn").length;
   // 요약·추천은 한 곳에만 그린다: lg~1400px는 결과 위 접이, 그 밖(넓은 화면의 3칸째·좁은 화면의 추천 탭)은 오른쪽 칸
   const isLg = useMediaQuery("(min-width: 64rem)");
@@ -372,22 +390,29 @@ export function PlannerApp() {
 
   const { exporter, printDocument: printPlain } = useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quoteLog, author: session.user?.name || quoteLog.author, print });
 
+  /** 영문 문서·링크용 — 아직 번역하지 않은 한글 글을 번역해 번역표를 돌려준다 (실패하면 null) */
+  const ensureEnglish = async (): Promise<Record<string, string> | null> => {
+    if (!docData) return null;
+    const texts = englishTexts(docData).filter((t) => !(t in translations));
+    if (texts.length === 0) return translations;
+    setTranslating(true);
+    try {
+      const r = await postJson<{ translations: string[] }>("/api/translate-doc", { texts });
+      const next = { ...translations, ...Object.fromEntries(texts.map((t, i) => [t, r.translations[i] ?? t])) };
+      setTranslations(next);
+      return next;
+    } catch {
+      return null;
+    } finally {
+      setTranslating(false);
+    }
+  };
+
   /** 문서 인쇄 — 영문 문서는 아직 번역하지 않은 글을 먼저 번역한다 */
   const printDocument = async (kind: DocKind) => {
-    if (kind === "english" && docData) {
-      const texts = englishTexts(docData).filter((t) => !(t in translations));
-      if (texts.length > 0) {
-        setTranslating(true);
-        try {
-          const r = await postJson<{ translations: string[] }>("/api/translate-doc", { texts });
-          setTranslations((prev) => ({ ...prev, ...Object.fromEntries(texts.map((t, i) => [t, r.translations[i] ?? t])) }));
-        } catch (e) {
-          window.alert(`영문 번역을 하지 못했습니다: ${e instanceof Error ? e.message : "다시 시도해 주세요."}`);
-          return;
-        } finally {
-          setTranslating(false);
-        }
-      }
+    if (kind === "english" && !(await ensureEnglish())) {
+      window.alert("영문 번역을 하지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
+      return;
     }
     printPlain(kind);
   };
@@ -441,6 +466,7 @@ export function PlannerApp() {
         { key: "daytime", label: `일정 시간 검증${dayTimeCheck.running ? ` (DAY ${dayTimeCheck.running.join(", ")})` : ""}`, running: dayTimeCheck.running !== null, typical: "1분 안팎" },
         { key: "engine", label: "코스 점검", running: courseEngine.running, typical: "하루 10~40초" },
         { key: "translate", label: "영문 일정표 번역", running: translating, typical: "10~30초" },
+        { key: "watch", label: "경쟁 상품 가격 정기 확인", running: competitorWatch.running, typical: "30초~1분" },
         { key: "season", label: "출발 시기 확인 (날씨·공휴일·축제)", running: season.running, typical: "20~40초" },
         { key: "competitors", label: "타업체 상품 찾기", running: competitorFind.running, typical: "30초~1분" },
         { key: "itineraries", label: `타업체 일정 가져오기 (${competitorItineraries.pending}개 남음)`, running: competitorItineraries.running.length > 0, typical: "상품당 30초" },
@@ -451,14 +477,26 @@ export function PlannerApp() {
       <Header
         actions={
           <>
+            <CommandPalette
+              commands={plannerCommands({
+                scroll: scrollToResult,
+                settings: openSettings,
+                input: () => {
+                  setTab("input");
+                  document.getElementById("planner-input")?.scrollIntoView({ block: "start", behavior: "smooth" });
+                },
+              })}
+            />
             <SavedPlansMenu snapshot={snapshot} onLoad={handleLoadPlan} onImportDay={itinerary.appendDayFromSegment} />
             <BookingsMenu
               author={session.user?.name || quoteLog.author}
+              companyName={company.name}
               draftFromQuote={() => (quote?.ok ? { ...bookingFromQuote(input, documentQuote(quote, input)), planName: suggestPlanName(input, meta) } : null)}
               buttonClassName="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 [&>span]:hidden sm:[&>span]:inline"
             />
             <DayTourMenu
               input={input}
+              company={{ name: company.name, phone: company.phone, email: company.email }}
               dayCount={days.length}
               onAddOption={(tour, dayNo, price) =>
                 update({ options: [...input.options, { ...tourToOption(tour, dayNo, input), costPerPerson: price.cost, pricePerPerson: price.sale }] })
@@ -468,6 +506,7 @@ export function PlannerApp() {
             <AccountMenu />
             <MoreMenu attention={missingLegalFields(company).length > 0}>
               <WelcomeGuide />
+              <InstallApp />
               <CompanySettings {...companyProfile} />
               <HistoryMenu log={quoteLog} teamSync={teamSync} />
               <SendToTourdesign getProduct={getProduct} />
@@ -581,7 +620,8 @@ export function PlannerApp() {
               onGenerate: handleGenerateUsp,
             }}
             exporter={exporter}
-            share={{ build: (showPrice) => (docData ? buildSharedItinerary(docData, showPrice) : null), planKey: suggestPlanName(input, meta) }}
+            ops={ops}
+            share={{ build: (showPrice, english) => (docData ? buildSharedItinerary(docData, showPrice, new Date(), ruleNotices(loadPriceRules()), english) : null), translate: ensureEnglish, planKey }}
             documents={{
               disabled: !quote?.ok,
               missingLegal: missingLegalFields(company),

@@ -66,6 +66,9 @@ export function AccountMenu() {
             {user.role === "staff" && (
               <p className="text-[11px] leading-4 text-slate-500">직원 권한은 견적 작성·저장·문서 인쇄를 할 수 있고, 회사 정보·회사 기본값·직원 계정은 관리자만 바꿉니다.</p>
             )}
+            {user.role === "sales" && (
+              <p className="text-[11px] leading-4 text-slate-500">영업 권한은 판매가·고객 문서만 보고, 원가·마진·업체 공급가·내부 검토서는 화면에서 숨깁니다.</p>
+            )}
 
             {session.isAdmin && !session.accounts && <p className="text-[11px] leading-4 text-amber-700">서버 저장소가 연결되지 않아 직원 계정을 만들 수 없습니다.</p>}
 

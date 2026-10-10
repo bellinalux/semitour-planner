@@ -24,8 +24,10 @@ function saveLink(key: string, id: string) {
 }
 
 interface Props {
-  /** 지금 견적으로 만든 고객용 일정표 (견적 전이면 null) */
-  build: (showPrice: boolean) => SharedItinerary | null;
+  /** 지금 견적으로 만든 고객용 일정표 (견적 전이면 null). english가 있으면 영문 */
+  build: (showPrice: boolean, english?: Record<string, string>) => SharedItinerary | null;
+  /** 영문 링크용 번역 (실패하면 null) */
+  translate?: () => Promise<Record<string, string> | null>;
   /** 같은 상품이면 같은 링크를 고치도록 하는 이름 */
   planKey: string;
 }
@@ -34,18 +36,22 @@ interface Props {
  * 고객용 웹 일정표 링크 — 휴대폰으로 보는 일정·포함 사항·문의 버튼 페이지를 링크 하나로 공유한다(카톡에 PDF 대신 링크).
  * 같은 상품은 같은 링크에 다시 올려 내용만 바꾼다. 원가·마진·업체 정보는 들어가지 않는다.
  */
-export function ShareLinkBox({ build, planKey }: Props) {
+export function ShareLinkBox({ build, planKey, translate }: Props) {
   const [showPrice, setShowPrice] = useState(true);
+  const [english, setEnglish] = useState(false);
+  const linkKey = english ? `${planKey}#en` : planKey;
   const [state, setState] = useState<{ status: "idle" | "loading" | "done" | "error"; url?: string; message?: string; updated?: boolean }>({ status: "idle" });
 
   const publish = async () => {
-    const itinerary = build(showPrice);
-    if (!itinerary) return;
     setState({ status: "loading" });
-    const prev = readLinks()[planKey];
+    const words = english && translate ? await translate() : undefined;
+    if (english && !words) return setState({ status: "error", message: "영문 번역을 하지 못했습니다. 잠시 뒤 다시 눌러 주세요." });
+    const itinerary = build(showPrice, words ?? undefined);
+    if (!itinerary) return setState({ status: "idle" });
+    const prev = readLinks()[linkKey];
     try {
       const res = await postJson<{ id: string; path: string }>("/api/share", { ...(prev ? { id: prev } : {}), itinerary });
-      saveLink(planKey, res.id);
+      saveLink(linkKey, res.id);
       setState({ status: "done", url: `${window.location.origin}${res.path}`, updated: !!prev });
     } catch (e) {
       setState({ status: "error", message: e instanceof Error ? e.message : "링크를 만들지 못했습니다." });
@@ -61,6 +67,12 @@ export function ShareLinkBox({ build, planKey }: Props) {
           <input type="checkbox" checked={showPrice} onChange={(e) => setShowPrice(e.target.checked)} />
           1인 요금 보이기
         </label>
+        {translate && (
+          <label className="inline-flex items-center gap-1 text-[11px] text-slate-600">
+            <input type="checkbox" checked={english} onChange={(e) => setEnglish(e.target.checked)} />
+            영어로 (외국인 고객)
+          </label>
+        )}
         <button
           type="button"
           onClick={() => void publish()}
@@ -68,7 +80,7 @@ export function ShareLinkBox({ build, planKey }: Props) {
           className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 font-semibold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {state.status === "loading" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Link2 className="h-3.5 w-3.5" aria-hidden />}
-          {readLinks()[planKey] ? "링크 내용 고치기" : "링크 만들기"}
+          {readLinks()[linkKey] ? "링크 내용 고치기" : english ? "영문 링크 만들기" : "링크 만들기"}
         </button>
       </div>
       <p className="text-pretty text-[11px] text-slate-500">휴대폰에서 보는 일정·포함 사항·전화/메일 문의 버튼 페이지입니다. 일정을 고친 뒤 다시 누르면 같은 링크의 내용이 바뀝니다 (180일 보관, 검색 노출 안 됨).</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useHideCosts } from "@/components/SessionContext";
 import { CopyButton } from "@/components/dashboard/CopyButton";
 import { formatMoney } from "@/lib/currency";
 import { priceGrid, priceGridTsv, pricePlans } from "@/lib/customerPrices";
@@ -23,6 +24,7 @@ export function CustomerPricePanel({ input, days, pmChoice, quote, meta }: Props
   const plans = useMemo(() => pricePlans(input, days, pmChoice, quote, meta), [input, days, pmChoice, quote, meta]);
   const grid = useMemo(() => priceGrid(input, days, pmChoice, quote, meta), [input, days, pmChoice, quote, meta]);
   const money = (v: number) => formatMoney(Math.round(v), input.currency);
+  const hideCosts = useHideCosts();
   const vehicleRows = grid.rows.filter((r) => r.vehicleChange);
 
   return (
@@ -40,7 +42,7 @@ export function CustomerPricePanel({ input, days, pmChoice, quote, meta }: Props
                 {input.travelers}명 총 {money(p.totalPrice)}
                 {p.diff !== 0 && <span className={p.diff > 0 ? "text-rose-600" : "text-emerald-700"}> ({p.diff > 0 ? "+" : "−"}{money(Math.abs(p.diff))})</span>}
               </p>
-              {p.marginRate !== null && <p className="mt-1 text-[10px] text-slate-400">수익률 {p.marginRate.toFixed(1)}% (내부용 — 문서에는 안 나감)</p>}
+              {p.marginRate !== null && !hideCosts && <p className="mt-1 text-[10px] text-slate-400">수익률 {p.marginRate.toFixed(1)}% (내부용 — 문서에는 안 나감)</p>}
             </div>
           ))}
         </div>

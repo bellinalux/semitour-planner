@@ -17,6 +17,7 @@ interface Props {
   dayCount: number;
   onAddOption: (tour: TourCandidate, dayNo: number, price: { cost: number; sale: number }) => void;
   buttonClassName?: string;
+  company?: { name: string; phone: string; email: string };
 }
 
 const TRANSPORTS: { id: DayTourTransport; label: string; hint: string }[] = [
@@ -53,10 +54,12 @@ export interface DayTourWork {
   stops: DayTourStop[];
   legs: DayTourLeg[];
   settings: DayTourSettings;
+  /** 고객용 웹 링크 (만들었으면) */
+  shareId?: string;
 }
 
 /** 상단 [근교 투어] — 반일·당일 근교 투어의 코스(차량·대중교통·도보)와 원가·판매가를 자동으로 만든다 */
-export function DayTourMenu({ input, dayCount, onAddOption, buttonClassName }: Props) {
+export function DayTourMenu({ input, dayCount, onAddOption, buttonClassName, company = { name: "", phone: "", email: "" } }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [req, setReq] = useState<DayTourRequest>(() => blankRequest(input));
   const [work, setWork] = useState<DayTourWork | null>(null);
@@ -98,7 +101,7 @@ export function DayTourMenu({ input, dayCount, onAddOption, buttonClassName }: P
 
   const load = (t: SavedDayTour) => {
     setReq(t.request);
-    setWork({ id: t.id, request: t.request, response: t.response, title: t.title, summary: t.summary, stops: t.stops, legs: t.legs, settings: t.settings });
+    setWork({ id: t.id, request: t.request, response: t.response, title: t.title, summary: t.summary, stops: t.stops, legs: t.legs, settings: t.settings, shareId: t.shareId });
     setNotice("");
   };
 
@@ -260,6 +263,7 @@ export function DayTourMenu({ input, dayCount, onAddOption, buttonClassName }: P
                 onAddOption={onAddOption}
                 onSave={save}
                 notice={notice}
+                company={company}
               />
             )}
 

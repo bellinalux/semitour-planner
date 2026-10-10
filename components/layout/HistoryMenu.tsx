@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Cloud, Download, HardDrive, History, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
-import { useSession } from "@/components/SessionContext";
+import { useHideCosts, useSession } from "@/components/SessionContext";
 import { useBookings } from "@/hooks/useBookings";
 import { SalesStatsPanel } from "./SalesStatsPanel";
 import type { QuoteLog } from "@/hooks/useQuoteLog";
@@ -33,6 +33,7 @@ export function HistoryMenu({ log, teamSync }: Props) {
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pendingRestore, setPendingRestore] = useState<ReturnType<typeof parseBackup> | null>(null);
   const bookings = useBookings(log.author);
+  const hideCosts = useHideCosts();
 
   const open = () => {
     setNotice(null);
@@ -124,7 +125,7 @@ export function HistoryMenu({ log, teamSync }: Props) {
               </section>
             )}
 
-            <SalesStatsPanel quotes={log.entries} bookings={bookings.list} />
+            <SalesStatsPanel quotes={log.entries} bookings={bookings.list} hideMargin={hideCosts} />
 
             <section aria-label="견적 이력" className="space-y-2">
               <h3 className="text-xs font-semibold text-slate-700">
@@ -143,7 +144,7 @@ export function HistoryMenu({ log, teamSync }: Props) {
                         <th className="py-1.5 pr-2 font-medium">작성자</th>
                         <th className="py-1.5 pr-2 font-medium">여행</th>
                         <th className="py-1.5 pr-2 text-right font-medium">1인 판매가</th>
-                        <th className="py-1.5 pr-2 text-right font-medium">마진</th>
+                        {!hideCosts && <th className="py-1.5 pr-2 text-right font-medium">마진</th>}
                         <th className="py-1.5 font-medium">문서</th>
                       </tr>
                     </thead>
@@ -159,7 +160,7 @@ export function HistoryMenu({ log, teamSync }: Props) {
                             {formatMoney(e.pricePerPerson, e.currency)}
                             <span className="block font-normal text-slate-400">{e.channel}</span>
                           </td>
-                          <td className={`py-1.5 pr-2 text-right tabular-nums ${e.marginRate < 10 ? "text-red-600" : ""}`}>{e.marginRate}%</td>
+                          {!hideCosts && <td className={`py-1.5 pr-2 text-right tabular-nums ${e.marginRate < 10 ? "text-red-600" : ""}`}>{e.marginRate}%</td>}
                           <td className="py-1.5 text-slate-500">
                             {e.action === "copy" ? "복사: " : ""}
                             {e.document}

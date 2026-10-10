@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { useBookings, type BookingView } from "@/hooks/useBookings";
 import { BOOKING_STATUSES, bookingAlerts, bookingSummary, newBookingId, STATUS_LABEL, type Booking, type BookingStatus } from "@/lib/bookings";
 import { formatMoney } from "@/lib/currency";
+import { ReviewLinkBox } from "./ReviewLinkBox";
 
 type Draft = Omit<Booking, "id" | "createdAt" | "updatedAt" | "owner" | "ownerId" | "history">;
 
@@ -12,6 +13,8 @@ interface Props {
   /** 지금 견적으로 만든 예약 초안 (견적이 없으면 null) */
   draftFromQuote: () => Draft | null;
   author: string;
+  /** 고객 후기 화면에 보일 회사 이름 */
+  companyName?: string;
   buttonClassName?: string;
 }
 
@@ -65,7 +68,7 @@ function Field({ label, children, wide }: { label: string; children: React.React
 }
 
 /** 상단 [예약 관리] — 견적 이후 예약 진행 상태·입금 기한·미수금을 관리한다 */
-export function BookingsMenu({ draftFromQuote, author, buttonClassName }: Props) {
+export function BookingsMenu({ draftFromQuote, author, companyName = "", buttonClassName }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const bookings = useBookings(author);
   const [filter, setFilter] = useState<Filter>("active");
@@ -87,6 +90,13 @@ export function BookingsMenu({ draftFromQuote, author, buttonClassName }: Props)
     .filter((b) => (filter === "all" ? true : filter === "active" ? b.status !== "cancelled" && b.status !== "departed" : b.status === filter))
     .sort((a, b) => (a.departureDate || "9999").localeCompare(b.departureDate || "9999"));
   const alertCount = list.reduce((n, b) => n + (bookingAlerts(b).some((a) => a.level === "danger") ? 1 : 0), 0);
+  const followUps = list.filter((b) => bookingAlerts(b).some((a) => a.text.includes("고객 연락") || a.text.includes("다시 견적"))).length;
+  /** "연락했어요" — 메모에 연락 기록을 남기고 저장(마지막 수정일이 오늘로) */
+  const markContacted = async (b: Booking) => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const error = await bookings.save({ ...b, memo: `${b.memo ? `${b.memo}\n` : ""}${stamp} 고객 연락`.slice(0, 2000) });
+    setMessage(error ? { kind: "error", text: error } : { kind: "ok", text: `${b.customerName} — 연락 기록을 남겼습니다.` });
+  };
 
   const startNew = (fromQuote: boolean) => {
     setConfirmDelete(false);
@@ -172,6 +182,7 @@ export function BookingsMenu({ draftFromQuote, author, buttonClassName }: Props)
                   </span>
                 )}
                 {alertCount > 0 && <span className="ml-2 font-semibold text-rose-600">확인 필요 {alertCount}건</span>}
+                {followUps > 0 && <span className="ml-2 font-semibold text-amber-700">연락할 고객 {followUps}건</span>}
               </p>
             </div>
             <button type="button" onClick={() => dialogRef.current?.close()} aria-label="닫기" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
@@ -245,6 +256,13 @@ export function BookingsMenu({ draftFromQuote, author, buttonClassName }: Props)
                     <textarea value={editing.memo} maxLength={2000} rows={2} onChange={(e) => set("memo", e.target.value)} className={fieldClass} />
                   </Field>
                 </div>
+                <ReviewLinkBox
+                  memo={editing.memo}
+                  title={editing.planName || `${editing.destination} 여행`}
+                  planName={editing.planName}
+                  company={companyName}
+                  onAppendMemo={(line) => set("memo", `${editing.memo ? `${editing.memo}\n` : ""}${line}`.slice(0, 2000))}
+                />
                 <p className="text-[11px] text-slate-500">
                   미수금 {formatMoney(Math.max(0, editing.totalPrice - editing.paidAmount), editing.currency)} · 계약금 기본값은 판매 금액의 10%, 잔금 기한은 출발 30일 전입니다(고칠 수 있음).
                 </p>
@@ -340,6 +358,18 @@ export function BookingsMenu({ draftFromQuote, author, buttonClassName }: Props)
                                 {a.text}
                               </span>
                             ))}
+                            {alerts.some((a) => a.text.includes("고객 연락")) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void markContacted(b);
+                                }}
+                                className="rounded border border-amber-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 hover:bg-amber-50"
+                              >
+                                연락했어요
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
