@@ -106,6 +106,9 @@ test("영문 일정표·견적서: 한글 글을 번역해 영어 문서로 인�
   await expect(doc).toContainText("Itinerary & Quotation");
   await expect(doc).toContainText("Da Nang Cathedral");
   await expect(doc).toContainText("Thu, Nov 5, 2026");
+  // 업계 표 형식 + 둘째 날 호텔 미팅 줄
+  await expect(doc.locator("th")).toContainText(["Day", "Area", "Transport", "Time", "Schedule", "Meals"]);
+  await expect(doc).toContainText("Meet at the hotel lobby and depart");
   // 한글이 하나도 남지 않는다 (모두 번역 글로)
   expect(await doc.innerText()).not.toMatch(/[가-힣]/);
 });

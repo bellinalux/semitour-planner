@@ -1,4 +1,4 @@
-import { calcDayLoad, dayMeetingTime, DAY_LOAD_OK_MAX, DAY_LOAD_TIGHT_MAX } from "@/lib/dayLoad";
+import { calcDayLoad, DAY_LOAD_OK_MAX, DAY_LOAD_TIGHT_MAX, dayTourStart } from "@/lib/dayLoad";
 import { isCafeMeal } from "@/lib/engineDay";
 import { formatDuration } from "@/lib/format";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
@@ -119,7 +119,7 @@ export function suggestDayMoves(days: DayPlan[], pmChoice: PmChoice): DayMove[] 
 export function refitDay(day: DayPlan): DayPlan {
   if (day.kind !== "linear") return day;
   const flightLater = day.items.some((it, i) => it.type === "flight" && day.items.slice(0, i).some((p) => p.type !== "flight"));
-  return flightLater ? day : { ...day, items: refitMealWindows(day.items, dayMeetingTime(day)) };
+  return flightLater ? day : { ...day, items: refitMealWindows(day.items, dayTourStart(day)) };
 }
 
 /**

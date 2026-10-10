@@ -74,3 +74,32 @@ describe("일정표 표기", () => {
     expect(tags).toEqual(expect.arrayContaining(["노쇼핑", "노옵션", "가이드 경비 포함 (노팁)", "식사 1회 포함", "4성급", "전용차량"]));
   });
 });
+
+describe("호텔 미팅 → 첫 장소 이동", () => {
+  it("둘째 날부터 첫 항목이 관광지면 30분, 첫날·항공·호텔 미팅 항목이면 0, 직접 넣은 값이 먼저", async () => {
+    const { dayTourStart, hotelLeadMinutes, calcDayLoad } = await import("@/lib/dayLoad");
+    const d2 = linearDay(2, [item("a", { name: "콜로안 빌리지", stayMinutes: 60, travelMinutesToNext: 0 })], { meetingTime: "08:30" });
+    expect(hotelLeadMinutes(d2)).toBe(30);
+    expect(dayTourStart(d2)).toBe("09:00");
+    expect(calcDayLoad(d2, {}).travelMinutes).toBe(30);
+    expect(hotelLeadMinutes(linearDay(1, [item("a")]))).toBe(0);
+    expect(hotelLeadMinutes(linearDay(2, [item("f", { type: "flight", name: "공항 출발" })]))).toBe(0);
+    expect(hotelLeadMinutes(linearDay(2, [item("m", { name: "호텔 로비 미팅" })]))).toBe(0);
+    expect(dayTourStart({ ...d2, hotelLeadMinutes: 45 })).toBe("09:15");
+    expect(hotelLeadMinutes({ ...d2, hotelLeadMinutes: 0 })).toBe(0);
+  });
+
+  it("일정표 표: 미팅 줄(미팅 시각) → 이동 줄 → 첫 장소(미팅 + 이동 시각)", async () => {
+    const { computeItemTimings, dayTourStart } = await import("@/lib/dayLoad");
+    const { dayTable } = await import("@/lib/itineraryDoc");
+    const days = [linearDay(1, [item("x")], { overnightCity: "마카오" }), linearDay(2, [item("a", { name: "콜로안 빌리지", stayMinutes: 60 }), item("b", { name: "점심", type: "meal" })], { meetingTime: "08:30" })];
+    const t = dayTable(days, 1, {}, { vehicle: true, flight: { out: "", back: "" }, selectedHotels: {} }, computeItemTimings(days[1].items, dayTourStart(days[1])));
+    expect(t.rows.slice(0, 3).map((r) => [r.kind, r.start, r.minutes ?? null])).toEqual([
+      ["meeting", "08:30", null],
+      ["move", "", 30],
+      ["item", "09:00", null],
+    ]);
+    expect(t.rows[0].transport).toBe("vehicle");
+    expect(t.rows[2].keyTime).toBe(true);
+  });
+});

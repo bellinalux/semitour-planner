@@ -575,6 +575,11 @@ export interface DayPlan {
    * 비어 있으면 기본값 08:00으로 본다(dayMeetingTime 참고).
    */
   meetingTime?: string;
+  /**
+   * 호텔 미팅 뒤 첫 장소까지 이동 시간(분). 비어 있으면 둘째 날부터 첫 항목이 관광지·식당인 날 30분으로 본다
+   * (미팅 시각 = 호텔 로비, 첫 장소 도착 = 미팅 + 이동). 0이면 이동 없음.
+   */
+  hotelLeadMinutes?: number;
 }
 
 /** 붙여넣은 코스에서 읽은 상품 정보 */

@@ -153,6 +153,8 @@ test("여행일정표: 업계 표 형식(일자·지역·교통편·시간·일�
   // 인쇄 영역은 화면 읽기에서 숨겨져(aria-hidden) 있어 태그로 확인한다
   await expect(doc.locator("th")).toContainText(["일자", "지역", "교통편", "시간", "일정", "식사"]);
   await expect(doc).toContainText("제1일");
+  // 둘째 날: 호텔 미팅 → 이동 → 첫 장소 (미팅 시각과 첫 장소 시각이 다르다)
+  await expect(doc).toContainText("호텔 로비 미팅 후 출발");
   await expect(doc.locator('ul[aria-label="상품 조건"]')).toContainText("노쇼핑");
   await expect(doc).toContainText("노옵션 — 선택관광이 없습니다.");
   await expect(doc).toContainText("노쇼핑 — 일정에 쇼핑센터 방문이 없습니다.");

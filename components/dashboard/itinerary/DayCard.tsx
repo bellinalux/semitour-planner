@@ -2,7 +2,7 @@ import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Compass, Flag, Plus, Sun
 import { useContext } from "react";
 import { CourseEngineContext } from "@/hooks/useCourseEngine";
 import { DayTimeCheckContext } from "@/hooks/useDayTimeCheck";
-import { calcDayEnd, calcDayGap, calcDayLoad, computeItemTimings, dayMeetingTime, STANDARD_DAY_END, timelineEndTime, type DayLoadLevel } from "@/lib/dayLoad";
+import { calcDayEnd, calcDayGap, calcDayLoad, computeItemTimings, dayMeetingTime, dayTourStart, hotelLeadMinutes, STANDARD_DAY_END, timelineEndTime, type DayLoadLevel } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
 import { dayItems } from "@/lib/itinerary";
 import type { SegmentKind } from "@/lib/segmentLibrary";
@@ -98,8 +98,11 @@ export function DayCard({
   const rescoring = engine?.byDay[plan.day]?.status === "loading";
   const placeCount = dayItems(plan, pmChoiceForDay).filter((i) => !["flight", "transfer", "hotel", "free_time"].includes(i.type ?? "")).length;
   const meetingTime = dayMeetingTime(plan);
-  const endTime = load.totalMinutes > 0 ? timelineEndTime(dayItems(plan, pmChoiceForDay), meetingTime) : null;
-  const timings = computeItemTimings(dayItems(plan, pmChoiceForDay), meetingTime);
+  // 시각은 첫 장소 도착(미팅 + 호텔에서 이동)부터 계산한다
+  const tourStart = dayTourStart(plan);
+  const lead = hotelLeadMinutes(plan);
+  const endTime = load.totalMinutes > 0 ? timelineEndTime(dayItems(plan, pmChoiceForDay), tourStart) : null;
+  const timings = computeItemTimings(dayItems(plan, pmChoiceForDay), tourStart);
   const isLastDay = days.length > 0 && plan.day === Math.max(...days.map((d) => d.day));
   const gap = calcDayGap(plan, pmChoiceForDay, isLastDay);
   const dayEnd = calcDayEnd(plan, pmChoiceForDay);
@@ -140,6 +143,25 @@ export function DayCard({
             className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] tabular-nums text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30"
           />
         </label>
+        {(lead > 0 || plan.hotelLeadMinutes !== undefined) && (
+          <label
+            className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200"
+            title="호텔에서 미팅한 뒤 첫 장소까지 이동 시간. 첫 장소 시각 = 미팅 + 이동"
+          >
+            호텔→첫 장소
+            <input
+              type="number"
+              min={0}
+              max={240}
+              step={5}
+              value={lead}
+              aria-label="호텔에서 첫 장소까지 이동 분"
+              onChange={(e) => onChangeDay(plan.day, { hotelLeadMinutes: Math.max(0, Math.min(240, Math.round(Number(e.target.value) || 0))) })}
+              className="w-12 rounded border border-slate-200 bg-white px-1 py-0.5 text-right text-[11px] tabular-nums text-slate-900 focus:border-indigo-500 focus:outline-none"
+            />
+            분{lead > 0 ? ` (도착 ${tourStart})` : ""}
+          </label>
+        )}
         {load.totalMinutes > 0 && (
           <span
             title={`체류 ${formatDuration(load.stayMinutes)} + 이동 ${formatDuration(load.travelMinutes)}`}

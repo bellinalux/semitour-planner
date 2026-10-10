@@ -2,7 +2,7 @@
 
 import { createContext, useState } from "react";
 import { postJson } from "@/lib/api";
-import { dayMeetingTime } from "@/lib/dayLoad";
+import { dayTourStart } from "@/lib/dayLoad";
 import { dayTimeRequestDay, fitDayTimes } from "@/lib/dayTimeFit";
 import type { PmChoice } from "@/lib/itinerary";
 import { refitMealWindows } from "@/lib/mealTiming";
@@ -63,7 +63,7 @@ export function useDayTimeCheck({
         if (!res || res.areas.length === 0) return d;
         const fitted = fitDayTimes(d, res.areas, r.checkedAt);
         const keepFlightTiming = i === lastIndex && fitted.items.some((x) => x.type === "flight");
-        return fitted.kind === "linear" && !keepFlightTiming ? { ...fitted, items: refitMealWindows(fitted.items, dayMeetingTime(fitted)) } : fitted;
+        return fitted.kind === "linear" && !keepFlightTiming ? { ...fitted, items: refitMealWindows(fitted.items, dayTourStart(fitted)) } : fitted;
       });
       const changed = r.days.filter((d) => d.areas.length > 0).map((d) => d.day);
       if (changed.length === 0) {

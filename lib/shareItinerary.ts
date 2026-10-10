@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { computeItemTimings, dayMeetingTime } from "@/lib/dayLoad";
+import { computeItemTimings, dayMeetingTime, dayTourStart, hotelLeadMinutes } from "@/lib/dayLoad";
 import { dayDate, includeLists, tripPeriod } from "@/lib/documents";
 import { localPayRows, moneyWithKrw } from "@/lib/fees";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
@@ -101,14 +101,19 @@ export function buildSharedItinerary(
       const flightDay = items.some((i) => i.type === "flight");
       const full = input.packageType === "full";
       const meals = en ? "" : `조 ${mealLabel(m.breakfast, "breakfast", flightDay, full)} · 중 ${mealLabel(m.lunch, "lunch", flightDay, full)} · 석 ${mealLabel(m.dinner, "dinner", flightDay, full)}`;
-      const timings = computeItemTimings(items, dayMeetingTime(d));
+      const timings = computeItemTimings(items, dayTourStart(d));
       return {
         day: d.day,
         date: (en ? englishDayDate(input, d.day) : dayDate(input, d.day)) ?? "",
         theme: cut(d.theme, 120),
         hotel: cut(d.overnightCity ? (input.selectedHotels[d.overnightCity.trim()]?.name ?? d.overnightCity) : "", 120),
         meals: meals.slice(0, 160),
-        items: items.slice(0, 40).map((it) => {
+        items: [
+          // 호텔 미팅 뒤 첫 장소로 이동하는 날은 미팅을 먼저 (첫 장소 시각 = 미팅 + 이동)
+          ...(hotelLeadMinutes(d) > 0
+            ? [{ time: d.meetingTime?.trim() ? dayMeetingTime(d) : "", name: en ? "Meet at the hotel lobby and depart" : "호텔 로비 미팅 후 출발", kind: "move" as const, note: en ? `approx. ${hotelLeadMinutes(d)} min to the first stop` : `첫 장소까지 약 ${hotelLeadMinutes(d)}분` }]
+            : []),
+          ...items.slice(0, 39).map((it) => {
           const t = timings.get(it.id);
           return {
             time: t ? t.start : "",
@@ -116,7 +121,8 @@ export function buildSharedItinerary(
             kind: KIND[it.type ?? "sightseeing"] ?? "other",
             note: (it.payment === "local" ? `${en ? "Paid locally" : "현지 지불"}${it.description ? ` · ${tr(it.description.slice(0, 160))}` : ""}` : tr(it.description?.slice(0, 160))).slice(0, 200),
           };
-        }),
+          }),
+        ],
       };
     }),
     included: included.slice(0, 40).map((s) => cut(s, 120)),

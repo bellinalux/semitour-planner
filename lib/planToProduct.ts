@@ -4,7 +4,7 @@
  *  - 시각은 일정표와 같은 계산(미팅 시각 + 체류 + 이동)
  *  - 원가·판매가 같은 내부 정보는 넣지 않는다(고객용 상세페이지 재료만)
  */
-import { clockMinutes, computeItemTimings, dayMeetingTime } from "@/lib/dayLoad";
+import { clockMinutes, computeItemTimings, dayMeetingTime, dayTourStart } from "@/lib/dayLoad";
 import { TRAVEL_TYPES } from "@/lib/defaults";
 import { isBreakfastItem } from "@/lib/documents";
 import { isLocalPay } from "@/lib/fees";
@@ -28,7 +28,7 @@ export function planToProduct(o: { input: TripInput; days: DayPlan[]; pmChoice: 
   const excluded = new Set<string>();
   const outDays = tourDays.map((d) => {
     const all = dayItems(d, pmChoice);
-    const timing = computeItemTimings(all, dayMeetingTime(d));
+    const timing = computeItemTimings(all, dayTourStart(d));
     const amIds = new Set(d.kind === "semi" ? d.amGuided.map((i) => i.id) : []);
     const courses = all
       .filter((i) => !NOT_COURSE.has(i.type ?? "sightseeing") && !isBreakfastItem(i))
@@ -51,7 +51,7 @@ export function planToProduct(o: { input: TripInput; days: DayPlan[]; pmChoice: 
   const hours = (() => {
     if (n !== 1 || !first) return "";
     const items = dayItems(first, pmChoice);
-    const t = computeItemTimings(items, dayMeetingTime(first));
+    const t = computeItemTimings(items, dayTourStart(first));
     const ends = items.map((i) => t.get(i.id)?.end).filter((x): x is string => !!x);
     const end = clockMinutes(ends[ends.length - 1] ?? "");
     const start = clockMinutes(dayMeetingTime(first));

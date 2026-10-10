@@ -3,7 +3,7 @@
  *  - 업체 코스(linear) 날: 엔진 추천 순서로 바꾸기까지
  *  - 세미투어(semi) 날: 오전 가이드 일정만 순서를 바꾸고, 오후 반자유 코스는 시간·주의만 채운다
  */
-import { dayMeetingTime, walkTimeline } from "@/lib/dayLoad";
+import { dayTourStart, hotelLeadMinutes, shiftClock, walkTimeline } from "@/lib/dayLoad";
 import { fmt } from "@/lib/courseEngine";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { hoursText } from "@/lib/courseEngine";
@@ -70,7 +70,7 @@ export function buildDayRequest(day: DayPlan, pmChoice: PmChoice, o: { destinati
   const city = day.overnightCity || parts[0] || o.destination;
   // 앱 일정표 시각 — 엔진은 항공을 빼고 받으므로, 항공 뒤 첫 항목의 일정표 시각에서 시작해야 한다(예: 12:50 도착 뒤 13:40)
   const all = dayItems(day, pmChoice);
-  const startOf = new Map(walkTimeline(all, dayMeetingTime(day)).map((s) => [s.item.id, s.start]));
+  const startOf = new Map(walkTimeline(all, dayTourStart(day)).map((s) => [s.item.id, s.start]));
   const firstStart = startOf.get(items[0].id);
   const hasFlight = all.some((i) => (i.type ?? "") === "flight");
   // 숙소 쪽 지역: 숙소 항목, 없으면 하루 마지막의 야경·저녁 일정이 있는 지역 (시간 검증으로 붙은 큰 지역)
@@ -105,7 +105,7 @@ export function buildDayRequest(day: DayPlan, pmChoice: PmChoice, o: { destinati
     city, country,
     ...(o.departureDate && /^\d{4}-\d{2}-\d{2}$/.test(o.departureDate) ? { date: addDays(o.departureDate, day.day - 1) } : {}),
     // 야경·분수쇼·저녁 식사 같은 저녁 일정이 있는 날은 19시에 끊으면 엔진이 그 일정을 빼 버린다
-    start: firstStart != null ? fmt(firstStart % 1440) : dayMeetingTime(day), maxEnd: items.some((i) => EVENING.test(`${i.name} ${i.description}`)) ? "23:00" : "19:00",
+    start: firstStart != null ? fmt(firstStart % 1440) : dayTourStart(day), maxEnd: items.some((i) => EVENING.test(`${i.name} ${i.description}`)) ? "23:00" : "19:00",
     mode: "car", audience: AUD[o.travelType] ?? "any",
     reorder: day.kind === "linear", lookup: true,
   };
@@ -179,12 +179,14 @@ export function applyDayResult(days: DayPlan[], dayNo: number, res: PlanResponse
     const items = fix(d.items, d.kind === "linear");
     // 순서·시작 시각이 바뀌면 식사 맞춤 자유시간을 다시 계산한다 (중간·끝에 항공이 있는 날은 출발 시각이 어긋나지 않게 그대로)
     const flightLater = items.some((it, i) => it.type === "flight" && items.slice(0, i).some((p) => p.type !== "flight"));
-    const meeting = o.meetingTime ?? dayMeetingTime(d);
+    // 엔진이 고른 시작 시각은 첫 장소 도착 시각이다 — 미팅은 호텔에서 이동하는 만큼 앞당긴다
+    const start = o.meetingTime ?? dayTourStart(d);
+    const lead = hotelLeadMinutes(d);
     const refit = d.kind === "linear" && (o.useBest || o.meetingTime) && !flightLater;
     return {
       ...d,
-      ...(o.meetingTime ? { meetingTime: o.meetingTime } : {}),
-      items: refit ? refitMealWindows(items, meeting) : items,
+      ...(o.meetingTime ? { meetingTime: shiftClock(o.meetingTime, -lead) ?? o.meetingTime } : {}),
+      items: refit ? refitMealWindows(items, start) : items,
       amGuided: fix(d.amGuided, false),
       pmFreeOptions: d.pmFreeOptions.map(p => ({ ...p, items: fix(p.items, false) })),
     };

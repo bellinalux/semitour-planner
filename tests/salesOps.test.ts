@@ -176,7 +176,9 @@ describe("고객용 웹 일정표·영문 문서", () => {
     expect(sharedItinerarySchema.safeParse(s).success).toBe(true);
     expect(s.priceLine).toBe("");
     expect(s.days[0].items.map((x) => x.name)).toEqual(["세나도 광장", "점심 딤섬", "마카오 타워"]);
-    expect(s.days[1].items[1].note).toContain("현지 지불");
+    // 둘째 날은 호텔 미팅 줄이 먼저 온다 (첫 장소 = 미팅 + 이동)
+    expect(s.days[1].items[0].name).toBe("호텔 로비 미팅 후 출발");
+    expect(s.days[1].items.find((x) => x.name === "현지식")!.note).toContain("현지 지불");
     expect(JSON.stringify(s)).not.toMatch(/원가|마진|margin/);
     expect(buildSharedItinerary({ input: i, days, pmChoice: {}, quote: q, meta: null, company }, true).priceLine).toMatch(/^1인 /);
   });

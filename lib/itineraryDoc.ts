@@ -1,5 +1,7 @@
 import { ourPolicy } from "@/lib/competitorDiff";
-import { dayMeals, isBreakfastItem, type MealSlot } from "@/lib/documents";
+import { dayMeals, documentItems, isBreakfastItem, type MealSlot } from "@/lib/documents";
+import { isOvernightStay } from "@/lib/dayTidy";
+import { dayMeetingTime, hotelLeadMinutes } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
 import { gradeText } from "@/lib/itemTypes";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
@@ -83,6 +85,9 @@ export interface DocRow {
   item?: ItineraryItem;
   /** 이동 줄: "전용차량 약 30분" */
   text?: string;
+  /** 이동 분, 이동 항목 이름 (영문·운영 지시서가 자기 말로 다시 쓴다) */
+  minutes?: number;
+  moveName?: string;
 }
 
 /**
@@ -96,13 +101,13 @@ export function docRows(items: ItineraryItem[], vehicle: boolean): DocRow[] {
     if (isMealFiller(it)) return;
     if (it.type === "transfer") {
       const m = Math.max(0, it.stayMinutes) + Math.max(0, it.travelMinutesToNext ?? 0);
-      rows.push({ kind: "move", text: `${it.name}${m > 0 ? ` (약 ${formatDuration(m)})` : ""}` });
+      rows.push({ kind: "move", text: `${it.name}${m > 0 ? ` (약 ${formatDuration(m)})` : ""}`, minutes: m, moveName: it.name });
       return;
     }
     rows.push({ kind: "item", item: it });
     const next = items.slice(i + 1).find((x) => !isMealFiller(x));
     const travel = Math.max(0, it.travelMinutesToNext ?? 0);
-    if (next && next.type !== "transfer" && it.type !== "flight" && travel >= 5) rows.push({ kind: "move", text: `${how} 약 ${formatDuration(travel)}` });
+    if (next && next.type !== "transfer" && it.type !== "flight" && travel >= 5) rows.push({ kind: "move", text: `${how} 약 ${formatDuration(travel)}`, minutes: travel });
   });
   return rows;
 }
@@ -167,4 +172,99 @@ export function dayRegion(days: DayPlan[], index: number, origin: string): strin
   if (flight && index === days.length - 1) return [prev, origin.trim() || "인천"].filter(Boolean).join(" → ");
   if (prev && here && prev !== here) return `${prev} → ${here}`;
   return here || prev;
+}
+
+/* ── 하루 표 (고객용 일정표·영문 일정표·운영 지시서가 같이 쓴다) ── */
+
+export interface DayTableRow {
+  key: string;
+  kind: "item" | "move" | "label" | "free" | "meeting";
+  item?: ItineraryItem;
+  /** move: 이동 분 (이동 항목이면 그 이름도) / label: 오전·오후 묶음 이름 */
+  minutes?: number;
+  moveName?: string;
+  label?: string;
+  /** free: 자유 일정 추천 */
+  tips?: string[];
+  /** 교통편 칸: 항공 편명("KE651"), "flight"(편명 모름), "vehicle"(그날 첫 차량 이동), 빈 칸 */
+  transport: string;
+  /** 시작·끝 시각 (운영 지시서용 전체 시각) */
+  start: string;
+  end: string;
+  /** 고객용 표에 시각을 적는 줄인지 / 시각 대신 "조식 후" */
+  keyTime: boolean;
+  afterBreakfast: boolean;
+  /** 귀국 항공 (출국 수속 안내) */
+  returnFlight: boolean;
+}
+
+export interface DayTable {
+  rows: DayTableRow[];
+  flightDay: boolean;
+  free: boolean;
+  /** 그날 마지막 투숙 숙소 (HOTEL 줄) — 없으면 null */
+  overnight: { city: string; hotel: string | null } | null;
+}
+
+/**
+ * 하루를 표 줄로 — 앱이 넣은 식사 맞춤 자유시간은 빼고, 이동 항목·장소 사이 이동은 연결 줄로,
+ * 그날 마지막 투숙은 HOTEL 줄로 (항목 줄에서 뺀다), 자유일만 있는 날은 한 줄로.
+ */
+export function dayTable(
+  days: DayPlan[],
+  index: number,
+  pmChoice: PmChoice,
+  opts: { vehicle: boolean; flight: { out: string; back: string }; selectedHotels: Record<string, { name: string }> },
+  timings: Map<string, { start: string; end: string }>,
+): DayTable {
+  const day = days[index];
+  const blocks = documentItems(day, pmChoice);
+  const flat = blocks.flatMap((b) => b.items);
+  const flightDay = flat.some((i) => i.type === "flight");
+  const lastDay = index === days.length - 1;
+  const city = (day.overnightCity ?? "").trim();
+  const overnight = city ? { city, hotel: opts.selectedHotels[city]?.name ?? null } : null;
+  const blank = { transport: "", start: "", end: "", keyTime: false, afterBreakfast: false, returnFlight: false };
+  if (isFreeDay(day, pmChoice)) {
+    const tips = flat.filter((i) => i.type === "free_time").map((i) => shortDescription(i.description)).filter(Boolean);
+    return { rows: [{ key: "free", kind: "free", tips, ...blank }], flightDay, free: true, overnight };
+  }
+  const rows: DayTableRow[] = [];
+  let first = true;
+  // 호텔에서 미팅하고 첫 장소로 이동하는 날: 미팅 줄 + 이동 줄을 먼저 (첫 장소 시각 = 미팅 + 이동)
+  const lead = hotelLeadMinutes(day);
+  const meetingKnown = Boolean(day.meetingTime?.trim());
+  if (lead > 0) {
+    rows.push({ key: "meeting", kind: "meeting", ...blank, transport: opts.vehicle ? "vehicle" : "", start: dayMeetingTime(day), end: dayMeetingTime(day), keyTime: true, afterBreakfast: !meetingKnown });
+    rows.push({ key: "meeting-move", kind: "move", minutes: lead, ...blank });
+    first = false;
+  }
+  for (const block of blocks) {
+    if (block.label) rows.push({ key: `b-${block.label}`, kind: "label", label: block.label, ...blank });
+    for (const [n, r] of docRows(block.items, opts.vehicle).entries()) {
+      if (r.kind === "move") {
+        rows.push({ key: `m-${block.label}-${n}`, kind: "move", minutes: r.minutes, moveName: r.moveName, ...blank });
+        continue;
+      }
+      const it = r.item!;
+      const idx = flat.indexOf(it);
+      if (overnight && isOvernightStay(flat, idx)) continue;
+      const t = timings.get(it.id);
+      const transport = it.type === "flight" ? (lastDay ? opts.flight.back : index === 0 ? opts.flight.out : "") || "flight" : first && opts.vehicle ? "vehicle" : "";
+      rows.push({
+        key: it.id,
+        kind: "item",
+        item: it,
+        transport,
+        start: t?.start ?? "",
+        end: t?.end ?? "",
+        // 미팅 시각을 모르는 날은 첫 장소 시각도 적지 않는다 (기본 08:00 기준이라 맞지 않을 수 있다)
+        keyTime: lead > 0 && idx === 0 ? meetingKnown : showsTime(it, idx),
+        afterBreakfast: first && !day.meetingTime?.trim() && it.type !== "flight",
+        returnFlight: lastDay && it.type === "flight",
+      });
+      first = false;
+    }
+  }
+  return { rows, flightDay, free: false, overnight };
 }

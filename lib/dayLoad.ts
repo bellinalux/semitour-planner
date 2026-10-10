@@ -11,6 +11,33 @@ export function dayMeetingTime(day: Pick<DayPlan, "meetingTime">): string {
   return day.meetingTime?.trim() || DEFAULT_MEETING_TIME;
 }
 
+/** 호텔 미팅 → 첫 장소 이동 기본값(분) — 시내 관광 차량 이동의 흔한 값 */
+export const DEFAULT_HOTEL_LEAD = 30;
+const NO_LEAD_TYPES = new Set(["flight", "transfer", "hotel", "free_time"]);
+
+/**
+ * 호텔 미팅 뒤 첫 장소까지 이동 시간(분). 직접 넣은 값이 있으면 그 값,
+ * 없으면 둘째 날부터(전날 호텔에서 출발) 첫 항목이 관광지·식당이고 이름이 미팅·출발 안내가 아닐 때 30분.
+ */
+export function hotelLeadMinutes(day: Pick<DayPlan, "day" | "kind" | "items" | "amGuided" | "hotelLeadMinutes">): number {
+  if (typeof day.hotelLeadMinutes === "number" && Number.isFinite(day.hotelLeadMinutes)) return Math.max(0, Math.round(day.hotelLeadMinutes));
+  if (day.day <= 1) return 0;
+  const list = (day.kind === "semi" ? day.amGuided : day.items).filter((i) => !isBreakfastItem(i));
+  const first = list[0];
+  if (!first || NO_LEAD_TYPES.has(first.type ?? "sightseeing")) return 0;
+  if (/미팅|로비|픽업|집결|출발|호텔/.test(first.name)) return 0;
+  return DEFAULT_HOTEL_LEAD;
+}
+
+/** 그날 첫 장소에 도착하는 시각 (미팅 + 호텔에서 이동) — 일정표 시각 계산은 여기서 시작한다 */
+export function dayTourStart(day: Pick<DayPlan, "day" | "kind" | "items" | "amGuided" | "hotelLeadMinutes" | "meetingTime">): string {
+  const meeting = dayMeetingTime(day);
+  const lead = hotelLeadMinutes(day);
+  if (lead === 0) return meeting;
+  const m = parseClock(meeting);
+  return m === null ? meeting : formatClock(m + lead);
+}
+
 /** "HH:mm"을 자정 기준 분으로. 형식이 이상하면 null. */
 function parseClock(time: string): number | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
@@ -150,6 +177,8 @@ export function calcDayLoad(day: DayPlan, pmChoice: PmChoice): DayLoad {
     stayMinutes += Math.max(0, item.stayMinutes);
     travelMinutes += Math.max(0, item.travelMinutesToNext ?? 0);
   }
+  // 호텔 미팅 뒤 첫 장소까지 이동
+  travelMinutes += hotelLeadMinutes(day);
   const totalMinutes = stayMinutes + travelMinutes;
   return { day: day.day, stayMinutes, travelMinutes, totalMinutes, level: dayLoadLevel(totalMinutes) };
 }
@@ -178,7 +207,7 @@ export interface DayGap {
  */
 export function calcDayGap(day: DayPlan, pmChoice: PmChoice, isLastDay: boolean): DayGap | null {
   if (day.kind !== "linear" || isLastDay) return null;
-  const endMinutes = timelineEndMinutes(dayItems(day, pmChoice), dayMeetingTime(day)) ?? parseClock(dayMeetingTime(day));
+  const endMinutes = timelineEndMinutes(dayItems(day, pmChoice), dayTourStart(day)) ?? parseClock(dayMeetingTime(day));
   if (endMinutes === null) return null;
   const freeMinutes = DAY_FILL_TARGET_END_MINUTES - endMinutes;
   if (freeMinutes < DAY_FILL_MIN_GAP_MINUTES) return null;
@@ -208,7 +237,7 @@ export interface DayEndCheck {
 export function calcDayEnd(day: DayPlan, pmChoice: PmChoice): DayEndCheck | null {
   const load = calcDayLoad(day, pmChoice);
   if (load.totalMinutes === 0) return null;
-  const endTime = timelineEndTime(dayItems(day, pmChoice), dayMeetingTime(day));
+  const endTime = timelineEndTime(dayItems(day, pmChoice), dayTourStart(day));
   if (!endTime) return null;
   const endMinutes = parseClock(endTime);
   const standardMinutes = parseClock(STANDARD_DAY_END);

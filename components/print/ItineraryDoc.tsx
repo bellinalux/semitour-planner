@@ -1,10 +1,9 @@
-import { computeItemTimings, dayMeetingTime } from "@/lib/dayLoad";
-import { isOvernightStay } from "@/lib/dayTidy";
+import { computeItemTimings, dayTourStart } from "@/lib/dayLoad";
 import { CANCELLATION_TERMS, dayDate, dayMeals, documentItems, includeLists, noticeLines, tripPeriod } from "@/lib/documents";
 import { customerFeeNote, localPayRows, moneyWithKrw } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { gradeText } from "@/lib/itemTypes";
-import { conditionTags, dayRegion, defaultAlternative, docRows, isFreeDay, mealLabel, shoppingStops, shortDescription, showsTime, stayText, visitStyle } from "@/lib/itineraryDoc";
+import { conditionTags, dayRegion, dayTable, defaultAlternative, mealLabel, shoppingStops, shortDescription, stayText, visitStyle } from "@/lib/itineraryDoc";
 import { singleSupplement } from "@/lib/pricing";
 import type { ItineraryItem } from "@/types";
 import { DocCover, DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
@@ -50,6 +49,7 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
   const tags = conditionTags(input, days, pmChoice, meta, quote);
   const vehicle = quote.ourIncludes.vehicle;
   const flight = input.selectedFlight;
+  const flightNos = { out: flight?.flightNumber ?? "", back: flight?.returnFlightNumber ?? "" };
   const full = input.packageType === "full";
   const single = singleSupplement(quote, input);
   const excludedText = [...excluded, ...(single ? [`싱글차지(1인실 사용 시 1인 +${money(single.price)})`] : [])];
@@ -162,60 +162,50 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
           {days.map((day, index) => {
             const meals = dayMeals(days, index, pmChoice, input);
             const date = dayDate(input, day.day);
-            const all = documentItems(day, pmChoice);
-            const flat = all.flatMap((b) => b.items);
-            const timings = computeItemTimings(flat, dayMeetingTime(day));
-            const flightDay = flat.some((i) => i.type === "flight");
-            const lastDay = index === days.length - 1;
-            const free = isFreeDay(day, pmChoice);
-            const hotelName = day.overnightCity ? input.selectedHotels[day.overnightCity.trim()]?.name : undefined;
+            const flat = documentItems(day, pmChoice).flatMap((b) => b.items);
+            const timings = computeItemTimings(flat, dayTourStart(day));
+            const table = dayTable(days, index, pmChoice, { vehicle, flight: flightNos, selectedHotels: input.selectedHotels }, timings);
+            const flightDay = table.flightDay;
+            const hotelName = table.overnight?.hotel ?? undefined;
             type Row = { key: string; transport: string; time: string; body: React.ReactNode; tone?: string };
-            const rows: Row[] = [];
-            if (free) {
-              const tips = flat.filter((i) => i.type === "free_time").map((i) => shortDescription(i.description)).filter(Boolean);
-              rows.push({ key: "free", transport: "", time: "", body: <><b>전일 자유일정</b> <span className="text-slate-500">(가이드·차량 불포함)</span>{tips.length > 0 && <span className="block text-slate-500">추천: {tips.join(" / ")}</span>}</> });
-            } else {
-              let first = true;
-              for (const block of all) {
-                if (block.label) rows.push({ key: `b-${block.label}`, transport: "", time: "", body: <b className="text-slate-700">{block.label}</b> });
-                for (const [n, r] of docRows(block.items, vehicle).entries()) {
-                  if (r.kind === "move") {
-                    rows.push({ key: `m-${block.label}-${n}`, transport: "", time: "", body: <span className="text-slate-400">↓ {r.text}</span>, tone: "text-slate-400" });
-                    continue;
-                  }
-                  const it = r.item!;
-                  const idx = flat.indexOf(it);
-                  // 그날 마지막 투숙은 아래 HOTEL 줄로 보여 준다 (같은 내용 두 번 쓰지 않기)
-                  if (day.overnightCity && isOvernightStay(flat, idx)) continue;
-                  const t = timings.get(it.id);
-                  // 시각을 모르는 날의 첫 항목은 "조식 후 미팅"으로 (기본 08:00을 그대로 쓰지 않는다)
-                  const time = first && !day.meetingTime?.trim() && it.type !== "flight" ? "조식 후" : t && showsTime(it, idx) ? t.start : "";
-                  const transport =
-                    it.type === "flight"
-                      ? lastDay && flight?.returnFlightNumber
-                        ? flight.returnFlightNumber
-                        : index === 0 && flight?.flightNumber
-                          ? flight.flightNumber
-                          : "항공"
-                      : first && vehicle
-                        ? "전용차량"
-                        : "";
-                  const returnFlight = lastDay && it.type === "flight";
-                  rows.push({
-                    key: it.id,
-                    transport,
-                    time,
-                    body: (
-                      <>
-                        <ItemCell item={it} input={input} />
-                        {returnFlight && <span className="block text-slate-500">출발 2~3시간 전 공항 도착 · 출국 수속</span>}
-                      </>
-                    ),
-                  });
-                  first = false;
-                }
-              }
-            }
+            const rows: Row[] = table.rows.map((r) => {
+              if (r.kind === "free")
+                return {
+                  key: r.key,
+                  transport: "",
+                  time: "",
+                  body: (
+                    <>
+                      <b>전일 자유일정</b> <span className="text-slate-500">(가이드·차량 불포함)</span>
+                      {r.tips && r.tips.length > 0 && <span className="block text-slate-500">추천: {r.tips.join(" / ")}</span>}
+                    </>
+                  ),
+                };
+              if (r.kind === "label") return { key: r.key, transport: "", time: "", body: <b className="text-slate-700">{r.label}</b> };
+              if (r.kind === "meeting")
+                return { key: r.key, transport: r.transport === "vehicle" ? "전용차량" : "", time: r.afterBreakfast ? "조식 후" : r.start, body: <span className="font-medium">🏨 호텔 로비 미팅 후 출발</span> };
+              if (r.kind === "move")
+                return {
+                  key: r.key,
+                  transport: "",
+                  time: "",
+                  body: <span className="text-slate-400">↓ {r.moveName ? `${r.moveName}${r.minutes ? ` (약 ${formatDuration(r.minutes)})` : ""}` : `${vehicle ? "전용차량" : "이동"} 약 ${formatDuration(r.minutes ?? 0)}`}</span>,
+                  tone: "text-slate-400",
+                };
+              return {
+                key: r.key,
+                // 항공은 편명(모르면 "항공"), 그날 첫 차량 이동은 "전용차량"
+                transport: r.transport === "vehicle" ? "전용차량" : r.transport === "flight" ? "항공" : r.transport,
+                // 시각을 모르는 날의 첫 항목은 "조식 후" (기본 08:00을 그대로 쓰지 않는다), 주요 일정만 시각
+                time: r.afterBreakfast ? "조식 후" : r.keyTime ? r.start : "",
+                body: (
+                  <>
+                    <ItemCell item={r.item!} input={input} />
+                    {r.returnFlight && <span className="block text-slate-500">출발 2~3시간 전 공항 도착 · 출국 수속</span>}
+                  </>
+                ),
+              };
+            });
             const span = rows.length + (day.overnightCity ? 1 : 0);
             return (
               <tbody key={day.day} className="break-inside-avoid border-b-2 border-emerald-200 align-top">

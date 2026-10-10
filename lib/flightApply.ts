@@ -1,4 +1,4 @@
-import { clockDiffMinutes, clockMinutes, dayMeetingTime, shiftClock, walkTimeline } from "@/lib/dayLoad";
+import { clockDiffMinutes, clockMinutes, dayTourStart, shiftClock, walkTimeline } from "@/lib/dayLoad";
 import { refitMealWindows } from "@/lib/mealTiming";
 import { TIME_STEP } from "@/lib/format";
 import { addDays, isBreakfastItem, parseDate } from "@/lib/documents";
@@ -332,5 +332,5 @@ export function applyFlightWithMeals(days: DayPlan[], flight: FlightOption): Day
   const next = applyFlightToDays(days, flight);
   if (next === days || next.length === 0 || next[0].kind !== "linear") return next;
   const first = next[0];
-  return [{ ...first, items: refitMealWindows(first.items, dayMeetingTime(first)) }, ...next.slice(1)];
+  return [{ ...first, items: refitMealWindows(first.items, dayTourStart(first)) }, ...next.slice(1)];
 }
