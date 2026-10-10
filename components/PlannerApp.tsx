@@ -14,6 +14,7 @@ import { HistoryMenu } from "@/components/layout/HistoryMenu";
 import { AccountMenu } from "@/components/layout/AccountMenu";
 import { FeedbackButton } from "@/components/layout/FeedbackButton";
 import { BookingsMenu } from "@/components/layout/BookingsMenu";
+import { DayTourMenu } from "@/components/daytour/DayTourMenu";
 import { MoreMenu } from "@/components/layout/MoreMenu";
 import { bookingFromQuote } from "@/lib/bookings";
 import { useSession } from "@/components/SessionContext";
@@ -403,6 +404,14 @@ export function PlannerApp() {
             <BookingsMenu
               author={session.user?.name || quoteLog.author}
               draftFromQuote={() => (quote?.ok ? { ...bookingFromQuote(input, documentQuote(quote, input)), planName: suggestPlanName(input, meta) } : null)}
+              buttonClassName="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 [&>span]:hidden sm:[&>span]:inline"
+            />
+            <DayTourMenu
+              input={input}
+              dayCount={days.length}
+              onAddOption={(tour, dayNo, price) =>
+                update({ options: [...input.options, { ...tourToOption(tour, dayNo, input), costPerPerson: price.cost, pricePerPerson: price.sale }] })
+              }
               buttonClassName="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 [&>span]:hidden sm:[&>span]:inline"
             />
             <AccountMenu />
