@@ -1,3 +1,7 @@
+import { citiesOf } from "@/lib/knowledge";
+import { lodgingWebSearchUrl } from "@/lib/schemas/lodgingSearch";
+import { addHotel, findHotel, pickRate } from "@/lib/rateBook";
+import { getRates, updateRates } from "@/lib/server/rateStore";
 import { lodgingWebRequestSchema, lodgingWebResponseSchema, toLodgingWebEstimate } from "@/lib/schemas/lodgingSearch";
 import {
   buildLodgingResearchPrompt,
@@ -32,6 +36,39 @@ export async function POST(request: Request) {
     return errorResponse("BAD_REQUEST", parsed.error.issues[0]?.message ?? "입력값을 확인해 주세요.", 400);
   }
 
+  const req = parsed.data;
+  const city = citiesOf(req.destination)[0] ?? req.destination;
+  const month = req.checkIn && /^\d{4}-\d{2}/.test(req.checkIn) ? Number(req.checkIn.slice(5, 7)) : 0;
+  const names = req.hotelNames ?? [];
+  // 견적서 호텔이 모두 회사 요금표에 살아 있는 요금(업체 견적가 6개월·시즌 / 웹 시세 30일)이 있으면 검색하지 않는다
+  if (names.length > 0) {
+    const book = await getRates(city).catch(() => null);
+    const picks = names.map((name) => {
+      const card = book ? findHotel(book, name) : undefined;
+      return { name, pick: card ? pickRate(card.rates, req.currency, month) : null };
+    });
+    if (picks.every((p) => p.pick)) {
+      const hotels = picks.map((p) => ({ name: p.name, rateLow: p.pick!.low, rateHigh: p.pick!.high, found: true, sourceName: `요금표 · ${p.pick!.basis}` }));
+      return Response.json({
+        estimate: {
+          hotels,
+          rateLow: Math.min(...hotels.map((h) => h.rateLow)),
+          rateHigh: Math.max(...hotels.map((h) => h.rateHigh)),
+          basis: "searched",
+          cityTaxPerPersonPerNight: 0,
+          areaNote: "",
+          sourceName: "회사 요금표",
+          priceNote: "저장된 요금표에서 가져왔습니다 (다시 검색하지 않음)",
+          searchUrl: lodgingWebSearchUrl(req.destination, req.lodgingType),
+          checkedAt: new Date().toISOString(),
+        },
+        sources: [],
+        searched: true,
+        fromBook: true,
+      });
+    }
+  }
+
   try {
     // 같은 조건(호텔 이름·날짜 포함)은 하루 동안 다시 쓴다 (검색 근거가 있는 결과만)
     const result = await cached(
@@ -62,6 +99,12 @@ export async function POST(request: Request) {
       (r) => r.searched && (!(parsed.data.hotelNames ?? []).length || (r.estimate.hotels ?? []).some((h) => h.found)),
     );
 
+    // 찾은 호텔 요금은 회사 요금표에 쌓는다
+    const found = (result.estimate.hotels ?? []).filter((h) => h.found);
+    if (result.searched && found.length > 0)
+      await updateRates(city, (d) =>
+        found.reduce((doc, h) => addHotel(doc, { name: h.name }, { at: new Date().toISOString(), month, low: h.rateLow, high: h.rateHigh, currency: req.currency, source: "web", by: h.sourceName || "웹 시세" }), d),
+      );
     return Response.json(result);
   } catch (err) {
     if (err instanceof GeminiError) return errorResponse(err.code, err.message, err.status);

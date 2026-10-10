@@ -1,5 +1,6 @@
 "use client";
 
+import type { DocLang } from "@/lib/foreignDoc";
 import { Link2, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { CopyButton } from "@/components/dashboard/CopyButton";
@@ -24,10 +25,10 @@ function saveLink(key: string, id: string) {
 }
 
 interface Props {
-  /** 지금 견적으로 만든 고객용 일정표 (견적 전이면 null). english가 있으면 영문 */
-  build: (showPrice: boolean, english?: Record<string, string>) => SharedItinerary | null;
-  /** 영문 링크용 번역 (실패하면 null) */
-  translate?: () => Promise<Record<string, string> | null>;
+  /** 지금 견적으로 만든 고객용 일정표 (견적 전이면 null). 번역표가 있으면 그 언어 */
+  build: (showPrice: boolean, words?: Record<string, string>, lang?: DocLang) => SharedItinerary | null;
+  /** 외국어 링크용 번역 (실패하면 null) */
+  translate?: (lang: DocLang) => Promise<Record<string, string> | null>;
   /** 같은 상품이면 같은 링크를 고치도록 하는 이름 */
   planKey: string;
 }
@@ -38,15 +39,16 @@ interface Props {
  */
 export function ShareLinkBox({ build, planKey, translate }: Props) {
   const [showPrice, setShowPrice] = useState(true);
-  const [english, setEnglish] = useState(false);
-  const linkKey = english ? `${planKey}#en` : planKey;
+  const [lang, setLang] = useState<"ko" | DocLang>("ko");
+  const foreign = lang !== "ko";
+  const linkKey = foreign ? `${planKey}#${lang}` : planKey;
   const [state, setState] = useState<{ status: "idle" | "loading" | "done" | "error"; url?: string; message?: string; updated?: boolean }>({ status: "idle" });
 
   const publish = async () => {
     setState({ status: "loading" });
-    const words = english && translate ? await translate() : undefined;
-    if (english && !words) return setState({ status: "error", message: "영문 번역을 하지 못했습니다. 잠시 뒤 다시 눌러 주세요." });
-    const itinerary = build(showPrice, words ?? undefined);
+    const words = foreign && translate ? await translate(lang) : undefined;
+    if (foreign && !words) return setState({ status: "error", message: "번역을 하지 못했습니다. 잠시 뒤 다시 눌러 주세요." });
+    const itinerary = build(showPrice, words ?? undefined, foreign ? lang : undefined);
     if (!itinerary) return setState({ status: "idle" });
     const prev = readLinks()[linkKey];
     try {
@@ -69,8 +71,13 @@ export function ShareLinkBox({ build, planKey, translate }: Props) {
         </label>
         {translate && (
           <label className="inline-flex items-center gap-1 text-[11px] text-slate-600">
-            <input type="checkbox" checked={english} onChange={(e) => setEnglish(e.target.checked)} />
-            영어로 (외국인 고객)
+            언어
+            <select aria-label="웹 일정표 언어" value={lang} onChange={(e) => setLang(e.target.value as "ko" | DocLang)} className="rounded border border-slate-300 bg-white px-1 py-0.5">
+              <option value="ko">한국어</option>
+              <option value="en">영어 (English)</option>
+              <option value="ja">일본어 (日本語)</option>
+              <option value="zh">중국어 (中文)</option>
+            </select>
           </label>
         )}
         <button
@@ -80,7 +87,7 @@ export function ShareLinkBox({ build, planKey, translate }: Props) {
           className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 font-semibold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {state.status === "loading" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Link2 className="h-3.5 w-3.5" aria-hidden />}
-          {readLinks()[linkKey] ? "링크 내용 고치기" : english ? "영문 링크 만들기" : "링크 만들기"}
+          {readLinks()[linkKey] ? "링크 내용 고치기" : lang === "en" ? "영문 링크 만들기" : lang === "ja" ? "일본어 링크 만들기" : lang === "zh" ? "중국어 링크 만들기" : "링크 만들기"}
         </button>
       </div>
       <p className="text-pretty text-[11px] text-slate-500">휴대폰에서 보는 일정·포함 사항·전화/메일 문의 버튼 페이지입니다. 일정을 고친 뒤 다시 누르면 같은 링크의 내용이 바뀝니다 (180일 보관, 검색 노출 안 됨).</p>

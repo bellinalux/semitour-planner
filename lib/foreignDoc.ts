@@ -49,6 +49,8 @@ interface Dict {
   morning: string;
   afternoon: string;
   morningFree: string;
+  restPm: string;
+  checkinRest: string;
   approx: (d: string) => string;
   returnFlight: string;
   hotelMeeting: string;
@@ -126,6 +128,8 @@ export const DICT: Record<DocLang, Dict> = {
     morning: "Morning · guided tour",
     afternoon: "Afternoon · free choice",
     morningFree: "Free morning (rest at the hotel)",
+    restPm: "Free afternoon (rest at the hotel or explore on your own)",
+    checkinRest: "Hotel check-in and free time",
     approx: (d) => `approx. ${d}`,
     returnFlight: "Arrive at the airport 2–3 hours before departure for check-in",
     hotelMeeting: "Meet at the hotel lobby and depart",
@@ -201,6 +205,8 @@ export const DICT: Record<DocLang, Dict> = {
     morning: "午前・ガイド付き観光",
     afternoon: "午後・自由選択",
     morningFree: "午前は自由行動（ホテルでご休憩）",
+    restPm: "午後は自由行動（ホテルでご休憩または個人観光）",
+    checkinRest: "ホテルチェックイン後、自由行動",
     approx: (d) => `約${d}`,
     returnFlight: "出発の2〜3時間前に空港到着・搭乗手続き",
     hotelMeeting: "ホテルロビー集合後出発",
@@ -276,6 +282,8 @@ export const DICT: Record<DocLang, Dict> = {
     morning: "上午·导游带领",
     afternoon: "下午·自由选择",
     morningFree: "上午自由活动（酒店休息）",
+    restPm: "下午自由活动（酒店休息或自行游览）",
+    checkinRest: "酒店入住后自由活动",
     approx: (d) => `约${d}`,
     returnFlight: "请于起飞前2–3小时抵达机场办理登机",
     hotelMeeting: "酒店大堂集合后出发",

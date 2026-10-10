@@ -44,7 +44,9 @@ export interface HotelPick {
 export function pickHotel(candidates: HotelCandidate[], capPerNight: number | null): HotelPick | null {
   const priced = candidates.filter((h) => h.nightlyLow > 0 || h.nightlyHigh > 0).map((hotel) => ({ hotel, rate: midpoint(hotel.nightlyLow, hotel.nightlyHigh) }));
   if (priced.length === 0) return null;
-  const score = (p: { hotel: HotelCandidate; rate: number }) => (p.hotel.priceBasis === "searched" ? 2 : 0) + (p.hotel.koreanFriendly ? 1 : 0);
+  // 요금 확인(+2)·한국인 이용(+1)·국내 여행사 패키지 사용(+1, 2곳 이상 +2)·회사 요금표 근거(+1)
+  const score = (p: { hotel: HotelCandidate; rate: number }) =>
+    (p.hotel.priceBasis === "searched" ? 2 : 0) + (p.hotel.koreanFriendly ? 1 : 0) + Math.min(2, p.hotel.agencies?.length ?? 0) + (p.hotel.rateBasis ? 1 : 0);
   if (capPerNight !== null && capPerNight > 0) {
     const within = priced.filter((p) => p.rate <= capPerNight);
     if (within.length === 0) {

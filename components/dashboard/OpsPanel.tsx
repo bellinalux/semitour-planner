@@ -1,5 +1,7 @@
 "use client";
 
+import { bookingSummary, daysToDeparture, serviceLines } from "@/lib/supplierBookings";
+import { SupplierBookingsTab } from "./SupplierBookingsTab";
 import { ClipboardCheck, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useHideCosts } from "@/components/SessionContext";
@@ -22,16 +24,19 @@ interface Props {
   onChange: (next: OpsData) => void;
   /** 가이드 링크 (운영 지시서 휴대폰용) */
   guide?: { build: (withNames: boolean) => GuideSheet | null; planKey: string; city?: string };
+  /** 수배 요청 문구에 넣을 상품 이름·회사 이름 */
+  title?: string;
+  companyName?: string;
 }
 
-type Tab = "checklist" | "rooming" | "settlement" | "guide";
+type Tab = "checklist" | "suppliers" | "rooming" | "settlement" | "guide";
 const cell = "rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs focus:border-indigo-500 focus:outline-none";
 
 /**
  * 출발 준비 · 명단 · 정산 — 운영 지시서의 예약 확인 체크리스트를 화면에서 체크하고(기한 지남·임박 표시),
  * 참가자 명단으로 룸리스트를 만들고, 행사 뒤 실제 지출을 넣어 견적 대비 실제 손익을 본다. 상품마다 이 브라우저에 저장.
  */
-export function OpsPanel({ input, days, pmChoice, quote, ops, onChange, guide }: Props) {
+export function OpsPanel({ input, days, pmChoice, quote, ops, onChange, guide, title = "", companyName = "" }: Props) {
   const [tab, setTab] = useState<Tab>("checklist");
   const hideCosts = useHideCosts();
   const items = bookingChecklist(input, days, pmChoice, quote.travelers);
@@ -39,7 +44,8 @@ export function OpsPanel({ input, days, pmChoice, quote, ops, onChange, guide }:
   const doneCount = items.filter((i) => ops.checklist[i.label]?.done).length;
   const money = (v: number) => formatMoney(Math.round(v), input.currency);
 
-  const summary = `준비 ${doneCount}/${items.length}${due.overdue.length > 0 ? ` · 기한 지남 ${due.overdue.length}` : ""} · 명단 ${ops.participants.length}명`;
+  const supplierSum = bookingSummary(serviceLines(input, days, pmChoice), ops.bookings ?? {}, daysToDeparture(input));
+  const summary = `준비 ${doneCount}/${items.length}${due.overdue.length > 0 ? ` · 기한 지남 ${due.overdue.length}` : ""} · 수배 확정 ${supplierSum.confirmed}/${supplierSum.total}${supplierSum.urgent.length ? ` · 미확정 경고 ${supplierSum.urgent.length}` : ""} · 명단 ${ops.participants.length}명`;
   return (
     <SectionCard title="출발 준비 · 명단 · 정산" description="예약 확인 체크·룸리스트·행사 후 실제 손익 (이 상품, 이 브라우저에 저장)" icon={ClipboardCheck} collapsible defaultOpen={false} summary={summary} anchorId="ops-panel">
       <div className="space-y-3 text-xs">
@@ -47,6 +53,7 @@ export function OpsPanel({ input, days, pmChoice, quote, ops, onChange, guide }:
           {(
             [
               ["checklist", `예약 확인 ${doneCount}/${items.length}`],
+              ["suppliers", `수배·확정 ${supplierSum.confirmed}/${supplierSum.total}`],
               ["rooming", `명단·룸리스트 ${ops.participants.length}명`],
               ["settlement", "행사 후 정산"],
               ["guide", "가이드 링크·현장 기록"],
@@ -67,6 +74,7 @@ export function OpsPanel({ input, days, pmChoice, quote, ops, onChange, guide }:
           ))}
         </div>
         {tab === "checklist" && <Checklist items={items} ops={ops} onChange={onChange} overdue={due.overdue.map((i) => i.label)} soon={due.soon.map((i) => i.label)} />}
+        {tab === "suppliers" && <SupplierBookingsTab input={input} days={days} pmChoice={pmChoice} ops={ops} onChange={onChange} title={title} companyName={companyName} />}
         {tab === "rooming" && <Rooming ops={ops} onChange={onChange} perRoom={input.guestsPerUnit} />}
         {tab === "guide" && guide && <GuideLinkTab build={guide.build} planKey={guide.planKey} city={guide.city} />}
         {tab === "settlement" && !hideCosts && <SettlementView quote={quote} ops={ops} onChange={onChange} money={money} />}

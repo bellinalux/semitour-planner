@@ -90,6 +90,10 @@ export async function mockAi(page: Page) {
   });
   await page.route("**/api/find-competitors", (r) => r.fulfill(json({ products: [competitor("하나투어", 450000), competitor("모두투어", 480000)], sources: [], searched: true, searchedAt: new Date().toISOString() })));
   await page.route("**/api/fx**", (r) => r.fulfill(json({ krwPerUnit: 1 })));
+  // 지식 창고 미리 조사·호텔 확인·숙소 위치는 실제 AI를 부르지 않는다 (테스트마다 필요하면 덮어쓴다)
+  await page.route("**/api/knowledge/research", (r) => r.fulfill(json({ doc: { city: "", places: [], courses: [], needs: [], fieldNotes: [], researchedAt: "", researchCount: 0, learnedCount: 0, updatedAt: "" }, researched: false })));
+  await page.route("**/api/rates/check-hotels", (r) => r.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { message: "e2e" } }) }));
+  await page.route("**/api/place-coords", (r) => r.fulfill(json({ places: [] })));
   // 지도 바탕(OpenFreeMap)은 바깥 서버를 부르지 않고 빈 바탕으로
   await page.route("https://tiles.openfreemap.org/**", (r) => r.fulfill(json({ version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#eef2f7" } }] })));
   // 의견·속도 기록 등 서버 저장 API는 로컬(잠금 꺼짐)에서 403 — 그대로 둔다

@@ -21,6 +21,7 @@ import { DocumentBar } from "./DocumentBar";
 import { ShareLinkBox } from "./ShareLinkBox";
 import { CourseMapPanel } from "./CourseMapPanel";
 import { PacePanel } from "./PacePanel";
+import { QualityScoreCard } from "./QualityScoreCard";
 import { CustomerNoticeBox } from "./CustomerNoticeBox";
 import { OpsPanel } from "./OpsPanel";
 import { VersionPanel } from "./VersionPanel";
@@ -111,7 +112,7 @@ interface Props {
   /** 견적 버전 비교 */
   versions?: React.ComponentProps<typeof VersionPanel>;
   /** 출발 준비·명단·정산 */
-  ops?: { data: OpsData; change: (next: OpsData) => void; guide?: React.ComponentProps<typeof OpsPanel>["guide"] };
+  ops?: { data: OpsData; change: (next: OpsData) => void; guide?: React.ComponentProps<typeof OpsPanel>["guide"]; title?: string; companyName?: string };
   /** 견적 화면에서 입력값(할인 시나리오·가격안 등)을 바꾼다 */
   onInputChange: (patch: Partial<TripInput>) => void;
   /** 가격 낮추기에서 일정을 바꿀 때 */
@@ -165,6 +166,7 @@ export function Dashboard({
 
   return (
     <div className="space-y-4 p-4">
+      {itinerary.status === "success" && days.length > 0 && <QualityScoreCard input={input} days={days} pmChoice={pmChoice} />}
       <ItineraryPanel
         state={itinerary}
         days={days}
@@ -244,7 +246,7 @@ export function Dashboard({
         budgetFit={budgetFit}
         onReplaceDays={onReplaceDays}
       />
-      {ops && quote?.ok && days.length > 0 && <OpsPanel input={input} days={days} pmChoice={pmChoice} quote={quote} ops={ops.data} onChange={ops.change} guide={ops.guide} />}
+      {ops && quote?.ok && days.length > 0 && <OpsPanel input={input} days={days} pmChoice={pmChoice} quote={quote} ops={ops.data} onChange={ops.change} guide={ops.guide} title={ops.title} companyName={ops.companyName} />}
       {versions && quote?.ok && days.length > 0 && <VersionPanel {...versions} />}
       <UspPanel {...usp} />
       <ExportBar {...exporter} />

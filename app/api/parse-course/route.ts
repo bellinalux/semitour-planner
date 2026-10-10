@@ -1,3 +1,5 @@
+import { addGround, addHotel, supplierObsFromQuote } from "@/lib/rateBook";
+import { updateRates } from "@/lib/server/rateStore";
 import { isVisualCourseFile } from "@/lib/courseFile";
 import { courseRequestSchema, courseResponseSchema, toCoursePlan, type CourseRequest } from "@/lib/schemas/course";
 import { extractCourseFileText } from "@/lib/server/courseFileExtract";
@@ -62,7 +64,21 @@ export async function POST(request: Request) {
         422,
       );
     }
-    return Response.json(toCoursePlan(result));
+    const plan = toCoursePlan(result);
+    // 업체 견적서의 실제 요금(호텔 1박, 차량·가이드 1일)은 회사 요금표에 쌓는다
+    const q = plan.quote;
+    const city = plan.meta.cities?.[0] ?? "";
+    if (q && city) {
+      const { hotels, ground } = supplierObsFromQuote({ lines: q.lines, hotelNames: q.hotelNames, originalCurrency: q.currency || "KRW" }, plan.meta.packageName ? `업체 견적: ${plan.meta.packageName.slice(0, 30)}` : "업체 견적", 0);
+      const names = q.hotelNames ?? [];
+      if (hotels.length + ground.length + names.length > 0)
+        await updateRates(city, (d) => {
+          let doc = names.reduce((x, n) => addHotel(x, { name: n }), d);
+          doc = hotels.reduce((x, h) => addHotel(x, { name: h.name }, h.obs), doc);
+          return ground.reduce((x, g) => addGround(x, g.kind, g.label, g.obs), doc);
+        });
+    }
+    return Response.json(plan);
   } catch (err) {
     if (err instanceof GeminiError) return errorResponse(err.code, err.message, err.status);
     console.error("[parse-course]", err);

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SharedDayMap } from "@/components/map/SharedDayMap";
+import { BookRequestForm } from "./BookRequestForm";
 import { getShared } from "@/lib/server/shareStore";
 import type { SharedItinerary } from "@/lib/shareItinerary";
 
@@ -8,13 +9,18 @@ import type { SharedItinerary } from "@/lib/shareItinerary";
 export const metadata: Metadata = { title: "여행 일정표", robots: { index: false, follow: false } };
 
 type Kind = SharedItinerary["days"][number]["items"][number]["kind"];
-const KIND_MARK: Record<"ko" | "en", Record<Kind, string>> = {
+type Lang = "ko" | "en" | "ja" | "zh";
+const KIND_MARK: Record<Lang, Record<Kind, string>> = {
   ko: { sight: "관광", meal: "식사", move: "이동", hotel: "숙소", free: "자유", flight: "항공", other: "" },
   en: { sight: "Sight", meal: "Meal", move: "Transfer", hotel: "Hotel", free: "Free", flight: "Flight", other: "" },
+  ja: { sight: "観光", meal: "食事", move: "移動", hotel: "ホテル", free: "自由", flight: "航空", other: "" },
+  zh: { sight: "观光", meal: "用餐", move: "交通", hotel: "酒店", free: "自由", flight: "航班", other: "" },
 };
-const TEXT = {
-  ko: { travelers: (n: number) => `${n}명`, stay: "숙박", inc: "포함", exc: "불포함", updated: "마지막 수정", call: "전화 문의", mail: "메일 문의", subject: "[문의]", days: "날짜별 일정", incl: "포함 사항" },
-  en: { travelers: (n: number) => `${n} travelers`, stay: "Overnight", inc: "Included", exc: "Not included", updated: "Last updated", call: "Call us", mail: "Email us", subject: "[Inquiry]", days: "Day-by-day itinerary", incl: "Inclusions" },
+const TEXT: Record<Lang, { travelers: (n: number) => string; stay: string; inc: string; exc: string; updated: string; call: string; mail: string; subject: string; days: string; incl: string; packing: string; map: string }> = {
+  ko: { travelers: (n) => `${n}명`, stay: "숙박", inc: "포함", exc: "불포함", updated: "마지막 수정", call: "전화 문의", mail: "메일 문의", subject: "[문의]", days: "날짜별 일정", incl: "포함 사항", packing: "준비물", map: "지도로 보기" },
+  en: { travelers: (n) => `${n} travelers`, stay: "Overnight", inc: "Included", exc: "Not included", updated: "Last updated", call: "Call us", mail: "Email us", subject: "[Inquiry]", days: "Day-by-day itinerary", incl: "Inclusions", packing: "Packing list", map: "View on map" },
+  ja: { travelers: (n) => `${n}名`, stay: "宿泊", inc: "含まれるもの", exc: "含まれないもの", updated: "最終更新", call: "電話で問い合わせ", mail: "メールで問い合わせ", subject: "[お問い合わせ]", days: "日程", incl: "旅行代金に含まれるもの", packing: "持ち物", map: "地図で見る" },
+  zh: { travelers: (n) => `${n}人`, stay: "住宿", inc: "包含", exc: "不包含", updated: "最后更新", call: "电话咨询", mail: "邮件咨询", subject: "[咨询]", days: "每日行程", incl: "费用包含", packing: "携带物品", map: "查看地图" },
 };
 
 export default async function SharedItineraryPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,7 +35,7 @@ export default async function SharedItineraryPage({ params }: { params: Promise<
       </main>
     );
   }
-  const lang = it.lang ?? "ko";
+  const lang: Lang = it.lang ?? "ko";
   const t = TEXT[lang];
   return (
     <main lang={lang} className="mx-auto min-h-dvh max-w-xl space-y-5 bg-white px-4 pb-24 pt-6 text-sm text-slate-800">
@@ -76,7 +82,7 @@ export default async function SharedItineraryPage({ params }: { params: Promise<
                 </li>
               ))}
             </ol>
-            <SharedDayMap day={d.day} index={it.days.indexOf(d)} items={d.items} label={lang === "en" ? "View on map" : "지도로 보기"} />
+            <SharedDayMap day={d.day} index={it.days.indexOf(d)} items={d.items} label={t.map} />
             {d.meals && <p className="mt-2 text-xs text-slate-600">🍴 {d.meals}</p>}
             {d.hotel && (
               <p className="mt-2 text-xs text-slate-500">
@@ -102,8 +108,8 @@ export default async function SharedItineraryPage({ params }: { params: Promise<
       </section>
 
       {it.packing.length > 0 && (
-        <section aria-label={lang === "en" ? "Packing" : "준비물"} className="space-y-1 rounded-xl border border-slate-200 p-3 text-xs">
-          <h2 className="font-semibold text-slate-900">{lang === "en" ? "Packing list" : "준비물"}</h2>
+        <section aria-label={t.packing} className="space-y-1 rounded-xl border border-slate-200 p-3 text-xs">
+          <h2 className="font-semibold text-slate-900">{t.packing}</h2>
           <ul className="space-y-0.5">
             {it.packing.map((p) => (
               <li key={p} className="text-slate-700">
@@ -114,12 +120,14 @@ export default async function SharedItineraryPage({ params }: { params: Promise<
         </section>
       )}
 
+      {it.bookable && <BookRequestForm id={id} lang={lang} travelers={it.travelers} options={it.options} />}
+
       <p className="text-center text-[11px] text-slate-400">
         {t.updated} {it.updatedAt.slice(0, 10)}
       </p>
 
       {(it.company.phone || it.company.email) && (
-        <nav aria-label={lang === "en" ? "Contact" : "문의"} className="fixed inset-x-0 bottom-0 flex gap-2 border-t border-slate-200 bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+        <nav aria-label={t.call} className="fixed inset-x-0 bottom-0 flex gap-2 border-t border-slate-200 bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
           {it.company.phone && (
             <a href={`tel:${it.company.phone.replace(/[^\d+]/g, "")}`} className="flex-1 rounded-lg bg-indigo-600 py-2.5 text-center text-sm font-semibold text-white">
               {t.call}

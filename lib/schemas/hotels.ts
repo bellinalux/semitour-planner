@@ -34,6 +34,7 @@ export const hotelResponseSchema = z.object({
           .boolean()
           .describe("한국어 후기·기사·여행 커뮤니티에서 한국인 이용이 확인된 경우에만 true. 확인이 안 되면 false"),
         koreanNote: z.string().describe("한국인 이용이 확인된 근거 한 줄. 확인이 안 되면 빈 문자열"),
+        agencies: z.array(z.string()).describe("이 호텔을 패키지에 쓰는 국내 여행사 이름 (메모에서 확인한 것만). 없으면 빈 배열"),
         highlights: z.string().describe("이 숙소를 추천하는 이유 한 줄 (위치, 교통, 시설)"),
       }),
     )
@@ -69,6 +70,7 @@ export function toHotelCandidates(parsed: Parsed, destination: string): HotelCan
         koreanNote: h.koreanFriendly ? h.koreanNote.trim() : "",
         highlights: h.highlights.trim(),
         mapUrl: mapSearchUrl(h.name.trim(), destination),
+        agencies: (h.agencies ?? []).map((a) => a.trim()).filter(Boolean).slice(0, 6),
       };
     });
 }

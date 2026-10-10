@@ -52,7 +52,9 @@ import { departureNotice } from "@/lib/departureNotice";
 import { buildGuideSheet } from "@/lib/guideSheet";
 import { citiesOf, coursePlaces } from "@/lib/knowledge";
 import { useKnowledgeEdits } from "@/hooks/useKnowledgeEdits";
+import { usePreResearch } from "@/hooks/usePreResearch";
 import { KnowledgeMenu } from "@/components/layout/KnowledgeMenu";
+import { RateBookMenu } from "@/components/layout/RateBookMenu";
 import { addVersion, loadVersions, makeVersion, versionKey, type QuoteVersion } from "@/lib/quoteVersions";
 import { packingList, packingText } from "@/lib/packingList";
 import type { TravelInfo } from "@/lib/schemas/travelInfo";
@@ -319,6 +321,16 @@ export function PlannerApp() {
   const dayTimeCheck = useDayTimeCheck({ input, days, pmChoice, replaceDays: history.labeled("일정 시간 검증") });
 
   // 코스 엔진 점검 — 점검 상자·일정 카드 점수 배지·요약·추천이 같이 쓴다. 자동 점검을 켜면 코스를 만든 뒤 긴 날 시간 검증 → 엔진 점검
+  // 지식 창고 미리 조사 — 여행지를 적으면 그 도시를, 하루 한 번 최근 견적 여행지를 (오래된 것만 실제로 조사)
+  usePreResearch({
+    destination: input.destination,
+    enabled: input.mode === "ai",
+    travelType: input.travelType,
+    tripScope: input.tripScope,
+    companions: input.companions,
+    recent: quoteLog.entries.map((e) => e.destination),
+  });
+
   // 직원 수정(뺀 곳·넣은 곳)을 지식 창고에 배운다
   const knowledgeEdits = useKnowledgeEdits(citiesOf(input.destination)[0] ?? "");
 
@@ -569,6 +581,7 @@ export function PlannerApp() {
               <CompanySettings {...companyProfile} />
               <HistoryMenu log={quoteLog} teamSync={teamSync} />
               <KnowledgeMenu defaultCity={citiesOf(input.destination)[0] ?? ""} travelType={input.travelType} tripScope={input.tripScope} />
+              <RateBookMenu defaultCity={citiesOf(input.destination)[0] ?? ""} />
               <SendToTourdesign getProduct={getProduct} />
               <FeedbackButton where={`${feedbackStage} 단계 · ${tab} 탭`} />
               <ErrorLogMenu />
@@ -690,14 +703,14 @@ export function PlannerApp() {
               onGenerate: handleGenerateUsp,
             }}
             exporter={exporter}
-            ops={{ ...ops, guide: { planKey, city: citiesOf(input.destination)[0] ?? "", build: (withNames) => (docData ? buildGuideSheet(docData, withNames ? ops.data.participants : []) : null) } }}
+            ops={{ ...ops, title: planKey, companyName: company.name, guide: { planKey, city: citiesOf(input.destination)[0] ?? "", build: (withNames) => (docData ? buildGuideSheet(docData, withNames ? ops.data.participants : []) : null) } }}
             versions={{ versions, currency: input.currency, customer: input.customerName.trim(), onSaveNow: () => saveVersion("직접 저장") }}
             notice={{
               buildNotice: async () => (docData ? departureNotice(docData, await ensureTravelInfo(), season.result) : null),
               buildPacking: async () => (docData ? packingText(packingList(input, days, pmChoice, await ensureTravelInfo(), season.result)) : null),
               onPrintPacking: () => void printDocument("packing"),
             }}
-            share={{ build: (showPrice, english) => (docData ? buildSharedItinerary(docData, showPrice, new Date(), ruleNotices(loadPriceRules()), english) : null), translate: () => ensureForeign("en"), planKey }}
+            share={{ build: (showPrice, words, lang) => (docData ? buildSharedItinerary(docData, showPrice, new Date(), ruleNotices(loadPriceRules()), words, lang) : null), translate: (lang) => ensureForeign(lang), planKey }}
             documents={{
               disabled: !quote?.ok,
               missingLegal: missingLegalFields(company),

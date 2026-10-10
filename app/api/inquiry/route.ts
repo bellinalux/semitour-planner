@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { inquirySchema, type Inquiry } from "@/lib/inquiry";
-import { isAuthed, workspaceId } from "@/lib/server/access";
-import { getKv } from "@/lib/server/planStore";
+import { isAuthed } from "@/lib/server/access";
+import { readInquiries, writeInquiries } from "@/lib/server/inquiryStore";
 import { allowPublicWrite } from "@/lib/server/rateLimit";
 import { newShareId } from "@/lib/server/shareStore";
 
@@ -9,26 +9,8 @@ function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
 }
 
-const MAX = 300;
-const keyOf = async () => `inquiries:${(await workspaceId()) ?? "local"}`;
-
-async function read(): Promise<Inquiry[]> {
-  const store = await getKv();
-  const raw = store ? await store.kv.get(await keyOf()) : null;
-  try {
-    const list = raw ? (JSON.parse(raw) as Inquiry[]) : [];
-    return Array.isArray(list) ? list : [];
-  } catch {
-    return [];
-  }
-}
-
-async function write(list: Inquiry[]): Promise<boolean> {
-  const store = await getKv();
-  if (!store) return false;
-  await store.kv.put(await keyOf(), JSON.stringify(list.slice(0, MAX)));
-  return true;
-}
+const read = readInquiries;
+const write = writeInquiries;
 
 /** 고객 견적 요청 (공개 폼) — 한 곳에서 1분 5번까지 */
 export async function POST(request: Request) {

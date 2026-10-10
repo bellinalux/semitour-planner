@@ -26,6 +26,7 @@ export function DetailConditionsSection({ input, onChange }: SectionProps) {
 
   return (
     <SectionCard
+      anchorId="detail-conditions"
       title="일정 상세 조건 (AI 일정용)"
       description="여행 유형·지역 순서·테마·요청사항을 일정에 반영합니다"
       icon={SlidersHorizontal}

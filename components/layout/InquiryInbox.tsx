@@ -75,6 +75,16 @@ export function InquiryInbox({ openSignal, companyName, onMakeBooking, onFillInp
                 {q.destination} · {q.departure || "출발일 미정"}
                 {q.nights > 0 ? ` · ${q.nights}박` : ""} · {q.travelers}명{q.budget > 0 ? ` · 1인 ${q.budget.toLocaleString("ko-KR")}원` : ""} · {STYLE_LABEL[q.style]}
               </p>
+              {q.source?.kind === "share" && (
+                <p className="flex flex-wrap items-center gap-1.5">
+                  <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10.5px] font-semibold text-emerald-800">웹 일정표 예약 요청</span>
+                  <a href={`/t/${q.source.shareId}`} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline underline-offset-2">
+                    {q.source.title}
+                  </a>
+                  {q.source.period && <span className="text-slate-500">{q.source.period}</span>}
+                  {q.source.options.length > 0 && <span className="text-slate-600">· 선택관광 {q.source.options.join(", ")}</span>}
+                </p>
+              )}
               {q.requests && <p className="text-pretty text-slate-500">“{q.requests}”</p>}
               <div className="flex flex-wrap gap-1.5">
                 <button

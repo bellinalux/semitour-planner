@@ -23,7 +23,19 @@ export interface Inquiry extends Omit<InquiryInput, "website"> {
   id: string;
   at: string;
   done: boolean;
+  /** 고객 웹 일정표에서 [이 일정으로 예약 요청]으로 온 것 */
+  source?: { kind: "share"; shareId: string; title: string; period: string; options: string[] };
 }
+
+/** 웹 일정표 예약 요청 (공개 — 링크를 받은 고객) */
+export const bookRequestSchema = z.object({
+  name: z.string().trim().min(1, "이름을 적어 주세요.").max(40),
+  contact: z.string().trim().min(5, "연락처를 적어 주세요.").max(60),
+  travelers: z.number().int().min(1).max(200),
+  options: z.array(z.string().trim().max(120)).max(30).default([]),
+  message: z.string().trim().max(500).default(""),
+  website: z.string().max(0).default(""),
+});
 
 export const STYLE_LABEL: Record<InquiryInput["style"], string> = { package: "패키지", semi: "세미패키지", free: "자유여행", unsure: "상담 후 결정" };
 

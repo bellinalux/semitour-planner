@@ -1,5 +1,6 @@
 "use client";
 
+import { HotelCheckBox } from "./HotelCheckBox";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { NumberField } from "@/components/ui/NumberField";
 import { currencySymbol, formatMoney } from "@/lib/currency";
@@ -200,6 +201,7 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
       {input.supplierQuote ? (
         <>
           <QuoteSummary q={input.supplierQuote} input={input} money={money} />
+          <HotelCheckBox destination={input.destination} q={input.supplierQuote} onSave={(hotelChecks) => input.supplierQuote && onInputChange({ supplierQuote: { ...input.supplierQuote, hotelChecks } })} />
           <SupplierWeekdayTable input={input} days={days} pmChoice={pmChoice} />
           <SupplierHistoryPanel input={input} />
         </>

@@ -56,6 +56,8 @@ export function EnglishDoc({ input, days, pmChoice, quote, meta, company, transl
     : [];
 
   const itemCell = (it: ItineraryItem) => {
+    // 일찍 끝나는 날의 자유시간 줄 (문서에만 있는 줄)
+    if (it.id === "rest-pm" || it.id === "rest-checkin") return <b className="text-slate-700">{it.id === "rest-pm" ? L.restPm : L.checkinRest}</b>;
     const style = visitStyle(it);
     const stay = it.timeNote ? t(it.timeNote) : STAY_TYPES.has(it.type ?? "sightseeing") && it.stayMinutes > 0 ? L.approx(dur(it.stayMinutes)) : "";
     const desc = shortDescription(it.description);

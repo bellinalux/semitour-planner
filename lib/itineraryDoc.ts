@@ -1,7 +1,7 @@
 import { ourPolicy } from "@/lib/competitorDiff";
 import { dayMeals, documentItems, isBreakfastItem, type MealSlot } from "@/lib/documents";
 import { isOvernightStay } from "@/lib/dayTidy";
-import { dayMeetingTime, hotelLeadMinutes } from "@/lib/dayLoad";
+import { dayMeetingTime, hotelLeadMinutes, parseClock } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
 import { gradeText } from "@/lib/itemTypes";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
@@ -210,6 +210,40 @@ export interface DayTable {
  * 하루를 표 줄로 — 앱이 넣은 식사 맞춤 자유시간은 빼고, 이동 항목·장소 사이 이동은 연결 줄로,
  * 그날 마지막 투숙은 HOTEL 줄로 (항목 줄에서 뺀다), 자유일만 있는 날은 한 줄로.
  */
+/** 이 시각 전에 관광이 끝나면 남은 오후를 자유시간으로 적는다 (업계 일정표 표기) */
+export const REST_PM_BEFORE = 15 * 60;
+const REST_UNTIL = "18:00";
+export const REST_PM_NAME = "오후 자유시간 (호텔 휴식 또는 개별 관광)";
+export const REST_CHECKIN_NAME = "호텔 체크인 및 휴식 (자유시간)";
+
+/**
+ * 일찍 끝나는 날의 오후 자유시간 줄 — 일정 데이터는 바꾸지 않고 문서·웹 일정표에만 보인다.
+ * 마지막 날·전일 자유·이미 오후 자유로 둔 날·마지막 항목이 자유시간인 날은 빼고, 관광이 15:00 전에 끝나면 18:00까지.
+ * 항공으로 도착한 날은 "호텔 체크인 및 휴식"으로 적는다. 관광을 채우면 끝 시각이 늦어져 저절로 사라진다.
+ */
+export function restAfter(days: DayPlan[], index: number, pmChoice: PmChoice, timings: Map<string, { start: string; end: string }>): ItineraryItem | null {
+  const day = days[index];
+  if (index === days.length - 1 || day.rest === "free" || day.rest === "pmfree" || day.kind !== "linear") return null;
+  const items = dayItems(day, pmChoice).filter((i) => !(i.type === "hotel" && i === dayItems(day, pmChoice).at(-1)));
+  const last = items.at(-1);
+  if (!last || last.type === "free_time") return null;
+  const end = parseClock(timings.get(last.id)?.end ?? "");
+  if (end === null || end >= REST_PM_BEFORE) return null;
+  const arrival = items.some((i) => i.type === "flight");
+  return {
+    id: arrival ? "rest-checkin" : "rest-pm",
+    type: "free_time",
+    admission: "none",
+    name: arrival ? REST_CHECKIN_NAME : REST_PM_NAME,
+    description: "",
+    stayMinutes: Math.max(0, (parseClock(REST_UNTIL) ?? 1080) - end),
+    travelMinutesToNext: 0,
+    entryFee: 0,
+    mealCost: 0,
+    isEstimated: false,
+  };
+}
+
 export function dayTable(
   days: DayPlan[],
   index: number,
@@ -267,6 +301,13 @@ export function dayTable(
       });
       first = false;
     }
+  }
+  // 일찍 끝나는 날 — 남은 오후는 자유시간으로 (호텔 줄 앞에)
+  const rest = restAfter(days, index, pmChoice, timings);
+  if (rest) {
+    const lastItem = [...rows].reverse().find((r) => r.kind === "item" && r.item?.type !== "hotel");
+    const start = lastItem?.end ?? "";
+    rows.push({ key: rest.id, kind: "item", item: rest, transport: "", start, end: REST_UNTIL, keyTime: true, afterBreakfast: false, returnFlight: false });
   }
   return { rows, flightDay, free: false, overnight };
 }

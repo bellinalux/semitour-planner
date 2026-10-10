@@ -1,3 +1,4 @@
+import type { SupplierBooking } from "@/lib/supplierBookings";
 import type { ChecklistItem } from "@/lib/bookingChecklist";
 import type { CostLine } from "@/types";
 
@@ -38,6 +39,8 @@ export interface OpsData {
   checklist: Record<string, CheckState>;
   participants: Participant[];
   settlement: Settlement;
+  /** 업체 수배·확정 (수배할 것 키 → 업체·상태·확정 번호) */
+  bookings?: Record<string, SupplierBooking>;
 }
 
 const keyOf = (planKey: string) => `semitour-planner:ops:${planKey}`;
@@ -52,6 +55,7 @@ export function loadOps(planKey: string): OpsData {
       checklist: raw.checklist && typeof raw.checklist === "object" ? raw.checklist : base.checklist,
       participants: Array.isArray(raw.participants) ? raw.participants : base.participants,
       settlement: { ...base.settlement, ...(raw.settlement ?? {}) },
+      bookings: raw.bookings && typeof raw.bookings === "object" && !Array.isArray(raw.bookings) ? raw.bookings : {},
     };
   } catch {
     return emptyOps();

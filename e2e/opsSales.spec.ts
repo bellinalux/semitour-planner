@@ -120,7 +120,7 @@ test("영문 웹 일정표 링크 · 시리즈 출발 할인 · 채널 등록 �
 
   // 영문 링크
   const box = page.getByRole("region", { name: "고객용 웹 일정표" });
-  await box.getByLabel("영어로 (외국인 고객)").check();
+  await box.getByLabel("웹 일정표 언어").selectOption("en");
   await box.getByRole("button", { name: "영문 링크 만들기" }).click();
   const link = box.getByRole("status").filter({ hasText: "/t/" }).getByRole("link");
   await expect(link).toBeVisible();

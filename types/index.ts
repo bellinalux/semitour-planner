@@ -645,6 +645,8 @@ export interface SupplierQuote {
   optionPrices?: { name: string; amount: number; currency: string; perGroup: boolean; minTravelers: number; pricePerPerson: number }[];
   /** 후보 호텔별 1박(2인 1실) 시세 — 웹 검색 결과 (앱 통화) */
   hotelRates?: { name: string; rateLow: number; rateHigh: number; found: boolean; sourceName: string }[];
+  /** 견적서 호텔 확인 결과 (실재·등급·위치·한국인 이용·국내 여행사 패키지) */
+  hotelChecks?: HotelCheckResult[];
   /** 요일별 요금에서 자동으로 고른 공급가 (사람이 고친 값과 구분해, 출발일·박수가 바뀌면 다시 고른다) */
   picked?: { price: number; label: string };
   /** 항목별 금액 (원문에 있으면) */
@@ -893,6 +895,24 @@ export interface HotelCandidate {
   highlights: string;
   /** 구글 지도에서 검색하는 링크 */
   mapUrl: string;
+  /** 이 호텔을 쓰는 국내 여행사 패키지 (확인한 것만) */
+  agencies?: string[];
+  /** 회사 요금표에서 가져왔으면 그 근거 (예: "3주 전 ○○랜드사 견적가") */
+  rateBasis?: string;
+}
+
+export interface HotelCheckResult {
+  name: string;
+  exists: boolean;
+  officialName: string;
+  grade: string;
+  area: string;
+  location: string;
+  korean: boolean;
+  koreanNote: string;
+  agencies: string[];
+  note: string;
+  at: string;
 }
 
 export type SelectedHotel = Pick<

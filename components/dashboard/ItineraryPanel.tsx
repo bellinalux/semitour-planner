@@ -185,6 +185,7 @@ export function ItineraryPanel({
 
   return (
     <SectionCard
+      anchorId="itinerary"
       title="일정표"
       description={meta ? "붙여넣은 코스를 구조화한 결과입니다. AI가 잘못 읽은 곳은 편집으로 고치세요" : "오전 가이드 투어 + 오후 반자유 일정"}
       icon={CalendarDays}
