@@ -2,6 +2,8 @@ import { refitDay } from "@/lib/dayBalance";
 import { dayTourStart, formatClock, parseClock, walkTimeline } from "@/lib/dayLoad";
 import { isBreakfastItem } from "@/lib/documents";
 import { isCafeMeal } from "@/lib/engineDay";
+import { isMealFiller } from "@/lib/mealTiming";
+import { estimateTravel, km } from "@/lib/courseEngine/time";
 import { formatDuration } from "@/lib/format";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import type { DayPlan, ItineraryItem } from "@/types";
@@ -181,18 +183,115 @@ export function pullMeals(day: DayPlan): { day: DayPlan; note: string | null } {
   return notes.length ? { day: clone(day, items), note: notes.join(", ") } : { day, note: null };
 }
 
+/** 식사를 맞출 목표 시각 — 업계 일정표의 점심 12:00, 저녁 18:30 */
+const LUNCH_TARGET = 12 * 60;
+const DINNER_TARGET = 18 * 60 + 30;
+
+/**
+ * 식사 자리 맞추기 (재정렬용) — 점심은 12:00, 저녁은 18:30에 가장 가까운 "구역 경계"로 옮긴다 (이르면 뒤로, 늦으면 앞으로).
+ * 항공·원문 시각 항목 앞으로는 옮기지 않고, 점심은 저녁보다 앞, 밤 일정(야경·쇼)은 저녁 뒤에 둔다.
+ * 지금 자리가 이미 목표에서 30분 안이면 그대로.
+ */
+export function slotMeals(day: DayPlan): { day: DayPlan; note: string | null } {
+  if (day.kind !== "linear") return { day, note: null };
+  // 식사를 기다리려고 넣었던 자유시간은 빼고 계산한다 (옮긴 뒤 다시 맞춘다)
+  let items = day.items.filter((x) => !isMealFiller(x));
+  const notes: string[] = [];
+  for (const slot of ["lunch", "dinner"] as MealSlot[]) {
+    const meal = items.find((x) => mealSlotOf(x) === slot);
+    if (!meal) continue;
+    const target = slot === "lunch" ? LUNCH_TARGET : DINNER_TARGET;
+    const from = startOf(day, items, meal.id);
+    if (from === null || Math.abs(from - target) <= 30) continue;
+    const rest = items.filter((x) => x !== meal);
+    // 옮길 수 있는 범위: 항공·원문 시각 항목 뒤, 점심은 저녁 앞 / 저녁은 점심 뒤, 숙소 줄 앞
+    let lo = 0;
+    let hi = rest.length;
+    rest.forEach((x, k) => {
+      if (x.type === "flight" || x.fixedTime) lo = Math.max(lo, k + 1);
+      if (slot === "dinner" && mealSlotOf(x) === "lunch") lo = Math.max(lo, k + 1);
+      if (slot === "lunch" && mealSlotOf(x) === "dinner") hi = Math.min(hi, k);
+      if (x.type === "hotel" && k > 0) hi = Math.min(hi, k);
+    });
+    const inside = new Set<number>();
+    for (const [a, b] of walkRuns(rest)) for (let k = a + 1; k < b; k++) inside.add(k);
+    let best: { cand: ItineraryItem[]; at: number; cost: number } | null = null;
+    for (let k = lo; k <= hi; k++) {
+      if (inside.has(k)) continue;
+      // 밤 일정이 저녁보다 앞에 오면 안 된다
+      if (slot === "dinner" && rest.slice(0, k).some((x) => NIGHT.test(x.name) && x.type !== "meal")) continue;
+      const cand = [...rest.slice(0, k), meal, ...rest.slice(k)];
+      const s = startOf(day, cand, meal.id);
+      if (s === null) continue;
+      const windowStart = slot === "lunch" ? LUNCH_FROM : DINNER_FROM;
+      const late = slot === "lunch" ? LUNCH_LATE : DINNER_LATE;
+      if (s < windowStart - EARLY_OK || s > late) continue;
+      const cost = Math.abs(s - target) + Math.abs(k - items.indexOf(meal)) * 2;
+      if (!best || cost < best.cost) best = { cand, at: s, cost };
+    }
+    if (!best || Math.abs(best.at - target) >= Math.abs(from - target)) continue;
+    items = best.cand;
+    notes.push(`${slot === "lunch" ? "점심" : "저녁"} ${formatClock(from)} → ${formatClock(best.at)}`);
+  }
+  return notes.length ? { day: clone(day, items), note: notes.join(", ") } : { day, note: null };
+}
+
+/**
+ * 가까운 순서 (엔진을 못 쓸 때) — 식사·항공·숙소·원문 시각 항목은 제자리에 두고, 그 사이 관광을 좌표로 가까운 곳부터 잇는다.
+ * 좌표가 없는 곳이 끼어 있는 구간은 그대로. 이동 시간은 직선거리로 다시 어림한다.
+ */
+export function nearestOrder(items: ItineraryItem[]): ItineraryItem[] {
+  const fixed = (x: ItineraryItem) => !WALKABLE.has(x.type ?? "sightseeing") || !!x.fixedTime || NIGHT.test(x.name);
+  const out: ItineraryItem[] = [];
+  let k = 0;
+  while (k < items.length) {
+    if (fixed(items[k])) {
+      out.push(items[k]);
+      k += 1;
+      continue;
+    }
+    let j = k;
+    while (j < items.length && !fixed(items[j])) j += 1;
+    const seg = items.slice(k, j);
+    if (seg.length >= 3 && seg.every((x) => typeof x.lat === "number" && typeof x.lng === "number")) {
+      const prev = out[out.length - 1];
+      let cur = prev && typeof prev.lat === "number" ? { lat: prev.lat!, lng: prev.lng! } : { lat: seg[0].lat!, lng: seg[0].lng! };
+      const left = seg.slice();
+      const ordered: ItineraryItem[] = [];
+      while (left.length) {
+        left.sort((a, b) => kmBetween(cur, a) - kmBetween(cur, b));
+        const nx = left.shift()!;
+        ordered.push(nx);
+        cur = { lat: nx.lat!, lng: nx.lng! };
+      }
+      ordered.forEach((x, n) => {
+        const next = ordered[n + 1] ?? items[j];
+        const minutes = next && typeof next.lat === "number" ? Math.max(5, Math.round(estimateTravel(x, next, kmBetween(x, next) < 1.2 ? "walk" : "car") / 5) * 5) : x.travelMinutesToNext;
+        out.push({ ...x, travelMinutesToNext: minutes });
+      });
+    } else out.push(...seg);
+    k = j;
+  }
+  return out;
+}
+
+const kmBetween = (a: { lat?: number; lng?: number }, b: { lat?: number; lng?: number }) => km({ lat: a.lat ?? 0, lng: a.lng ?? 0 }, { lat: b.lat ?? 0, lng: b.lng ?? 0 });
+
 export interface FitChange {
   day: number;
   note: string;
 }
 
-/** 업체 코스를 읽은 직후 — 도보 구역 압축(업체 코스만) → 같은 식사 합치기 → 늦은 식사 당기기 */
-export function fitCourse(days: DayPlan[], o: { walk: boolean }): { days: DayPlan[]; changes: FitChange[] } {
+/**
+ * 업체 코스를 읽은 직후 — 도보 구역 압축(업체 코스만) → 같은 식사 합치기 → 늦은 식사 당기기.
+ * slot이면(코스 재정렬) 늦은 식사 당기기 대신 식사 자리 맞추기(이르면 뒤로·늦으면 앞으로)
+ */
+export function fitCourse(days: DayPlan[], o: { walk: boolean; slot?: boolean }): { days: DayPlan[]; changes: FitChange[] } {
   const changes: FitChange[] = [];
   const next = days.map((d) => {
     let cur = d;
     const notes: string[] = [];
-    for (const step of [...(o.walk ? [compressWalkRuns] : []), mergeMeals, pullMeals]) {
+    for (const step of [...(o.walk ? [compressWalkRuns] : []), mergeMeals, o.slot ? slotMeals : pullMeals]) {
       const r = step(cur);
       cur = r.day;
       if (r.note) notes.push(r.note);

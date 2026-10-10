@@ -344,6 +344,7 @@ export function PlannerApp() {
     tripScope: input.tripScope,
     replaceDays: history.labeled("코스 점검 적용"),
     saveCoords: itinerary.replaceDays,
+    reorderReplace: history.labeled("코스 재정렬"),
     beforeAuto: { run: dayTimeCheck.run, busy: dayTimeCheck.running !== null },
   });
 

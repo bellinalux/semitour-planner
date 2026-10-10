@@ -4,7 +4,9 @@ import { createContext, useEffect, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
 import { calcDayLoad } from "@/lib/dayLoad";
 import { dayItems } from "@/lib/itinerary";
-import { withCoords } from "@/lib/regionPlan";
+import { fitCourse, nearestOrder } from "@/lib/courseFit";
+import { planRegions, withCoords } from "@/lib/regionPlan";
+import { diffDays, type DayDiff } from "@/lib/reorder";
 import { findZigzag, groupByArea, type Zigzag } from "@/lib/routeOrder";
 import { applyDayMove, insertBreak, refitDay, suggestDayMoves, type DayMove } from "@/lib/dayBalance";
 import { applyAlternative, applyDayResult, buildDayRequest } from "@/lib/engineDay";
@@ -66,6 +68,13 @@ export interface CourseEngineView {
   setAutoCheck: (on: boolean) => void;
   /** 코스 생성이 끝나면 걸어 둔다 — 새 일정이 화면에 들어온 뒤 한 번 실행 */
   armAfterGenerate: () => void;
+  /**
+   * 코스 재정렬 미리보기 — (전체면) 여러 날 지역 묶기 → 날마다 엔진 추천 순서 → 식사 시간 맞추기.
+   * 바꾼 일정과 날마다 전·후 비교를 돌려준다 (아직 적용하지 않음).
+   */
+  reorder: (dayNos?: number[]) => Promise<{ days: DayPlan[]; diffs: DayDiff[] }>;
+  /** 재정렬 결과 적용 (되돌리기 기록에 '코스 재정렬'로) */
+  applyReorder: (days: DayPlan[]) => void;
 }
 
 interface Args {
@@ -79,6 +88,8 @@ interface Args {
   replaceDays: (days: DayPlan[]) => void;
   /** 찾은 장소 좌표를 일정에 넣는다 (되돌리기 기록에 쌓지 않는 저장) — 코스 지도·지역 묶기에 쓴다 */
   saveCoords?: (days: DayPlan[]) => void;
+  /** 코스 재정렬 적용 (되돌리기 기록 이름 '코스 재정렬') */
+  reorderReplace?: (days: DayPlan[]) => void;
   /** 자동 점검 전에 할 일(긴 날 시간 검증)과, 그 일이 끝날 때까지 기다릴지 */
   beforeAuto?: { run: (dayNos: number[]) => void; busy: boolean };
 }
@@ -99,7 +110,7 @@ function scoreOf(res: PlanResponse): EngineScore {
  * 코스 엔진 점검 상태 — 날짜별 점검 결과·점수·추천 변경안, 결과 적용, "100점 만들기", 되돌리기.
  * 한 번 점검한 날은 일정을 고치면 잠시 뒤 자동으로 다시 채점한다(장소 정보는 서버에 저장돼 있어 다시 찾지 않는다).
  */
-export function useCourseEngine({ days, pmChoice, destination, departureDate, travelType, currency, tripScope, replaceDays, saveCoords, beforeAuto }: Args): CourseEngineView {
+export function useCourseEngine({ days, pmChoice, destination, departureDate, travelType, currency, tripScope, replaceDays, saveCoords, reorderReplace, beforeAuto }: Args): CourseEngineView {
   const [byDay, setByDay] = useState<Record<number, EngineDayState>>({});
   const [alts, setAlts] = useState<Record<number, EngineAltState>>({});
   const [scores, setScores] = useState<Record<number, EngineScore>>({});
@@ -113,6 +124,26 @@ export function useCourseEngine({ days, pmChoice, destination, departureDate, tr
   }, [days]);
 
   const requestFor = (d: DayPlan) => buildDayRequest(d, pmChoice, { destination, departureDate, travelType });
+
+  /** 한 날 점검 — 결과를 화면 상태에 넣고 돌려준다 (실패하면 null) */
+  const planFor = async (d: DayPlan): Promise<PlanResponse | null> => {
+    const req = requestFor(d);
+    if (!req) return null;
+    setByDay((s) => ({ ...s, [d.day]: { status: "loading" } }));
+    try {
+      const r = await fetch("/api/engine/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+      const j = await r.json();
+      if (r.ok) {
+        const res = j as PlanResponse;
+        setByDay((s) => ({ ...s, [d.day]: { status: "done", res } }));
+        return res;
+      }
+      setByDay((s) => ({ ...s, [d.day]: { status: "error", message: j?.error?.message ?? "코스 엔진 오류" } }));
+    } catch {
+      setByDay((s) => ({ ...s, [d.day]: { status: "error", message: "서버에 연결하지 못했습니다." } }));
+    }
+    return null;
+  };
 
   const run = async (dayNos?: number[]) => {
     setRunning(true);
@@ -308,7 +339,72 @@ export function useCourseEngine({ days, pmChoice, destination, departureDate, tr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waitingRun, busy, running]);
 
+  const reorder: CourseEngineView["reorder"] = async (dayNos) => {
+    setRunning(true);
+    const before = latest.current;
+    const targets = (dayNos ?? before.map((d) => d.day)).filter((n) => before.some((d) => d.day === n));
+    const notes: Record<number, string[]> = {};
+    const scoreInfo: Record<number, { before: number; after: number }> = {};
+    const note = (day: number, text: string) => (notes[day] = [...(notes[day] ?? []), text]);
+    let work = before;
+    try {
+      // ① 전체 재정렬이면 같은 지역을 여러 날 나눠 가는 곳을 한 날로
+      if (!dayNos && work.length > 1) {
+        const rp = planRegions(work, pmChoice);
+        if (rp.moves.length > 0) {
+          work = rp.days;
+          for (const m of rp.moves) {
+            note(m.fromDay, `${m.names.join(", ")} → DAY ${m.toDay} (같은 지역 묶기)`);
+            note(m.toDay, `${m.names.join(", ")} ← DAY ${m.fromDay} (같은 지역 묶기)`);
+          }
+        }
+      }
+      // ② 날마다 엔진 추천 순서 (영업시간·식사 시간대·이동·일몰/밤) — 점수가 오를 때만
+      for (const n of targets) {
+        const d = work.find((x) => x.day === n);
+        if (!d) continue;
+        const res = d.kind === "linear" ? await planFor(d) : null;
+        if (!res) {
+          // 엔진을 못 쓰거나 오전·오후 나뉜 날 — 좌표로 가까운 순서 (식사·항공·숙소는 제자리)
+          const local =
+            d.kind === "linear"
+              ? { ...d, items: nearestOrder(d.items) }
+              : { ...d, amGuided: nearestOrder(d.amGuided), pmFreeOptions: d.pmFreeOptions.map((o) => ({ ...o, items: nearestOrder(o.items) })) };
+          const ids = (x: DayPlan) => [...x.items, ...x.amGuided, ...x.pmFreeOptions.flatMap((o) => o.items)].map((i) => i.id).join("|");
+          if (ids(local) !== ids(d)) {
+            work = work.map((x) => (x.day === n ? local : x));
+            note(n, "가까운 곳부터 (좌표 기준)");
+          }
+          continue;
+        }
+        setScores((s) => ({ ...s, [n]: scoreOf(res) }));
+        // 점검이 찾은 좌표도 함께 (코스 지도·지역 묶기)
+        work = withCoords(work, res.places);
+        if (res.best.order.join("|") !== res.current.order.join("|") && res.bestQuality.score > res.quality.score) {
+          work = applyDayResult(work, n, res, { useBest: true });
+          scoreInfo[n] = { before: res.quality.score, after: res.bestQuality.score };
+          note(n, `추천 순서 (점검 ${res.quality.score} → ${res.bestQuality.score}점)`);
+        } else scoreInfo[n] = { before: res.quality.score, after: res.quality.score };
+      }
+      // ③ 식사 시간 맞추기 (같은 식사 합치기·늦은 식사 당기기)
+      const fit = fitCourse(work.filter((d) => targets.includes(d.day)), { walk: false, slot: true });
+      const fitted = new Map(fit.days.map((d) => [d.day, d]));
+      work = work.map((d) => fitted.get(d.day) ?? d);
+      for (const c of fit.changes) note(c.day, c.note);
+    } finally {
+      setRunning(false);
+    }
+    return { days: work, diffs: diffDays(before, work, pmChoice, { scores: scoreInfo, notes }) };
+  };
+
+  const applyReorder: CourseEngineView["applyReorder"] = (next) => {
+    keepSnapshot(next.map((d) => d.day));
+    (reorderReplace ?? replaceDays)(next);
+  };
+
   return {
+    reorder,
+    applyReorder,
     byDay,
     alts,
     scores,

@@ -1,5 +1,6 @@
 "use client";
 
+import { ReorderButton } from "./itinerary/ReorderButton";
 import { Accessibility, CalendarDays, Check, Info, Loader2, Pencil, PlaneLanding, PlaneTakeoff, SearchCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -191,6 +192,7 @@ export function ItineraryPanel({
       icon={CalendarDays}
       action={
         <div className="flex flex-wrap justify-end gap-2">
+          {state.status === "success" && days.length > 0 && <ReorderButton />}
           {verifyButton}
           {suggestButton}
           {accessibilityButton}

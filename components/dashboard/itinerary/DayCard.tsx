@@ -1,5 +1,6 @@
 import { REST_LABEL } from "@/lib/pace";
 import { dayMealIssues, fitCourse } from "@/lib/courseFit";
+import { ReorderButton } from "./ReorderButton";
 import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Compass, Flag, Plus, Sun, Sunset, Timer } from "lucide-react";
 import { useContext } from "react";
 import { CourseEngineContext } from "@/hooks/useCourseEngine";
@@ -205,6 +206,7 @@ export function DayCard({
             {dayTime.running?.includes(plan.day) ? "시간 확인 중..." : "시간 검증"}
           </button>
         )}
+        {placeCount >= 3 && <ReorderButton dayNo={plan.day} compact />}
         {plan.kind === "linear" && plan.items.length > 0 && (
           <button
             type="button"

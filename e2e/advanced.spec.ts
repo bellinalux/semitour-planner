@@ -158,10 +158,59 @@ test("식사 시간 점검: 저녁이 21시 넘으면 일정 카드에 경고, [
   await page.goto("/");
   const day1 = page.locator("#day-1");
   const issues = day1.getByRole("list", { name: "식사 시간 점검" });
-  await day1.getByText(/식사 시간/).first().click().catch(() => undefined);
+  await day1.getByRole("button", { name: /이 날 확인할 것/ }).click();
   await expect(issues).toContainText("저녁이 20:50 시작 — 너무 늦음");
   await day1.getByRole("button", { name: "식사 시간 맞추기" }).click();
   await expect(issues).toHaveCount(0);
   const names = await page.evaluate(() => JSON.parse(localStorage.getItem("semitour-planner:work:v1") ?? "{}").days[0].items.map((i: { name: string }) => i.name));
   expect(names.indexOf("저녁 식사")).toBeLessThan(names.indexOf("용다리"));
+});
+
+test("코스 재정렬: 추천 순서를 미리 비교하고 적용, 되돌리기", async ({ page }) => {
+  await mockAi(page);
+  const s = (id: string, name: string) => ({ id, type: "sightseeing", admission: "enter", name, description: "", stayMinutes: 60, travelMinutesToNext: 40, entryFee: 0, mealCost: 0, isEstimated: true });
+  const w = {
+    days: [{ day: 1, theme: "DAY 1", kind: "linear", overnightCity: "다낭", amGuided: [], pmFreeOptions: [], meetingTime: "09:00", items: [s("a", "오행산"), s("b", "린응사"), s("c", "한 시장"), s("d", "용다리")] }],
+    pmChoice: {},
+    meta: null,
+    generatedCurrency: "KRW",
+    usps: [],
+    uspKey: null,
+  };
+  await page.addInitScript((work) => {
+    if (sessionStorage.getItem("e2e-seeded")) return;
+    sessionStorage.setItem("e2e-seeded", "1");
+    localStorage.setItem("semitour-planner:input:v1", JSON.stringify({ destination: "다낭", days: 1, nights: 0, travelers: 4 }));
+    localStorage.setItem("semitour-planner:work:v1", JSON.stringify(work));
+    localStorage.setItem("semitour.autoEngineCheck", "0");
+  }, w);
+  // 엔진: 지금 순서 62점, 추천(거꾸로) 88점
+  await page.route("**/api/engine/plan", async (r) => {
+    const body = r.request().postDataJSON() as { places: { id: string; name: string; stayMin: number }[] };
+    const mk = (ids: string[]) => {
+      let t = 540;
+      const timeline = ids.map((id, k) => {
+        const p = body.places.find((x) => x.id === id)!;
+        const stop = { id, name: p.name, arrive: t, start: t, end: t + 60, travelFromPrev: k ? 10 : 0, wait: 0, issues: [] };
+        t += 70;
+        return stop;
+      });
+      return { order: ids, timeline, violations: [], dropped: [], totalTravel: 30, totalWait: 0, endTime: t, savedTravel: 0, method: "exhaustive" };
+    };
+    const ids = body.places.map((p) => p.id);
+    const q = (score: number) => ({ score, grade: score >= 80 ? "B" : "D", items: [], fixes: [] });
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify({ current: mk(ids), best: mk([...ids].reverse()), quality: q(62), bestQuality: q(88), places: [], context: { weekday: null, holiday: null, sunset: null, sunrise: null, matrix: "estimate", looked: 0, known: ids.length } }) });
+  });
+  await page.goto("/");
+  await page.locator("#day-1").getByRole("button", { name: "재정렬" }).click();
+  const dlg = page.getByRole("dialog", { name: "DAY 1 코스 재정렬" });
+  const cmp = dlg.getByRole("list", { name: "재정렬 비교" });
+  await expect(cmp).toContainText("점검 62 → 88점");
+  await expect(cmp).toContainText("추천 순서");
+  await expect(dlg.getByRole("list", { name: "DAY 1 바꾼 뒤" }).getByRole("listitem").first()).toHaveText("용다리");
+  await dlg.getByRole("button", { name: "이 순서로 적용" }).click();
+  const order = () => page.evaluate(() => JSON.parse(localStorage.getItem("semitour-planner:work:v1") ?? "{}").days[0].items.map((i: { name: string }) => i.name));
+  await expect.poll(order).toEqual(["용다리", "한 시장", "린응사", "오행산"]);
+  await page.keyboard.press("Control+z");
+  await expect.poll(order).toEqual(["오행산", "린응사", "한 시장", "용다리"]);
 });

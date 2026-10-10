@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compressWalkRuns, cuisineWord, dayMealIssues, fitCourse, isGenericMeal, mergeMeals, pullMeals } from "@/lib/courseFit";
+import { compressWalkRuns, cuisineWord, dayMealIssues, fitCourse, isGenericMeal, mergeMeals, nearestOrder, pullMeals, slotMeals } from "@/lib/courseFit";
 import { computeItemTimings, dayTourStart } from "@/lib/dayLoad";
 import { tidyDays } from "@/lib/dayTidy";
 import { heavyReasons } from "@/lib/pace";
@@ -106,5 +106,31 @@ describe("원문 시각·쉬는 시간", () => {
   it("식사를 기다리는 자유시간은 힘든 날 계산에서 뺀다", () => {
     const d = linearDay(2, [item("a", { stayMinutes: 300 }), item("f", { type: "free_time", stayMinutes: 200 }), item("b", { stayMinutes: 60 })]);
     expect(heavyReasons(d, {})).toEqual([]);
+  });
+});
+
+describe("일자별 재정렬 — 식사 자리 맞추기·가까운 순서", () => {
+  it("이른 점심은 뒤로(12:00 근처), 밤 일정은 저녁 뒤에", () => {
+    const d = linearDay(
+      1,
+      [
+        item("a", { name: "오행산", stayMinutes: 60, travelMinutesToNext: 30 }),
+        item("l", { type: "meal", name: "점심 식사", stayMinutes: 60, travelMinutesToNext: 30 }),
+        item("b", { name: "린응사", stayMinutes: 60, travelMinutesToNext: 30 }),
+        item("c", { name: "한 시장", stayMinutes: 60, travelMinutesToNext: 30 }),
+      ],
+      { meetingTime: "08:00" },
+    );
+    const r = slotMeals(d);
+    // 11:00(1시간 이름)보다 12:30(30분 늦음)이 12:00에 더 가깝다
+    expect(r.note).toBe("점심 09:30 → 12:30");
+    expect(r.day.items.filter((i) => !i.id.includes("-free-")).map((i) => i.id)).toEqual(["a", "b", "c", "l"]);
+  });
+
+  it("좌표로 가까운 곳부터 (식사는 제자리)", () => {
+    const at = (id: string, lat: number, lng: number) => item(id, { lat, lng, travelMinutesToNext: 30 });
+    const items = [at("far", 16.2, 108.3), at("near", 16.07, 108.22), at("mid", 16.12, 108.25), item("lunch", { type: "meal", name: "점심" })];
+    const out = nearestOrder([at("start", 16.06, 108.22), ...items]);
+    expect(out.map((i) => i.id)).toEqual(["start", "near", "mid", "far", "lunch"]);
   });
 });
