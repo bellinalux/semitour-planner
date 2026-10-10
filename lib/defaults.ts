@@ -1,4 +1,4 @@
-import type { Competitor, DiscountScenario, SalesChannel, ThemeId, TravelType, TripInput, TripScope } from "@/types";
+import type { Competitor, DiscountScenario, SalesChannel, ThemeId, TravelType, TripInput, TripScope, TripPace, Companion } from "@/types";
 
 export const THEMES: { id: ThemeId; label: string }[] = [
   { id: "history", label: "역사·문화" },
@@ -20,6 +20,21 @@ export const TRAVEL_TYPES: { id: TravelType; label: string; hint: string }[] = [
   { id: "honeymoon", label: "신혼여행", hint: "로맨틱한 명소·커플 액티비티 중심" },
   { id: "senior", label: "시니어투어", hint: "무리 없는 동선, 효도관광 인기 코스" },
   { id: "accessible", label: "장애인투어", hint: "휠체어 이용 편의시설(화장실·엘리베이터·경사로) 확인" },
+];
+
+export const PACES: { id: TripPace; label: string; hint: string }[] = [
+  { id: "relaxed", label: "여유", hint: "늦은 출발·반나절 자유를 넉넉히, 4박 이상이면 전일 자유 1일" },
+  { id: "normal", label: "보통", hint: "힘든 날 다음 날은 가볍게, 4박 이상이면 반나절 이상 자유 1번" },
+  { id: "packed", label: "알참", hint: "자유일 없이 관광 위주 (장거리 다음 날만 늦은 출발)" },
+];
+
+export const COMPANIONS: { id: Companion; label: string }[] = [
+  { id: "senior", label: "부모님·시니어" },
+  { id: "kids", label: "아이 동반" },
+  { id: "infant", label: "영유아" },
+  { id: "couple", label: "커플·신혼" },
+  { id: "friends", label: "친구" },
+  { id: "group", label: "단체·모임" },
 ];
 
 export const TRIP_SCOPES: { id: TripScope; label: string; hint: string }[] = [
@@ -45,6 +60,10 @@ export const DEFAULT_INPUT: TripInput = {
   notes: "",
   travelType: "semi",
   regionPlan: "",
+  pace: "normal",
+  companions: [],
+  mustHave: "",
+  avoid: "",
 
   currency: "KRW",
   exchangeRateToKrw: 1,

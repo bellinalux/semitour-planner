@@ -62,7 +62,7 @@ interface Props {
   travelers?: number;
   /** 국내(한국 방문 외국인 대상)/해외 여행. 추천일정 검색 대상 관광객을 정한다 */
   tripScope: TripScope;
-  researchInfo: { sources: SearchSource[]; researched: boolean };
+  researchInfo: { sources: SearchSource[]; researched: boolean; knowledge?: { city: string; places: number; researched: boolean }[] };
   pickupNote: string;
   sendingNote: string;
   /** 지역(도시)별로 선택한 숙소. 키는 그 지역 이름(일정의 overnightCity와 같은 문자열) */
@@ -219,6 +219,16 @@ export function ItineraryPanel({
         <div className="space-y-4">
           {meta && <MetaBanner meta={meta} />}
           <TravelTypeBanner travelType={travelType} researchInfo={researchInfo} />
+          {(researchInfo.knowledge ?? []).some((k) => k.places > 0) && (
+            <p role="note" aria-label="지식 창고" className="rounded-md bg-indigo-50 px-3 py-2 text-[11px] leading-4 text-indigo-900">
+              지식 창고 참고:{" "}
+              {(researchInfo.knowledge ?? [])
+                .filter((k) => k.places > 0)
+                .map((k) => `${k.city} ${k.places}곳${k.researched ? " (이번에 웹에서 새로 조사해 저장)" : ""}`)
+                .join(" · ")}
+              . 장소 옆 <b>근거</b>는 여행자 후기 인기·다른 여행사 포함·우리 고객 평가·현장 실측입니다.
+            </p>
+          )}
           <p className="flex items-start gap-1.5 rounded-md bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-500">
             <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
             입장료·식대·체류 시간은 AI 추정치입니다. &quot;입장료·체류시간 웹 확인&quot;으로 현지 통화 금액과 통상적인 체류 시간을 확인하고, 각 항목의 &quot;현지 지불(불포함)&quot; 버튼으로 고객이 현지에서 직접 내는 항목을 표시하세요. 금액·시간은 직접 수정할 수 있고, 수정하면 견적과 아래 소요 시간이 바로 다시 계산됩니다.

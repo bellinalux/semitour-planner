@@ -1,8 +1,9 @@
-import { DEFAULT_INPUT, TRAVEL_TYPES } from "@/lib/defaults";
+import { COMPANIONS, DEFAULT_INPUT, TRAVEL_TYPES } from "@/lib/defaults";
 import type { TripInput } from "@/types";
 import { isCostSource } from "@/lib/costSource";
 
 const TRAVEL_TYPE_IDS: Set<string> = new Set(TRAVEL_TYPES.map((t) => t.id));
+const COMPANION_IDS: Set<string> = new Set(COMPANIONS.map((c) => c.id));
 
 /**
  * 저장된(또는 파일에서 읽은) 입력값을 현재 TripInput 형태로 맞춘다.
@@ -33,6 +34,10 @@ export function normalizeInput(saved: unknown): TripInput {
     options: Array.isArray(s.options) ? s.options : DEFAULT_INPUT.options,
     travelAlert: typeof s.travelAlert === "object" && s.travelAlert !== null ? s.travelAlert : null,
     travelType: typeof s.travelType === "string" && TRAVEL_TYPE_IDS.has(s.travelType) ? s.travelType : DEFAULT_INPUT.travelType,
+    pace: s.pace === "relaxed" || s.pace === "packed" ? s.pace : "normal",
+    companions: Array.isArray(s.companions) ? s.companions.filter((c) => COMPANION_IDS.has(c)) : [],
+    mustHave: typeof s.mustHave === "string" ? s.mustHave.slice(0, 300) : "",
+    avoid: typeof s.avoid === "string" ? s.avoid.slice(0, 300) : "",
     tripScope: s.tripScope === "domestic" || s.tripScope === "overseas" ? s.tripScope : DEFAULT_INPUT.tripScope,
     channels: Array.isArray(s.channels)
       ? s.channels

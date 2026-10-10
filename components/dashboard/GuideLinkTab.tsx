@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { CopyButton } from "@/components/dashboard/CopyButton";
 import { postJson } from "@/lib/api";
-import { fieldReport, type GuideSheet, type GuideState } from "@/lib/guideSheet";
+import { fieldReport, fieldStays, type GuideSheet, type GuideState } from "@/lib/guideSheet";
 
 const LINKS_KEY = "semitour-planner:guideLinks";
 const readLinks = (): Record<string, string> => {
@@ -19,7 +19,7 @@ const readLinks = (): Record<string, string> => {
  * 가이드 링크·현장 기록 — 운영 지시서를 가이드 휴대폰용 링크로 만들고(같은 상품은 같은 링크), 가이드가 남긴 진행 체크·변경·사고 기록을
  * 불러와 현장 보고서로 복사한다. 명단은 "명단 포함"을 고를 때만 링크에 넣는다.
  */
-export function GuideLinkTab({ build, planKey }: { build: (withNames: boolean) => GuideSheet | null; planKey: string }) {
+export function GuideLinkTab({ build, planKey, city = "" }: { build: (withNames: boolean) => GuideSheet | null; planKey: string; city?: string }) {
   const [withNames, setWithNames] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -93,6 +93,26 @@ export function GuideLinkTab({ build, planKey }: { build: (withNames: boolean) =
               현장 기록 불러오기
             </button>
             {state && sheet && <CopyButton label="현장 보고서 복사" variant="secondary" disabled={false} getText={() => fieldReport(sheet, state)} />}
+            {state && sheet && city && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  const stays = fieldStays(sheet, state);
+                  const notes = state.logs.map((l) => ({ at: l.at, day: l.day ?? 0, type: l.type, text: l.text }));
+                  try {
+                    if (stays.length) await postJson("/api/knowledge/learn", { kind: "stays", city, stays });
+                    if (notes.length) await postJson("/api/knowledge/learn", { kind: "notes", city, notes });
+                    setMessage(stays.length + notes.length > 0 ? `지식 창고(${city})에 현장 실측 ${stays.length}곳·기록 ${notes.length}건을 반영했습니다. 다음 코스부터 이 시간을 씁니다.` : "반영할 현장 실측·기록이 아직 없습니다.");
+                  } catch (e) {
+                    setMessage(e instanceof Error ? e.message : "반영하지 못했습니다.");
+                  }
+                }}
+                className="rounded-md border border-indigo-300 bg-indigo-50 px-2.5 py-1 font-semibold text-indigo-800 hover:bg-indigo-100"
+              >
+                지식 창고에 반영
+              </button>
+            )}
           </div>
           {state && (
             <>

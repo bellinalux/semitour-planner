@@ -266,7 +266,7 @@ export function useCourseEngine({ days, pmChoice, destination, departureDate, tr
     try {
       // 브라우저 저장소 값이라 화면을 그린 뒤에 읽는다
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAutoCheckState(localStorage.getItem(AUTO_KEY) === "1");
+      setAutoCheckState(localStorage.getItem(AUTO_KEY) !== "0");
     } catch {
       // 무시
     }

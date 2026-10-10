@@ -24,6 +24,14 @@ import type {
 export type CityRegenState = Record<number, AsyncState>;
 
 /** 코스 붙여넣기에서 읽어낸 기간/도시 (입력 폼에 반영하는 데 쓴다) */
+/** 코스를 만들 때 참고한 지식 창고 (도시별) */
+export interface KnowledgeUse {
+  city: string;
+  places: number;
+  /** 이번에 웹에서 새로 조사했는지 */
+  researched: boolean;
+}
+
 export interface DetectedTrip {
   days: number;
   nights: number;
@@ -39,6 +47,8 @@ export interface GeneratedItinerary {
   sources: SearchSource[];
   /** 웹 검색 근거로 조사됐는지 (장애인투어는 이게 false면 이용 편의시설 정보를 화면에서 "확인 못함"으로 표시한다) */
   researched: boolean;
+  /** 참고한 지식 창고 (도시별 장소 수, 이번에 새로 조사했는지) */
+  knowledge?: KnowledgeUse[];
   /** 붙여넣은 업체 견적서에서 읽은 금액 (원문 통화). 요금이 없으면 null */
   supplierQuote: ParsedSupplierQuote | null;
 }
@@ -65,7 +75,7 @@ async function requestItinerary(
     };
   }
 
-  const { days, sources, researched } = await postJson<{ days: DayPlan[]; sources: SearchSource[]; researched: boolean }>(
+  const { days, sources, researched, knowledge } = await postJson<{ days: DayPlan[]; sources: SearchSource[]; researched: boolean; knowledge?: KnowledgeUse[] }>(
     "/api/generate-itinerary",
     {
       destination: input.destination,
@@ -77,6 +87,10 @@ async function requestItinerary(
       travelType: input.travelType,
       tripScope: input.tripScope,
       regionPlan: input.regionPlan,
+      pace: input.pace,
+      companions: input.companions,
+      mustHave: input.mustHave,
+      avoid: input.avoid,
       // 판매가·도매가에서 시작한 견적이면 예산 안의 명소·식당을 고르게 한다
       budgetNote: itineraryBudgetNote(input),
     },
@@ -88,6 +102,7 @@ async function requestItinerary(
     detected: null,
     sources,
     researched,
+    knowledge: knowledge ?? [],
     supplierQuote: null,
   };
 }
@@ -99,7 +114,7 @@ export function useItinerary() {
   const [pmChoice, setPmChoice] = useState<PmChoice>({});
   const [meta, setMeta] = useState<CourseMeta | null>(null);
   /** 여행 유형별 웹 조사 출처와, 실제로 검색을 실행했는지 */
-  const [researchInfo, setResearchInfo] = useState<{ sources: SearchSource[]; researched: boolean }>({
+  const [researchInfo, setResearchInfo] = useState<{ sources: SearchSource[]; researched: boolean; knowledge?: KnowledgeUse[] }>({
     sources: [],
     researched: false,
   });
@@ -124,7 +139,7 @@ export function useItinerary() {
       setDays(result.days);
       setPmChoice(choice);
       setMeta(result.meta);
-      setResearchInfo({ sources: result.sources, researched: result.researched });
+      setResearchInfo({ sources: result.sources, researched: result.researched, knowledge: result.knowledge ?? [] });
       setGeneratedCurrency(input.currency);
       setState({ status: "success" });
       return { ...result, pmChoice: choice };
@@ -238,6 +253,10 @@ export function useItinerary() {
           travelType: baseInput.travelType,
           tripScope: baseInput.tripScope,
           regionPlan: "",
+          pace: baseInput.pace,
+          companions: baseInput.companions,
+          mustHave: baseInput.mustHave,
+          avoid: baseInput.avoid,
         },
       );
       const replacement = new Map(sorted.map((dayNo, i) => [dayNo, newDays[i]]));

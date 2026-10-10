@@ -18,6 +18,11 @@ export const itineraryRequestSchema = z.object({
   regionPlan: z.string().max(300).default(""),
   /** 판매가·도매가에서 시작한 견적의 예산 안내 (1인 입장·체험 합계, 식사 1끼 수준). 비우면 예산 제한 없음 */
   budgetNote: z.string().trim().max(300).default(""),
+  /** 일정 강도 — 쉬는 날·늦은 출발을 얼마나 넣을지 */
+  pace: z.enum(["relaxed", "normal", "packed"]).default("normal"),
+  companions: z.array(z.enum(["senior", "kids", "infant", "couple", "friends", "group"])).max(6).default([]),
+  mustHave: z.string().max(300).default(""),
+  avoid: z.string().max(300).default(""),
 });
 
 export type ItineraryRequest = z.infer<typeof itineraryRequestSchema>;
@@ -52,15 +57,22 @@ const itemSchema = z.object({
     .describe("여행 유형이 accessible(장애인투어)일 때만 채웁니다. 그 외 유형이면 생략합니다."),
 });
 
+export const DAY_STYLES = ["semi", "full", "late", "pmfree", "free"] as const;
+
 const dayPlanSchema = z.object({
   day: z.number().describe("1부터 시작하는 일차"),
   theme: z.string().describe("그날의 한 줄 주제"),
+  style: z
+    .enum(DAY_STYLES)
+    .describe(
+      "그날 구성. semi: 오전 가이드(amGuided)+오후 반자유 A/B(pmFreeOptions) / full: 하루 전체 가이드 관광(fullDay) / late: 오전 자유(늦잠·호텔 휴식)+오후 관광(fullDay, 13:00 출발) / pmfree: 오전 관광+점심 뒤 오후 자유(fullDay) / free: 전일 자유(freeNote에 추천 활동)",
+    ),
   overnightCity: z
     .string()
     .describe(
       "그날 밤 숙박하는 도시 이름. 여러 도시를 도는 여행이면 도시가 바뀌는 날을 정확히 반영합니다(예: 로마 2일 다음 피렌체로 이동하면 그날부터 '피렌체'). 단일 도시 여행이면 매일 그 도시 이름을 씁니다.",
     ),
-  amGuided: z.array(itemSchema).min(2).max(4).describe("오전 가이드 투어 일정. 명소 2~3곳 + 마지막에 점심 식당 1곳"),
+  amGuided: z.array(itemSchema).max(4).describe("style이 semi일 때만: 오전 가이드 투어 일정. 명소 2~3곳 + 마지막에 점심 식당 1곳. 다른 style이면 빈 배열"),
   pmFreeOptions: z
     .array(
       z.object({
@@ -69,8 +81,13 @@ const dayPlanSchema = z.object({
         items: z.array(itemSchema).min(2).max(3).describe("오후 코스의 장소 2~3곳"),
       }),
     )
-    .length(2)
-    .describe("오후 반자유 일정: 고객이 하나를 고르는 추천 코스. 정확히 2개(id는 A, B)"),
+    .max(2)
+    .describe("style이 semi일 때만: 오후 반자유 일정, 고객이 하나를 고르는 추천 코스 정확히 2개(id는 A, B). 다른 style이면 빈 배열"),
+  fullDay: z
+    .array(itemSchema)
+    .max(8)
+    .describe("style이 full·late·pmfree일 때: 방문 순서대로 장소·식사 (full은 4~7곳, late는 오후 2~4곳, pmfree는 오전 2~3곳+점심). 다른 style이면 빈 배열"),
+  freeNote: z.string().describe("style이 free일 때: 자유일에 고객이 할 만한 활동·선택관광 추천 2~3가지 (한두 문장). 아니면 빈 문자열"),
 });
 
 export const itineraryResponseSchema = z.object({
@@ -97,31 +114,50 @@ function toItem(raw: RawItem, id: string, isLast: boolean): ItineraryItem {
   };
 }
 
-/** 검증된 LLM 응답을 앱 내부 타입(DayPlan[])으로 변환한다. id 부여, 마지막 장소 이동시간 null 처리. */
+/** 쉬는 날 항목 (자유시간) */
+function freeItem(id: string, name: string, minutes: number, description: string): ItineraryItem {
+  return { id, type: "free_time", admission: "none", name, description, stayMinutes: minutes, travelMinutesToNext: 0, entryFee: 0, mealCost: 0, isEstimated: false };
+}
+
+/** 하루 전체를 순서대로 둔 날 (full·late·pmfree·free) */
+function linearDay(base: Pick<DayPlan, "day" | "theme" | "overnightCity">, items: ItineraryItem[], extra: Partial<DayPlan> = {}): DayPlan {
+  return { ...base, kind: "linear", items, amGuided: [], pmFreeOptions: [], ...extra };
+}
+
+/**
+ * 검증된 LLM 응답을 앱 내부 타입(DayPlan[])으로 변환한다. id 부여, 마지막 장소 이동시간 null 처리.
+ * 날 구성(style): semi는 오전 가이드+오후 A/B, 나머지는 하루를 순서대로 둔 날(linear)로 —
+ * late는 13:00 출발(오전 자유), pmfree는 점심 뒤 오후 자유시간, free는 전일 자유일정 한 줄.
+ * 모델이 style과 다른 칸을 채웠으면 채운 칸을 따른다.
+ */
 export function toDayPlans(
   parsed: z.infer<typeof itineraryResponseSchema>,
   expectedDays: number,
 ): DayPlan[] {
-  return parsed.days
-    .slice(0, expectedDays)
-    .map((day, index) => {
-      const dayNo = index + 1;
+  return parsed.days.slice(0, expectedDays).map((day, index) => {
+    const dayNo = index + 1;
+    const base = { day: dayNo, theme: day.theme.trim(), overnightCity: day.overnightCity.trim() || undefined };
+    const list = (raw: RawItem[], prefix: string) => raw.map((item, i) => toItem(item, `d${dayNo}-${prefix}-${i + 1}`, i === raw.length - 1));
+    const full = day.fullDay ?? [];
+    const style = day.style ?? "semi";
+    if (style === "free" || (style !== "semi" && full.length === 0 && day.amGuided.length === 0)) {
+      return linearDay(base, [freeItem(`d${dayNo}-free`, "전일 자유일정", 480, day.freeNote?.trim() || "가이드·차량 없이 자유롭게 보내는 날입니다.")], { rest: "free" });
+    }
+    if (style === "semi" && day.amGuided.length > 0 && day.pmFreeOptions.length >= 2) {
       return {
-        day: dayNo,
-        theme: day.theme.trim(),
-        overnightCity: day.overnightCity.trim() || undefined,
+        ...base,
         kind: "semi" as const,
         items: [],
-        amGuided: day.amGuided.map((item, i) =>
-          toItem(item, `d${dayNo}-am-${i + 1}`, i === day.amGuided.length - 1),
-        ),
-        pmFreeOptions: day.pmFreeOptions.map((option) => ({
-          id: option.id,
-          title: option.title.trim(),
-          items: option.items.map((item, i) =>
-            toItem(item, `d${dayNo}-pm${option.id}-${i + 1}`, i === option.items.length - 1),
-          ),
-        })),
+        amGuided: list(day.amGuided, "am"),
+        pmFreeOptions: day.pmFreeOptions.map((option) => ({ id: option.id, title: option.title.trim(), items: list(option.items, `pm${option.id}`) })),
       };
-    });
+    }
+    const items = list(full.length > 0 ? full : [...day.amGuided, ...(day.pmFreeOptions[0]?.items ?? [])], "it");
+    if (style === "late") return linearDay(base, items, { meetingTime: "13:00", rest: "late" });
+    if (style === "pmfree") {
+      const last = items[items.length - 1];
+      return linearDay(base, [...items.slice(0, -1), ...(last ? [{ ...last, travelMinutesToNext: 10 }] : []), freeItem(`d${dayNo}-pmfree`, "오후 자유시간", 210, "호텔 휴식 또는 개별 관광 (가이드·차량 없음)")], { rest: "pmfree" });
+    }
+    return linearDay(base, items);
+  });
 }

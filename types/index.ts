@@ -25,6 +25,10 @@ export type ThemeId =
  * senior: 무리 없는 동선·효도관광 인기 코스 / accessible: 휠체어 이용 편의시설 확인
  */
 export type TravelType = "semi" | "package" | "honeymoon" | "senior" | "accessible";
+/** 일정 강도 — 여유(쉬는 날·늦은 출발 넉넉히) / 보통 / 알참(자유일 없이) */
+export type TripPace = "relaxed" | "normal" | "packed";
+/** 동반자 유형 — 일정의 걷는 양·쉬는 시간·식사를 맞춘다 */
+export type Companion = "senior" | "kids" | "infant" | "couple" | "friends" | "group";
 
 /** 국내여행/해외여행 구분. 하루 일정이 19:00 전에 끝나야 한다는 기준 등 일정 검증과 추천 검색 범위에 쓴다 */
 export type TripScope = "domestic" | "overseas";
@@ -237,6 +241,13 @@ export interface TripInput {
   travelType: TravelType;
   /** 사용자가 직접 지정한 방문 도시 순서·일수 (mode === "ai"일 때만 사용, 선택). 예: "로마 2일, 피렌체 2일, 베니스 2일". 비우면 AI가 알아서 도시를 구성한다 */
   regionPlan: string;
+  /** 일정 강도 (AI 일정·쉬는 날 제안에 쓴다) */
+  pace: TripPace;
+  /** 동반자 (여러 개) */
+  companions: Companion[];
+  /** 꼭 넣고 싶은 것 / 피하고 싶은 것 (고객 요청, 한 줄씩 자유롭게) */
+  mustHave: string;
+  avoid: string;
 
   currency: CurrencyCode;
   /** 1 견적통화 = ? KRW (KRW 선택 시 사용하지 않음) */
@@ -482,6 +493,8 @@ export interface ItineraryItem {
   lng?: number;
   /** 좌표를 사람이 지도에서 고쳤으면 true — 코스 점검이 덮어쓰지 않는다 */
   coordEdited?: boolean;
+  /** 지식 창고 근거 — 이 장소를 넣은 이유 (예: "인기 2위 · 여행사 3곳 포함 · 우리 고객 추천 4") */
+  reason?: string;
   /** 현지 통화로 확인한 입장·체험 요금 (웹 확인 결과). 견적 통화와 다를 수 있다 */
   local?: { currency: CurrencyCode; amount: number };
   /** 입장료 웹 확인 결과 */
@@ -591,7 +604,14 @@ export interface DayPlan {
    * (미팅 시각 = 호텔 로비, 첫 장소 도착 = 미팅 + 이동). 0이면 이동 없음.
    */
   hotelLeadMinutes?: number;
+  /**
+   * 일부러 가볍게 둔 날 — late: 오전 자유·오후 관광 / pmfree: 오전 관광·오후 자유 / free: 전일 자유.
+   * 빈 시간 채우기·날짜 사이 옮기기·지역 묶기가 이 날을 다시 채우지 않는다.
+   */
+  rest?: RestKind;
 }
+
+export type RestKind = "late" | "pmfree" | "free";
 
 /** 붙여넣은 코스에서 읽은 상품 정보 */
 /** 업체 견적서에서 읽은 금액 (원문 통화 그대로, 앱 통화로 바꾼 값은 pricePerPerson) */

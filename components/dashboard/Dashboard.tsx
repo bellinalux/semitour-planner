@@ -20,6 +20,7 @@ import { ExportBar } from "./ExportBar";
 import { DocumentBar } from "./DocumentBar";
 import { ShareLinkBox } from "./ShareLinkBox";
 import { CourseMapPanel } from "./CourseMapPanel";
+import { PacePanel } from "./PacePanel";
 import { CustomerNoticeBox } from "./CustomerNoticeBox";
 import { OpsPanel } from "./OpsPanel";
 import { VersionPanel } from "./VersionPanel";
@@ -117,6 +118,8 @@ interface Props {
   onReplaceDays?: (days: DayPlan[]) => void;
   /** 코스 지도 · 지역 묶기 — 다시 나눈 안 적용 (되돌리기 기록) */
   onRegroupDays?: (days: DayPlan[]) => void;
+  /** 일정 강도 — 쉬는 날 제안 적용 (되돌리기 기록) */
+  onPaceDays?: (days: DayPlan[]) => void;
   /** 견적 경고에서 입력 화면의 해당 폴더로 이동한다 */
   onOpenSettings: (section: SettingsSection) => void;
   /** 견적 경고에서 바로 실행하는 자동 견적 */
@@ -153,6 +156,7 @@ export function Dashboard({
   onInputChange,
   onReplaceDays,
   onRegroupDays,
+  onPaceDays,
   onOpenSettings,
   autoQuote,
   budgetFit,
@@ -191,6 +195,7 @@ export function Dashboard({
       {itinerary.status === "success" && days.length > 0 && onRegroupDays && (
         <CourseMapPanel days={days} pmChoice={pmChoice} onApply={onRegroupDays} onChangeItem={itemActions.onChangeItem} />
       )}
+      {itinerary.status === "success" && days.length > 1 && onPaceDays && <PacePanel days={days} pmChoice={pmChoice} pace={input.pace} needs={input} onApply={onPaceDays} />}
       {itinerary.status === "success" && days.length > 0 && (
         <TourCatalogPanel
           input={input}

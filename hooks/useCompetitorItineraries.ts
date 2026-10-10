@@ -1,5 +1,7 @@
 "use client";
 
+import { citiesOf } from "@/lib/knowledge";
+import { postJson } from "@/lib/api";
 import { createContext, useEffect, useRef, useState } from "react";
 import { fetchCompetitorItinerary } from "@/lib/competitorSearch";
 import type { TripInput } from "@/types";
@@ -38,7 +40,13 @@ export function useCompetitorItineraries(input: TripInput, update: (patch: Parti
         setRunning((r) => [...r, target.id]);
         try {
           const itinerary = await fetchCompetitorItinerary(target, latest.current);
-          if (itinerary.found) found += 1;
+          if (itinerary.found) {
+            found += 1;
+            // 다른 여행사 상품 일정은 지식 창고에도 쌓는다 (장소마다 여행사·하루 코스)
+            const city = citiesOf(latest.current.destination)[0];
+            if (city)
+              void postJson("/api/knowledge/learn", { kind: "competitor", city, agency: target.source?.agency || target.name.split(" ")[0] || "다른 여행사", title: target.name, days: itinerary.days.map((d) => d.places) }).catch(() => undefined);
+          }
           // 그사이 바뀐 경쟁사 목록에 이 상품 일정만 붙인다
           const next = latest.current.competitors.map((x) => (x.id === target.id ? { ...x, itinerary } : x));
           latest.current = { ...latest.current, competitors: next };

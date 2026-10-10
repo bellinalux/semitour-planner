@@ -234,6 +234,8 @@ export function dayTable(
   // 호텔에서 미팅하고 첫 장소로 이동하는 날: 미팅 줄 + 이동 줄을 먼저 (첫 장소 시각 = 미팅 + 이동)
   const lead = hotelLeadMinutes(day);
   const meetingKnown = Boolean(day.meetingTime?.trim());
+  // 일부러 늦게 출발하는 날(오전 자유)은 미팅 앞에 한 줄
+  if (day.rest === "late") rows.push({ key: "rest-late", kind: "label", label: "오전 자유 (호텔 휴식·개별 시간)", ...blank });
   if (lead > 0) {
     rows.push({ key: "meeting", kind: "meeting", ...blank, transport: opts.vehicle ? "vehicle" : "", start: dayMeetingTime(day), end: dayMeetingTime(day), keyTime: true, afterBreakfast: !meetingKnown });
     rows.push({ key: "meeting-move", kind: "move", minutes: lead, ...blank });

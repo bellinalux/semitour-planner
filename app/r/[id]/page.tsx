@@ -24,7 +24,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
         <h1 className="text-balance text-lg font-bold text-slate-900">{link.title}</h1>
         <p className="text-pretty text-slate-600">함께해 주셔서 감사합니다. 여행은 어떠셨나요? 남겨 주신 의견은 다음 여행을 더 좋게 만드는 데 씁니다.</p>
       </header>
-      <ReviewForm id={id} />
+      <ReviewForm id={id} places={link.places ?? []} />
     </main>
   );
 }

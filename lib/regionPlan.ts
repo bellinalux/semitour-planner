@@ -235,7 +235,7 @@ export function planRegions(days: DayPlan[], pmChoice: PmChoice): RegionPlan {
     // 받는 날: 옮긴 뒤에도 여유가 가장 많이 남는 날 (날마다 부담이 고르게) — 같으면 그 지역을 오래 도는 날.
     // 마지막 날 항공일은 받지 않는다
     const options = cur()
-      .filter((d) => !(d.day === days[days.length - 1].day && hasFlight(d)))
+      .filter((d) => !d.rest && !(d.day === days[days.length - 1].day && hasFlight(d)))
       .map((target) => {
         const sources = cur().filter((d) => d.day !== target.day);
         const need = sources.reduce((s, d) => s + blockMinutes(inRegion(d)), 0);

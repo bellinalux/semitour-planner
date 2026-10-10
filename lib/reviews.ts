@@ -16,6 +16,9 @@ export const reviewSchema = z.object({
   scores: z.object({ course: z.number().int().min(0).max(5), guide: z.number().int().min(0).max(5), meal: z.number().int().min(0).max(5), hotel: z.number().int().min(0).max(5) }).partial().default({}),
   comment: z.string().trim().max(500).default(""),
   name: z.string().trim().max(30).default(""),
+  /** 가장 좋았던 곳·아쉬웠던 곳 (링크에 담긴 일정 장소 중에서, 각 3곳까지) */
+  best: z.array(z.string().trim().max(80)).max(3).optional(),
+  worst: z.array(z.string().trim().max(80)).max(3).optional(),
 });
 export type ReviewInput = z.infer<typeof reviewSchema>;
 export interface Review extends ReviewInput {
@@ -26,6 +29,9 @@ export const reviewLinkSchema = z.object({
   title: z.string().trim().min(1).max(120),
   planName: z.string().trim().max(120).default(""),
   company: z.string().trim().max(80).default(""),
+  /** 일정 도시·장소 — 고객이 좋았던 곳을 고르고, 지식 창고가 배운다 */
+  city: z.string().trim().max(60).optional(),
+  places: z.array(z.string().trim().max(80)).max(40).optional(),
 });
 export type ReviewLink = z.infer<typeof reviewLinkSchema> & { createdAt: string };
 

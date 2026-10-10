@@ -56,6 +56,9 @@ export interface Booking {
   planName: string;
   memo: string;
   history: BookingHistory[];
+  /** 연결한 일정의 도시·장소 (지식 창고 학습: 성약·후기) */
+  city?: string;
+  places?: string[];
 }
 
 const CURRENCIES: CurrencyCode[] = ["KRW", "USD", "EUR", "JPY", "GBP", "CNY", "THB", "VND", "SGD", "AUD"];
@@ -100,6 +103,8 @@ export function parseBooking(v: unknown): Booking | null {
     planName: str(o.planName, 100),
     memo: str(o.memo, 2000),
     history,
+    ...(str(o.city, 60) ? { city: str(o.city, 60) } : {}),
+    ...(Array.isArray(o.places) ? { places: (o.places as unknown[]).map((p) => str(p, 80)).filter(Boolean).slice(0, 40) } : {}),
   };
 }
 

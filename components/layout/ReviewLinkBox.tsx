@@ -29,7 +29,24 @@ export function useReviewSummaries(ids: string[]): ReviewSummary[] {
 /**
  * 예약 편집의 고객 만족도 — 귀국 뒤 보낼 후기 링크를 만들어 메모에 남기고(팀이 함께 봄), 받은 별점·항목 점수·한마디를 보여 준다.
  */
-export function ReviewLinkBox({ memo, title, planName, company, onAppendMemo }: { memo: string; title: string; planName: string; company: string; onAppendMemo: (line: string) => void }) {
+export function ReviewLinkBox({
+  memo,
+  title,
+  planName,
+  company,
+  city = "",
+  places = [],
+  onAppendMemo,
+}: {
+  memo: string;
+  title: string;
+  planName: string;
+  company: string;
+  /** 후기에서 "좋았던 곳·아쉬운 곳"을 고르게 할 일정 장소 (지식 창고 학습) */
+  city?: string;
+  places?: string[];
+  onAppendMemo: (line: string) => void;
+}) {
   const ids = reviewIdsIn(memo);
   const summaries = useReviewSummaries(ids);
   const [error, setError] = useState("");
@@ -38,7 +55,7 @@ export function ReviewLinkBox({ memo, title, planName, company, onAppendMemo }: 
     setBusy(true);
     setError("");
     try {
-      const r = await postJson<{ path: string }>("/api/review-link", { title: title || "여행 후기", planName, company });
+      const r = await postJson<{ path: string }>("/api/review-link", { title: title || "여행 후기", planName, company, city, places });
       onAppendMemo(`후기 링크: ${window.location.origin}${r.path}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "링크를 만들지 못했습니다.");

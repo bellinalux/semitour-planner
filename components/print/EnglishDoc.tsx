@@ -233,7 +233,7 @@ export function EnglishDoc({ input, days, pmChoice, quote, meta, company, transl
                         </>
                       )}
                       {r.kind === "meeting" && <span className="font-medium">{L.hotelMeeting}</span>}
-                      {r.kind === "label" && <b className="text-slate-700">{r.label?.startsWith("오전") ? L.morning : L.afternoon}</b>}
+                      {r.kind === "label" && <b className="text-slate-700">{r.key === "rest-late" ? L.morningFree : r.label?.startsWith("오전") ? L.morning : L.afternoon}</b>}
                       {r.kind === "move" && (
                         <span className="text-slate-400">
                           ↓ {r.moveName ? t(r.moveName) : vehicle ? L.vehicle : L.transfer}

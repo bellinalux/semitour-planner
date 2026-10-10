@@ -1,6 +1,8 @@
 import { REVIEW_ID, reviewSchema } from "@/lib/reviews";
 import { allowPublicWrite } from "@/lib/server/rateLimit";
-import { addReview } from "@/lib/server/reviewStore";
+import { learnVotes } from "@/lib/knowledge";
+import { updateCity } from "@/lib/server/knowledgeStore";
+import { addReview, reviewLinkInfo } from "@/lib/server/reviewStore";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -20,9 +22,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const parsed = reviewSchema.safeParse(body);
   if (!parsed.success) return errorResponse("BAD_REQUEST", "별점을 골라 주세요.", 400);
   try {
-    const r = await addReview(id, { ...parsed.data, at: new Date().toISOString() });
+    const link = await reviewLinkInfo(id);
+    // 좋았던 곳·아쉬운 곳은 링크에 담긴 일정 장소 중에서만 받는다
+    const allowed = new Set(link?.places ?? []);
+    const best = (parsed.data.best ?? []).filter((p) => allowed.has(p));
+    const worst = (parsed.data.worst ?? []).filter((p) => allowed.has(p) && !best.includes(p));
+    const r = await addReview(id, { ...parsed.data, best, worst, at: new Date().toISOString() });
     if (r === "missing") return errorResponse("NOT_FOUND", "링크가 만료되었거나 잘못되었습니다.", 404);
     if (r === "full") return errorResponse("FULL", "이 링크는 더 이상 후기를 받지 않습니다.", 409);
+    // 지식 창고에 배운다 (실패해도 후기는 저장됨)
+    if (link?.city && best.length + worst.length > 0) await updateCity(link.city, (d) => learnVotes(d, best, worst)).catch(() => undefined);
     return Response.json({ ok: true });
   } catch (err) {
     console.error("[review]", err);

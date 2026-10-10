@@ -50,6 +50,9 @@ import { englishTexts } from "@/lib/englishDoc";
 import type { DocLang } from "@/lib/foreignDoc";
 import { departureNotice } from "@/lib/departureNotice";
 import { buildGuideSheet } from "@/lib/guideSheet";
+import { citiesOf, coursePlaces } from "@/lib/knowledge";
+import { useKnowledgeEdits } from "@/hooks/useKnowledgeEdits";
+import { KnowledgeMenu } from "@/components/layout/KnowledgeMenu";
 import { addVersion, loadVersions, makeVersion, versionKey, type QuoteVersion } from "@/lib/quoteVersions";
 import { packingList, packingText } from "@/lib/packingList";
 import type { TravelInfo } from "@/lib/schemas/travelInfo";
@@ -316,6 +319,9 @@ export function PlannerApp() {
   const dayTimeCheck = useDayTimeCheck({ input, days, pmChoice, replaceDays: history.labeled("일정 시간 검증") });
 
   // 코스 엔진 점검 — 점검 상자·일정 카드 점수 배지·요약·추천이 같이 쓴다. 자동 점검을 켜면 코스를 만든 뒤 긴 날 시간 검증 → 엔진 점검
+  // 직원 수정(뺀 곳·넣은 곳)을 지식 창고에 배운다
+  const knowledgeEdits = useKnowledgeEdits(citiesOf(input.destination)[0] ?? "");
+
   const courseEngine = useCourseEngine({
     days,
     pmChoice,
@@ -542,7 +548,9 @@ export function PlannerApp() {
                 update(patch);
                 setTab("input");
               }}
-              draftFromQuote={() => (quote?.ok ? { ...bookingFromQuote(input, documentQuote(quote, input)), planName: suggestPlanName(input, meta) } : null)}
+              draftFromQuote={() =>
+                quote?.ok ? { ...bookingFromQuote(input, documentQuote(quote, input)), planName: suggestPlanName(input, meta), city: citiesOf(input.destination)[0] ?? "", places: coursePlaces(days, pmChoice) } : null
+              }
               buttonClassName="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 [&>span]:hidden sm:[&>span]:inline"
             />
             <DayTourMenu
@@ -560,6 +568,7 @@ export function PlannerApp() {
               <InstallApp />
               <CompanySettings {...companyProfile} />
               <HistoryMenu log={quoteLog} teamSync={teamSync} />
+              <KnowledgeMenu defaultCity={citiesOf(input.destination)[0] ?? ""} travelType={input.travelType} tripScope={input.tripScope} />
               <SendToTourdesign getProduct={getProduct} />
               <FeedbackButton where={`${feedbackStage} 단계 · ${tab} 탭`} />
               <ErrorLogMenu />
@@ -630,15 +639,24 @@ export function PlannerApp() {
             onInputChange={update}
             onReplaceDays={history.labeled("가격 낮추기")}
             onRegroupDays={history.labeled("지역 묶기")}
+            onPaceDays={history.labeled("쉬는 날")}
             onOpenSettings={openSettings}
             autoQuote={{ running: autoQuote.running, run: () => void autoQuote.run() }}
             budgetFit={budgetFit}
             itemActions={{
               onChangeItem: itinerary.updateItem,
               onChangeDay: itinerary.updateDay,
-              onDeleteItem: itinerary.deleteItem,
+              onDeleteItem: (itemId) => {
+                // AI가 넣은 장소를 직원이 지우면 지식 창고에 "뺀 곳"으로 배운다
+                const it = days.flatMap((d) => [...d.items, ...d.amGuided, ...d.pmFreeOptions.flatMap((o) => o.items)]).find((i) => i.id === itemId);
+                if (it?.isEstimated && !["flight", "transfer", "hotel", "free_time", "meal"].includes(it.type ?? "sightseeing")) knowledgeEdits.removed(it.name);
+                itinerary.deleteItem(itemId);
+              },
               onAddItem: itinerary.addItem,
-              onAddTour: itinerary.addTour,
+              onAddTour: (dayNo, slot, item) => {
+                knowledgeEdits.added(item.name);
+                itinerary.addTour(dayNo, slot, item);
+              },
               onMoveItem: itinerary.moveItemOrder,
               onRelocateItem: itinerary.relocate,
               onReorderItems: itinerary.reorderSessionItems,
@@ -672,7 +690,7 @@ export function PlannerApp() {
               onGenerate: handleGenerateUsp,
             }}
             exporter={exporter}
-            ops={{ ...ops, guide: { planKey, build: (withNames) => (docData ? buildGuideSheet(docData, withNames ? ops.data.participants : []) : null) } }}
+            ops={{ ...ops, guide: { planKey, city: citiesOf(input.destination)[0] ?? "", build: (withNames) => (docData ? buildGuideSheet(docData, withNames ? ops.data.participants : []) : null) } }}
             versions={{ versions, currency: input.currency, customer: input.customerName.trim(), onSaveNow: () => saveVersion("직접 저장") }}
             notice={{
               buildNotice: async () => (docData ? departureNotice(docData, await ensureTravelInfo(), season.result) : null),

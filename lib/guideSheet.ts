@@ -142,3 +142,42 @@ export function fieldReport(sheet: Pick<GuideSheet, "title" | "period">, state: 
         })),
   ].join("\n");
 }
+
+/** "1시간 30분" → 90 */
+function minutesIn(text: string): number {
+  const h = /(\d+)\s*시간/.exec(text);
+  const m = /(\d+)\s*분/.exec(text);
+  return (h ? Number(h[1]) * 60 : 0) + (m ? Number(m[1]) : 0);
+}
+
+/**
+ * 현장 실측 체류 — 가이드가 체크한 시각 사이(앞 장소 체크 → 이 장소 체크)에서 그 사이 이동 시간(일정표 값)을 빼서 잰다.
+ * 10분~10시간 사이만 (빠뜨렸다가 몰아서 체크한 것은 뺀다). 장소 이름의 [입장]·[하차] 표시는 지운다.
+ */
+export function fieldStays(sheet: Pick<GuideSheet, "days">, state: Pick<GuideState, "progress">): { name: string; minutes: number }[] {
+  const out: { name: string; minutes: number }[] = [];
+  for (const day of sheet.days) {
+    let last: number | null = null;
+    let travel = 0;
+    for (const r of day.rows) {
+      if (r.move) {
+        travel += minutesIn(r.title);
+        continue;
+      }
+      const at = state.progress[`${day.day}:${r.key}`];
+      const t = at ? new Date(at).getTime() : NaN;
+      if (!Number.isFinite(t)) {
+        last = null;
+        travel = 0;
+        continue;
+      }
+      if (last !== null && !/미팅|자유일정/.test(r.title)) {
+        const stay = Math.round((t - last) / 60_000) - travel;
+        if (stay >= 10 && stay <= 600) out.push({ name: r.title.replace(/\s*\[[^\]]*\]\s*$/, "").trim(), minutes: stay });
+      }
+      last = t;
+      travel = 0;
+    }
+  }
+  return out;
+}

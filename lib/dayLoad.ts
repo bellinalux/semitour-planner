@@ -39,7 +39,7 @@ export function dayTourStart(day: Pick<DayPlan, "day" | "kind" | "items" | "amGu
 }
 
 /** "HH:mm"을 자정 기준 분으로. 형식이 이상하면 null. */
-function parseClock(time: string): number | null {
+export function parseClock(time: string): number | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
   if (!m) return null;
   const minutes = Number(m[1]) * 60 + Number(m[2]);
@@ -206,7 +206,8 @@ export interface DayGap {
  * 마지막 날(귀국·체크아웃일)은 대상에서 제외한다 — 출국 준비 시간이 필요해 일정을 더 채우면 안 된다.
  */
 export function calcDayGap(day: DayPlan, pmChoice: PmChoice, isLastDay: boolean): DayGap | null {
-  if (day.kind !== "linear" || isLastDay) return null;
+  // 일부러 쉬게 둔 날(오전·오후·전일 자유)은 채우지 않는다
+  if (day.kind !== "linear" || isLastDay || day.rest) return null;
   const endMinutes = timelineEndMinutes(dayItems(day, pmChoice), dayTourStart(day)) ?? parseClock(dayMeetingTime(day));
   if (endMinutes === null) return null;
   const freeMinutes = DAY_FILL_TARGET_END_MINUTES - endMinutes;

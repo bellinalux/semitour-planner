@@ -24,7 +24,35 @@ function Stars({ label, value, onChange, big }: { label: string; value: number; 
 }
 
 /** 후기 보내기 — 전체 별점(필수)과 항목별 점수·한마디(선택) */
-export function ReviewForm({ id }: { id: string }) {
+/** 장소 고르기 (3곳까지) */
+function PlacePicker({ label, places, value, onChange, disabled }: { label: string; places: string[]; value: string[]; onChange: (v: string[]) => void; disabled: string[] }) {
+  return (
+    <fieldset className="space-y-1">
+      <legend className="text-xs text-slate-600">{label}</legend>
+      <div className="flex flex-wrap gap-1.5">
+        {places.map((p) => {
+          const on = value.includes(p);
+          return (
+            <button
+              key={p}
+              type="button"
+              aria-pressed={on}
+              disabled={!on && (value.length >= 3 || disabled.includes(p))}
+              onClick={() => onChange(on ? value.filter((x) => x !== p) : [...value, p])}
+              className={`rounded-full border px-2.5 py-1 text-xs disabled:opacity-40 ${on ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 text-slate-600"}`}
+            >
+              {p}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+export function ReviewForm({ id, places = [] }: { id: string; places?: string[] }) {
+  const [best, setBest] = useState<string[]>([]);
+  const [worst, setWorst] = useState<string[]>([]);
   const [rating, setRating] = useState(0);
   const [scores, setScores] = useState<Partial<Record<(typeof SCORE_KEYS)[number], number>>>({});
   const [comment, setComment] = useState("");
@@ -35,7 +63,7 @@ export function ReviewForm({ id }: { id: string }) {
     if (rating === 0) return setState({ status: "error", message: "전체 별점을 골라 주세요." });
     setState({ status: "sending" });
     try {
-      const r = await fetch(`/api/review/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating, scores, comment, name }) });
+      const r = await fetch(`/api/review/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating, scores, comment, name, best, worst }) });
       if (!r.ok) {
         const j = (await r.json().catch(() => null)) as { error?: { message?: string } } | null;
         return setState({ status: "error", message: j?.error?.message ?? "보내지 못했습니다." });
@@ -67,6 +95,12 @@ export function ReviewForm({ id }: { id: string }) {
           </div>
         ))}
       </div>
+      {places.length > 0 && (
+        <>
+          <PlacePicker label="가장 좋았던 곳 (3곳까지, 선택)" places={places} value={best} onChange={setBest} disabled={worst} />
+          <PlacePicker label="아쉬웠던 곳 (3곳까지, 선택)" places={places} value={worst} onChange={setWorst} disabled={best} />
+        </>
+      )}
       <label className="block space-y-1">
         <span className="text-xs text-slate-600">좋았던 점·아쉬웠던 점 (선택)</span>
         <textarea value={comment} onChange={(e) => setComment(e.target.value.slice(0, 500))} rows={4} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />

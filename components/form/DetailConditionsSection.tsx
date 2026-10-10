@@ -3,8 +3,8 @@ import { ChipToggle } from "@/components/ui/ChipToggle";
 import { Field } from "@/components/ui/Field";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { TextField } from "@/components/ui/TextField";
-import { THEMES, TRAVEL_TYPES } from "@/lib/defaults";
-import type { ThemeId, TravelType } from "@/types";
+import { COMPANIONS, PACES, THEMES, TRAVEL_TYPES } from "@/lib/defaults";
+import type { Companion, ThemeId, TravelType } from "@/types";
 import type { SectionProps } from "./types";
 
 /** 고급: AI가 일정을 만들 때 참고할 상세 조건 — 여행 유형, 방문 지역 순서, 선호 테마, 추가 요청사항 */
@@ -12,6 +12,8 @@ export function DetailConditionsSection({ input, onChange }: SectionProps) {
   const travelTypeLabel = TRAVEL_TYPES.find((t) => t.id === input.travelType)?.label ?? "";
   const summary = [
     travelTypeLabel,
+    `강도 ${PACES.find((p) => p.id === input.pace)?.label ?? "보통"}`,
+    input.companions.length > 0 ? COMPANIONS.filter((c) => input.companions.includes(c.id)).map((c) => c.label).join("·") : "",
     input.themes.length > 0 ? `테마 ${input.themes.length}개` : "",
     input.regionPlan.trim() ? "지역 순서 지정" : "",
     input.notes.trim() ? "요청사항 있음" : "",
@@ -19,6 +21,7 @@ export function DetailConditionsSection({ input, onChange }: SectionProps) {
     .filter(Boolean)
     .join(" · ");
 
+  const toggleCompanion = (id: Companion) => onChange({ companions: input.companions.includes(id) ? input.companions.filter((c) => c !== id) : [...input.companions, id] });
   const toggleTheme = (id: ThemeId) => onChange({ themes: input.themes.includes(id) ? input.themes.filter((t) => t !== id) : [...input.themes, id] });
 
   return (
@@ -51,6 +54,34 @@ export function DetailConditionsSection({ input, onChange }: SectionProps) {
             ))}
           </div>
         </Field>
+
+        <Field htmlFor="pace" label="일정 강도" hint="힘든 날(장거리·긴 하루) 다음 날은 늦은 출발·반나절 자유로 가볍게 합니다">
+          <div id="pace" role="radiogroup" aria-label="일정 강도" className="grid grid-cols-3 gap-1.5">
+            {PACES.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                role="radio"
+                aria-checked={input.pace === p.id}
+                onClick={() => onChange({ pace: p.id })}
+                className={`rounded-md border px-2 py-1.5 text-left ${input.pace === p.id ? "border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600" : "border-slate-200 bg-white hover:border-indigo-300"}`}
+              >
+                <span className="block text-xs font-semibold text-slate-800">{p.label}</span>
+                <span className="mt-0.5 block text-pretty text-[10.5px] leading-4 text-slate-500">{p.hint}</span>
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field htmlFor="companions" label="동반자" hint="걷는 양·쉬는 시간·식사를 맞춥니다 (여러 개)">
+          <div id="companions" className="flex flex-wrap gap-1.5">
+            {COMPANIONS.map((c) => (
+              <ChipToggle key={c.id} label={c.label} selected={input.companions.includes(c.id)} onToggle={() => toggleCompanion(c.id)} />
+            ))}
+          </div>
+        </Field>
+        <TextField id="mustHave" label="꼭 넣고 싶은 것 (선택)" value={input.mustHave} placeholder="예) 바나힐 골든브릿지, 야시장, 한식 1번" onChange={(mustHave) => onChange({ mustHave: mustHave.slice(0, 300) })} />
+        <TextField id="avoid" label="피하고 싶은 것 (선택)" value={input.avoid} placeholder="예) 쇼핑센터, 긴 도보, 해산물" onChange={(avoid) => onChange({ avoid: avoid.slice(0, 300) })} />
 
         <TextField
           id="regionPlan"

@@ -7,6 +7,7 @@ import {
   needsItineraryResearch,
 } from "@/lib/server/itineraryPrompt";
 import { guardRequest } from "@/lib/server/guard";
+import { annotateReasons, knowledgeForTrip } from "@/lib/server/knowledgeForTrip";
 import { mapDayItems } from "@/lib/itinerary";
 import type { DayPlan } from "@/types";
 
@@ -56,21 +57,26 @@ export async function POST(request: Request) {
   try {
     // 세미투어(기본)이면서 해외여행이면 조사 없이 바로 만들고, 그 외(다른 여행 유형이거나 국내=외국인 대상 투어)는
     // 일정을 짜기 전에 여행 유형별 특징(또는 외국인에게 인기 있는 명소)을 먼저 웹에서 조사한다
-    const research = needsItineraryResearch(req) ? await generateGroundedText({ user: buildItineraryResearchPrompt(req) }) : null;
+    // 지식 창고(여행자 인기·다른 여행사·우리 현장·고객·판매 결과)를 먼저 보고, 없거나 오래됐으면 웹에서 조사해 쌓는다
+    const [research, knowledge] = await Promise.all([
+      needsItineraryResearch(req) ? generateGroundedText({ user: buildItineraryResearchPrompt(req) }) : Promise.resolve(null),
+      knowledgeForTrip(req).catch(() => ({ docs: [], memo: "", info: [] })),
+    ]);
 
     const result = await generateJson({
       system: itineraryStructureSystemPrompt(req.travelType, req.tripScope),
-      user: buildItineraryUserPrompt(req, research?.text ?? ""),
+      user: buildItineraryUserPrompt(req, research?.text ?? "", knowledge.memo),
       schema: itineraryResponseSchema,
     });
 
-    let days = toDayPlans(result, req.days);
+    let days = annotateReasons(toDayPlans(result, req.days), knowledge.docs);
     if (req.travelType === "accessible" && !research?.searched) days = clearUnverifiedAccessibility(days);
 
     return Response.json({
       days,
       sources: research?.sources ?? [],
       researched: research?.searched ?? false,
+      knowledge: knowledge.info,
     });
   } catch (err) {
     if (err instanceof GeminiError) return errorResponse(err.code, err.message, err.status);

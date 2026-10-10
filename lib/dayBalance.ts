@@ -84,7 +84,8 @@ export function roomOf(day: DayPlan, pmChoice: PmChoice): number {
 export function suggestDayMoves(days: DayPlan[], pmChoice: PmChoice): DayMove[] {
   if (days.length < 2) return [];
   const hasFlight = (d: DayPlan) => dayItems(d, pmChoice).some((i) => i.type === "flight");
-  const targets = days.filter((d, i) => d.kind === "linear" && !(i === days.length - 1 && hasFlight(d)) && roomOf(d, pmChoice) >= 90);
+  // 일부러 쉬게 둔 날(rest)은 받지 않는다
+  const targets = days.filter((d, i) => d.kind === "linear" && !d.rest && !(i === days.length - 1 && hasFlight(d)) && roomOf(d, pmChoice) >= 90);
   const out: DayMove[] = [];
   for (const day of days) {
     if (day.kind !== "linear") continue;

@@ -6,6 +6,8 @@ import { useBookings, type BookingView } from "@/hooks/useBookings";
 import { BOOKING_STATUSES, bookingAlerts, bookingSummary, newBookingId, STATUS_LABEL, type Booking, type BookingStatus } from "@/lib/bookings";
 import { formatMoney } from "@/lib/currency";
 import { ReviewLinkBox } from "./ReviewLinkBox";
+import { postJson } from "@/lib/api";
+import { WON } from "@/lib/salesStats";
 import { InquiryInbox } from "./InquiryInbox";
 import { inquiryDate, STYLE_LABEL, type Inquiry } from "@/lib/inquiry";
 import type { TripInput } from "@/types";
@@ -161,7 +163,13 @@ export function BookingsMenu({ draftFromQuote, author, companyName = "", onFillI
     const { canDelete: _ignored, ...rest } = editing;
     void _ignored;
     const booking: Booking = { ...rest, id: editing.id ?? newBookingId(), createdAt: now, updatedAt: now, owner: author, ownerId: "", history: editing.history ?? [] };
+    const before = list.find((b) => b.id === booking.id)?.status ?? "inquiry";
     const error = await bookings.save(booking);
+    // 성약(계약 이후)이 되거나 견적 뒤 취소되면 그 일정의 장소를 지식 창고에 배운다 (실패해도 저장은 그대로)
+    const wonNow = WON.has(booking.status) && !WON.has(before);
+    const lostNow = booking.status === "cancelled" && before === "quoted";
+    if (!error && booking.city && booking.places?.length && (wonNow || lostNow))
+      void postJson("/api/knowledge/learn", { kind: "sale", city: booking.city, places: booking.places, won: wonNow }).catch(() => undefined);
     setBusy(false);
     if (error) setMessage({ kind: "error", text: error });
     else {
@@ -298,6 +306,8 @@ export function BookingsMenu({ draftFromQuote, author, companyName = "", onFillI
                   </Field>
                 </div>
                 <ReviewLinkBox
+                  city={editing.city ?? ""}
+                  places={editing.places ?? []}
                   memo={editing.memo}
                   title={editing.planName || `${editing.destination} 여행`}
                   planName={editing.planName}

@@ -366,6 +366,13 @@ export function TimelineItem({
           </p>
         )}
 
+        {item.reason && (
+          <p className="mt-1.5 text-[11px] leading-4 text-indigo-700">
+            <span className="mr-1 rounded bg-indigo-50 px-1 font-semibold ring-1 ring-indigo-200">근거</span>
+            {item.reason}
+          </p>
+        )}
+
         {item.caution && (
           <p className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] leading-4 text-amber-800">
             <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
