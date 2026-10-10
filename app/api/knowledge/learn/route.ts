@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { learnCompetitor, learnEdits, learnFieldNotes, learnSale, learnStays, learnVotes } from "@/lib/knowledge";
 import { isAuthed } from "@/lib/server/access";
-import { updateCity } from "@/lib/server/knowledgeStore";
+import { bumpMetric, updateCity } from "@/lib/server/knowledgeStore";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -40,5 +40,6 @@ export async function POST(request: Request) {
         return learnCompetitor(d, b.agency, b.title, b.days);
     }
   });
+  await bumpMetric({ learned: 1, kind: b.kind, ...(b.kind === "edits" ? { removed: b.removed.length, added: b.added.length } : {}) });
   return Response.json({ ok: true, learnedCount: doc.learnedCount });
 }

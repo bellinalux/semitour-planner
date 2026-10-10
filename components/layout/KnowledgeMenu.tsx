@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { postJson } from "@/lib/api";
 import { COMPANIONS } from "@/lib/defaults";
 import { bestStay, placeScore, reasonFor, type CityKnowledge } from "@/lib/knowledge";
+import { metricsRows, type MetricsRecord, type MetricsRow } from "@/lib/knowledgeMetrics";
 import type { CityIndexEntry } from "@/lib/server/knowledgeStore";
 import type { TravelType, TripScope } from "@/types";
 
@@ -16,7 +17,7 @@ interface Props {
   buttonClassName?: string;
 }
 
-type Tab = "places" | "courses" | "needs" | "notes";
+type Tab = "review" | "places" | "courses" | "needs" | "notes";
 const SEG: Record<string, string> = { general: "여행자 공통", ...Object.fromEntries(COMPANIONS.map((c) => [c.id, c.label])) };
 const date = (iso: string) => (iso ? new Date(iso).toLocaleDateString("ko-KR", { year: "2-digit", month: "numeric", day: "numeric" }) : "—");
 
@@ -42,6 +43,7 @@ export function KnowledgeMenu({ defaultCity, travelType, tripScope, buttonClassN
   const [filter, setFilter] = useState("");
   const [newCity, setNewCity] = useState("");
   const [add, setAdd] = useState({ name: "", area: "", stay: 0 });
+  const [metrics, setMetrics] = useState<MetricsRow[] | null>(null);
 
   const loadCity = async (c: string) => {
     if (!c.trim()) return;
@@ -62,6 +64,10 @@ export function KnowledgeMenu({ defaultCity, travelType, tripScope, buttonClassN
   const open = async () => {
     dialogRef.current?.showModal();
     setMessage(null);
+    void fetch("/api/knowledge?metrics=1")
+      .then((r) => (r.ok ? (r.json() as Promise<{ metrics: MetricsRecord }>) : { metrics: {} }))
+      .then((j) => setMetrics(metricsRows(j.metrics)))
+      .catch(() => setMetrics(null));
     try {
       const r = await fetch("/api/knowledge");
       const j = (await r.json()) as { cities?: CityIndexEntry[] };
@@ -162,6 +168,40 @@ export function KnowledgeMenu({ defaultCity, travelType, tripScope, buttonClassN
                 </button>
               </span>
             </div>
+            {metrics && metrics.some((m) => m.research + m.reuse + m.learned > 0 || m.score !== null) && (
+              <details open className="rounded-md border border-slate-200 p-2.5">
+                <summary className="cursor-pointer font-semibold text-slate-800">발전 지표 (최근 6개월)</summary>
+                <p className="mt-1 text-pretty text-[11px] text-slate-500">
+                  재사용이 늘면 웹 조사(AI 호출 2번·약 2분)를 아낀 것이고, 직원이 뺀 비율이 줄고 코스 점검 점수가 오르면 코스가 좋아지고 있는 것입니다.
+                </p>
+                <div className="overflow-x-auto">
+                  <table aria-label="발전 지표" className="mt-1 w-full min-w-[520px] tabular-nums">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-slate-500">
+                        <th className="py-0.5 pr-2 font-medium">달</th>
+                        <th className="py-0.5 pr-2 text-right font-medium">웹 조사</th>
+                        <th className="py-0.5 pr-2 text-right font-medium">지식 재사용 (조사 절약)</th>
+                        <th className="py-0.5 pr-2 text-right font-medium">우리 자료로 배운 것</th>
+                        <th className="py-0.5 pr-2 text-right font-medium">AI 장소 중 직원이 뺀 비율</th>
+                        <th className="py-0.5 text-right font-medium">코스 점검 평균</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {metrics.map((m) => (
+                        <tr key={m.month} className="border-b border-slate-100">
+                          <td className="py-0.5 pr-2">{m.month}</td>
+                          <td className="py-0.5 pr-2 text-right">{m.research}</td>
+                          <td className="py-0.5 pr-2 text-right">{m.reuse}</td>
+                          <td className="py-0.5 pr-2 text-right">{m.learned}</td>
+                          <td className="py-0.5 pr-2 text-right">{m.removedRate === null ? "—" : `${m.removedRate}%`}</td>
+                          <td className="py-0.5 text-right">{m.score === null ? "—" : `${m.score}점`}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            )}
             {busy === "research" && <p className="text-slate-500">여행 후기·다른 여행사 상품·여행자 유형별 니즈를 웹에서 조사합니다 (1~2분).</p>}
             {message && (
               <p role="status" className={message.kind === "ok" ? "text-emerald-700" : "text-red-600"}>
@@ -180,6 +220,7 @@ export function KnowledgeMenu({ defaultCity, travelType, tripScope, buttonClassN
                 <div role="tablist" aria-label="지식 종류" className="flex flex-wrap gap-1">
                   {(
                     [
+                      ...(doc.places.some((p) => p.pending) ? [["review", `검수 대기 ${doc.places.filter((p) => p.pending).length}`] as [Tab, string]] : []),
                       ["places", `장소 ${doc.places.length}`],
                       ["courses", `인기 코스 ${doc.courses.length}`],
                       ["needs", `여행자 니즈 ${doc.needs.length}`],
@@ -214,7 +255,7 @@ export function KnowledgeMenu({ defaultCity, travelType, tripScope, buttonClassN
                       </span>
                     </div>
                     <div className="overflow-x-auto">
-                      <table className="w-full min-w-[760px]">
+                      <table aria-label="장소 목록" className="w-full min-w-[760px]">
                         <thead>
                           <tr className="border-b border-slate-200 text-left text-slate-500">
                             <th className="py-1 pr-2 font-medium">순위</th>
@@ -234,6 +275,7 @@ export function KnowledgeMenu({ defaultCity, travelType, tripScope, buttonClassN
                                 <td className="py-1 pr-2 tabular-nums text-slate-500">{rank + 1}</td>
                                 <td className="py-1 pr-2">
                                   <b className="text-slate-800">{p.name}</b>
+                                  {p.pending && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-800">검수 대기</span>}
                                   {p.area && <span className="block text-[10.5px] text-slate-400">{p.area}</span>}
                                   {p.fits.length > 0 && <span className="block text-[10.5px] text-indigo-600">{p.fits.map((f) => SEG[f] ?? f).join(" · ")}</span>}
                                 </td>
@@ -300,6 +342,60 @@ export function KnowledgeMenu({ defaultCity, travelType, tripScope, buttonClassN
                       </table>
                     </div>
                     <p className="text-[10.5px] text-slate-400">점수 = 후기 인기(40%) + 다른 여행사 포함 + 우리 고객이 고른 좋았던 곳/아쉬운 곳 + 성약 − 직원이 뺀 횟수 + 직원 확인. 우리 자료가 쌓일수록 웹 인기보다 무거워집니다.</p>
+                  </div>
+                )}
+
+                {tab === "review" && (
+                  <div className="space-y-2">
+                    <p className="text-pretty text-slate-600">웹 조사로 새로 들어온 곳입니다. 코스에는 쓰지만 점수를 조금 낮춰 둡니다. 맞으면 [그대로 쓰기], 확실하면 [확인](잠금), 틀리면 지우세요.</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button type="button" onClick={() => void act({ action: "review", all: true }, "검수 대기를 모두 그대로 쓰기로 했습니다.")} className="rounded-md bg-indigo-600 px-2.5 py-1 font-semibold text-white hover:bg-indigo-700">
+                        모두 그대로 쓰기
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm("검수 대기 중인 곳을 모두 지울까요?")) void act({ action: "rejectPending" }, "검수 대기 중인 곳을 지웠습니다.");
+                        }}
+                        className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        모두 지우기
+                      </button>
+                    </div>
+                    <ul aria-label="검수 대기" className="divide-y divide-slate-100">
+                      {ranked
+                        .filter((p) => p.pending)
+                        .map((p) => (
+                          <li key={p.key} className="flex flex-wrap items-start gap-2 py-1.5">
+                            <span className="min-w-0 flex-1 text-pretty">
+                              <b className="text-slate-800">{p.name}</b>
+                              {p.area && <span className="text-slate-400"> · {p.area}</span>}
+                              <span className="block text-[10.5px] text-slate-500">
+                                인기 {p.popularity}
+                                {p.agencies.length ? ` · ${p.agencies.join(", ")}` : ""}
+                                {p.likes[0] ? ` · + ${p.likes[0]}` : ""}
+                                {p.dislikes[0] ? ` · − ${p.dislikes[0]}` : ""}
+                              </span>
+                              {p.sources[0] && (
+                                <a href={p.sources[0].url} target="_blank" rel="noopener noreferrer" className="text-[10.5px] text-indigo-600 hover:underline">
+                                  출처: {p.sources[0].title || p.sources[0].url}
+                                </a>
+                              )}
+                            </span>
+                            <span className="flex shrink-0 gap-1">
+                              <button type="button" onClick={() => void act({ action: "review", key: p.key }, `${p.name} — 그대로 씁니다.`)} className="rounded-md border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-50">
+                                그대로 쓰기
+                              </button>
+                              <button type="button" onClick={() => void act({ action: "verify", key: p.key, verified: true }, `${p.name} — 직원 확인 (조사가 덮어쓰지 않습니다)`)} className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-800 hover:bg-emerald-100">
+                                확인
+                              </button>
+                              <button type="button" aria-label={`${p.name} 지우기`} onClick={() => void act({ action: "remove", key: p.key }, `${p.name}을(를) 지웠습니다.`)} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-600">
+                                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                              </button>
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
                   </div>
                 )}
 

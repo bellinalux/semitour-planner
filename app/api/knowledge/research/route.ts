@@ -3,7 +3,7 @@ import { COMPANION_IDS, isStale, mergeResearch } from "@/lib/knowledge";
 import { GeminiError } from "@/lib/server/gemini";
 import { guardRequest } from "@/lib/server/guard";
 import { researchCity } from "@/lib/server/knowledgeResearch";
-import { getCity, putCity } from "@/lib/server/knowledgeStore";
+import { bumpMetric, getCity, putCity } from "@/lib/server/knowledgeStore";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -31,6 +31,7 @@ export async function POST(request: Request) {
     const r = await researchCity(o);
     const doc = mergeResearch(cur, r.result, r.sources);
     await putCity(doc);
+    await bumpMetric({ research: 1 });
     return Response.json({ doc, researched: r.searched });
   } catch (err) {
     if (err instanceof GeminiError) return errorResponse(err.code, err.message, err.status);

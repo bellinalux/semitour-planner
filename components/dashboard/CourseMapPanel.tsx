@@ -7,8 +7,10 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { CourseEngineContext } from "@/hooks/useCourseEngine";
 import { formatDuration } from "@/lib/format";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
-import { dayDistance, mapPoints, planRegions, regionRepeats } from "@/lib/regionPlan";
-import type { DayPlan, ItineraryItem } from "@/types";
+import { postJson } from "@/lib/api";
+import { isCoord } from "@/lib/coords";
+import { dayDistance, hotelLeadSuggestions, hotelPins, mapPoints, planRegions, regionRepeats } from "@/lib/regionPlan";
+import type { DayPlan, ItineraryItem, SelectedHotel } from "@/types";
 
 interface Props {
   days: DayPlan[];
@@ -16,6 +18,12 @@ interface Props {
   /** 다시 나눈 안 적용 (되돌리기 기록에 쌓인다) */
   onApply: (days: DayPlan[]) => void;
   onChangeItem: (itemId: string, patch: Partial<ItineraryItem>) => void;
+  /** 고른 숙소 (숙박 도시별) — 좌표가 있으면 하루 동선의 출발·도착점 */
+  hotels?: Record<string, SelectedHotel>;
+  onHotelCoords?: (city: string, lat: number, lng: number) => void;
+  onChangeDay?: (dayNo: number, patch: Partial<DayPlan>) => void;
+  /** 숙소 위치 찾기에 쓰는 나라 이름 (여행지 문자열) */
+  destination?: string;
 }
 
 const PLACE_TYPES = new Set(["sightseeing", "experience", "shopping", "massage"]);
@@ -24,17 +32,41 @@ const PLACE_TYPES = new Set(["sightseeing", "experience", "shopping", "massage"]
  * 코스 지도 · 지역 묶기 — 날짜별 색 핀과 순서 선(업계 방식: Wanderlog·Travefy), 하루 이동 거리,
  * 같은 지역을 여러 날 오가는 곳을 찾아 한 날로 모은 안을 전/후 비교로 보여 주고 적용한다.
  */
-export function CourseMapPanel({ days, pmChoice, onApply, onChangeItem }: Props) {
+export function CourseMapPanel({ days, pmChoice, onApply, onChangeItem, hotels = {}, onHotelCoords, onChangeDay, destination = "" }: Props) {
   const engine = useContext(CourseEngineContext);
   const [selected, setSelected] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState("");
+  const [locating, setLocating] = useState(false);
 
-  const points = mapPoints(days, pmChoice);
+  const pins = hotelPins(hotels);
+  const missingHotels = Object.entries(hotels).filter(([, h]) => h.name && !isCoord(h.lat, h.lng));
+  const leads = hotelLeadSuggestions(days, pmChoice, pins);
+  const locateHotels = async () => {
+    setLocating(true);
+    let found = 0;
+    try {
+      for (const [city, h] of missingHotels) {
+        const r = await postJson<{ places: { name: string; lat: number; lng: number }[] }>("/api/place-coords", { city, country: destination, names: [h.name] });
+        const p = r.places[0];
+        if (p) {
+          onHotelCoords?.(city, p.lat, p.lng);
+          found += 1;
+        }
+      }
+      setMessage(found > 0 ? `숙소 ${found}곳의 위치를 찾았습니다. 하루 동선이 숙소에서 출발해 숙소로 돌아옵니다.` : "숙소 위치를 찾지 못했습니다. 숙소 이름을 확인해 주세요.");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "숙소 위치를 찾지 못했습니다.");
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  const points = mapPoints(days, pmChoice, pins);
   const places = days.flatMap((d) => dayItems(d, pmChoice)).filter((i) => PLACE_TYPES.has(i.type ?? "sightseeing"));
   const withCoord = places.filter((i) => typeof i.lat === "number").length;
-  const repeats = regionRepeats(days, pmChoice);
-  const plan = repeats.length > 0 ? planRegions(days, pmChoice) : null;
+  const repeats = regionRepeats(days, pmChoice, pins);
+  const plan = repeats.length > 0 ? planRegions(days, pmChoice, pins) : null;
   const shown = days
     .map((d, index) => ({ day: d.day, index, points: points[index] }))
     .filter((d) => d.points.length > 0 && (selected === null || d.day === selected));
@@ -66,6 +98,37 @@ export function CourseMapPanel({ days, pmChoice, onApply, onChangeItem }: Props)
               </button>
             )}
           </div>
+        )}
+
+        {onHotelCoords && missingHotels.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md bg-slate-50 px-3 py-2">
+            <span className="text-slate-600">숙소 위치를 모릅니다 ({missingHotels.map(([, h]) => h.name).join(", ")}) — 찾으면 하루 동선을 숙소에서 출발·도착으로 그리고, 숙소 동네는 반복 지역으로 보지 않습니다.</span>
+            <button type="button" disabled={locating} onClick={() => void locateHotels()} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              {locating && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+              숙소 위치 찾기
+            </button>
+          </div>
+        )}
+        {onChangeDay && leads.length > 0 && (
+          <ul aria-label="숙소에서 첫 장소까지" className="space-y-1 rounded-md border border-amber-200 bg-amber-50/50 p-2.5">
+            {leads.map((l) => (
+              <li key={l.day} className="flex flex-wrap items-center gap-2">
+                <span className="text-amber-900">
+                  DAY {l.day} {l.hotel} → {l.first}: 약 {formatDuration(l.minutes)} (일정표 {formatDuration(l.current)})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChangeDay(l.day, { hotelLeadMinutes: l.minutes });
+                    setMessage(`DAY ${l.day} 숙소에서 첫 장소까지를 ${formatDuration(l.minutes)}으로 맞췄습니다.`);
+                  }}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  {formatDuration(l.minutes)}으로 맞추기
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
 
         {hasMapData && (
@@ -105,7 +168,7 @@ export function CourseMapPanel({ days, pmChoice, onApply, onChangeItem }: Props)
               }}
             />
             <p className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-              <span>번호 = 그날 방문 순서 · 흰 원 = 식사 · H = 숙소</span>
+              <span>번호 = 그날 방문 순서 · 흰 원 = 식사 · H = 숙소{Object.keys(pins).length > 0 ? " (전날 숙소에서 출발, 그날 숙소로 도착)" : ""}</span>
               <span className="inline-flex items-center gap-1">
                 <span className="inline-block h-0 w-5 border-t-2 border-dashed" style={{ borderColor: BACKTRACK_COLOR }} aria-hidden />
                 떠났던 지역으로 되돌아가는 구간
@@ -146,7 +209,7 @@ export function CourseMapPanel({ days, pmChoice, onApply, onChangeItem }: Props)
                   </ul>
                   <p className="tabular-nums text-slate-700" aria-label="전후 비교">
                     반복 이동 {plan.before.repeats}번 → {plan.after.repeats}번
-                    {plan.before.km !== null && plan.after.km !== null && ` · 장소 사이 이동 거리 ${plan.before.km}km → ${plan.after.km}km (숙소 오가는 길 제외)`}
+                    {plan.before.km !== null && plan.after.km !== null && ` · ${plan.withHotels ? "숙소 포함 이동 거리" : "장소 사이 이동 거리"} ${plan.before.km}km → ${plan.after.km}km${plan.withHotels ? "" : " (숙소 오가는 길 제외)"}`}
                   </p>
                   <button
                     type="button"

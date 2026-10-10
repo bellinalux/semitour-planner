@@ -5,11 +5,11 @@ import { fetchTeam, mergeTeamData, onTeamChange, putTeam, readTeamLocal, writeTe
 
 export type TeamSyncStatus = "loading" | "cloud" | "local";
 
-const KINDS: TeamKind[] = ["defaults", "cost-memory"];
+const KINDS: TeamKind[] = ["defaults", "cost-memory", "segments"];
 const PUSH_DELAY_MS = 1500;
 
 /**
- * 화면을 열 때 서버의 팀 공용 데이터(회사 기본값, 원가 기억)를 받아 브라우저 값과 합치고,
+ * 화면을 열 때 서버의 팀 공용 데이터(회사 기본값, 원가 기억, 코스 조각)를 받아 브라우저 값과 합치고,
  * 이후 브라우저에서 바뀌면 잠시 모았다가 서버에 올린다. 서버 저장을 못 쓰면 브라우저에만 남는다(status = "local").
  */
 export function useTeamSync(): TeamSyncStatus {

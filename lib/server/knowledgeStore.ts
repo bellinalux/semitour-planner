@@ -1,4 +1,5 @@
 import { emptyCity, knowledgeKey, type CityKnowledge } from "@/lib/knowledge";
+import { bumpMetrics, type MetricsPatch, type MetricsRecord } from "@/lib/knowledgeMetrics";
 import { workspaceId } from "./access";
 import { getKv } from "./planStore";
 
@@ -22,6 +23,30 @@ async function wsKey(): Promise<string> {
 }
 const docKey = (ws: string, city: string) => `kn:${ws}:${knowledgeKey(city)}`;
 const indexKey = (ws: string) => `kn:${ws}:_cities`;
+const metricsKey = (ws: string) => `kn:${ws}:_metrics`;
+
+export async function getMetrics(): Promise<MetricsRecord> {
+  const store = await getKv();
+  if (!store) return {};
+  const raw = await store.kv.get(metricsKey(await wsKey()));
+  try {
+    const r = raw ? (JSON.parse(raw) as MetricsRecord) : {};
+    return typeof r === "object" && r !== null && !Array.isArray(r) ? r : {};
+  } catch {
+    return {};
+  }
+}
+
+/** 발전 지표 더하기 (실패해도 본 작업에는 영향 없음) */
+export async function bumpMetric(patch: MetricsPatch): Promise<void> {
+  try {
+    const store = await getKv();
+    if (!store) return;
+    await store.kv.put(metricsKey(await wsKey()), JSON.stringify(bumpMetrics(await getMetrics(), patch)));
+  } catch {
+    /* 지표는 놓쳐도 된다 */
+  }
+}
 
 export async function getCity(city: string): Promise<CityKnowledge> {
   const store = await getKv();

@@ -1,8 +1,21 @@
-import { km } from "@/lib/courseEngine/time";
+import { estimateTravel, km } from "@/lib/courseEngine/time";
+import { hotelLeadMinutes } from "@/lib/dayLoad";
 import { blockMinutes, movable, refitDay, roomOf } from "@/lib/dayBalance";
 import { isCoord } from "@/lib/coords";
 import { dayItems, mapDayItems, type PmChoice } from "@/lib/itinerary";
-import type { DayPlan, ItineraryItem } from "@/types";
+import type { DayPlan, ItineraryItem, SelectedHotel } from "@/types";
+
+/** 숙박 도시별 숙소 좌표 — 하루 동선의 출발(전날 숙소)·도착(그날 숙소)점 */
+export type HotelPins = Record<string, { name: string; lat: number; lng: number }>;
+
+/** 고른 숙소 중 좌표가 있는 것 */
+export function hotelPins(selected: Record<string, SelectedHotel>): HotelPins {
+  return Object.fromEntries(
+    Object.entries(selected)
+      .filter(([, h]) => isCoord(h.lat, h.lng))
+      .map(([city, h]) => [city.trim(), { name: h.name, lat: h.lat!, lng: h.lng! }]),
+  );
+}
 
 /**
  * 코스 지도·여러 날 지역 묶기 — 업계 방식(Wanderlog 날짜별 지도, 여행 일정 연구의 "지역으로 먼저 나누고 날 안에서 순서")을 따른다.
@@ -91,12 +104,13 @@ export function regionKeys(days: DayPlan[], pmChoice: PmChoice): Map<string, str
   return out;
 }
 
-/** 날짜별 지도 점 (항공·이동 빼고, 좌표 있는 곳만) */
-export function mapPoints(days: DayPlan[], pmChoice: PmChoice): MapPoint[][] {
+/** 날짜별 지도 점 (항공·이동 빼고, 좌표 있는 곳만). 숙소 좌표가 있으면 전날 숙소에서 출발해 그날 숙소로 돌아온다 */
+export function mapPoints(days: DayPlan[], pmChoice: PmChoice, hotels: HotelPins = {}): MapPoint[][] {
   const keys = regionKeys(days, pmChoice);
-  return days.map((d) => {
+  const pin = (h: HotelPins[string] | undefined, id: string, day: number): MapPoint[] => (h ? [{ id, day, order: 0, name: h.name, lat: h.lat, lng: h.lng, kind: "hotel", region: null }] : []);
+  return days.map((d, index) => {
     let order = 0;
-    return dayItems(d, pmChoice)
+    const stops = dayItems(d, pmChoice)
       .filter((i) => !SKIP.has(i.type ?? "sightseeing") && i.type !== "free_time" && coordOf(i))
       .map((i) => ({
         id: i.id,
@@ -108,7 +122,28 @@ export function mapPoints(days: DayPlan[], pmChoice: PmChoice): MapPoint[][] {
         kind: i.type === "hotel" ? ("hotel" as const) : i.type === "meal" ? ("meal" as const) : ("sight" as const),
         region: keys.get(i.id) ?? null,
       }));
+    if (stops.length === 0) return stops;
+    const startHotel = index > 0 ? hotels[cityOf(days[index - 1])] : undefined;
+    const endHotel = stops.some((p) => p.kind === "hotel") ? undefined : hotels[cityOf(d)];
+    return [...pin(startHotel, `hotel-s-${d.day}`, d.day), ...stops, ...pin(endHotel, `hotel-e-${d.day}`, d.day)];
   });
+}
+
+/**
+ * 숙소 → 첫 장소 이동 시간 — 숙소 좌표로 어림한 값이 일정표 값(기본 30분)과 15분 넘게 다르면 바꾸자고 한다 (5분 단위).
+ */
+export function hotelLeadSuggestions(days: DayPlan[], pmChoice: PmChoice, hotels: HotelPins): { day: number; current: number; minutes: number; hotel: string; first: string }[] {
+  const out: { day: number; current: number; minutes: number; hotel: string; first: string }[] = [];
+  days.forEach((d, index) => {
+    if (index === 0) return;
+    const h = hotels[cityOf(days[index - 1])];
+    const current = hotelLeadMinutes(d);
+    const first = dayItems(d, pmChoice)[0];
+    if (!h || current === 0 || !first || !coordOf(first)) return;
+    const est = Math.max(5, Math.round(estimateTravel(h, coordOf(first)!, "car") / 5) * 5);
+    if (Math.abs(est - current) >= 15) out.push({ day: d.day, current, minutes: est, hotel: h.name, first: first.name });
+  });
+  return out;
 }
 
 /** 하루 이동 거리(km, 직선 × 도로 우회 1.35)와 차량 어림 시간(분) */
@@ -145,18 +180,24 @@ export interface RegionRepeat {
   extraMinutes: number | null;
 }
 
-/** 숙소가 있는 동네 — 숙소 항목·밤 일정의 지역 (매일 나가고 들어오는 곳이라 반복으로 보지 않는다) */
-function homeRegions(days: DayPlan[], pmChoice: PmChoice, keys: Map<string, string>): Set<string> {
+/** 숙소가 있는 동네 — 숙소 항목·밤 일정·숙소 좌표 4km 안의 지역 (매일 나가고 들어오는 곳이라 반복으로 보지 않는다) */
+function homeRegions(days: DayPlan[], pmChoice: PmChoice, keys: Map<string, string>, hotels: HotelPins = {}): Set<string> {
   const out = new Set<string>();
+  const pins = Object.values(hotels);
   for (const d of days)
-    for (const i of dayItems(d, pmChoice)) if ((i.type === "hotel" || NIGHT.test(`${i.name} ${i.description}`)) && keys.get(i.id)) out.add(keys.get(i.id)!);
+    for (const i of dayItems(d, pmChoice)) {
+      const k = keys.get(i.id);
+      if (!k) continue;
+      const c = coordOf(i);
+      if (i.type === "hotel" || NIGHT.test(`${i.name} ${i.description}`) || (c && pins.some((h) => km(c, h) <= RADIUS_KM))) out.add(k);
+    }
   return out;
 }
 
 /** 같은 지역을 여러 날에 나눠 가는 곳 (더 드는 이동이 큰 것부터) */
-export function regionRepeats(days: DayPlan[], pmChoice: PmChoice): RegionRepeat[] {
+export function regionRepeats(days: DayPlan[], pmChoice: PmChoice, hotels: HotelPins = {}): RegionRepeat[] {
   const keys = regionKeys(days, pmChoice);
-  const home = homeRegions(days, pmChoice, keys);
+  const home = homeRegions(days, pmChoice, keys, hotels);
   const groups = new Map<string, Map<number, ItineraryItem[]>>();
   for (const d of days) {
     if (d.kind !== "linear") continue;
@@ -207,13 +248,15 @@ export interface RegionPlan {
   skipped: string[];
   before: { repeats: number; km: number | null };
   after: { repeats: number; km: number | null };
+  /** 거리에 숙소 오가는 길이 들어갔는지 */
+  withHotels: boolean;
 }
 
 const cityOf = (d: DayPlan) => (d.overnightCity ?? "").trim();
 
-function metrics(days: DayPlan[], pmChoice: PmChoice): RegionPlan["before"] {
-  const reps = regionRepeats(days, pmChoice);
-  const pts = mapPoints(days, pmChoice);
+function metrics(days: DayPlan[], pmChoice: PmChoice, hotels: HotelPins): RegionPlan["before"] {
+  const reps = regionRepeats(days, pmChoice, hotels);
+  const pts = mapPoints(days, pmChoice, hotels);
   const any = pts.some((p) => p.length >= 2);
   return { repeats: reps.reduce((s, r) => s + r.days.length - 1, 0), km: any ? Math.round(pts.reduce((s, p) => s + dayDistance(p).km, 0) * 10) / 10 : null };
 }
@@ -223,13 +266,13 @@ function metrics(days: DayPlan[], pmChoice: PmChoice): RegionPlan["before"] {
  * 받는 날 여유(하루 8시간에서 남은 시간, 자유시간 포함)가 모자라면 그대로 두고 이유를 남긴다.
  * 옮긴 장소는 받는 날의 같은 지역 장소 바로 뒤에 넣고, 두 날 모두 식사 시간을 다시 맞춘다.
  */
-export function planRegions(days: DayPlan[], pmChoice: PmChoice): RegionPlan {
+export function planRegions(days: DayPlan[], pmChoice: PmChoice, hotels: HotelPins = {}): RegionPlan {
   let work = days;
   const moves: RegionMove[] = [];
   const skipped: string[] = [];
   const keys = regionKeys(days, pmChoice);
   const hasFlight = (d: DayPlan) => d.items.some((i) => i.type === "flight");
-  for (const rep of regionRepeats(days, pmChoice)) {
+  for (const rep of regionRepeats(days, pmChoice, hotels)) {
     const inRegion = (d: DayPlan) => d.items.filter((i) => keys.get(i.id) === rep.region && movable(i) && i.type !== "meal");
     const cur = () => rep.days.map((n) => work.find((d) => d.day === n)!).filter((d) => d.kind === "linear");
     // 받는 날: 옮긴 뒤에도 여유가 가장 많이 남는 날 (날마다 부담이 고르게) — 같으면 그 지역을 오래 도는 날.
@@ -258,7 +301,7 @@ export function planRegions(days: DayPlan[], pmChoice: PmChoice): RegionPlan {
       skipped.push(`${rep.region} (DAY ${rep.days.join("·")}) — ${diffCity ? "숙박 도시가 달라 그대로 둡니다" : "모을 날의 시간이 모자라 그대로 둡니다 (하루 8시간 기준)"}`);
     }
   }
-  return { days: work, moves, skipped, before: metrics(days, pmChoice), after: metrics(work, pmChoice) };
+  return { days: work, moves, skipped, before: metrics(days, pmChoice, hotels), after: metrics(work, pmChoice, hotels), withHotels: Object.keys(hotels).length > 0 };
 }
 
 /** moving을 src 날에서 빼서 target 날의 같은 지역 장소 바로 뒤에 넣는다 */

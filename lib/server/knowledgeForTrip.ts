@@ -2,7 +2,7 @@ import { mapDayItems } from "@/lib/itinerary";
 import { citiesOf, findPlace, isStale, knowledgeMemo, mergeResearch, placeScore, reasonFor, type CityKnowledge } from "@/lib/knowledge";
 import type { Companion, DayPlan, TravelType, TripScope } from "@/types";
 import { researchCity } from "./knowledgeResearch";
-import { getCity, putCity } from "./knowledgeStore";
+import { bumpMetric, getCity, putCity } from "./knowledgeStore";
 
 export interface TripKnowledgeInfo {
   city: string;
@@ -38,10 +38,12 @@ export async function knowledgeForTrip(o: { destination: string; regionPlan: str
         doc = mergeResearch(doc, r.result, r.sources);
         await putCity(doc);
         researched = true;
+        await bumpMetric({ research: 1 });
       } catch (err) {
         console.error("[knowledge] 조사 실패", city, err instanceof Error ? err.message : err);
       }
     }
+    if (!researched && doc.places.length > 0) await bumpMetric({ reuse: 1 });
     docs.push(doc);
     info.push({ city, places: doc.places.length, researched });
   }

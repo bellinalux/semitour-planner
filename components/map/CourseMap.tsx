@@ -128,11 +128,13 @@ export function CourseMap({ days, editable = false, onMovePoint, className = "h-
       const bounds = new ml.LngLatBounds();
       for (const d of days)
         for (const p of d.points) {
-          const marker = new ml.Marker({ element: pinElement(p, dayColor(d.index), editable), draggable: editable })
+          // 숙소 핀은 숙소 정보에서 온 것이라 끌어서 고치지 않는다
+          const movable = editable && !p.id.startsWith("hotel-");
+          const marker = new ml.Marker({ element: pinElement(p, dayColor(d.index), movable), draggable: movable })
             .setLngLat([p.lng, p.lat])
-            .setPopup(new ml.Popup({ offset: 14, closeButton: false }).setText(`DAY ${p.day} · ${p.order}. ${p.name}${p.region ? ` (${p.region})` : ""}`))
+            .setPopup(new ml.Popup({ offset: 14, closeButton: false }).setText(p.kind === "hotel" ? `DAY ${p.day} · 숙소 ${p.name}` : `DAY ${p.day} · ${p.order}. ${p.name}${p.region ? ` (${p.region})` : ""}`))
             .addTo(map);
-          if (editable)
+          if (movable)
             marker.on("dragend", () => {
               const ll = marker.getLngLat();
               moveRef.current?.(p.id, Math.round(ll.lat * 1e6) / 1e6, Math.round(ll.lng * 1e6) / 1e6);

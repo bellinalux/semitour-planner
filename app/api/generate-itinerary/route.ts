@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/itineraryPrompt";
 import { guardRequest } from "@/lib/server/guard";
 import { annotateReasons, knowledgeForTrip } from "@/lib/server/knowledgeForTrip";
+import { bumpMetric } from "@/lib/server/knowledgeStore";
 import { mapDayItems } from "@/lib/itinerary";
 import type { DayPlan } from "@/types";
 
@@ -71,6 +72,10 @@ export async function POST(request: Request) {
 
     let days = annotateReasons(toDayPlans(result, req.days), knowledge.docs);
     if (req.travelType === "accessible" && !research?.searched) days = clearUnverifiedAccessibility(days);
+    // 발전 지표: AI가 넣은 장소 수 (나중에 직원이 지운 비율을 본다)
+    await bumpMetric({
+      aiPlaces: days.flatMap((d) => [...d.items, ...d.amGuided, ...(d.pmFreeOptions[0]?.items ?? [])]).filter((i) => !["free_time", "meal", "flight", "transfer", "hotel"].includes(i.type ?? "sightseeing")).length,
+    });
 
     return Response.json({
       days,

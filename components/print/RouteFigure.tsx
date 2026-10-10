@@ -1,5 +1,5 @@
 import { dayColor, BACKTRACK_COLOR } from "@/components/map/CourseMapColors";
-import { backtrackLegs, dayDistance, mapPoints } from "@/lib/regionPlan";
+import { backtrackLegs, dayDistance, mapPoints, type HotelPins } from "@/lib/regionPlan";
 import type { PmChoice } from "@/lib/itinerary";
 import type { DayPlan } from "@/types";
 
@@ -7,8 +7,8 @@ import type { DayPlan } from "@/types";
  * 인쇄용 코스 그림 — 지도 바탕 없이 좌표로 그린 날짜별 동선 (북쪽이 위, 경도는 위도에 맞춰 줄인다).
  * 인쇄에서는 지도 타일이 잘 안 나와서 그림으로 넣는다. 좌표가 3곳 이상일 때만.
  */
-export function RouteFigure({ days, pmChoice }: { days: DayPlan[]; pmChoice: PmChoice }) {
-  const all = mapPoints(days, pmChoice);
+export function RouteFigure({ days, pmChoice, hotels = {} }: { days: DayPlan[]; pmChoice: PmChoice; hotels?: HotelPins }) {
+  const all = mapPoints(days, pmChoice, hotels);
   const pts = all.flat();
   if (pts.length < 3) return null;
   const W = 640;

@@ -136,6 +136,21 @@ ${list.map((p, i) => `${i}. ${p.name}${p.nameEn ? ` / ${p.nameEn}` : ""}${p.area
   return out;
 }
 
+/**
+ * 이름으로 좌표 찾기 (숙소처럼 코스 점검에 안 들어가는 곳) — 저장된 장소 지식을 먼저 보고, 없으면 구글 지도로 찾아 저장한다.
+ */
+export async function locatePlaces(names: string[], city: string, country = ""): Promise<{ name: string; lat: number; lng: number }[]> {
+  const list = [...new Set(names.map((n) => n.trim()).filter(Boolean))].slice(0, 10);
+  if (!list.length) return [];
+  const know = await getKnowledge(list, city);
+  const need = list.filter((n) => know[n]?.lat == null);
+  if (need.length) {
+    const found = await lookupPlaces(need.map((name) => ({ name })), city, country).catch(() => []);
+    await Promise.all(found.map((k) => { know[k.name] = k; return putKnowledge(k); }));
+  }
+  return list.flatMap((n) => (know[n]?.lat != null && know[n]?.lng != null ? [{ name: n, lat: know[n].lat!, lng: know[n].lng! }] : []));
+}
+
 /* ── 공휴일 ── */
 export async function holidays(country: string, year: number): Promise<{ date: string; name: string }[]> {
   const iso = isoForCountry(country); if (!iso) return [];

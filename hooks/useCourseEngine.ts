@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useEffect, useRef, useState } from "react";
+import { postJson } from "@/lib/api";
 import { calcDayLoad } from "@/lib/dayLoad";
 import { dayItems } from "@/lib/itinerary";
 import { withCoords } from "@/lib/regionPlan";
@@ -127,7 +128,11 @@ export function useCourseEngine({ days, pmChoice, destination, departureDate, tr
           if (r.ok) {
             const res = j as PlanResponse;
             setByDay((s) => ({ ...s, [d.day]: { status: "done", res } }));
-            setScores((s) => ({ ...s, [d.day]: scoreOf(res) }));
+            setScores((s) => {
+              // 발전 지표: 그날 처음 채점한 점수만 (고친 뒤 다시 채점한 것은 빼고)
+              if (!s[d.day]) void postJson("/api/knowledge", { score: res.quality.score }).catch(() => undefined);
+              return { ...s, [d.day]: scoreOf(res) };
+            });
             if (saveCoords) {
               const next = withCoords(latest.current, res.places);
               if (next !== latest.current) {

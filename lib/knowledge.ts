@@ -44,6 +44,8 @@ export interface PlaceCard {
   sources: { title: string; url: string }[];
   /** 직원이 확인했으면 true (잠금 — 조사가 덮어쓰지 않는다) */
   verified: boolean;
+  /** 웹 조사로 새로 들어와 아직 직원이 보지 않은 곳 (검수 대기). 코스에는 쓰되 점수를 조금 낮춘다 */
+  pending?: boolean;
   updatedAt: string;
 }
 
@@ -175,6 +177,7 @@ export function mergeResearch(doc: CityKnowledge, r: ResearchResult, sources: { 
         fieldNotes: [],
         sources: sources.slice(0, 3),
         verified: false,
+        pending: true,
         updatedAt: at,
       });
       continue;
@@ -239,7 +242,7 @@ function uniqSources(xs: { title: string; url: string }[]) {
 
 /**
  * 장소 점수 — 웹 인기(40%) + 다른 여행사 포함(곳당 8, 최대 32) + 우리 고객(좋았던 곳 +6 / 아쉬운 곳 −8)
- * + 성약(+4 / 실패 −2) − 직원이 뺀 수(−6) + 직접 넣은 수(+4) + 직원 확인 10. 우리 자료가 쌓일수록 웹 인기보다 무거워진다.
+ * + 성약(+4 / 실패 −2) − 직원이 뺀 수(−6) + 직접 넣은 수(+4) + 직원 확인 10 − 검수 대기 5. 우리 자료가 쌓일수록 웹 인기보다 무거워진다.
  */
 export function placeScore(p: PlaceCard): number {
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -249,7 +252,8 @@ export function placeScore(p: PlaceCard): number {
       clamp((p.votes?.best ?? 0) * 6 - (p.votes?.worst ?? 0) * 8, -40, 40) +
       clamp((p.sales?.won ?? 0) * 4 - (p.sales?.lost ?? 0) * 2, -20, 24) +
       clamp((p.edits?.added ?? 0) * 4 - (p.edits?.removed ?? 0) * 6, -30, 20) +
-      (p.verified ? 10 : 0),
+      (p.verified ? 10 : 0) -
+      (p.pending ? 5 : 0),
   );
 }
 

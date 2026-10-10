@@ -193,7 +193,19 @@ export function Dashboard({
         {...panelActions}
       />
       {itinerary.status === "success" && days.length > 0 && onRegroupDays && (
-        <CourseMapPanel days={days} pmChoice={pmChoice} onApply={onRegroupDays} onChangeItem={itemActions.onChangeItem} />
+        <CourseMapPanel
+          days={days}
+          pmChoice={pmChoice}
+          onApply={onRegroupDays}
+          onChangeItem={itemActions.onChangeItem}
+          onChangeDay={itemActions.onChangeDay}
+          hotels={input.selectedHotels}
+          destination={input.destination}
+          onHotelCoords={(city, lat, lng) => {
+            const h = input.selectedHotels[city];
+            if (h) onInputChange({ selectedHotels: { ...input.selectedHotels, [city]: { ...h, lat, lng } } });
+          }}
+        />
       )}
       {itinerary.status === "success" && days.length > 1 && onPaceDays && <PacePanel days={days} pmChoice={pmChoice} pace={input.pace} needs={input} onApply={onPaceDays} />}
       {itinerary.status === "success" && days.length > 0 && (

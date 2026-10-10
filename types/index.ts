@@ -898,7 +898,11 @@ export interface HotelCandidate {
 export type SelectedHotel = Pick<
   HotelCandidate,
   "name" | "grade" | "area" | "nearestStation" | "walkMinutes" | "nightlyLow" | "nightlyHigh" | "priceBasis" | "mapUrl"
->;
+> & {
+  /** 숙소 좌표 (코스 지도의 [숙소 위치 찾기]) — 하루 동선의 출발·도착점 */
+  lat?: number;
+  lng?: number;
+};
 
 /** 검색 결과의 출처 */
 export interface SearchSource {

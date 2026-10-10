@@ -17,7 +17,7 @@ test("지식 창고: 쌓인 장소를 점수순으로 보고, 확인·직접 추
   await page.getByRole("button", { name: "지식 창고" }).click();
   const dlg = page.getByRole("dialog", { name: "지식 창고" });
   await dlg.getByRole("radio", { name: new RegExp(city) }).click();
-  const rows = dlg.getByRole("row");
+  const rows = dlg.getByRole("table", { name: "장소 목록" }).getByRole("row");
   // 오행산: 여행사 1곳 + 우리 고객 추천 → 1위
   await expect(rows.nth(1)).toContainText("오행산");
   await expect(rows.nth(1)).toContainText("우리 고객 추천 1");
@@ -95,4 +95,26 @@ test("고객 후기: 좋았던 곳을 고르면 지식 창고에 쌓인다", asy
   const k = (await (await page.request.get(`/api/knowledge?city=${encodeURIComponent(city)}`)).json()) as { doc: { places: { name: string; votes?: { best: number; worst: number } }[] } };
   expect(k.doc.places.find((p) => p.name === "바나힐")?.votes).toEqual({ best: 1, worst: 0 });
   expect(k.doc.places.find((p) => p.name === "오행산")?.votes).toEqual({ best: 0, worst: 1 });
+});
+
+test("지식 창고: 발전 지표와, 웹 조사로 새로 들어온 곳의 검수 대기", async ({ page }) => {
+  await mockAi(page);
+  await page.goto("/");
+  const city = uniq();
+  await page.request.post("/api/knowledge/learn", { data: { kind: "edits", city, removed: ["쇼핑센터"], added: [] } });
+  const card = (name: string, pending: boolean) => ({ key: name, name, area: "", kind: "sight", popularity: 80, seen: 1, agencies: ["하나투어"], fits: [], likes: ["전망"], dislikes: [], tips: [], stayWeb: 60, fieldNotes: [], sources: [{ title: "블로그", url: "https://example.com/x" }], verified: false, pending, updatedAt: "" });
+  await page.route("**/api/knowledge/research", (r) =>
+    r.fulfill({ contentType: "application/json", body: JSON.stringify({ researched: true, doc: { city, places: [card("새 전망대", true), card("오래된 곳", false)], courses: [], needs: [], fieldNotes: [], researchedAt: new Date().toISOString(), researchCount: 1, learnedCount: 0, updatedAt: "" } }) }),
+  );
+  await page.getByRole("button", { name: "더보기" }).click();
+  await page.getByRole("button", { name: "지식 창고" }).click();
+  const dlg = page.getByRole("dialog", { name: "지식 창고" });
+  await expect(dlg.getByRole("table", { name: "발전 지표" })).toBeVisible();
+  await dlg.getByLabel("조사할 도시").fill(city);
+  await dlg.getByRole("button", { name: "웹에서 (다시) 조사" }).click();
+  await dlg.getByRole("tab", { name: "검수 대기 1" }).click();
+  const queue = dlg.getByRole("list", { name: "검수 대기" });
+  await expect(queue).toContainText("새 전망대");
+  await expect(queue).not.toContainText("오래된 곳");
+  await expect(queue.getByRole("link", { name: /출처: 블로그/ })).toBeVisible();
 });
