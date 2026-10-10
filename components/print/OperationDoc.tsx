@@ -1,4 +1,5 @@
 import { bookingChecklist } from "@/lib/bookingChecklist";
+import { timeRange } from "@/lib/dayTidy";
 import { calcDayEnd, computeItemTimings, dayMeetingTime, STANDARD_DAY_END } from "@/lib/dayLoad";
 import { dayDate, tripPeriod } from "@/lib/documents";
 import { continuousDriving } from "@/lib/driverHours";
@@ -101,7 +102,7 @@ export function OperationDoc({ input, days, pmChoice, quote, meta, company }: Do
                   const notes = fieldNotes(item, travelers);
                   return (
                     <tr key={item.id} className="break-inside-avoid border-b border-slate-100 align-top">
-                      <td className="px-1.5 py-1 tabular-nums">{t ? `${t.start}–${t.end}` : ""}</td>
+                      <td className="px-1.5 py-1 tabular-nums">{t ? timeRange(t, "–") : ""}</td>
                       <td className="px-1.5 py-1">
                         <span className="mr-1 text-[9.5px] text-slate-500">[{TYPE_LABELS[item.type ?? "sightseeing"] ?? "관광"}]</span>
                         <span className="font-medium">{item.name}</span>

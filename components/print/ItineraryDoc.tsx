@@ -1,3 +1,4 @@
+import { timeRange } from "@/lib/dayTidy";
 import { CANCELLATION_TERMS, dayDate, dayMeals, documentItems, includeLists, noticeLines, tripPeriod } from "@/lib/documents";
 import { computeItemTimings, dayMeetingTime, type ItemTiming } from "@/lib/dayLoad";
 import { hotelLines } from "@/lib/exportText";
@@ -27,7 +28,7 @@ function ItemLine({ item, input, number, timing }: { item: ItineraryItem; input:
       <div className="flex gap-2">
         <span className="w-4 shrink-0 text-right font-semibold text-slate-500">{number}.</span>
         <span>
-          {timing && <span className="mr-1.5 font-semibold tabular-nums text-emerald-700">{timing.start}–{timing.end}</span>}
+          {timing && <span className="mr-1.5 font-semibold tabular-nums text-emerald-700">{timeRange(timing, "–")}</span>}
           <span className="font-medium">{item.name}</span>
           {notes.length > 0 && <span className="text-slate-500"> ({notes.join(" · ")})</span>}
           {item.description && <span className="block text-slate-500">{item.description}</span>}

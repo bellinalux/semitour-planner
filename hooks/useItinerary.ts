@@ -7,6 +7,7 @@ import { appendDay, defaultPmChoice, mapDayItems, moveItem, relocateItem, reorde
 import { insertItem, insertItems } from "@/lib/tourItem";
 import type { CourseFile } from "@/lib/courseFile";
 import type { ParsedSupplierQuote } from "@/lib/schemas/course";
+import { tidyDay, tidyDays } from "@/lib/dayTidy";
 import type {
   AsyncState,
   CourseMeta,
@@ -116,7 +117,9 @@ export function useItinerary() {
 
     setState({ status: "loading" });
     try {
-      const result = await requestItinerary(input, courseFile, controller.signal);
+      // 투숙 체류시간·20분 안 되는 자유시간처럼 이해 안 되는 항목은 정리해서 받는다
+      const raw = await requestItinerary(input, courseFile, controller.signal);
+      const result = { ...raw, days: tidyDays(raw.days) };
       const choice = defaultPmChoice(result.days);
       setDays(result.days);
       setPmChoice(choice);
@@ -165,7 +168,7 @@ export function useItinerary() {
   }, []);
 
   /** 웹 확인 결과를 반영한 일정으로 통째로 바꾼다 */
-  const replaceDays = useCallback((next: DayPlan[]) => setDays(next), []);
+  const replaceDays = useCallback((next: DayPlan[]) => setDays(tidyDays(next)), []);
 
   /** 날짜 전체에 속하는 값(오전 미팅 시각 등)을 고친다. */
   const updateDay = useCallback((dayNo: number, patch: Partial<DayPlan>) => {
@@ -242,7 +245,7 @@ export function useItinerary() {
         prev.map((day) => {
           const repl = replacement.get(day.day);
           if (!repl) return day;
-          return { ...repl, day: day.day, overnightCity: repl.overnightCity?.trim() || city };
+          return tidyDay({ ...repl, day: day.day, overnightCity: repl.overnightCity?.trim() || city });
         }),
       );
       setPmChoice((prev) => {
@@ -273,7 +276,8 @@ export function useItinerary() {
   /** 저장된 일정을 그대로 되살린다 (진행 중인 생성 요청은 취소) */
   const restore = useCallback((saved: Pick<GeneratedItinerary, "days" | "pmChoice" | "meta"> & { generatedCurrency: CurrencyCode | null }) => {
     controllerRef.current?.abort();
-    setDays(saved.days);
+    // 예전에 만든 일정의 투숙 체류시간·짧은 자유시간도 열 때 정리한다
+    setDays(tidyDays(saved.days));
     setPmChoice(saved.pmChoice);
     setMeta(saved.meta);
     setResearchInfo({ sources: [], researched: false });

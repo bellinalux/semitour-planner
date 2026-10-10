@@ -64,7 +64,7 @@ test("이미 만든 일정표: 다시 열면 항공 시각을 원문 시각(09:5
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "항공 출발" })).toBeVisible();
-  await expect(page.getByText("09:50 – 09:50")).toBeVisible();
+  await expect(page.getByText("09:50", { exact: true })).toBeVisible(); // 머무는 시간이 없는 항목은 시작 시각만
   await expect(page.getByText("12:50 – 13:30")).toBeVisible(); // 마카오 도착 12:50, 가이드 미팅 40분
   await expect(page.getByText("13:50 – 14:40")).toBeVisible(); // 점심 — 예전 시각 기준 자유시간은 빠진다
 });

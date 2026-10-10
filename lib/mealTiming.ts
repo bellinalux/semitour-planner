@@ -16,6 +16,11 @@ function mealWindowStart(item: ItineraryItem): string | null {
 }
 
 const FILLER_NOTE = "다음 식사 시간에 맞춰 비워 둔 자유시간입니다.";
+/**
+ * 식사 시간대보다 이만큼 이른 것은 그대로 둔다 (분) — 식당은 보통 11시·17시 반에 열고, 여행사 일정표도 11시 점심을 흔히 쓴다.
+ * 이보다 더 이르면 그때만 자유시간을 넣는다 ("자유시간 10분" 같은 이해 안 되는 항목을 만들지 않는다).
+ */
+export const MEAL_EARLY_OK = 30;
 
 function freeTimeItem(id: string, minutes: number): ItineraryItem {
   return {
@@ -57,7 +62,7 @@ export function enforceMealWindows(items: ItineraryItem[], meetingTime: string =
     const windowStart = mealWindowStart(item);
     if (windowStart !== null) {
       const windowStartMinutes = clockMinutes(windowStart);
-      if (windowStartMinutes !== null && clock < windowStartMinutes) {
+      if (windowStartMinutes !== null && windowStartMinutes - clock > MEAL_EARLY_OK) {
         const gap = windowStartMinutes - clock;
         result.push(freeTimeItem(`${item.id}-free-${freeTimeSeq++}`, gap));
         clock = windowStartMinutes;

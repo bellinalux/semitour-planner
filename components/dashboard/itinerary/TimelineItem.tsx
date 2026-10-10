@@ -7,6 +7,7 @@ import type { ItemTiming } from "@/lib/dayLoad";
 import { feeHint, isLocalPay } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { feeLabel, ITEM_TYPE_META, ITEM_TYPES, stayTimeLabel } from "@/lib/itemTypes";
+import { timeRange } from "@/lib/dayTidy";
 import type { SegmentKind } from "@/lib/segmentLibrary";
 import type { Admission, CurrencyCode, DayPlan, ItemType, ItineraryItem, OptionSuggestion, TourSlot } from "@/types";
 import { AccessibilityBox, FeeCheckBadges, RelocateControls, SuggestedOptions, selectClass, type ItemPatch } from "./TimelineItemParts";
@@ -100,7 +101,7 @@ export function TimelineItem({
       <div className={`min-w-0 flex-1 ${isLast ? "" : "pb-3"}`}>
         {timing && (
           <p className="mb-0.5 text-[11px] font-semibold tabular-nums text-indigo-600" title="오전 미팅 시각부터 계산한 예상 시작·종료 시각">
-            {timing.start} – {timing.end}
+            {timeRange(timing)}
           </p>
         )}
         {editing ? (
@@ -175,7 +176,13 @@ export function TimelineItem({
         {item.description && <p className="mt-1 text-xs leading-5 text-slate-600">{item.description}</p>}
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <DurationInput label={stayTimeLabel(item.type)} icon={Clock} value={item.stayMinutes} onChange={(stayMinutes) => onChangeItem(item.id, { stayMinutes })} />
+          {item.type === "hotel" && item.stayMinutes === 0 && !editing ? (
+            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600" title="그날 마지막 숙소는 머무는 시간을 두지 않습니다 (편집에서 바꿀 수 있음)">
+              투숙 · 체류시간 없음
+            </span>
+          ) : (
+            <DurationInput label={stayTimeLabel(item.type)} icon={Clock} value={item.stayMinutes} onChange={(stayMinutes) => onChangeItem(item.id, { stayMinutes })} />
+          )}
           {item.timeNote && (
             <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600" title="원문에 적힌 소요 시간 표기">
               {item.timeNote}
