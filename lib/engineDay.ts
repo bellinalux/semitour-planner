@@ -1,3 +1,4 @@
+import { isCoord } from "@/lib/coords";
 /**
  * 세미투어 일정(DayPlan) ↔ 코스 엔진 요청/결과 변환 (화면과 무관한 순수 함수).
  *  - 업체 코스(linear) 날: 엔진 추천 순서로 바꾸기까지
@@ -13,7 +14,7 @@ import { roundMinutes } from "@/lib/format";
 import { refitMealWindows } from "@/lib/mealTiming";
 
 export interface EngineDayRequest {
-  places: { id: string; name: string; stayMin: number; kind?: "sight" | "meal" | "free" | "transfer" | "end"; priority?: 1 | 2 | 3; fixedOrder?: "first" | "last"; meal?: "lunch" | "dinner" | "cafe"; area?: string; region?: string; best?: "night" }[];
+  places: { id: string; name: string; stayMin: number; kind?: "sight" | "meal" | "free" | "transfer" | "end"; priority?: 1 | 2 | 3; fixedOrder?: "first" | "last"; meal?: "lunch" | "dinner" | "cafe"; area?: string; region?: string; best?: "night"; lat?: number; lng?: number }[];
   city: string; country: string; date?: string; start: string; maxEnd: string;
   mode: "car" | "walk" | "public"; audience: "any" | "couple" | "family" | "senior" | "group"; reorder: boolean; lookup: boolean;
   /** 앱 일정표의 이동 시간 (이어지는 두 항목마다) — 엔진이 일정표와 같은 시계로 채점하게 */
@@ -95,6 +96,8 @@ export function buildDayRequest(day: DayPlan, pmChoice: PmChoice, o: { destinati
         ...(kind === "meal" ? { meal: mealKind(i, start) } : {}),
         ...(i.timeCheck?.basis === "area" && i.timeCheck.area ? { area: i.timeCheck.area } : {}),
         ...(i.timeCheck?.basis === "area" && i.timeCheck.region ? { region: i.timeCheck.region } : {}),
+        // 지도에서 고친 좌표(또는 지난 점검에서 찾은 좌표)를 그대로 쓴다
+        ...(isCoord(i.lat, i.lng) ? { lat: i.lat, lng: i.lng } : {}),
         // 야경·분수쇼 같은 밤 일정 — 숙소 쪽으로 돌아가며 하는 일정이라 지나온 구역이어도 지그재그로 보지 않는다
         ...(kind === "sight" && NIGHT.test(`${i.name} ${i.description}`) ? { best: "night" as const } : {}),
       };

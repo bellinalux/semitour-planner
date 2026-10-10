@@ -90,6 +90,8 @@ export async function mockAi(page: Page) {
   });
   await page.route("**/api/find-competitors", (r) => r.fulfill(json({ products: [competitor("하나투어", 450000), competitor("모두투어", 480000)], sources: [], searched: true, searchedAt: new Date().toISOString() })));
   await page.route("**/api/fx**", (r) => r.fulfill(json({ krwPerUnit: 1 })));
+  // 지도 바탕(OpenFreeMap)은 바깥 서버를 부르지 않고 빈 바탕으로
+  await page.route("https://tiles.openfreemap.org/**", (r) => r.fulfill(json({ version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#eef2f7" } }] })));
   // 의견·속도 기록 등 서버 저장 API는 로컬(잠금 꺼짐)에서 403 — 그대로 둔다
 }
 

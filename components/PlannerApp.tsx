@@ -325,6 +325,7 @@ export function PlannerApp() {
     currency: input.currency,
     tripScope: input.tripScope,
     replaceDays: history.labeled("코스 점검 적용"),
+    saveCoords: itinerary.replaceDays,
     beforeAuto: { run: dayTimeCheck.run, busy: dayTimeCheck.running !== null },
   });
 
@@ -628,6 +629,7 @@ export function PlannerApp() {
             onSelectPm={itinerary.selectPmOption}
             onInputChange={update}
             onReplaceDays={history.labeled("가격 낮추기")}
+            onRegroupDays={history.labeled("지역 묶기")}
             onOpenSettings={openSettings}
             autoQuote={{ running: autoQuote.running, run: () => void autoQuote.run() }}
             budgetFit={budgetFit}

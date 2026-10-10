@@ -19,6 +19,7 @@ import type { SettingsSection } from "@/components/form/settingsFocus";
 import { ExportBar } from "./ExportBar";
 import { DocumentBar } from "./DocumentBar";
 import { ShareLinkBox } from "./ShareLinkBox";
+import { CourseMapPanel } from "./CourseMapPanel";
 import { CustomerNoticeBox } from "./CustomerNoticeBox";
 import { OpsPanel } from "./OpsPanel";
 import { VersionPanel } from "./VersionPanel";
@@ -114,6 +115,8 @@ interface Props {
   onInputChange: (patch: Partial<TripInput>) => void;
   /** 가격 낮추기에서 일정을 바꿀 때 */
   onReplaceDays?: (days: DayPlan[]) => void;
+  /** 코스 지도 · 지역 묶기 — 다시 나눈 안 적용 (되돌리기 기록) */
+  onRegroupDays?: (days: DayPlan[]) => void;
   /** 견적 경고에서 입력 화면의 해당 폴더로 이동한다 */
   onOpenSettings: (section: SettingsSection) => void;
   /** 견적 경고에서 바로 실행하는 자동 견적 */
@@ -149,6 +152,7 @@ export function Dashboard({
   ops,
   onInputChange,
   onReplaceDays,
+  onRegroupDays,
   onOpenSettings,
   autoQuote,
   budgetFit,
@@ -184,6 +188,9 @@ export function Dashboard({
         onRegenerateCity={regionActions.onRegenerateCity}
         {...panelActions}
       />
+      {itinerary.status === "success" && days.length > 0 && onRegroupDays && (
+        <CourseMapPanel days={days} pmChoice={pmChoice} onApply={onRegroupDays} onChangeItem={itemActions.onChangeItem} />
+      )}
       {itinerary.status === "success" && days.length > 0 && (
         <TourCatalogPanel
           input={input}

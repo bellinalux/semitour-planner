@@ -1,3 +1,4 @@
+import { isCoord } from "@/lib/coords";
 import { z } from "zod";
 import { computeItemTimings, dayMeetingTime, dayTourStart, hotelLeadMinutes } from "@/lib/dayLoad";
 import { dayDate, includeLists, tripPeriod } from "@/lib/documents";
@@ -34,7 +35,7 @@ export const sharedItinerarySchema = z.object({
         hotel: str(120),
         /** 조·중·석 표기 한 줄 */
         meals: str(160).default(""),
-        items: z.array(z.object({ time: str(20), name: str(160), kind: z.enum(["sight", "meal", "move", "hotel", "free", "flight", "other"]), note: str(200), photo: z.string().max(120_000).optional() })).max(40),
+        items: z.array(z.object({ time: str(20), name: str(160), kind: z.enum(["sight", "meal", "move", "hotel", "free", "flight", "other"]), note: str(200), photo: z.string().max(120_000).optional(), lat: z.number().min(-90).max(90).optional(), lng: z.number().min(-180).max(180).optional() })).max(40),
       }),
     )
     .max(60),
@@ -124,6 +125,7 @@ export function buildSharedItinerary(
             name: cut(it.name, 160),
             kind: KIND[it.type ?? "sightseeing"] ?? "other",
             ...(isPhotoData(it.photo, 120_000) ? { photo: it.photo } : {}),
+            ...(isCoord(it.lat, it.lng) ? { lat: it.lat, lng: it.lng } : {}),
             note: (it.payment === "local" ? `${en ? "Paid locally" : "현지 지불"}${it.description ? ` · ${tr(it.description.slice(0, 160))}` : ""}` : tr(it.description?.slice(0, 160))).slice(0, 200),
           };
           }),

@@ -6,6 +6,8 @@ import { gradeText } from "@/lib/itemTypes";
 import { conditionTags, dayRegion, dayTable, defaultAlternative, mealLabel, shoppingStops, shortDescription, stayText, visitStyle } from "@/lib/itineraryDoc";
 import { singleSupplement } from "@/lib/pricing";
 import type { ItineraryItem } from "@/types";
+import { mapPoints } from "@/lib/regionPlan";
+import { RouteFigure } from "./RouteFigure";
 import { DocCover, DocCoverPage, DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
 
 const ACCESSIBILITY_LABELS = { ok: "이용 가능", limited: "일부 구간 어려움", difficult: "이용 어려움", unknown: "확인 못함" } as const;
@@ -163,6 +165,11 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
         </DocSection>
       )}
 
+      {mapPoints(days, pmChoice).flat().length >= 3 && (
+        <DocSection title="코스 그림">
+          <RouteFigure days={days} pmChoice={pmChoice} />
+        </DocSection>
+      )}
       <DocSection title="일자별 일정">
         <table className="w-full border-collapse text-[10.5px]">
           <thead>

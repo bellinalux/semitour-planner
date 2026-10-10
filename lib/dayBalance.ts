@@ -26,7 +26,7 @@ export interface DayMove {
 /** 옮기지 않는 항목 — 항공·이동·숙소·점심·저녁·저녁 일정 (카페·간식은 그 동네 구역과 함께 옮긴다) */
 const FIXED = new Set(["flight", "transfer", "hotel"]);
 const EVENING = /야경|야시장|야간|분수쇼|나이트|night/i;
-const movable = (i: ItineraryItem) =>
+export const movable = (i: ItineraryItem) =>
   !FIXED.has(i.type ?? "sightseeing") &&
   i.type !== "free_time" &&
   (i.type !== "meal" || isCafeMeal(i)) &&
@@ -40,7 +40,7 @@ function lunchNeeded(items: ItineraryItem[], addMinutes: number): boolean {
 }
 /** 받는 날에 시작 시각이 없으면 — 관광지 문 여는 시간에 맞춰 09:00 미팅 */
 const MOVED_MEETING = "09:00";
-const blockMinutes = (items: ItineraryItem[]) => items.reduce((s, i) => s + Math.max(0, i.stayMinutes) + Math.max(0, i.travelMinutesToNext ?? 0), 0);
+export const blockMinutes = (items: ItineraryItem[]) => items.reduce((s, i) => s + Math.max(0, i.stayMinutes) + Math.max(0, i.travelMinutesToNext ?? 0), 0);
 
 /** 옮길 묶음 후보 — 구역(timeCheck.area)이 있으면 구역 단위, 없으면 이어진 관광지 묶음 */
 function blocks(items: ItineraryItem[]): ItineraryItem[][] {
@@ -73,7 +73,7 @@ function tourLoad(day: DayPlan, pmChoice: PmChoice): number {
   return calcDayLoad(day, pmChoice).totalMinutes - flight;
 }
 
-function roomOf(day: DayPlan, pmChoice: PmChoice): number {
+export function roomOf(day: DayPlan, pmChoice: PmChoice): number {
   const items = dayItems(day, pmChoice);
   const free = items.filter((i) => i.type === "free_time").reduce((s, i) => s + i.stayMinutes, 0);
   const load = tourLoad(day, pmChoice);

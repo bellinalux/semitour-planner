@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SharedDayMap } from "@/components/map/SharedDayMap";
 import { getShared } from "@/lib/server/shareStore";
 import type { SharedItinerary } from "@/lib/shareItinerary";
 
@@ -75,6 +76,7 @@ export default async function SharedItineraryPage({ params }: { params: Promise<
                 </li>
               ))}
             </ol>
+            <SharedDayMap day={d.day} index={it.days.indexOf(d)} items={d.items} label={lang === "en" ? "View on map" : "지도로 보기"} />
             {d.meals && <p className="mt-2 text-xs text-slate-600">🍴 {d.meals}</p>}
             {d.hotel && (
               <p className="mt-2 text-xs text-slate-500">

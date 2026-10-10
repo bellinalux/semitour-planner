@@ -3,6 +3,7 @@
 import { createContext, useEffect, useRef, useState } from "react";
 import { calcDayLoad } from "@/lib/dayLoad";
 import { dayItems } from "@/lib/itinerary";
+import { withCoords } from "@/lib/regionPlan";
 import { findZigzag, groupByArea, type Zigzag } from "@/lib/routeOrder";
 import { applyDayMove, insertBreak, refitDay, suggestDayMoves, type DayMove } from "@/lib/dayBalance";
 import { applyAlternative, applyDayResult, buildDayRequest } from "@/lib/engineDay";
@@ -75,6 +76,8 @@ interface Args {
   currency: CurrencyCode;
   tripScope: TripScope;
   replaceDays: (days: DayPlan[]) => void;
+  /** 찾은 장소 좌표를 일정에 넣는다 (되돌리기 기록에 쌓지 않는 저장) — 코스 지도·지역 묶기에 쓴다 */
+  saveCoords?: (days: DayPlan[]) => void;
   /** 자동 점검 전에 할 일(긴 날 시간 검증)과, 그 일이 끝날 때까지 기다릴지 */
   beforeAuto?: { run: (dayNos: number[]) => void; busy: boolean };
 }
@@ -95,7 +98,7 @@ function scoreOf(res: PlanResponse): EngineScore {
  * 코스 엔진 점검 상태 — 날짜별 점검 결과·점수·추천 변경안, 결과 적용, "100점 만들기", 되돌리기.
  * 한 번 점검한 날은 일정을 고치면 잠시 뒤 자동으로 다시 채점한다(장소 정보는 서버에 저장돼 있어 다시 찾지 않는다).
  */
-export function useCourseEngine({ days, pmChoice, destination, departureDate, travelType, currency, tripScope, replaceDays, beforeAuto }: Args): CourseEngineView {
+export function useCourseEngine({ days, pmChoice, destination, departureDate, travelType, currency, tripScope, replaceDays, saveCoords, beforeAuto }: Args): CourseEngineView {
   const [byDay, setByDay] = useState<Record<number, EngineDayState>>({});
   const [alts, setAlts] = useState<Record<number, EngineAltState>>({});
   const [scores, setScores] = useState<Record<number, EngineScore>>({});
@@ -125,6 +128,13 @@ export function useCourseEngine({ days, pmChoice, destination, departureDate, tr
             const res = j as PlanResponse;
             setByDay((s) => ({ ...s, [d.day]: { status: "done", res } }));
             setScores((s) => ({ ...s, [d.day]: scoreOf(res) }));
+            if (saveCoords) {
+              const next = withCoords(latest.current, res.places);
+              if (next !== latest.current) {
+                latest.current = next;
+                saveCoords(next);
+              }
+            }
           } else setByDay((s) => ({ ...s, [d.day]: { status: "error", message: j?.error?.message ?? "코스 엔진 오류" } }));
         } catch {
           setByDay((s) => ({ ...s, [d.day]: { status: "error", message: "서버에 연결하지 못했습니다." } }));

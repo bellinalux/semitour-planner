@@ -477,6 +477,11 @@ export interface ItineraryItem {
   payment?: "included" | "local";
   /** 직접 올린 장소 사진 (작게 줄인 data URL) — 일정표·상품 소개서·웹 일정표에 쓴다 */
   photo?: string;
+  /** 장소 좌표 (코스 점검이 찾은 값, 또는 지도에서 핀을 옮겨 고친 값) — 코스 지도·지역 묶기에 쓴다 */
+  lat?: number;
+  lng?: number;
+  /** 좌표를 사람이 지도에서 고쳤으면 true — 코스 점검이 덮어쓰지 않는다 */
+  coordEdited?: boolean;
   /** 현지 통화로 확인한 입장·체험 요금 (웹 확인 결과). 견적 통화와 다를 수 있다 */
   local?: { currency: CurrencyCode; amount: number };
   /** 입장료 웹 확인 결과 */
