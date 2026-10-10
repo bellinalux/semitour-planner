@@ -176,7 +176,7 @@ export function TimelineItem({
         {item.description && <p className="mt-1 text-xs leading-5 text-slate-600">{item.description}</p>}
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {item.type === "hotel" && item.stayMinutes === 0 && !editing ? (
+          {(item.type === "flight" || item.type === "transfer") && !editing ? null : item.type === "hotel" && item.stayMinutes === 0 && !editing ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600" title="그날 마지막 숙소는 머무는 시간을 두지 않습니다 (편집에서 바꿀 수 있음)">
               투숙 · 체류시간 없음
             </span>

@@ -129,3 +129,35 @@ test("영문 웹 일정표 링크 · 시리즈 출발 할인 · 채널 등록 �
   await expect(page.getByRole("heading", { name: /Day 1/ })).toBeVisible();
   await expect(page.getByRole("link", { name: "Call us" }).or(page.getByText("Last updated"))).toBeVisible();
 });
+
+test("여행일정표: 업계 표 형식(일자·지역·교통편·시간·일정·식사)과 조건 표식·쇼핑·선택관광·가이드 경비·여행 정보", async ({ page }) => {
+  await mockAi(page);
+  await page.addInitScript(() => {
+    window.print = () => undefined;
+  });
+  let asked = false;
+  await page.route("**/api/travel-info", async (r) => {
+    asked = true;
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify({ timeDifference: "한국보다 2시간 느림", voltage: "220V, A·C타입", currency: "동(VND)", visa: "45일 무비자", emergency: "경찰 113", embassy: "주다낭 총영사관", weather: "우기, 우산 필요", searched: true }) });
+  });
+  await seed(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "여행일정표" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "인쇄 전 확인" });
+  if (await confirm.isVisible().catch(() => false)) {
+    await confirm.getByRole("checkbox").check();
+    await confirm.getByRole("button", { name: "인쇄" }).click();
+  }
+  const doc = page.locator(".print-root");
+  await expect(doc).toContainText("일자별 일정");
+  // 인쇄 영역은 화면 읽기에서 숨겨져(aria-hidden) 있어 태그로 확인한다
+  await expect(doc.locator("th")).toContainText(["일자", "지역", "교통편", "시간", "일정", "식사"]);
+  await expect(doc).toContainText("제1일");
+  await expect(doc.locator('ul[aria-label="상품 조건"]')).toContainText("노쇼핑");
+  await expect(doc).toContainText("노옵션 — 선택관광이 없습니다.");
+  await expect(doc).toContainText("노쇼핑 — 일정에 쇼핑센터 방문이 없습니다.");
+  await expect(doc).toContainText("가이드 · 기사 경비");
+  await expect(doc).toContainText("한국보다 2시간 느림");
+  await expect(doc).toContainText("상기 일정은 항공 및 현지 사정");
+  expect(asked).toBe(true);
+});

@@ -358,6 +358,8 @@ export interface TripInput {
   pickupNote: string;
   /** 공항 샌딩(출국) 안내 문구. 비어 있으면 문서·일정표에 표시하지 않는다 */
   sendingNote: string;
+  /** 한국 출발 공항 미팅 안내 (예: 인천공항 1터미널 3층 M카운터, 출발 3시간 전). 비우면 일정표에 기본 안내 */
+  meetingNote: string;
   /** 숙박 다음날 아침 호텔 조식이 포함되는지. 랜드만(land) 구성이면 숙박이 없어 무시된다 */
   breakfastIncluded: boolean;
 }
@@ -940,6 +942,8 @@ export interface TourOption {
   participationRate: number;
   link?: string;
   note: string;
+  /** 선택하지 않은 사람의 일정 (대체 일정·대기 장소·가이드 동행) — 국외여행상품 정보제공 표준안 */
+  alternative?: string;
 }
 
 /** ---- 항공 시세 (Travelpayouts 캐시 최저가) ---- */

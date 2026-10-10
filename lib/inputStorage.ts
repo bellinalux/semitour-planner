@@ -63,6 +63,7 @@ export function normalizeInput(saved: unknown): TripInput {
     regionPlan: typeof s.regionPlan === "string" ? s.regionPlan : DEFAULT_INPUT.regionPlan,
     pickupNote: typeof s.pickupNote === "string" ? s.pickupNote : DEFAULT_INPUT.pickupNote,
     sendingNote: typeof s.sendingNote === "string" ? s.sendingNote : DEFAULT_INPUT.sendingNote,
+    meetingNote: typeof s.meetingNote === "string" ? s.meetingNote : DEFAULT_INPUT.meetingNote,
     breakfastIncluded: typeof s.breakfastIncluded === "boolean" ? s.breakfastIncluded : DEFAULT_INPUT.breakfastIncluded,
     travelerNames: Array.isArray(s.travelerNames) ? s.travelerNames.filter((n): n is string => typeof n === "string") : DEFAULT_INPUT.travelerNames,
     competitors: Array.isArray(s.competitors)

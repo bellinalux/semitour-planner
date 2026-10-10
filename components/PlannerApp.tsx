@@ -47,6 +47,7 @@ import { planToProduct } from "@/lib/planToProduct";
 import { buildSharedItinerary } from "@/lib/shareItinerary";
 import { loadPriceRules, ruleNotices } from "@/lib/seriesPricing";
 import { englishTexts } from "@/lib/englishDoc";
+import type { TravelInfo } from "@/lib/schemas/travelInfo";
 import { postJson } from "@/lib/api";
 import type { DocKind } from "@/components/print/PrintDocuments";
 import { listenErrors } from "@/lib/errorReport";
@@ -140,11 +141,16 @@ export function PlannerApp() {
   // 영문 일정표·견적서용 번역 (한글 글 → 영어, 이 화면에서 모아 둔다)
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const [translating, setTranslating] = useState(false);
+  // 일정표 「여행 정보」 (시차·전압·통화·입국·긴급 연락처) — 일정표를 인쇄할 때 한 번 찾는다
+  const [travelInfo, setTravelInfo] = useState<{ key: string; info: TravelInfo } | null>(null);
   // 인쇄 문서는 견적이 준비된 뒤에만 만들 수 있다
   const docData = useMemo(
     // 고객 문서는 선택한 판매 채널의 소비자가를 쓰고, 내부 검토서는 원래 견적(rawQuote)으로 모든 채널을 본다
-    () => (quote?.ok ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company, translations } : null),
-    [quote, input, days, pmChoice, meta, company, translations],
+    () =>
+      quote?.ok
+        ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company, translations, travelInfo: travelInfo?.key === input.destination.trim() ? travelInfo.info : null }
+        : null,
+    [quote, input, days, pmChoice, meta, company, translations, travelInfo],
   );
 
   const stays = useMemo(() => overnightNights(days), [days]);
@@ -408,8 +414,24 @@ export function PlannerApp() {
     }
   };
 
-  /** 문서 인쇄 — 영문 문서는 아직 번역하지 않은 글을 먼저 번역한다 */
+  /** 일정표 여행 정보 — 같은 여행지는 한 번만 (서버가 30일 보관). 못 찾아도 인쇄는 한다 */
+  const ensureTravelInfo = async () => {
+    const dest = input.destination.trim();
+    if (!dest || travelInfo?.key === dest) return;
+    setTranslating(true);
+    try {
+      const info = await postJson<TravelInfo>("/api/travel-info", { destination: dest, month: /^\d{4}-\d{2}/.test(input.departureDate) ? input.departureDate.slice(0, 7) : "" });
+      setTravelInfo({ key: dest, info });
+    } catch {
+      /* 여행 정보 없이 인쇄 */
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  /** 문서 인쇄 — 영문 문서는 아직 번역하지 않은 글을 먼저 번역하고, 일정표는 여행 정보를 먼저 찾는다 */
   const printDocument = async (kind: DocKind) => {
+    if (kind === "itinerary") await ensureTravelInfo();
     if (kind === "english" && !(await ensureEnglish())) {
       window.alert("영문 번역을 하지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
       return;
@@ -443,7 +465,7 @@ export function PlannerApp() {
 
   return (
     <>
-    <PrintDocuments kind={printKind} data={docData} />
+    <PrintDocuments kind={printKind} data={docData ? { ...docData, season: season.result } : null} />
     <div className="screen-only pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40 flex flex-col items-end gap-2 [&>*]:pointer-events-auto">
     {history.last && (
       <button
@@ -465,7 +487,7 @@ export function PlannerApp() {
         { key: "fees", label: "입장료·체류시간 웹 확인", running: webChecks.feeCheck.state.status === "loading", typical: "30초~1분" },
         { key: "daytime", label: `일정 시간 검증${dayTimeCheck.running ? ` (DAY ${dayTimeCheck.running.join(", ")})` : ""}`, running: dayTimeCheck.running !== null, typical: "1분 안팎" },
         { key: "engine", label: "코스 점검", running: courseEngine.running, typical: "하루 10~40초" },
-        { key: "translate", label: "영문 일정표 번역", running: translating, typical: "10~30초" },
+        { key: "translate", label: "문서 준비 (번역·여행 정보)", running: translating, typical: "10~30초" },
         { key: "watch", label: "경쟁 상품 가격 정기 확인", running: competitorWatch.running, typical: "30초~1분" },
         { key: "season", label: "출발 시기 확인 (날씨·공휴일·축제)", running: season.running, typical: "20~40초" },
         { key: "competitors", label: "타업체 상품 찾기", running: competitorFind.running, typical: "30초~1분" },

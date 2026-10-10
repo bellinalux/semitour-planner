@@ -65,6 +65,7 @@ export async function mockAi(page: Page) {
   await page.route("**/api/competitor-itinerary", (r) =>
     r.fulfill(json({ itinerary: { found: false, days: [], mealCount: 0, tipNote: "", optionTours: [], sourceName: "", checkedAt: new Date().toISOString() } })),
   );
+  await page.route("**/api/travel-info", (r) => r.fulfill(json({ timeDifference: "", voltage: "", currency: "", visa: "", emergency: "", embassy: "", weather: "", searched: false })));
   await page.route("**/api/holidays**", (r) => r.fulfill(json({ holidays: [] })));
   await page.route("**/api/season-check", (r) => r.fulfill(json({ weather: "", notes: [], searched: false, sources: [] })));
   await page.route("**/api/suggest-restaurant", (r) => r.fulfill(json({ restaurants: [], sources: [], searched: false })));

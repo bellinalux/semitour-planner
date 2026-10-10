@@ -2,6 +2,8 @@ import { companyLines } from "@/lib/company";
 import { formatToday } from "@/lib/documents";
 import type { CompanyProfile, CourseMeta, DayPlan, QuoteData, TripInput } from "@/types";
 import type { PmChoice } from "@/lib/itinerary";
+import type { SeasonResponse } from "@/lib/schemas/season";
+import type { TravelInfo } from "@/lib/schemas/travelInfo";
 
 /** 인쇄 문서 세 종류가 함께 쓰는 자료 */
 export interface DocProps {
@@ -16,6 +18,10 @@ export interface DocProps {
   company: CompanyProfile;
   /** 영문 문서용 번역 (한글 글 → 영어) */
   translations?: Record<string, string>;
+  /** 일정표 「여행 정보」 (시차·전압·통화·입국·긴급 연락처) */
+  travelInfo?: TravelInfo | null;
+  /** 출발 시기 확인 (날씨) */
+  season?: SeasonResponse | null;
 }
 
 interface ShellProps {

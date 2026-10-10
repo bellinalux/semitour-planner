@@ -121,6 +121,7 @@ export const DEFAULT_INPUT: TripInput = {
   travelAlert: null,
   pickupNote: "",
   sendingNote: "",
+  meetingNote: "",
   breakfastIncluded: true,
 };
 

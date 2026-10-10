@@ -658,12 +658,13 @@ export function dayTourShare(
     period: `${c.length === "full" ? "당일" : "반일"} · ${fmt(tl.startMin)} 출발 ~ ${fmt(tl.endMin)} 도착`.slice(0, 80),
     travelers: c.travelers,
     priceLine: showPrice ? `1인 ${cost.salePrice.toLocaleString()} ${c.currency}`.slice(0, 120) : "",
-    days: [{ day: 1, date: "", theme: summary.slice(0, 120), hotel: "", items: [{ time: fmt(tl.startMin), name: `${c.baseName} 출발`.slice(0, 160), kind: "move" as const, note: "" }, ...items].slice(0, 40) }],
+    days: [{ day: 1, date: "", theme: summary.slice(0, 120), hotel: "", meals: "", items: [{ time: fmt(tl.startMin), name: `${c.baseName} 출발`.slice(0, 160), kind: "move" as const, note: "" }, ...items].slice(0, 40) }],
     included: includes,
     excluded: ["개인 경비", ...(c.stops.some((s) => s.kind === "meal") ? [] : ["식사"])],
     notices: ["현지 교통·날씨에 따라 순서·시각이 바뀔 수 있습니다."],
     company: { name: company.name.slice(0, 80), phone: company.phone.slice(0, 40), email: company.email.slice(0, 120) },
     updatedAt: now.toISOString(),
     lang: "ko",
+    tags: [c.length === "full" ? "당일 투어" : "반일 투어", ...(cost.vehicle ? ["전용차량"] : []), ...(cost.guides > 0 ? ["가이드 동행"] : [])],
   };
 }

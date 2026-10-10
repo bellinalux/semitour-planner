@@ -126,6 +126,13 @@ export function DocumentSection({ input, onChange, openSignal }: SectionProps) {
           />
         </div>
         <p className="-mt-2 text-[11px] leading-4 text-slate-500">비워 두면 일정표에 표시하지 않습니다. 일정 속 이동 항목과 별개로, 픽업·샌딩 담당·장소·시간 등을 안내 문구로 적는 곳입니다.</p>
+        <TextField
+          id="meetingNote"
+          label="출국 공항 미팅 안내"
+          value={input.meetingNote}
+          placeholder="예) 인천공항 1터미널 3층 M카운터 앞, 출발 3시간 전"
+          onChange={(meetingNote) => onChange({ meetingNote })}
+        />
 
         <div className="grid grid-cols-2 gap-3">
           <NumberField

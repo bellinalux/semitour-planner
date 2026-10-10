@@ -4,6 +4,7 @@ import { formatMoney, currencySymbol } from "@/lib/currency";
 import { formatDuration } from "@/lib/format";
 import { isLossMaking, suggestOptionPrice, type OptionResult } from "@/lib/options";
 import type { CurrencyCode, DayPlan, TourOption, TripInput } from "@/types";
+import { defaultAlternative } from "@/lib/itineraryDoc";
 
 interface Props {
   option: TourOption;
@@ -75,6 +76,17 @@ export function OptionRow({ option, result, days, currency, pricing, onChange, o
         <CompactNumber label="최소 인원" value={option.minParticipants} suffix="명" min={1} max={50} onChange={(minParticipants) => onChange({ minParticipants })} />
         <CompactNumber label="예상 참여율" value={option.participationRate} suffix="%" max={100} onChange={(participationRate) => onChange({ participationRate })} />
       </div>
+
+      <label className="mt-2 block text-[11px] text-slate-600">
+        <span className="font-medium">미참여 시 일정</span> <span className="text-slate-400">(대체 일정·대기 장소·가이드 동행 — 일정표에 그대로 나갑니다)</span>
+        <input
+          value={option.alternative ?? ""}
+          maxLength={160}
+          onChange={(e) => onChange({ alternative: e.target.value })}
+          placeholder={defaultAlternative(option)}
+          className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none"
+        />
+      </label>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
         {option.costPerPerson > 0 && option.pricePerPerson !== suggested && (

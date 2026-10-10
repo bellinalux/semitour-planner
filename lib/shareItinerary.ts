@@ -3,7 +3,10 @@ import { computeItemTimings, dayMeetingTime } from "@/lib/dayLoad";
 import { dayDate, includeLists, tripPeriod } from "@/lib/documents";
 import { localPayRows, moneyWithKrw } from "@/lib/fees";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
+import { isMealFiller } from "@/lib/mealTiming";
 import { docTitle, englishDayDate, englishMoney, englishPeriod } from "@/lib/englishDoc";
+import { conditionTags, mealLabel } from "@/lib/itineraryDoc";
+import { dayMeals } from "@/lib/documents";
 import type { CompanyProfile, CourseMeta, DayPlan, QuoteData, TripInput } from "@/types";
 
 /**
@@ -27,6 +30,8 @@ export const sharedItinerarySchema = z.object({
         date: str(20),
         theme: str(120),
         hotel: str(120),
+        /** 조·중·석 표기 한 줄 */
+        meals: str(160).default(""),
         items: z.array(z.object({ time: str(20), name: str(160), kind: z.enum(["sight", "meal", "move", "hotel", "free", "flight", "other"]), note: str(200) })).max(40),
       }),
     )
@@ -36,6 +41,8 @@ export const sharedItinerarySchema = z.object({
   notices: z.array(str(300)).max(20),
   company: z.object({ name: str(80), phone: str(40), email: str(120) }),
   updatedAt: str(40),
+  /** 상품 조건 표식 (노쇼핑·노옵션·식사 n회 등) */
+  tags: z.array(str(40)).max(10).default([]),
   /** 화면 글자 언어 (영문 링크면 en) */
   lang: z.enum(["ko", "en"]).default("ko"),
 });
@@ -88,14 +95,19 @@ export function buildSharedItinerary(
       : en
         ? `Per person ${englishMoney(price, input.currency)}${quote.lodgingUnits > 0 ? " (twin sharing)" : ""}`.slice(0, 120)
         : `1인 ${moneyWithKrw(price, input.currency, input.exchangeRateToKrw)}${quote.lodgingUnits > 0 ? " (2인 1실 기준)" : ""}`.slice(0, 120),
-    days: days.slice(0, 60).map((d) => {
-      const items = dayItems(d, pmChoice);
+    days: days.slice(0, 60).map((d, index) => {
+      const items = dayItems(d, pmChoice).filter((i) => !isMealFiller(i));
+      const m = dayMeals(days, index, pmChoice, input);
+      const flightDay = items.some((i) => i.type === "flight");
+      const full = input.packageType === "full";
+      const meals = en ? "" : `조 ${mealLabel(m.breakfast, "breakfast", flightDay, full)} · 중 ${mealLabel(m.lunch, "lunch", flightDay, full)} · 석 ${mealLabel(m.dinner, "dinner", flightDay, full)}`;
       const timings = computeItemTimings(items, dayMeetingTime(d));
       return {
         day: d.day,
         date: (en ? englishDayDate(input, d.day) : dayDate(input, d.day)) ?? "",
         theme: cut(d.theme, 120),
         hotel: cut(d.overnightCity ? (input.selectedHotels[d.overnightCity.trim()]?.name ?? d.overnightCity) : "", 120),
+        meals: meals.slice(0, 160),
         items: items.slice(0, 40).map((it) => {
           const t = timings.get(it.id);
           return {
@@ -125,5 +137,6 @@ export function buildSharedItinerary(
     company: { name: cut(company.name, 80), phone: company.phone.trim().slice(0, 40), email: company.email.trim().slice(0, 120) },
     updatedAt: now.toISOString(),
     lang: en ? "en" : "ko",
+    tags: en ? [] : conditionTags(input, days, pmChoice, meta, quote).map((t) => t.slice(0, 40)).slice(0, 10),
   };
 }

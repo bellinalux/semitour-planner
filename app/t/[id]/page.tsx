@@ -40,6 +40,15 @@ export default async function SharedItineraryPage({ params }: { params: Promise<
           {it.travelers > 0 && ` · ${t.travelers(it.travelers)}`}
         </p>
         {it.priceLine && <p className="text-base font-semibold text-indigo-800">{it.priceLine}</p>}
+        {it.tags.length > 0 && (
+          <ul aria-label="상품 조건" className="flex flex-wrap gap-1 pt-1">
+            {it.tags.map((tag) => (
+              <li key={tag} className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-800">
+                {tag}
+              </li>
+            ))}
+          </ul>
+        )}
       </header>
 
       <section aria-label={t.days} className="space-y-4">
@@ -62,6 +71,7 @@ export default async function SharedItineraryPage({ params }: { params: Promise<
                 </li>
               ))}
             </ol>
+            {d.meals && <p className="mt-2 text-xs text-slate-600">🍴 {d.meals}</p>}
             {d.hotel && (
               <p className="mt-2 text-xs text-slate-500">
                 {t.stay}: {d.hotel}
