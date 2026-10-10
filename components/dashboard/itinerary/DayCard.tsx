@@ -1,4 +1,5 @@
 import { REST_LABEL } from "@/lib/pace";
+import { dayMealIssues, fitCourse } from "@/lib/courseFit";
 import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Compass, Flag, Plus, Sun, Sunset, Timer } from "lucide-react";
 import { useContext } from "react";
 import { CourseEngineContext } from "@/hooks/useCourseEngine";
@@ -111,7 +112,11 @@ export function DayCard({
   // 이 날 확인할 것 — 한 줄로 접어 두고 펼치면 설명과 고치기 버튼
   const drives = continuousDriving(plan, pmChoiceForDay);
   const offMeals = offRouteMeals(plan, pmChoiceForDay);
+  // 식사 시간 점검 — 늦은 식사·저녁 두 번·같은 식당 두 줄·저녁 전 밤 일정·원문 시각
+  const mealIssues = dayMealIssues(plan, pmChoiceForDay);
+  const mealFit = mealIssues.length > 0 ? fitCourse([plan], { walk: false }) : null;
   const issueLabels = [
+    ...(mealIssues.length > 0 ? ["식사 시간"] : []),
     ...(load.level === "overloaded" ? ["일정 과부하"] : load.level === "tight" ? ["일정 빠듯"] : []),
     ...(engine?.zigzags[plan.day] ? ["지그재그 동선"] : []),
     ...(drives.length > 0 ? ["기사 연속 운전"] : []),
@@ -212,6 +217,26 @@ export function DayCard({
         )}
       </header>
       <DayIssues labels={issueLabels}>
+      {mealIssues.length > 0 && (
+        <div className="flex flex-wrap items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          <ul aria-label="식사 시간 점검" className="min-w-0 flex-1 space-y-0.5 text-pretty">
+            {mealIssues.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+          {mealFit && mealFit.changes.length > 0 && (
+            <button
+              type="button"
+              title={mealFit.changes.map((c) => c.note).join(" · ")}
+              onClick={() => onChangeDay(plan.day, { items: mealFit.days[0].items })}
+              className="shrink-0 rounded border border-amber-400 bg-white px-2 py-0.5 font-semibold hover:bg-amber-100"
+            >
+              식사 시간 맞추기
+            </button>
+          )}
+        </div>
+      )}
       {load.level !== "ok" && (
         <p className={`flex items-start gap-1.5 border-b border-slate-100 px-4 py-2 text-[11px] leading-4 ${load.level === "overloaded" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-800"}`}>
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />

@@ -133,3 +133,35 @@ test("고객 웹 일정표: 예약 요청이 웹 견적 요청함으로 들어�
   await expect(guest.getByText("ハン市場")).toBeVisible();
   await expect(guest.getByRole("heading", { name: "この日程で予約をリクエスト" })).toBeVisible();
 });
+
+test("식사 시간 점검: 저녁이 21시 넘으면 일정 카드에 경고, [식사 시간 맞추기]로 당긴다", async ({ page }) => {
+  await mockAi(page);
+  const s = (id: string, name: string, stay: number, next = 30) => ({ id, type: "sightseeing", admission: "enter", name, description: "", stayMinutes: stay, travelMinutesToNext: next, entryFee: 0, mealCost: 0, isEstimated: true });
+  const late = {
+    days: [
+      { day: 1, theme: "DAY 1", kind: "linear", overnightCity: "다낭", amGuided: [], pmFreeOptions: [], meetingTime: "08:00", items: [s("a", "오행산", 190), s("b", "린응사", 190), s("c", "한 시장", 190), s("e", "용다리", 80), { id: "d", type: "meal", admission: "none", name: "저녁 식사", description: "", stayMinutes: 60, travelMinutesToNext: 0, entryFee: 0, mealCost: 15000, isEstimated: true }] },
+      { day: 2, theme: "DAY 2", kind: "linear", overnightCity: "다낭", amGuided: [], pmFreeOptions: [], items: [s("f", "바나힐", 120)] },
+    ],
+    pmChoice: {},
+    meta: null,
+    generatedCurrency: "KRW",
+    usps: [],
+    uspKey: null,
+  };
+  await page.addInitScript((w) => {
+    if (sessionStorage.getItem("e2e-seeded")) return;
+    sessionStorage.setItem("e2e-seeded", "1");
+    localStorage.setItem("semitour-planner:input:v1", JSON.stringify({ destination: "다낭", days: 2, nights: 1, travelers: 4 }));
+    localStorage.setItem("semitour-planner:work:v1", JSON.stringify(w));
+    localStorage.setItem("semitour.autoEngineCheck", "0");
+  }, late);
+  await page.goto("/");
+  const day1 = page.locator("#day-1");
+  const issues = day1.getByRole("list", { name: "식사 시간 점검" });
+  await day1.getByText(/식사 시간/).first().click().catch(() => undefined);
+  await expect(issues).toContainText("저녁이 20:50 시작 — 너무 늦음");
+  await day1.getByRole("button", { name: "식사 시간 맞추기" }).click();
+  await expect(issues).toHaveCount(0);
+  const names = await page.evaluate(() => JSON.parse(localStorage.getItem("semitour-planner:work:v1") ?? "{}").days[0].items.map((i: { name: string }) => i.name));
+  expect(names.indexOf("저녁 식사")).toBeLessThan(names.indexOf("용다리"));
+});

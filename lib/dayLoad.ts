@@ -47,7 +47,7 @@ export function parseClock(time: string): number | null {
 }
 
 /** 자정 기준 분을 "HH:mm"으로 (다음날로 넘어가면 24시간 안으로 돌린다) */
-function formatClock(minutes: number): string {
+export function formatClock(minutes: number): string {
   const wrapped = ((minutes % (24 * 60)) + 24 * 60) % (24 * 60);
   const hh = Math.floor(wrapped / 60).toString().padStart(2, "0");
   const mm = (wrapped % 60).toString().padStart(2, "0");
@@ -116,6 +116,9 @@ export function walkTimeline(items: ItineraryItem[], meetingTime: string): Timel
   for (const item of items) {
     if (isBreakfastItem(item)) continue;
     const flight = item.type === "flight";
+    // 원문에 시작 시각이 적힌 곳(예: 가이드 미팅 11:30, 분수쇼 20:00)은 그 시각까지 기다린다 (늦으면 그대로 — 점검에서 알린다)
+    const fixed = item.fixedTime ? parseClock(item.fixedTime) : null;
+    if (fixed !== null && fixed > clock) clock = fixed;
     const itemStart = flight ? clock : snapUp(clock);
     const itemEnd = flight ? itemStart + Math.max(0, item.stayMinutes) : snapUp(itemStart + Math.max(0, item.stayMinutes));
     slots.push({ item, start: itemStart, end: itemEnd });

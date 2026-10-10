@@ -10,6 +10,7 @@ const raw = (type: string, name: string, patch: Partial<RawItem> = {}): RawItem 
   type,
   name,
   description: "",
+  fixedTime: "",
   timeNote: "",
   admission: "none",
   stayMinutes: 0,

@@ -62,7 +62,7 @@ interface Props {
   travelers?: number;
   /** 국내(한국 방문 외국인 대상)/해외 여행. 추천일정 검색 대상 관광객을 정한다 */
   tripScope: TripScope;
-  researchInfo: { sources: SearchSource[]; researched: boolean; knowledge?: { city: string; places: number; researched: boolean }[] };
+  researchInfo: { sources: SearchSource[]; researched: boolean; knowledge?: { city: string; places: number; researched: boolean }[]; fits?: { day: number; note: string }[] };
   pickupNote: string;
   sendingNote: string;
   /** 지역(도시)별로 선택한 숙소. 키는 그 지역 이름(일정의 overnightCity와 같은 문자열) */
@@ -220,6 +220,18 @@ export function ItineraryPanel({
         <div className="space-y-4">
           {meta && <MetaBanner meta={meta} />}
           <TravelTypeBanner travelType={travelType} researchInfo={researchInfo} />
+          {(researchInfo.fits ?? []).length > 0 && (
+            <div role="note" aria-label="시간 다듬기" className="rounded-md bg-emerald-50 px-3 py-2 text-[11px] leading-4 text-emerald-900">
+              <b>시간을 다듬었습니다</b> (업계 기준: 점심 11:30~13:30, 저녁 18:00~19:30 → 야경·공연)
+              <ul className="mt-0.5 space-y-0.5">
+                {(researchInfo.fits ?? []).map((f) => (
+                  <li key={f.day}>
+                    DAY {f.day}: {f.note}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {(researchInfo.knowledge ?? []).some((k) => k.places > 0) && (
             <p role="note" aria-label="지식 창고" className="rounded-md bg-indigo-50 px-3 py-2 text-[11px] leading-4 text-indigo-900">
               지식 창고 참고:{" "}

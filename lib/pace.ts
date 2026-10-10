@@ -17,6 +17,10 @@ const LONG_LEG = 120;
 const EARLY = 7 * 60 + 30;
 const LATE_END = 21 * 60;
 export const LATE_MEETING = "10:00";
+/** 이 시각을 넘어 끝나는 날은 나누자고 한다 */
+const LATE_DAY_END = 22 * 60;
+/** 밤에 해도 되는 일정 (저녁 뒤에 그대로 둔다) */
+const NIGHT_OK = /야경|야시장|야간|분수쇼|나이트|night|공연|쇼|크루즈|카지노|마사지/i;
 
 const flightMinutes = (items: ItineraryItem[]) => items.filter((i) => i.type === "flight").reduce((s, i) => s + Math.max(0, i.stayMinutes) + Math.max(0, i.travelMinutesToNext ?? 0), 0);
 
@@ -25,7 +29,9 @@ export function heavyReasons(day: DayPlan, pmChoice: PmChoice): string[] {
   const items = dayItems(day, pmChoice);
   if (items.length === 0 || day.rest === "free") return [];
   const out: string[] = [];
-  const load = calcDayLoad(day, pmChoice).totalMinutes - flightMinutes(items);
+  // 식사를 기다리는 자유시간·자유일정은 힘든 시간이 아니다
+  const free = items.filter((i) => i.type === "free_time").reduce((s, i) => s + Math.max(0, i.stayMinutes), 0);
+  const load = calcDayLoad(day, pmChoice).totalMinutes - flightMinutes(items) - free;
   if (load >= HEAVY_LOAD) out.push(`관광 ${Math.floor(load / 60)}시간${load % 60 ? ` ${load % 60}분` : ""}`);
   const longLeg = Math.max(0, ...items.filter((i) => i.type !== "flight").map((i) => i.travelMinutesToNext ?? 0));
   if (longLeg >= LONG_LEG) out.push(`한 번에 ${Math.floor(longLeg / 60)}시간${longLeg % 60 ? ` ${longLeg % 60}분` : ""} 이동`);
@@ -163,6 +169,25 @@ export function paceIssues(days: DayPlan[], pmChoice: PmChoice, pace: TripPace):
       fixes,
     });
   }
+  // 22:00 넘어 끝나는 날 — 저녁 뒤 관광(밤 일정 빼고)을 여유 있는 날로
+  for (const d of days) {
+    if (d.kind !== "linear" || d.rest) continue;
+    const end = timelineEndMinutes(dayItems(d, pmChoice), dayTourStart(d));
+    if (end === null || end <= LATE_DAY_END) continue;
+    const dinner = d.items.findIndex((i) => i.type === "meal" && /석식|저녁|디너|dinner/i.test(i.name));
+    const after = (dinner >= 0 ? d.items.slice(dinner + 1) : []).filter((i) => movable(i) && !NIGHT_OK.test(i.name));
+    const moved = after.length ? moveAway(days, d.day, after, pmChoice) : null;
+    out.push({
+      day: d.day,
+      text: `DAY ${d.day}이(가) ${String(Math.floor(end / 60) % 24).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}에 끝납니다 — 관광을 줄이거나 다른 날로 나누세요`,
+      fixes: [
+        moved
+          ? { kind: "pmfree", day: d.day, label: `DAY ${d.day} 저녁 뒤 관광 ${after.length}곳을 다른 날로`, days: moved }
+          : { kind: "pmfree", day: d.day, label: `DAY ${d.day} 관광 옮기기`, blocked: after.length ? "옮길 날의 여유가 없습니다 — 일정 카드의 '시간 검증'으로 체류 시간을 확인하세요" : "저녁 뒤에 옮길 관광이 없습니다 — 일정 카드의 '시간 검증'으로 체류 시간을 확인하세요" },
+      ],
+    });
+  }
+
   // 5일 이상인데 쉬는 날(반나절 이상)이 없으면 — 알참은 빼고
   const restCount = days.filter((d) => d.rest).length;
   const middle = days.filter((d, i) => i > 0 && i < days.length - 1 && d.kind === "linear" && !d.rest && dayItems(d, pmChoice).length > 0);

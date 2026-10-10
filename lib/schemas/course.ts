@@ -39,6 +39,7 @@ const itemSchema = z.object({
   name: z.string().describe("원문에 적힌 장소/활동 이름"),
   description: z.string().describe("원문에 있는 설명. 없으면 빈 문자열"),
   timeNote: z.string().describe("원문에 적힌 소요 시간 표기(예: 약 30~40분). 없으면 빈 문자열"),
+  fixedTime: z.string().describe("원문에 이 항목의 시작 시각이 적혀 있으면 HH:mm (예: '가이드 미팅(11:30)' → 11:30, '20:00 분수쇼' → 20:00). 항공 항목·시각 없는 항목은 빈 문자열"),
   admission: z
     .enum(["enter", "view_only", "none", "unknown"])
     .describe(
@@ -197,6 +198,7 @@ function toItem(raw: ParsedCourse["days"][number]["items"][number], id: string):
     type: itemType(raw),
     admission: raw.admission,
     timeNote: raw.timeNote.trim() || undefined,
+    ...(/^\d{1,2}:\d{2}$/.test((raw.fixedTime ?? "").trim()) && raw.type !== "flight" ? { fixedTime: raw.fixedTime.trim().padStart(5, "0") } : {}),
     name: raw.name.trim(),
     description: raw.description.trim(),
     stayMinutes: clampMealStay(raw.type, `${raw.name} ${raw.description}`, roundMinutes(raw.stayMinutes)),

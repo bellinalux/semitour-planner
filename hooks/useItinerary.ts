@@ -8,6 +8,7 @@ import { insertItem, insertItems } from "@/lib/tourItem";
 import type { CourseFile } from "@/lib/courseFile";
 import type { ParsedSupplierQuote } from "@/lib/schemas/course";
 import { tidyDay, tidyDays } from "@/lib/dayTidy";
+import { fitCourse, type FitChange } from "@/lib/courseFit";
 import type {
   AsyncState,
   CourseMeta,
@@ -114,7 +115,7 @@ export function useItinerary() {
   const [pmChoice, setPmChoice] = useState<PmChoice>({});
   const [meta, setMeta] = useState<CourseMeta | null>(null);
   /** 여행 유형별 웹 조사 출처와, 실제로 검색을 실행했는지 */
-  const [researchInfo, setResearchInfo] = useState<{ sources: SearchSource[]; researched: boolean; knowledge?: KnowledgeUse[] }>({
+  const [researchInfo, setResearchInfo] = useState<{ sources: SearchSource[]; researched: boolean; knowledge?: KnowledgeUse[]; fits?: FitChange[] }>({
     sources: [],
     researched: false,
   });
@@ -134,12 +135,14 @@ export function useItinerary() {
     try {
       // 투숙 체류시간·20분 안 되는 자유시간처럼 이해 안 되는 항목은 정리해서 받는다
       const raw = await requestItinerary(input, courseFile, controller.signal);
-      const result = { ...raw, days: tidyDays(raw.days) };
+      // 늦은 식사·같은 식사 두 줄·업체 코스의 지나치게 긴 도보 구역을 바로 다듬는다 (되돌리기는 일정 카드의 경고에서 다시 맞추기)
+      const fit = fitCourse(tidyDays(raw.days), { walk: input.mode === "paste" });
+      const result = { ...raw, days: tidyDays(fit.days) };
       const choice = defaultPmChoice(result.days);
       setDays(result.days);
       setPmChoice(choice);
       setMeta(result.meta);
-      setResearchInfo({ sources: result.sources, researched: result.researched, knowledge: result.knowledge ?? [] });
+      setResearchInfo({ sources: result.sources, researched: result.researched, knowledge: result.knowledge ?? [], fits: fit.changes });
       setGeneratedCurrency(input.currency);
       setState({ status: "success" });
       return { ...result, pmChoice: choice };

@@ -1,4 +1,5 @@
 import { dayItems, type PmChoice } from "@/lib/itinerary";
+import { dayMealIssues } from "@/lib/courseFit";
 import { needsCheck } from "@/lib/needsCheck";
 import { paceIssues } from "@/lib/pace";
 import { hotelPins, regionRepeats } from "@/lib/regionPlan";
@@ -110,16 +111,17 @@ export function itineraryQuality(input: TripInput, days: DayPlan[], pmChoice: Pm
     ...(cost < 20 ? { fix: "업체 견적을 받으면 확정, 요금표·웹 시세로 채우면 점수가 오릅니다 (견적 칸에서 확정 표시)", anchor: "supplier-check" } : {}),
   });
 
-  // 시간 확인: 웹·현장으로 체류 시간을 확인한 장소 비율
+  // 시간 확인: 웹·현장으로 체류 시간을 확인한 장소 비율 − 식사 시간 문제 1건마다 2점
   const timed = places.filter((i) => i.timeCheck || i.stayEdited).length;
-  const time = r1((timed / n) * 10);
+  const mealProblems = days.reduce((s, d) => s + dayMealIssues(d, pmChoice).length, 0);
+  const time = r1(Math.max(0, (timed / n) * 10 - mealProblems * 2));
   parts.push({
     key: "time",
     label: "시간 확인",
     score: time,
     max: 10,
-    note: `장소 ${places.length}곳 중 ${timed}곳 체류 시간 확인`,
-    ...(time < 10 ? { fix: "일정 카드의 '시간 검증'(구역 단위 웹 확인)을 하세요", anchor: "itinerary" } : {}),
+    note: `장소 ${places.length}곳 중 ${timed}곳 체류 시간 확인${mealProblems ? ` · 식사 시간 문제 ${mealProblems}건` : ""}`,
+    ...(time < 10 ? { fix: mealProblems ? "일정 카드의 [식사 시간 맞추기]를 누르세요" : "일정 카드의 '시간 검증'(구역 단위 웹 확인)을 하세요", anchor: "itinerary" } : {}),
   });
 
   return { total: Math.round(parts.reduce((s, p) => s + p.score, 0)), parts };

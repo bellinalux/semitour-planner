@@ -495,6 +495,8 @@ export interface ItineraryItem {
   coordEdited?: boolean;
   /** 지식 창고 근거 — 이 장소를 넣은 이유 (예: "인기 2위 · 여행사 3곳 포함 · 우리 고객 추천 4") */
   reason?: string;
+  /** 원문에 적힌 시작 시각 "HH:mm" (예: 가이드 미팅 11:30) — 그 시각까지 기다려 시작한다 */
+  fixedTime?: string;
   /** 현지 통화로 확인한 입장·체험 요금 (웹 확인 결과). 견적 통화와 다를 수 있다 */
   local?: { currency: CurrencyCode; amount: number };
   /** 입장료 웹 확인 결과 */

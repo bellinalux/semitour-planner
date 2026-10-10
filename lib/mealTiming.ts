@@ -57,7 +57,9 @@ export function enforceMealWindows(items: ItineraryItem[], meetingTime: string =
       result.push(item);
       continue;
     }
-    // 시각 계산은 일정표와 같게 — 항공 외 항목은 10분 단위로 올려서 시작한다 (walkTimeline)
+    // 시각 계산은 일정표와 같게 — 원문 시각이 있으면 그때까지 기다리고, 항공 외 항목은 10분 단위로 올려서 시작한다 (walkTimeline)
+    const fixed = item.fixedTime ? clockMinutes(item.fixedTime) : null;
+    if (fixed !== null && fixed > clock) clock = fixed;
     if (item.type !== "flight") clock = snapUp(clock);
     const windowStart = mealWindowStart(item);
     if (windowStart !== null) {
