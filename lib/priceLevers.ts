@@ -395,6 +395,21 @@ export interface GradeOption {
 }
 
 /**
+ * 숙소 등급을 바꾼 견적 입력 — 한 등급 차이를 숙박 요금 약 30%로 보고 1실 1박 요금(도시별 요금 포함)을 바꾼다.
+ * 업체 공급가 견적은 숙박 차이만큼 공급가가 바뀐다고 본다 (등급을 바꿀 수 없는 견적이면 그대로).
+ */
+export function inputWithGrade(input: TripInput, g: HotelGrade, curMid = gradeMid(gradeRange(input.hotelGrade) ?? [4, 4]), guests = Math.max(1, Math.round(input.guestsPerUnit))): TripInput {
+  const range = gradeRange(g);
+  if (!range) return input;
+  const factor = Math.pow(1 - HOTEL_DOWN_RATE, curMid - gradeMid(range));
+  const rate = Math.round(input.lodgingRatePerNight * factor);
+  const scale = (v: number) => Math.round(v * factor);
+  return input.pricingMode === "supplier"
+    ? { ...input, hotelGrade: g, lodgingRatePerNight: rate, supplierPricePerPerson: Math.max(0, Math.round(input.supplierPricePerPerson + ((rate - input.lodgingRatePerNight) * input.nights) / guests)) }
+    : { ...input, hotelGrade: g, lodgingRatePerNight: rate, lodgingCityRates: Object.fromEntries(Object.entries(input.lodgingCityRates).map(([k, v]) => [k, scale(v)])) };
+}
+
+/**
  * 등급별 여러 안 (A/B/C안) — 지금 숙박 요금을 기준으로 등급마다 1실 1박 요금을 추정해(한 등급 약 30%) 판매가·수익률·경쟁 순위를 한 번에.
  * 업체 공급가 견적은 숙박 차이만큼 공급가가 바뀐다고 본다. 숙박이 없거나(랜드·BnB) 숙박 요금을 모르면 빈 목록.
  */
@@ -407,14 +422,8 @@ export function gradeOptions(input: TripInput, days: DayPlan[], pmChoice: PmChoi
   const rivals = (compare?.columns ?? []).filter((c) => !c.isOurs && c.extraRegions.length === 0 && c.price !== null).map((c) => c.price!);
   const grades: HotelGrade[] = ["3", "3-4", "4", "4-5", "5"];
   return grades.map((g) => {
-    const mid = gradeMid(gradeRange(g)!);
-    const factor = Math.pow(1 - HOTEL_DOWN_RATE, curMid - mid);
-    const rate = Math.round(input.lodgingRatePerNight * factor);
-    const scale = (v: number) => Math.round(v * factor);
-    const next: TripInput =
-      input.pricingMode === "supplier"
-        ? { ...input, hotelGrade: g, supplierPricePerPerson: Math.max(0, Math.round(input.supplierPricePerPerson + ((rate - input.lodgingRatePerNight) * input.nights) / guests)) }
-        : { ...input, hotelGrade: g, lodgingRatePerNight: rate, lodgingCityRates: Object.fromEntries(Object.entries(input.lodgingCityRates).map(([k, v]) => [k, scale(v)])) };
+    const next = inputWithGrade(input, g, curMid, guests);
+    const rate = next.lodgingRatePerNight;
     const qt = calculateQuote(next, days, pmChoice);
     const price = salePrice(next, days, pmChoice);
     return {

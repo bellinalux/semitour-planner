@@ -30,6 +30,7 @@ import { DeparturePricesPanel } from "./quote/DeparturePricesPanel";
 import { DiscountSimulator } from "./quote/DiscountSimulator";
 import { FxSensitivityPanel } from "./quote/FxSensitivityPanel";
 import { PerPersonMatrix } from "./quote/PerPersonMatrix";
+import { CustomerPricePanel } from "./quote/CustomerPricePanel";
 import { PriceGapAnalysis } from "./quote/PriceGapAnalysis";
 import { PriceTiersCard } from "./quote/PriceTiersCard";
 import { QuoteKpis } from "./quote/QuoteKpis";
@@ -305,6 +306,11 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
       <section>
         <SubHeading>원가 계산서 · 엑셀</SubHeading>
         <CostSheetPanel input={input} days={days} pmChoice={pmChoice} quote={quote} title={meta?.packageName?.trim() || `${input.destination} ${input.nights}박${input.days}일`} />
+      </section>
+
+      <section id="customer-prices" className="scroll-mt-4">
+        <SubHeading>고객 제시용 가격 (A/B/C안 · 인원별)</SubHeading>
+        <CustomerPricePanel input={input} days={days} pmChoice={pmChoice} quote={quote} meta={meta} />
       </section>
 
       {detail && (

@@ -15,7 +15,7 @@ describe("인쇄 전 확인", () => {
   it("확인할 값이 있으면 바로 인쇄하지 않고, 체크해야 인쇄된다", () => {
     const onPrint = vi.fn();
     render(<DocumentBar disabled={false} missingLegal={[]} unconfirmed={["차량비 — 추정 (웹 검색)"]} onPrint={onPrint} />);
-    fireEvent.click(screen.getByRole("button", { name: /견적서/ }));
+    fireEvent.click(screen.getByRole("button", { name: "견적서" }));
     expect(onPrint).not.toHaveBeenCalled();
     expect(screen.getByRole("alertdialog").textContent).toContain("차량비 — 추정 (웹 검색)");
 
@@ -29,7 +29,7 @@ describe("인쇄 전 확인", () => {
   it("확인할 값이 없으면 바로 인쇄", () => {
     const onPrint = vi.fn();
     render(<DocumentBar disabled={false} missingLegal={[]} unconfirmed={[]} onPrint={onPrint} />);
-    fireEvent.click(screen.getByRole("button", { name: /견적서/ }));
+    fireEvent.click(screen.getByRole("button", { name: "견적서" }));
     expect(onPrint).toHaveBeenCalledWith("quote");
   });
 
