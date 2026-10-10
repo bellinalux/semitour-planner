@@ -5,12 +5,22 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "@/components/SessionContext";
 import type { CompanyStorage } from "@/hooks/useCompanyProfile";
 import { missingLegalFields } from "@/lib/company";
+import { resizeImage } from "@/lib/imageResize";
 import type { CompanyProfile } from "@/types";
 
 type FieldKey = Exclude<
   keyof CompanyProfile,
-  "depositRate" | "balanceDueDaysBeforeDeparture" | "useInterimPayment" | "interimPaymentRate" | "interimPaymentDaysBeforeDeparture"
+  "depositRate" | "balanceDueDaysBeforeDeparture" | "useInterimPayment" | "interimPaymentRate" | "interimPaymentDaysBeforeDeparture" | "docColor" | "logo"
 >;
+
+const DOC_COLORS = [
+  { color: "", label: "초록 (기본)" },
+  { color: "#1e3a8a", label: "남색" },
+  { color: "#0e7490", label: "청록" },
+  { color: "#be123c", label: "자주" },
+  { color: "#b45309", label: "호박" },
+  { color: "#334155", label: "먹색" },
+];
 
 interface FieldSpec {
   key: FieldKey;
@@ -211,6 +221,59 @@ export function CompanySettings({ company, storage, save }: Props) {
                 </div>
               </section>
             ))}
+
+            <section className="space-y-2">
+              <div>
+                <h3 className="text-xs font-semibold text-slate-800">문서 디자인</h3>
+                <p className="mt-0.5 text-[11px] leading-4 text-slate-500">고객 문서(일정표·견적서·상품 소개서 등)의 강조색과 로고입니다. 고객 이름이 있으면 일정표 첫 장에 표지가 붙습니다.</p>
+              </div>
+              <div role="radiogroup" aria-label="문서 강조색" className="flex flex-wrap items-center gap-2">
+                {DOC_COLORS.map((c) => (
+                  <button
+                    key={c.label}
+                    type="button"
+                    role="radio"
+                    aria-checked={draft.docColor === c.color}
+                    disabled={!isAdmin}
+                    onClick={() => setDraft((prev) => ({ ...prev, docColor: c.color }))}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${draft.docColor === c.color ? "border-slate-900 font-semibold" : "border-slate-300"}`}
+                  >
+                    <span className="size-3 rounded-full" style={{ background: c.color || "#059669" }} aria-hidden />
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                {/* eslint-disable-next-line @next/next/no-img-element -- 사용자가 올린 data URL 미리보기 */}
+                <img src={draft.logo || "/logo-mark.png"} alt="문서 로고" className="size-9 rounded border border-slate-200 object-contain" />
+                <label className={`cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1 font-medium text-slate-700 ${isAdmin ? "hover:bg-slate-50" : "opacity-50"}`}>
+                  로고 올리기
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={!isAdmin}
+                    className="sr-only"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      try {
+                        const logo = await resizeImage(file, 200, "image/png");
+                        if (logo.length > 40_000) throw new Error("로고가 너무 큽니다. 더 단순한 이미지로 올려 주세요.");
+                        setDraft((prev) => ({ ...prev, logo }));
+                      } catch (err) {
+                        setNotice({ kind: "error", text: err instanceof Error ? err.message : "로고를 올리지 못했습니다." });
+                      }
+                    }}
+                  />
+                </label>
+                {draft.logo && isAdmin && (
+                  <button type="button" onClick={() => setDraft((prev) => ({ ...prev, logo: "" }))} className="text-slate-500 underline">
+                    기본 로고로
+                  </button>
+                )}
+              </div>
+            </section>
 
             <section className="space-y-3">
               <div>

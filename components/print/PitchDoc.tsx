@@ -4,7 +4,7 @@ import { localPayRows, moneyWithKrw } from "@/lib/fees";
 import { gradeText } from "@/lib/itemTypes";
 import { dayItems } from "@/lib/itinerary";
 import { buildTourCompare } from "@/lib/tourCompare";
-import { DocCover, DocSection, DocShell, type DocProps } from "./DocShell";
+import { DocCover, DocCoverPage, DocSection, DocShell, type DocProps } from "./DocShell";
 
 const SKIP = new Set(["meal", "transfer", "hotel", "flight", "free_time"]);
 
@@ -43,8 +43,31 @@ export function PitchDoc({ input, days, pmChoice, quote, meta, company }: DocPro
   }
   for (const h of meta?.highlights ?? []) if (h.trim() && points.length < 9) points.push(h.trim());
 
+  const photos = days.flatMap((d) => dayItems(d, pmChoice)).filter((i) => i.photo).slice(0, 6);
   return (
+    <>
+    {input.customerName.trim() && (
+      <DocCoverPage
+        company={company}
+        customer={input.customerName.trim()}
+        title={title}
+        period={`${tripPeriod(input)} (${input.nights}박 ${input.days}일)`}
+        travelers={`${quote.travelers}명`}
+        photo={photos[0]?.photo}
+      />
+    )}
     <DocShell title="상품 소개서" subtitle={title} company={company}>
+      {photos.length > 0 && (
+        <div className="grid grid-cols-3 gap-1.5">
+          {photos.map((p) => (
+            <figure key={p.id} className="break-inside-avoid">
+              {/* eslint-disable-next-line @next/next/no-img-element -- 직접 올린 사진 data URL */}
+              <img src={p.photo} alt="" aria-hidden className="h-28 w-full rounded object-cover" />
+              <figcaption className="mt-0.5 truncate text-[10px] text-slate-600">{p.name}</figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
       <DocCover
         title={title}
         destination={input.destination || "-"}
@@ -107,5 +130,6 @@ export function PitchDoc({ input, days, pmChoice, quote, meta, company }: DocPro
         <p className="mt-1 text-[10px] text-slate-500">초저가 상품은 쇼핑·선택관광·현지 경비로 실제 비용이 늘어나는 경우가 있어, 총비용으로 비교하시길 권합니다.</p>
       </DocSection>
     </DocShell>
+    </>
   );
 }

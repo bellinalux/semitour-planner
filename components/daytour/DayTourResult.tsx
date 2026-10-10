@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { useHideCosts } from "@/components/SessionContext";
 import { postJson } from "@/lib/api";
 import { DayTourPrint } from "./DayTourPrint";
+import { DepartureSection } from "./DepartureSection";
 import { CopyButton } from "@/components/dashboard/CopyButton";
 import { useNumberText } from "@/hooks/useNumberText";
 import { fmt } from "@/lib/courseEngine/time";
@@ -428,6 +429,8 @@ export function DayTourResult({ work, onChange, dayCount, currencyMismatch, onAd
         </div>
         <p className="mt-1 text-[10px] text-slate-400">다른 차종은 지금 차종 값(연비·고정비·대절료)을 차종 비율로 바꿔 계산했습니다. 통행료는 지금 차종 기준입니다.</p>
       </section>
+
+      <DepartureSection c={c} title={work.title} salePrice={cost.salePrice} breakEven={even} departures={work.departures ?? []} minSeats={work.minSeats} maxSeats={work.maxSeats} onChange={onChange} />
 
       {res.market.length > 0 && (
         <section aria-label="비슷한 판매 투어" className="rounded-lg border border-slate-200 p-3">

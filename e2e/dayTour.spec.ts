@@ -96,3 +96,35 @@ test("근교 투어: 도보 투어는 차량·차고지 칸이 없다", async ({
   await dialog.getByRole("radio", { name: "도보", exact: true }).click();
   await expect(dialog.getByLabel("차고지 (선택 — 공차 거리 계산)")).toHaveCount(0);
 });
+
+test("근교 투어 합류형: 요일로 출발일을 만들고, 좌석을 넣으면 출발 확정·마감이 보이며 저장하면 남는다", async ({ page }) => {
+  await mockAi(page);
+  await page.route("**/api/day-tour", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(RESPONSE) }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "근교 투어" }).click();
+  const dialog = page.getByRole("dialog", { name: "근교 투어 만들기 (반일·당일)" });
+  await dialog.getByLabel("출발·복귀 기준지 (호텔·역·도시)").fill("서울 명동");
+  await dialog.getByLabel("인원", { exact: true }).fill("10");
+  await dialog.getByLabel("통화").selectOption("KRW");
+  await dialog.getByLabel("국내·해외").selectOption("domestic");
+  await dialog.getByRole("button", { name: "코스·원가 만들기" }).click();
+
+  const dep = dialog.getByRole("region", { name: "정기 출발 (합류형)" });
+  await dep.getByLabel("첫 출발일").fill("2030-01-05");
+  await dep.getByLabel("기간").selectOption("2");
+  // 토요일은 기본 선택, 일요일도 더한다
+  await dep.getByRole("button", { name: "일요일" }).click();
+  await dep.getByRole("button", { name: "출발일 추가" }).click();
+  await expect(dep.getByRole("row")).toHaveCount(5);
+  await dep.getByLabel("최소 출발").fill("6");
+  await dep.getByLabel("정원").fill("12");
+  await dep.getByLabel("2030-01-05 판매 좌석").fill("7");
+  await dep.getByLabel("2030-01-06 판매 좌석").fill("12");
+  await expect(dep.getByRole("row").filter({ hasText: "2030-01-05" })).toContainText("출발 확정");
+  await expect(dep.getByRole("row").filter({ hasText: "2030-01-06" })).toContainText("마감");
+  await expect(dep.getByRole("row").filter({ hasText: "2030-01-12" })).toContainText("모집 중");
+
+  await dialog.getByRole("button", { name: "저장", exact: true }).click();
+  const saved = await page.evaluate(() => Object.entries(localStorage).find(([k]) => k.includes("dayTour") || k.includes("day-tour"))?.[1] ?? "");
+  expect(saved).toContain('"date":"2030-01-05","sold":7');
+});

@@ -665,6 +665,56 @@ export function dayTourShare(
     company: { name: company.name.slice(0, 80), phone: company.phone.slice(0, 40), email: company.email.slice(0, 120) },
     updatedAt: now.toISOString(),
     lang: "ko",
+    packing: [],
     tags: [c.length === "full" ? "당일 투어" : "반일 투어", ...(cost.vehicle ? ["전용차량"] : []), ...(cost.guides > 0 ? ["가이드 동행"] : [])],
   };
+}
+
+/* ── 합류형 정기 출발 ── */
+
+export interface Departure {
+  date: string;
+  /** 판매(예약)된 좌석 */
+  sold: number;
+}
+
+export type DepartureStatus = "모집 중" | "출발 확정" | "마감" | "취소 안내 필요" | "지난 출발";
+
+export interface DepartureView extends Departure {
+  status: DepartureStatus;
+  /** 이 인원으로 출발할 때 이익 (판매가 × 인원 − 원가) */
+  profit: number;
+  /** 출발까지 남은 날 */
+  daysLeft: number;
+}
+
+/**
+ * 합류형(정기 출발) 근교 투어 — 날짜마다 판매 좌석으로 출발 확정·마감·취소 안내를 판단한다.
+ * 업계 관행: 최소 인원을 채우면 출발 확정, 출발 2일 전까지 못 채우면 취소 안내(전액 환불).
+ */
+export function departureView(c: DayTourCostInput, salePrice: number, dep: Departure, minSeats: number, maxSeats: number, today = new Date()): DepartureView {
+  const t = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+  const daysLeft = Math.round((Date.UTC(+dep.date.slice(0, 4), +dep.date.slice(5, 7) - 1, +dep.date.slice(8, 10)) - t.getTime()) / 86_400_000);
+  const sold = Math.max(0, Math.round(dep.sold));
+  const cost = sold > 0 ? dayTourCost({ ...c, travelers: sold }, salePrice).totalCost : 0;
+  const status: DepartureStatus = daysLeft < 0 ? "지난 출발" : sold >= maxSeats ? "마감" : sold >= minSeats ? "출발 확정" : daysLeft <= 2 ? "취소 안내 필요" : "모집 중";
+  return { ...dep, sold, status, profit: Math.round(salePrice * sold - cost), daysLeft };
+}
+
+/** 출발일 목록 (첫날부터 n주, 고른 요일) */
+export function weeklyDates(from: string, weeks: number, weekdays: number[]): string[] {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || weekdays.length === 0) return [];
+  const out: string[] = [];
+  const start = new Date(`${from}T00:00:00Z`).getTime();
+  for (let k = 0; k < weeks * 7 && out.length < 60; k++) {
+    const d = new Date(start + k * 86_400_000);
+    if (weekdays.includes(d.getUTCDay())) out.push(d.toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+export function departureNoticeText(title: string, dep: DepartureView, minSeats: number, confirmed: boolean): string {
+  return confirmed
+    ? `[출발 확정] ${title} ${dep.date} 출발이 확정되었습니다 (현재 ${dep.sold}명). 미팅 시각·장소는 전날 다시 안내드립니다.`
+    : `[출발 취소 안내] ${title} ${dep.date} 출발은 최소 인원 ${minSeats}명에 못 미쳐 진행이 어렵게 되었습니다 (현재 ${dep.sold}명). 결제하신 금액은 전액 환불해 드리며, 다른 날짜로 바꾸실 수도 있습니다. 불편을 드려 죄송합니다.`;
 }

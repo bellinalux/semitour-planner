@@ -8,6 +8,7 @@ import { feeHint, isLocalPay } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { feeLabel, ITEM_TYPE_META, ITEM_TYPES, stayTimeLabel } from "@/lib/itemTypes";
 import { timeRange } from "@/lib/dayTidy";
+import { resizeImage } from "@/lib/imageResize";
 import type { SegmentKind } from "@/lib/segmentLibrary";
 import type { Admission, CurrencyCode, DayPlan, ItemType, ItineraryItem, OptionSuggestion, TourSlot } from "@/types";
 import { AccessibilityBox, FeeCheckBadges, RelocateControls, SuggestedOptions, selectClass, type ItemPatch } from "./TimelineItemParts";
@@ -172,6 +173,39 @@ export function TimelineItem({
         )}
 
         {editing && <RelocateControls item={item} dayNo={dayNo} days={days} onRelocateItem={onRelocateItem} />}
+        {item.photo && (
+          // eslint-disable-next-line @next/next/no-img-element -- 직접 올린 사진 data URL
+          <img src={item.photo} alt={`${item.name} 사진`} className="mt-1 h-20 w-32 rounded-md object-cover ring-1 ring-slate-200" />
+        )}
+        {editing && (
+          <div className="mt-1 flex items-center gap-2 text-[11px]">
+            <label className="cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-50">
+              {item.photo ? "사진 바꾸기" : "사진 올리기"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                aria-label={`${item.name} 사진 올리기`}
+                className="sr-only"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  try {
+                    onChangeItem(item.id, { photo: await resizeImage(file, 640) });
+                  } catch (err) {
+                    window.alert(err instanceof Error ? err.message : "사진을 올리지 못했습니다.");
+                  }
+                }}
+              />
+            </label>
+            {item.photo && (
+              <button type="button" onClick={() => onChangeItem(item.id, { photo: undefined })} className="text-slate-500 underline">
+                사진 빼기
+              </button>
+            )}
+            <span className="text-slate-400">직접 찍거나 사용권이 있는 사진만 (일정표·소개서·웹 링크에 들어갑니다)</span>
+          </div>
+        )}
 
         {item.description && <p className="mt-1 text-xs leading-5 text-slate-600">{item.description}</p>}
 

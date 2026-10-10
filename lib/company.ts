@@ -1,3 +1,4 @@
+import { isPhotoData } from "@/lib/imageResize";
 import type { CompanyProfile } from "@/types";
 
 export const DEFAULT_COMPANY: CompanyProfile = {
@@ -18,6 +19,8 @@ export const DEFAULT_COMPANY: CompanyProfile = {
   interimPaymentDaysBeforeDeparture: 30,
   bankAccount: "",
   emergencyContact: "",
+  docColor: "",
+  logo: "",
 };
 
 /** 저장된 값을 현재 형태로 맞춘다. 없는 키는 기본값으로 채운다. */
@@ -51,6 +54,8 @@ export function normalizeCompany(saved: unknown): CompanyProfile {
       : DEFAULT_COMPANY.interimPaymentDaysBeforeDeparture,
     bankAccount: text(s.bankAccount, ""),
     emergencyContact: text(s.emergencyContact, ""),
+    docColor: typeof s.docColor === "string" && /^#[0-9a-f]{6}$/i.test(s.docColor) ? s.docColor : "",
+    logo: isPhotoData(s.logo, 40_000) ? s.logo : "",
   };
 }
 

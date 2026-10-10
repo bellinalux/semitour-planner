@@ -6,7 +6,7 @@ import { gradeText } from "@/lib/itemTypes";
 import { conditionTags, dayRegion, dayTable, defaultAlternative, mealLabel, shoppingStops, shortDescription, stayText, visitStyle } from "@/lib/itineraryDoc";
 import { singleSupplement } from "@/lib/pricing";
 import type { ItineraryItem } from "@/types";
-import { DocCover, DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
+import { DocCover, DocCoverPage, DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
 
 const ACCESSIBILITY_LABELS = { ok: "이용 가능", limited: "일부 구간 어려움", difficult: "이용 어려움", unknown: "확인 못함" } as const;
 const STYLE_TONE = { 입장: "bg-emerald-100 text-emerald-800", 하차: "bg-sky-100 text-sky-800", 차창: "bg-slate-200 text-slate-700" } as const;
@@ -21,6 +21,10 @@ function ItemCell({ item, input }: { item: ItineraryItem; input: DocProps["input
   const desc = shortDescription(item.description);
   return (
     <>
+      {item.photo && (
+        // eslint-disable-next-line @next/next/no-img-element -- 직접 올린 사진 data URL
+        <img src={item.photo} alt="" aria-hidden className="float-right ml-2 h-14 w-20 rounded object-cover" />
+      )}
       {KIND_MARK[item.type ?? ""] && <span className="mr-1" aria-hidden>{KIND_MARK[item.type ?? ""]}</span>}
       <span className="font-medium">{item.name}</span>
       {style && <span className={`ml-1 rounded px-1 text-[9.5px] font-semibold ${STYLE_TONE[style]}`}>{style}</span>}
@@ -68,7 +72,19 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
     { label: "여행사 비상연락", value: company.emergencyContact.trim() },
   ].filter((r) => r.value);
 
+  const heroPhoto = days.flatMap((d) => documentItems(d, pmChoice).flatMap((b) => b.items)).find((i) => i.photo)?.photo;
   return (
+    <>
+    {input.customerName.trim() && (
+      <DocCoverPage
+        company={company}
+        customer={input.customerName.trim()}
+        title={title}
+        period={`${tripPeriod(input)} (${input.nights}박 ${input.days}일)`}
+        travelers={`${quote.travelers}명`}
+        photo={heroPhoto}
+      />
+    )}
     <DocShell title="여행일정표" subtitle={title} company={company}>
       <DocCover
         title={title}
@@ -401,5 +417,6 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
         {company.emergencyContact.trim() && <p className="mt-1.5 font-medium">비상연락처: {company.emergencyContact.trim()}</p>}
       </DocSection>
     </DocShell>
+    </>
   );
 }

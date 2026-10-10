@@ -47,9 +47,14 @@ import { planToProduct } from "@/lib/planToProduct";
 import { buildSharedItinerary } from "@/lib/shareItinerary";
 import { loadPriceRules, ruleNotices } from "@/lib/seriesPricing";
 import { englishTexts } from "@/lib/englishDoc";
+import type { DocLang } from "@/lib/foreignDoc";
+import { departureNotice } from "@/lib/departureNotice";
+import { buildGuideSheet } from "@/lib/guideSheet";
+import { addVersion, loadVersions, makeVersion, versionKey, type QuoteVersion } from "@/lib/quoteVersions";
+import { packingList, packingText } from "@/lib/packingList";
 import type { TravelInfo } from "@/lib/schemas/travelInfo";
 import { postJson } from "@/lib/api";
-import type { DocKind } from "@/components/print/PrintDocuments";
+import { DOC_LABELS, type DocKind } from "@/components/print/PrintDocuments";
 import { listenErrors } from "@/lib/errorReport";
 import { missingLegalFields } from "@/lib/company";
 import { calculateQuote } from "@/lib/cost";
@@ -93,6 +98,7 @@ import { DayTimeCheckContext, useDayTimeCheck } from "@/hooks/useDayTimeCheck";
 import type { DayPlan, FlightOption, ItineraryItem, TourCandidate, TripInput } from "@/types";
 
 const NO_USPS: never[] = [];
+const NO_WORDS: Record<string, string> = {};
 
 export function PlannerApp() {
   const { input, update, reset, replace } = usePlannerInput();
@@ -139,7 +145,8 @@ export function PlannerApp() {
     [isReady, input, days, pmChoice],
   );
   // 영문 일정표·견적서용 번역 (한글 글 → 영어, 이 화면에서 모아 둔다)
-  const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [translationsByLang, setTranslationsByLang] = useState<Partial<Record<DocLang, Record<string, string>>>>({});
+  const translations = translationsByLang.en ?? NO_WORDS;
   const [translating, setTranslating] = useState(false);
   // 일정표 「여행 정보」 (시차·전압·통화·입국·긴급 연락처) — 일정표를 인쇄할 때 한 번 찾는다
   const [travelInfo, setTravelInfo] = useState<{ key: string; info: TravelInfo } | null>(null);
@@ -148,9 +155,9 @@ export function PlannerApp() {
     // 고객 문서는 선택한 판매 채널의 소비자가를 쓰고, 내부 검토서는 원래 견적(rawQuote)으로 모든 채널을 본다
     () =>
       quote?.ok
-        ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company, translations, travelInfo: travelInfo?.key === input.destination.trim() ? travelInfo.info : null }
+        ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company, translations, translationsByLang, travelInfo: travelInfo?.key === input.destination.trim() ? travelInfo.info : null }
         : null,
-    [quote, input, days, pmChoice, meta, company, translations, travelInfo],
+    [quote, input, days, pmChoice, meta, company, translations, translationsByLang, travelInfo],
   );
 
   const stays = useMemo(() => overnightNights(days), [days]);
@@ -339,6 +346,14 @@ export function PlannerApp() {
   // 출발 준비·명단·정산 (상품 이름별 저장)
   const planKey = suggestPlanName(input, meta);
   const ops = useOps(planKey);
+  // 견적 버전 (고객에게 나간 견적의 변경 내역)
+  const [versionState, setVersionState] = useState<{ key: string; list: QuoteVersion[] } | null>(null);
+  const vKey = versionKey(input, meta);
+  const versions = versionState?.key === vKey ? versionState.list : typeof window === "undefined" ? [] : loadVersions(vKey);
+  const saveVersion = (label: string) => {
+    if (!docData) return;
+    setVersionState({ key: vKey, list: addVersion(vKey, makeVersion(docData, label)) });
+  };
   const opsOverdue = quote?.ok && days.length > 0 ? dueChecklist(bookingChecklist(input, days, pmChoice, quote.travelers), ops.data.checklist).overdue.length : 0;
 
   // 외화 업체 견적: 받을 때 환율과 지금 환율 비교
@@ -397,15 +412,16 @@ export function PlannerApp() {
   const { exporter, printDocument: printPlain } = useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quoteLog, author: session.user?.name || quoteLog.author, print });
 
   /** 영문 문서·링크용 — 아직 번역하지 않은 한글 글을 번역해 번역표를 돌려준다 (실패하면 null) */
-  const ensureEnglish = async (): Promise<Record<string, string> | null> => {
+  const ensureForeign = async (lang: DocLang, info?: TravelInfo | null): Promise<Record<string, string> | null> => {
     if (!docData) return null;
-    const texts = englishTexts(docData).filter((t) => !(t in translations));
-    if (texts.length === 0) return translations;
+    const have = translationsByLang[lang] ?? {};
+    const texts = englishTexts({ ...docData, travelInfo: info ?? docData.travelInfo }).filter((t) => !(t in have));
+    if (texts.length === 0) return have;
     setTranslating(true);
     try {
-      const r = await postJson<{ translations: string[] }>("/api/translate-doc", { texts });
-      const next = { ...translations, ...Object.fromEntries(texts.map((t, i) => [t, r.translations[i] ?? t])) };
-      setTranslations(next);
+      const r = await postJson<{ translations: string[] }>("/api/translate-doc", { texts, lang });
+      const next = { ...have, ...Object.fromEntries(texts.map((t, i) => [t, r.translations[i] ?? t])) };
+      setTranslationsByLang((prev) => ({ ...prev, [lang]: next }));
       return next;
     } catch {
       return null;
@@ -415,15 +431,18 @@ export function PlannerApp() {
   };
 
   /** 일정표 여행 정보 — 같은 여행지는 한 번만 (서버가 30일 보관). 못 찾아도 인쇄는 한다 */
-  const ensureTravelInfo = async () => {
+  const ensureTravelInfo = async (): Promise<TravelInfo | null> => {
     const dest = input.destination.trim();
-    if (!dest || travelInfo?.key === dest) return;
+    if (!dest) return null;
+    if (travelInfo?.key === dest) return travelInfo.info;
     setTranslating(true);
     try {
       const info = await postJson<TravelInfo>("/api/travel-info", { destination: dest, month: /^\d{4}-\d{2}/.test(input.departureDate) ? input.departureDate.slice(0, 7) : "" });
       setTravelInfo({ key: dest, info });
+      return info;
     } catch {
       /* 여행 정보 없이 인쇄 */
+      return null;
     } finally {
       setTranslating(false);
     }
@@ -431,11 +450,16 @@ export function PlannerApp() {
 
   /** 문서 인쇄 — 영문 문서는 아직 번역하지 않은 글을 먼저 번역하고, 일정표는 여행 정보를 먼저 찾는다 */
   const printDocument = async (kind: DocKind) => {
-    if (kind === "itinerary") await ensureTravelInfo();
-    if (kind === "english" && !(await ensureEnglish())) {
+    if (kind === "itinerary" || kind === "packing" || kind === "operation") await ensureTravelInfo();
+
+    const foreign: Partial<Record<DocKind, DocLang>> = { english: "en", japanese: "ja", chinese: "zh" };
+    const lang = foreign[kind];
+    if (lang && !(await ensureForeign(lang, await ensureTravelInfo()))) {
       window.alert("영문 번역을 하지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
       return;
     }
+    // 고객에게 나가는 문서는 견적 버전으로 남긴다 (내용이 같으면 새로 만들지 않음)
+    if (["quote", "itinerary", "options", "english", "japanese", "chinese", "pitch"].includes(kind)) saveVersion(`${DOC_LABELS[kind]} 인쇄`);
     printPlain(kind);
   };
   // 화면 위 진행 안내 (① 입력 → ② 코스 → ③ 견적 → ④ 문서)
@@ -513,6 +537,10 @@ export function PlannerApp() {
             <BookingsMenu
               author={session.user?.name || quoteLog.author}
               companyName={company.name}
+              onFillInput={(patch) => {
+                update(patch);
+                setTab("input");
+              }}
               draftFromQuote={() => (quote?.ok ? { ...bookingFromQuote(input, documentQuote(quote, input)), planName: suggestPlanName(input, meta) } : null)}
               buttonClassName="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 [&>span]:hidden sm:[&>span]:inline"
             />
@@ -642,8 +670,14 @@ export function PlannerApp() {
               onGenerate: handleGenerateUsp,
             }}
             exporter={exporter}
-            ops={ops}
-            share={{ build: (showPrice, english) => (docData ? buildSharedItinerary(docData, showPrice, new Date(), ruleNotices(loadPriceRules()), english) : null), translate: ensureEnglish, planKey }}
+            ops={{ ...ops, guide: { planKey, build: (withNames) => (docData ? buildGuideSheet(docData, withNames ? ops.data.participants : []) : null) } }}
+            versions={{ versions, currency: input.currency, customer: input.customerName.trim(), onSaveNow: () => saveVersion("직접 저장") }}
+            notice={{
+              buildNotice: async () => (docData ? departureNotice(docData, await ensureTravelInfo(), season.result) : null),
+              buildPacking: async () => (docData ? packingText(packingList(input, days, pmChoice, await ensureTravelInfo(), season.result)) : null),
+              onPrintPacking: () => void printDocument("packing"),
+            }}
+            share={{ build: (showPrice, english) => (docData ? buildSharedItinerary(docData, showPrice, new Date(), ruleNotices(loadPriceRules()), english) : null), translate: () => ensureForeign("en"), planKey }}
             documents={{
               disabled: !quote?.ok,
               missingLegal: missingLegalFields(company),

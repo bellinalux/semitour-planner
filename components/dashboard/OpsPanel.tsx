@@ -5,6 +5,8 @@ import { useState } from "react";
 import { useHideCosts } from "@/components/SessionContext";
 import { CopyButton } from "@/components/dashboard/CopyButton";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { GuideLinkTab } from "./GuideLinkTab";
+import type { GuideSheet } from "@/lib/guideSheet";
 import { bookingChecklist } from "@/lib/bookingChecklist";
 import { formatMoney } from "@/lib/currency";
 import type { PmChoice } from "@/lib/itinerary";
@@ -18,16 +20,18 @@ interface Props {
   quote: QuoteData;
   ops: OpsData;
   onChange: (next: OpsData) => void;
+  /** 가이드 링크 (운영 지시서 휴대폰용) */
+  guide?: { build: (withNames: boolean) => GuideSheet | null; planKey: string };
 }
 
-type Tab = "checklist" | "rooming" | "settlement";
+type Tab = "checklist" | "rooming" | "settlement" | "guide";
 const cell = "rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs focus:border-indigo-500 focus:outline-none";
 
 /**
  * 출발 준비 · 명단 · 정산 — 운영 지시서의 예약 확인 체크리스트를 화면에서 체크하고(기한 지남·임박 표시),
  * 참가자 명단으로 룸리스트를 만들고, 행사 뒤 실제 지출을 넣어 견적 대비 실제 손익을 본다. 상품마다 이 브라우저에 저장.
  */
-export function OpsPanel({ input, days, pmChoice, quote, ops, onChange }: Props) {
+export function OpsPanel({ input, days, pmChoice, quote, ops, onChange, guide }: Props) {
   const [tab, setTab] = useState<Tab>("checklist");
   const hideCosts = useHideCosts();
   const items = bookingChecklist(input, days, pmChoice, quote.travelers);
@@ -45,9 +49,10 @@ export function OpsPanel({ input, days, pmChoice, quote, ops, onChange }: Props)
               ["checklist", `예약 확인 ${doneCount}/${items.length}`],
               ["rooming", `명단·룸리스트 ${ops.participants.length}명`],
               ["settlement", "행사 후 정산"],
+              ["guide", "가이드 링크·현장 기록"],
             ] as const
           )
-            .filter(([id]) => !(hideCosts && id === "settlement"))
+            .filter(([id]) => !(hideCosts && id === "settlement") && !(id === "guide" && !guide))
             .map(([id, label]) => (
             <button
               key={id}
@@ -63,6 +68,7 @@ export function OpsPanel({ input, days, pmChoice, quote, ops, onChange }: Props)
         </div>
         {tab === "checklist" && <Checklist items={items} ops={ops} onChange={onChange} overdue={due.overdue.map((i) => i.label)} soon={due.soon.map((i) => i.label)} />}
         {tab === "rooming" && <Rooming ops={ops} onChange={onChange} perRoom={input.guestsPerUnit} />}
+        {tab === "guide" && guide && <GuideLinkTab build={guide.build} planKey={guide.planKey} />}
         {tab === "settlement" && !hideCosts && <SettlementView quote={quote} ops={ops} onChange={onChange} money={money} />}
       </div>
     </SectionCard>

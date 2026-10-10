@@ -10,7 +10,7 @@ import { getKv } from "@/lib/server/planStore";
  *   GET /api/company   조회
  *   PUT /api/company   저장
  */
-const MAX_BYTES = 32 * 1024;
+const MAX_BYTES = 64 * 1024;
 
 async function open(request: Request) {
   const ws = await workspaceId();

@@ -65,3 +65,8 @@ export function allowLoginAttempt(request: Request): boolean {
 export function allowPublicWrite(request: Request): boolean {
   return memoryAllow(`pub:${clientKey(request)}`, 5);
 }
+
+/** 가이드 운영 페이지의 진행 체크·기록 — 현장에서 연달아 누르므로 1분에 30번까지 */
+export function allowGuideWrite(request: Request): boolean {
+  return memoryAllow(`guide:${clientKey(request)}`, 30);
+}

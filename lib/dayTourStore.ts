@@ -1,4 +1,4 @@
-import { COMPANY_KEYS, type CompanyDayTourDefaults, type DayTourSettings } from "@/lib/dayTour";
+import { COMPANY_KEYS, type CompanyDayTourDefaults, type DayTourSettings, type Departure } from "@/lib/dayTour";
 import type { DayTourLeg, DayTourRequest, DayTourResponse, DayTourStop } from "@/lib/schemas/dayTour";
 
 /**
@@ -21,6 +21,9 @@ export interface SavedDayTour {
   legs: DayTourLeg[];
   settings: DayTourSettings;
   shareId?: string;
+  departures?: Departure[];
+  minSeats?: number;
+  maxSeats?: number;
 }
 
 function read<T>(key: string, fallback: T): T {

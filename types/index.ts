@@ -418,6 +418,10 @@ export interface CompanyProfile {
   bankAccount: string;
   /** 현지 인솔자·긴급 비상연락처 */
   emergencyContact: string;
+  /** 고객 문서 강조색 (#rrggbb). 비면 기본 초록 */
+  docColor: string;
+  /** 고객 문서 로고 (작게 줄인 이미지 data URL). 비면 기본 로고 */
+  logo: string;
 }
 
 export type RequestStatus = "idle" | "loading" | "error" | "success";
@@ -471,6 +475,8 @@ export interface ItineraryItem {
    * 불포함 항목이라 원가와 판매가에서 빠지고 "현지 지불" 안내로만 표시된다.
    */
   payment?: "included" | "local";
+  /** 직접 올린 장소 사진 (작게 줄인 data URL) — 일정표·상품 소개서·웹 일정표에 쓴다 */
+  photo?: string;
   /** 현지 통화로 확인한 입장·체험 요금 (웹 확인 결과). 견적 통화와 다를 수 있다 */
   local?: { currency: CurrencyCode; amount: number };
   /** 입장료 웹 확인 결과 */

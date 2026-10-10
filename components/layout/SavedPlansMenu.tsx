@@ -6,6 +6,7 @@ import { useCloudPlans } from "@/hooks/useCloudPlans";
 import { useSavedPlans } from "@/hooks/useSavedPlans";
 import { dayItems } from "@/lib/itinerary";
 import { SavedPlanEntry } from "./SavedPlanEntry";
+import { CostAuditBox } from "./CostAuditBox";
 import { useBookings } from "@/hooks/useBookings";
 import { wonByPlanName } from "@/lib/salesStats";
 import { buttonClass, SaveCurrentSection, StoreSelector, type StoreKind } from "./saved/SaveSections";
@@ -296,6 +297,16 @@ export function SavedPlansMenu({ snapshot, onLoad, onImportDay }: Props) {
                 {notice.kind === "error" ? <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden /> : <Check className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />}
                 {notice.text}
               </p>
+            )}
+
+            {entries.length > 0 && (
+              <CostAuditBox
+                plans={entries.map((e) => ({ id: e.id, name: e.name }))}
+                loadInput={async (id) => {
+                  const r = await getFull(id);
+                  return "plan" in r ? r.plan.snapshot.input : null;
+                }}
+              />
             )}
 
             <section aria-label="저장된 일정" className="space-y-2">

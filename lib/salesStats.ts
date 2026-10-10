@@ -103,3 +103,35 @@ export function wonByPlanName(bookings: Booking[]): Map<string, number> {
   for (const b of bookings) if (WON.has(b.status) && b.planName.trim()) out.set(b.planName.trim(), (out.get(b.planName.trim()) ?? 0) + 1);
   return out;
 }
+
+export interface MonthRow {
+  /** "2026-10" */
+  month: string;
+  quotes: number;
+  won: number;
+  /** 성약 금액 합계 (원화 예약만) */
+  revenue: number;
+  /** 그달 나간 견적 평균 마진 % */
+  avgMargin: number | null;
+}
+
+/** 최근 n개월 월별 실적 — 견적은 나간 달, 예약은 만든 달 기준 (비어 있는 달도 0으로) */
+export function monthlyStats(quotes: QuoteLogEntry[], bookings: Booking[], months = 12, today = new Date()): MonthRow[] {
+  const keys: string[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  const monthOf = (iso: string) => iso.slice(0, 7);
+  return keys.map((month) => {
+    const q = quotes.filter((x) => monthOf(x.at) === month);
+    const w = bookings.filter((b) => WON.has(b.status) && monthOf(b.createdAt || b.updatedAt) === month);
+    return {
+      month,
+      quotes: q.length,
+      won: w.length,
+      revenue: w.filter((b) => b.currency === "KRW").reduce((s, b) => s + b.totalPrice, 0),
+      avgMargin: avg(q.map((x) => x.marginRate)),
+    };
+  });
+}

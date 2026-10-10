@@ -3,7 +3,8 @@
 import { formatMoney } from "@/lib/currency";
 import type { Booking } from "@/lib/bookings";
 import type { QuoteLogEntry } from "@/lib/quoteLog";
-import { salesStats, type StatRow } from "@/lib/salesStats";
+import { monthlyStats, salesStats, type StatRow } from "@/lib/salesStats";
+import { MonthlyChart } from "./MonthlyChart";
 import { reviewIdsIn } from "@/lib/reviews";
 import { useReviewSummaries } from "./ReviewLinkBox";
 
@@ -81,6 +82,7 @@ export function SalesStatsPanel({ quotes, bookings, hideMargin = false }: { quot
           {[...byDest.entries()].map(([d, v]) => ` · ${d} ★${Math.round((v.sum / v.n) * 10) / 10}`).join("")}
         </p>
       )}
+      <MonthlyChart rows={monthlyStats(quotes, bookings ?? []).map((r) => (hideMargin ? { ...r, avgMargin: null } : r))} />
       <Table title="여행지별" rows={s.byDestination} hideMargin={hideMargin} />
       <Table title="1인 가격대별 (원화)" rows={s.byPriceBand} hideMargin={hideMargin} />
       <p className="text-[10px] leading-4 text-slate-400">

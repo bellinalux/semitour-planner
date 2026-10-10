@@ -4,7 +4,7 @@ import { Bus, FolderOpen, Loader2, Route, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useRequest } from "@/hooks/useRequest";
-import { initialSettings, vehicleFor, type DayTourSettings } from "@/lib/dayTour";
+import { initialSettings, vehicleFor, type DayTourSettings, type Departure } from "@/lib/dayTour";
 import { deleteDayTour, loadCompanyDefaults, loadSavedDayTours, saveDayTour, type SavedDayTour } from "@/lib/dayTourStore";
 import { CURRENCIES } from "@/lib/currency";
 import type { DayTourLeg, DayTourRequest, DayTourResponse, DayTourStop, DayTourTransport } from "@/lib/schemas/dayTour";
@@ -56,6 +56,10 @@ export interface DayTourWork {
   settings: DayTourSettings;
   /** 고객용 웹 링크 (만들었으면) */
   shareId?: string;
+  /** 합류형 정기 출발 (날짜별 판매 좌석)과 최소·최대 좌석 */
+  departures?: Departure[];
+  minSeats?: number;
+  maxSeats?: number;
 }
 
 /** 상단 [근교 투어] — 반일·당일 근교 투어의 코스(차량·대중교통·도보)와 원가·판매가를 자동으로 만든다 */
@@ -101,7 +105,7 @@ export function DayTourMenu({ input, dayCount, onAddOption, buttonClassName, com
 
   const load = (t: SavedDayTour) => {
     setReq(t.request);
-    setWork({ id: t.id, request: t.request, response: t.response, title: t.title, summary: t.summary, stops: t.stops, legs: t.legs, settings: t.settings, shareId: t.shareId });
+    setWork({ id: t.id, request: t.request, response: t.response, title: t.title, summary: t.summary, stops: t.stops, legs: t.legs, settings: t.settings, shareId: t.shareId, departures: t.departures, minSeats: t.minSeats, maxSeats: t.maxSeats });
     setNotice("");
   };
 

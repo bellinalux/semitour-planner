@@ -6,6 +6,9 @@ import { useBookings, type BookingView } from "@/hooks/useBookings";
 import { BOOKING_STATUSES, bookingAlerts, bookingSummary, newBookingId, STATUS_LABEL, type Booking, type BookingStatus } from "@/lib/bookings";
 import { formatMoney } from "@/lib/currency";
 import { ReviewLinkBox } from "./ReviewLinkBox";
+import { InquiryInbox } from "./InquiryInbox";
+import { inquiryDate, STYLE_LABEL, type Inquiry } from "@/lib/inquiry";
+import type { TripInput } from "@/types";
 
 type Draft = Omit<Booking, "id" | "createdAt" | "updatedAt" | "owner" | "ownerId" | "history">;
 
@@ -15,6 +18,8 @@ interface Props {
   author: string;
   /** 고객 후기 화면에 보일 회사 이름 */
   companyName?: string;
+  /** 웹 견적 요청으로 입력 채우기 */
+  onFillInput?: (patch: Partial<TripInput>) => void;
   buttonClassName?: string;
 }
 
@@ -68,7 +73,7 @@ function Field({ label, children, wide }: { label: string; children: React.React
 }
 
 /** 상단 [예약 관리] — 견적 이후 예약 진행 상태·입금 기한·미수금을 관리한다 */
-export function BookingsMenu({ draftFromQuote, author, companyName = "", buttonClassName }: Props) {
+export function BookingsMenu({ draftFromQuote, author, companyName = "", onFillInput, buttonClassName }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const bookings = useBookings(author);
   const [filter, setFilter] = useState<Filter>("active");
@@ -77,11 +82,36 @@ export function BookingsMenu({ draftFromQuote, author, companyName = "", buttonC
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const [openSignal, setOpenSignal] = useState(0);
   const open = () => {
     setMessage(null);
     setEditing(null);
+    setOpenSignal((n) => n + 1);
     void bookings.refresh();
     dialogRef.current?.showModal();
+  };
+  /** 웹 견적 요청 → 예약(문의 단계) */
+  const bookingFromInquiry = (q: Inquiry): Promise<string | null> => {
+    const now = new Date().toISOString();
+    return bookings.save({
+      ...blank(),
+      customerName: q.name.slice(0, 60),
+      phone: /@/.test(q.contact) ? "" : q.contact.slice(0, 40),
+      email: /@/.test(q.contact) ? q.contact.slice(0, 120) : "",
+      destination: q.destination,
+      departureDate: inquiryDate(q.departure),
+      nights: q.nights,
+      days: q.nights > 0 ? q.nights + 1 : 0,
+      travelers: q.travelers,
+      status: "inquiry",
+      memo: [`웹 견적 요청 (${STYLE_LABEL[q.style]})`, q.budget > 0 ? `1인 예산 ${q.budget.toLocaleString("ko-KR")}원` : "", q.requests].filter(Boolean).join("\n").slice(0, 2000),
+      id: newBookingId(),
+      createdAt: now,
+      updatedAt: now,
+      owner: author,
+      ownerId: "",
+      history: [],
+    });
   };
 
   const list = bookings.list ?? [];
@@ -191,6 +221,17 @@ export function BookingsMenu({ draftFromQuote, author, companyName = "", buttonC
           </header>
 
           <div className="space-y-3 overflow-y-auto p-4 text-xs">
+            {onFillInput && (
+              <InquiryInbox
+                openSignal={openSignal}
+                companyName={companyName}
+                onMakeBooking={bookingFromInquiry}
+                onFillInput={(patch) => {
+                  onFillInput(patch);
+                  dialogRef.current?.close();
+                }}
+              />
+            )}
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => startNew(true)} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-700">
                 <Plus className="h-3.5 w-3.5" aria-hidden />

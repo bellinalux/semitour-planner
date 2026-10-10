@@ -6,6 +6,8 @@ import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { isMealFiller } from "@/lib/mealTiming";
 import { docTitle, englishDayDate, englishMoney, englishPeriod } from "@/lib/englishDoc";
 import { conditionTags, mealLabel } from "@/lib/itineraryDoc";
+import { isPhotoData } from "@/lib/imageResize";
+import { packingList } from "@/lib/packingList";
 import { dayMeals } from "@/lib/documents";
 import type { CompanyProfile, CourseMeta, DayPlan, QuoteData, TripInput } from "@/types";
 
@@ -32,7 +34,7 @@ export const sharedItinerarySchema = z.object({
         hotel: str(120),
         /** 조·중·석 표기 한 줄 */
         meals: str(160).default(""),
-        items: z.array(z.object({ time: str(20), name: str(160), kind: z.enum(["sight", "meal", "move", "hotel", "free", "flight", "other"]), note: str(200) })).max(40),
+        items: z.array(z.object({ time: str(20), name: str(160), kind: z.enum(["sight", "meal", "move", "hotel", "free", "flight", "other"]), note: str(200), photo: z.string().max(120_000).optional() })).max(40),
       }),
     )
     .max(60),
@@ -41,6 +43,8 @@ export const sharedItinerarySchema = z.object({
   notices: z.array(str(300)).max(20),
   company: z.object({ name: str(80), phone: str(40), email: str(120) }),
   updatedAt: str(40),
+  /** 준비물 (한 줄씩) */
+  packing: z.array(str(200)).max(40).default([]),
   /** 상품 조건 표식 (노쇼핑·노옵션·식사 n회 등) */
   tags: z.array(str(40)).max(10).default([]),
   /** 화면 글자 언어 (영문 링크면 en) */
@@ -119,6 +123,7 @@ export function buildSharedItinerary(
             time: t ? t.start : "",
             name: cut(it.name, 160),
             kind: KIND[it.type ?? "sightseeing"] ?? "other",
+            ...(isPhotoData(it.photo, 120_000) ? { photo: it.photo } : {}),
             note: (it.payment === "local" ? `${en ? "Paid locally" : "현지 지불"}${it.description ? ` · ${tr(it.description.slice(0, 160))}` : ""}` : tr(it.description?.slice(0, 160))).slice(0, 200),
           };
           }),
@@ -144,5 +149,6 @@ export function buildSharedItinerary(
     updatedAt: now.toISOString(),
     lang: en ? "en" : "ko",
     tags: en ? [] : conditionTags(input, days, pmChoice, meta, quote).map((t) => t.slice(0, 40)).slice(0, 10),
+    packing: en ? [] : packingList(input, days, pmChoice).flatMap((g) => g.items.map((i) => `${g.title} · ${i}`.slice(0, 200))).slice(0, 40),
   };
 }

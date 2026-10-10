@@ -66,6 +66,10 @@ export default async function SharedItineraryPage({ params }: { params: Promise<
                   <span className="min-w-0">
                     {KIND_MARK[lang][item.kind] && <span className="mr-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">{KIND_MARK[lang][item.kind]}</span>}
                     <span className="font-medium">{item.name}</span>
+                    {item.photo && (
+                      // eslint-disable-next-line @next/next/no-img-element -- 여행사가 올린 사진 data URL
+                      <img src={item.photo} alt="" className="mt-1 block max-h-48 w-full rounded-lg object-cover" />
+                    )}
                     {item.note && <span className="block text-pretty text-xs text-slate-500">{item.note}</span>}
                   </span>
                 </li>
@@ -94,6 +98,19 @@ export default async function SharedItineraryPage({ params }: { params: Promise<
           </p>
         ))}
       </section>
+
+      {it.packing.length > 0 && (
+        <section aria-label={lang === "en" ? "Packing" : "준비물"} className="space-y-1 rounded-xl border border-slate-200 p-3 text-xs">
+          <h2 className="font-semibold text-slate-900">{lang === "en" ? "Packing list" : "준비물"}</h2>
+          <ul className="space-y-0.5">
+            {it.packing.map((p) => (
+              <li key={p} className="text-slate-700">
+                ☐ {p}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <p className="text-center text-[11px] text-slate-400">
         {t.updated} {it.updatedAt.slice(0, 10)}

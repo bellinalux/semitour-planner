@@ -19,7 +19,9 @@ import type { SettingsSection } from "@/components/form/settingsFocus";
 import { ExportBar } from "./ExportBar";
 import { DocumentBar } from "./DocumentBar";
 import { ShareLinkBox } from "./ShareLinkBox";
+import { CustomerNoticeBox } from "./CustomerNoticeBox";
 import { OpsPanel } from "./OpsPanel";
+import { VersionPanel } from "./VersionPanel";
 import type { OpsData } from "@/lib/opsStore";
 import type { BudgetFitView } from "@/hooks/useBudgetFit";
 import { ItineraryPanel, type AccessibilityCheckView, type FeeCheckView, type OptionSuggestView } from "./ItineraryPanel";
@@ -102,8 +104,12 @@ interface Props {
   documents: React.ComponentProps<typeof DocumentBar>;
   /** 고객용 웹 일정표 링크 */
   share?: React.ComponentProps<typeof ShareLinkBox>;
+  /** 고객 안내 (출발 전 안내문·준비물) */
+  notice?: React.ComponentProps<typeof CustomerNoticeBox>;
+  /** 견적 버전 비교 */
+  versions?: React.ComponentProps<typeof VersionPanel>;
   /** 출발 준비·명단·정산 */
-  ops?: { data: OpsData; change: (next: OpsData) => void };
+  ops?: { data: OpsData; change: (next: OpsData) => void; guide?: React.ComponentProps<typeof OpsPanel>["guide"] };
   /** 견적 화면에서 입력값(할인 시나리오·가격안 등)을 바꾼다 */
   onInputChange: (patch: Partial<TripInput>) => void;
   /** 가격 낮추기에서 일정을 바꿀 때 */
@@ -138,6 +144,8 @@ export function Dashboard({
   library,
   documents,
   share,
+  notice,
+  versions,
   ops,
   onInputChange,
   onReplaceDays,
@@ -212,11 +220,13 @@ export function Dashboard({
         budgetFit={budgetFit}
         onReplaceDays={onReplaceDays}
       />
-      {ops && quote?.ok && days.length > 0 && <OpsPanel input={input} days={days} pmChoice={pmChoice} quote={quote} ops={ops.data} onChange={ops.change} />}
+      {ops && quote?.ok && days.length > 0 && <OpsPanel input={input} days={days} pmChoice={pmChoice} quote={quote} ops={ops.data} onChange={ops.change} guide={ops.guide} />}
+      {versions && quote?.ok && days.length > 0 && <VersionPanel {...versions} />}
       <UspPanel {...usp} />
       <ExportBar {...exporter} />
       <DocumentBar {...documents} />
       {share && !documents.disabled && <ShareLinkBox {...share} />}
+      {notice && !documents.disabled && <CustomerNoticeBox {...notice} />}
     </div>
   );
 }

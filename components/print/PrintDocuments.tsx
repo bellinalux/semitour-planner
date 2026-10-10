@@ -7,12 +7,13 @@ import { InvoiceDoc } from "./InvoiceDoc";
 import { ItineraryDoc } from "./ItineraryDoc";
 import { OperationDoc } from "./OperationDoc";
 import { OptionsDoc } from "./OptionsDoc";
+import { PackingDoc } from "./PackingDoc";
 import { PitchDoc } from "./PitchDoc";
 import { QuoteDoc } from "./QuoteDoc";
 import type { DocProps } from "./DocShell";
 
 /** 인쇄할 수 있는 문서 종류 */
-export type DocKind = "itinerary" | "quote" | "invoice" | "contract" | "internal" | "operation" | "pitch" | "options" | "english";
+export type DocKind = "itinerary" | "quote" | "invoice" | "contract" | "internal" | "operation" | "pitch" | "options" | "english" | "japanese" | "chinese" | "packing";
 
 export const DOC_LABELS: Record<DocKind, string> = {
   itinerary: "여행일정표",
@@ -24,6 +25,9 @@ export const DOC_LABELS: Record<DocKind, string> = {
   pitch: "상품 소개서",
   options: "비교 견적서 (A/B/C안·인원별)",
   english: "영문 일정표·견적서 (English)",
+  japanese: "일본어 일정표·견적서 (日本語)",
+  chinese: "중국어 일정표·견적서 (中文)",
+  packing: "준비물 체크리스트",
 };
 
 interface Props {
@@ -48,7 +52,10 @@ export function PrintDocuments({ kind, data }: Props) {
       {kind === "operation" && <OperationDoc {...data} />}
       {kind === "pitch" && <PitchDoc {...data} />}
       {kind === "options" && <OptionsDoc {...data} />}
-      {kind === "english" && <EnglishDoc {...data} />}
+      {kind === "english" && <EnglishDoc {...data} lang="en" />}
+      {kind === "japanese" && <EnglishDoc {...data} lang="ja" />}
+      {kind === "chinese" && <EnglishDoc {...data} lang="zh" />}
+      {kind === "packing" && <PackingDoc {...data} />}
     </div>
   );
 }
