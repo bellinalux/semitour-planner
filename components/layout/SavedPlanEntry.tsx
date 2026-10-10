@@ -13,6 +13,8 @@ function formatSavedAt(iso: string): string {
 
 interface Props {
   entry: PlanIndexEntry;
+  /** 이 일정으로 성약한 예약 수 (예약 관리) */
+  won?: number;
   /** 확인을 기다리는 동작 (지금 작업을 덮어쓰는 불러오기, 삭제) */
   confirming: "load" | "delete" | null;
   busy: boolean;
@@ -31,12 +33,15 @@ interface Props {
   onImportDay: (theme: string, items: ItineraryItem[]) => void;
 }
 
-export function SavedPlanEntry({ entry, confirming, busy, dirty, isCloud, importDays, importLoading, onAsk, onCancel, onLoad, onDelete, onDownload, onToggleImport, onImportDay }: Props) {
+export function SavedPlanEntry({ entry, won = 0, confirming, busy, dirty, isCloud, importDays, importLoading, onAsk, onCancel, onLoad, onDelete, onDownload, onToggleImport, onImportDay }: Props) {
   return (
     <li className="rounded-lg border border-slate-200 bg-white p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-900">{entry.name}</p>
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+            <span className="truncate">{entry.name}</span>
+            {won > 0 && <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">잘 팔린 코스 · 성약 {won}건</span>}
+          </p>
           <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{entry.summary}</p>
           <p className="text-[11px] text-slate-400">
             저장 {formatSavedAt(entry.savedAt)}

@@ -10,6 +10,7 @@ import { verifySupplierQuote } from "@/lib/supplierVerify";
 import { SupplierVerifyTable } from "./SupplierVerifyTable";
 import { SupplierRequestBox } from "./SupplierRequestBox";
 import { SupplierWeekdayTable } from "./DeparturePricesPanel";
+import { SupplierHistoryPanel } from "./SupplierHistoryPanel";
 import type { CourseMeta, DayPlan, QuoteData, SupplierQuote, TripInput } from "@/types";
 
 interface Props {
@@ -200,6 +201,7 @@ export function SupplierCheckPanel({ input, days, pmChoice, meta, quote, competi
         <>
           <QuoteSummary q={input.supplierQuote} input={input} money={money} />
           <SupplierWeekdayTable input={input} days={days} pmChoice={pmChoice} />
+          <SupplierHistoryPanel input={input} />
         </>
       ) : (
         <p className="text-pretty text-[11px] text-slate-500">

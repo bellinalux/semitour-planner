@@ -16,6 +16,7 @@ import { FeedbackButton } from "@/components/layout/FeedbackButton";
 import { BookingsMenu } from "@/components/layout/BookingsMenu";
 import { DayTourMenu } from "@/components/daytour/DayTourMenu";
 import { MoreMenu } from "@/components/layout/MoreMenu";
+import { WelcomeGuide } from "@/components/layout/WelcomeGuide";
 import { bookingFromQuote } from "@/lib/bookings";
 import { useSession } from "@/components/SessionContext";
 import { StepGuide } from "@/components/layout/StepGuide";
@@ -41,6 +42,10 @@ import { useWorkPersistence } from "@/hooks/useWorkPersistence";
 import { useStudioProductReceive } from "@/hooks/useStudioProductReceive";
 import { useStudioProductProvide } from "@/hooks/useStudioProductProvide";
 import { planToProduct } from "@/lib/planToProduct";
+import { buildSharedItinerary } from "@/lib/shareItinerary";
+import { englishTexts } from "@/lib/englishDoc";
+import { postJson } from "@/lib/api";
+import type { DocKind } from "@/components/print/PrintDocuments";
 import { listenErrors } from "@/lib/errorReport";
 import { missingLegalFields } from "@/lib/company";
 import { calculateQuote } from "@/lib/cost";
@@ -68,6 +73,11 @@ import { useCompetitorAutoFind } from "@/hooks/useCompetitorAutoFind";
 import { CompetitorItinerariesContext, useCompetitorItineraries } from "@/hooks/useCompetitorItineraries";
 import { useVerifyPipeline, VerifyPipelineContext } from "@/hooks/useVerifyPipeline";
 import { useUndoHistory } from "@/hooks/useUndoHistory";
+import { useFxDrift } from "@/hooks/useFxDrift";
+import { useSeasonCheck } from "@/hooks/useSeasonCheck";
+import { applyFxPatch } from "@/lib/fxDrift";
+import { addSupplierRecord, loadSupplierHistory, recordFromQuote } from "@/lib/supplierHistory";
+import { SUPPLIER_HISTORY_EVENT } from "@/components/dashboard/quote/SupplierHistoryPanel";
 import { TaskTray } from "@/components/layout/TaskTray";
 import { CourseEngineContext, useCourseEngine } from "@/hooks/useCourseEngine";
 import { DayTimeCheckContext, useDayTimeCheck } from "@/hooks/useDayTimeCheck";
@@ -119,11 +129,14 @@ export function PlannerApp() {
     () => (isReady ? calculateQuote(input, days, pmChoice) : null),
     [isReady, input, days, pmChoice],
   );
+  // 영문 일정표·견적서용 번역 (한글 글 → 영어, 이 화면에서 모아 둔다)
+  const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [translating, setTranslating] = useState(false);
   // 인쇄 문서는 견적이 준비된 뒤에만 만들 수 있다
   const docData = useMemo(
     // 고객 문서는 선택한 판매 채널의 소비자가를 쓰고, 내부 검토서는 원래 견적(rawQuote)으로 모든 채널을 본다
-    () => (quote?.ok ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company } : null),
-    [quote, input, days, pmChoice, meta, company],
+    () => (quote?.ok ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company, translations } : null),
+    [quote, input, days, pmChoice, meta, company, translations],
   );
 
   const stays = useMemo(() => overnightNights(days), [days]);
@@ -189,6 +202,11 @@ export function PlannerApp() {
       const patch = extra.length > 0 ? { ...quotePatch, options: [...nextInput.options, ...extra] } : quotePatch;
       update(patch);
       nextInput = { ...nextInput, ...patch };
+      // 업체 견적 기록에 쌓는다 (같은 여행지 여러 업체·같은 업체 지난 요금과 견주기)
+      if (patch.supplierQuote) {
+        addSupplierRecord(loadSupplierHistory(), recordFromQuote(patch.supplierQuote, nextInput, courseFile?.name ?? "붙여넣은 견적", result.meta?.packageName ?? ""));
+        window.dispatchEvent(new Event(SUPPLIER_HISTORY_EVENT));
+      }
       // 업체 견적서를 읽었으면 우리 시세(견적서 호텔별 숙박·차량·가이드·팁·보험)를 바로 조회해 업체 몫 추정까지 보여 준다
       // 업체 견적서를 읽었으면 한 번에 검증: 시세 → 시간 검증 → 코스 점검 → 타업체 찾기 → 타업체 일정 가져오기
       if (!options.fromAutoBuild) verifyPipeline.start();
@@ -300,9 +318,18 @@ export function PlannerApp() {
     itineraries: competitorItineraries,
   });
 
+  // 외화 업체 견적: 받을 때 환율과 지금 환율 비교
+  const fx = useFxDrift(input);
+  // 출발 시기 확인: 출발일이 정해지고 일정이 있으면 날씨·현지 공휴일·축제·휴관·혼잡을 확인
+  const season = useSeasonCheck(
+    days.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(input.departureDate) && input.destination.trim()
+      ? { destination: input.destination.trim(), departureDate: input.departureDate, days: Math.max(1, Math.min(60, input.days || days.length)) }
+      : null,
+  );
+
   // 레이아웃3(요약·추천): 핵심 숫자와 고치면 좋은 것
   const money = (v: number) => formatMoney(Math.round(v), input.currency);
-  const insightArgs = { input, days, pmChoice, meta, quote, budgetFit, money, engine: { scores: courseEngine.scores, moves: courseEngine.moves, zigzags: courseEngine.zigzags, zigzagFixable: courseEngine.zigzagFixable } };
+  const insightArgs = { input, days, pmChoice, meta, quote, budgetFit, money, engine: { scores: courseEngine.scores, moves: courseEngine.moves, zigzags: courseEngine.zigzags, zigzagFixable: courseEngine.zigzagFixable }, fx: fx.drift, season: season.result };
   const numbers = keyNumbers(insightArgs);
   const insights = buildInsights(insightArgs);
   const urgentCount = insights.filter((i) => i.tone === "warn").length;
@@ -332,6 +359,9 @@ export function PlannerApp() {
       engine={courseEngine}
       competitorFind={competitorFind}
       pipeline={verifyPipeline}
+      onApplyFx={() => {
+        if (fx.current) update(applyFxPatch(input, fx.current));
+      }}
       onConfirmCosts={(keys) => update({ costStatus: { ...input.costStatus, ...Object.fromEntries(keys.map((k) => [k, "confirmed" as const])) } })}
       onFixFlight={() => {
         const fixed = repairFlightTimes(days, input, meta);
@@ -340,8 +370,27 @@ export function PlannerApp() {
     />
   );
 
-  const { exporter, printDocument } = useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quoteLog, author: session.user?.name || quoteLog.author, print });
+  const { exporter, printDocument: printPlain } = useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quoteLog, author: session.user?.name || quoteLog.author, print });
 
+  /** 문서 인쇄 — 영문 문서는 아직 번역하지 않은 글을 먼저 번역한다 */
+  const printDocument = async (kind: DocKind) => {
+    if (kind === "english" && docData) {
+      const texts = englishTexts(docData).filter((t) => !(t in translations));
+      if (texts.length > 0) {
+        setTranslating(true);
+        try {
+          const r = await postJson<{ translations: string[] }>("/api/translate-doc", { texts });
+          setTranslations((prev) => ({ ...prev, ...Object.fromEntries(texts.map((t, i) => [t, r.translations[i] ?? t])) }));
+        } catch (e) {
+          window.alert(`영문 번역을 하지 못했습니다: ${e instanceof Error ? e.message : "다시 시도해 주세요."}`);
+          return;
+        } finally {
+          setTranslating(false);
+        }
+      }
+    }
+    printPlain(kind);
+  };
   // 화면 위 진행 안내 (① 입력 → ② 코스 → ③ 견적 → ④ 문서)
   const { steps: guideSteps, unconfirmed, stage: feedbackStage } = plannerGuide({
     input,
@@ -391,6 +440,8 @@ export function PlannerApp() {
         { key: "fees", label: "입장료·체류시간 웹 확인", running: webChecks.feeCheck.state.status === "loading", typical: "30초~1분" },
         { key: "daytime", label: `일정 시간 검증${dayTimeCheck.running ? ` (DAY ${dayTimeCheck.running.join(", ")})` : ""}`, running: dayTimeCheck.running !== null, typical: "1분 안팎" },
         { key: "engine", label: "코스 점검", running: courseEngine.running, typical: "하루 10~40초" },
+        { key: "translate", label: "영문 일정표 번역", running: translating, typical: "10~30초" },
+        { key: "season", label: "출발 시기 확인 (날씨·공휴일·축제)", running: season.running, typical: "20~40초" },
         { key: "competitors", label: "타업체 상품 찾기", running: competitorFind.running, typical: "30초~1분" },
         { key: "itineraries", label: `타업체 일정 가져오기 (${competitorItineraries.pending}개 남음)`, running: competitorItineraries.running.length > 0, typical: "상품당 30초" },
       ]}
@@ -416,6 +467,7 @@ export function PlannerApp() {
             />
             <AccountMenu />
             <MoreMenu attention={missingLegalFields(company).length > 0}>
+              <WelcomeGuide />
               <CompanySettings {...companyProfile} />
               <HistoryMenu log={quoteLog} teamSync={teamSync} />
               <SendToTourdesign getProduct={getProduct} />
@@ -529,6 +581,7 @@ export function PlannerApp() {
               onGenerate: handleGenerateUsp,
             }}
             exporter={exporter}
+            share={{ build: (showPrice) => (docData ? buildSharedItinerary(docData, showPrice) : null), planKey: suggestPlanName(input, meta) }}
             documents={{
               disabled: !quote?.ok,
               missingLegal: missingLegalFields(company),

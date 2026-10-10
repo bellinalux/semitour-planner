@@ -51,12 +51,21 @@ const competitor = (agency: string, price: number) => ({
 
 export async function mockAi(page: Page) {
   const json = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  // 처음 사용 안내는 열지 않는다 (사용 안내 테스트는 따로)
+  await page.addInitScript(() => {
+    try {
+      if (!sessionStorage.getItem("e2e-show-welcome")) localStorage.setItem("semitour-planner:welcomeSeen", "1");
+    } catch {
+      /* 무시 */
+    }
+  });
   // 테스트에서 실제 AI·웹 검색을 부르지 않도록 기본 응답 (테스트마다 필요하면 page.route로 덮어쓴다)
   await page.route("**/api/verify-day-time", (r) => r.fulfill(json({ days: [], sources: [], checkedAt: new Date().toISOString() })));
   await page.route("**/api/engine/plan", (r) => r.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { message: "e2e" } }) }));
   await page.route("**/api/competitor-itinerary", (r) =>
     r.fulfill(json({ itinerary: { found: false, days: [], mealCount: 0, tipNote: "", optionTours: [], sourceName: "", checkedAt: new Date().toISOString() } })),
   );
+  await page.route("**/api/season-check", (r) => r.fulfill(json({ weather: "", notes: [], searched: false, sources: [] })));
   await page.route("**/api/suggest-restaurant", (r) => r.fulfill(json({ restaurants: [], sources: [], searched: false })));
   await page.route("**/api/search-lodging-price", (r) => r.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { message: "e2e" } }) }));
   await page.route("**/api/generate-itinerary", (r) => r.fulfill(json({ days: DAYS, sources: [], researched: false })));

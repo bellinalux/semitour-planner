@@ -1,3 +1,4 @@
+import { bookingChecklist } from "@/lib/bookingChecklist";
 import { calcDayEnd, computeItemTimings, dayMeetingTime, STANDARD_DAY_END } from "@/lib/dayLoad";
 import { dayDate, tripPeriod } from "@/lib/documents";
 import { continuousDriving } from "@/lib/driverHours";
@@ -145,6 +146,43 @@ export function OperationDoc({ input, days, pmChoice, quote, meta, company }: Do
           </ul>
         </DocSection>
       )}
+
+      <DocSection title="예약 확인 체크리스트">
+        <table className="w-full border-collapse text-[10.5px]">
+          <thead>
+            <tr className="border-b border-slate-300 bg-slate-50 text-left">
+              <th scope="col" className="w-6 px-1.5 py-1" aria-label="확인" />
+              <th scope="col" className="w-20 px-1.5 py-1 font-semibold">
+                구분
+              </th>
+              <th scope="col" className="px-1.5 py-1 font-semibold">
+                확인할 것
+              </th>
+              <th scope="col" className="w-24 px-1.5 py-1 font-semibold">
+                기한
+              </th>
+              <th scope="col" className="w-20 px-1.5 py-1 font-semibold">
+                담당
+              </th>
+              <th scope="col" className="w-28 px-1.5 py-1 font-semibold">
+                확정번호·메모
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {bookingChecklist(input, days, pmChoice, travelers).map((c) => (
+              <tr key={`${c.group}-${c.label}`} className="break-inside-avoid border-b border-slate-100 align-top">
+                <td className="px-1.5 py-1">☐</td>
+                <td className="px-1.5 py-1 text-slate-600">{c.group}</td>
+                <td className="px-1.5 py-1">{c.label}</td>
+                <td className="px-1.5 py-1 tabular-nums">{c.due ? `${c.due} (D-${c.dueDays})` : `출발 D-${c.dueDays}`}</td>
+                <td className="px-1.5 py-1" />
+                <td className="px-1.5 py-1" />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </DocSection>
 
       <p className="text-[10px] text-slate-500">
         시각은 일정표의 체류·이동 시간으로 계산한 예정 시각입니다. 현지 교통·날씨에 따라 가이드가 조정하고, 식사·입장 예약 시각은 업체에 확인하세요.

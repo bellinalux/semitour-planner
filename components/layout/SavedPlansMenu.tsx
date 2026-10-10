@@ -6,6 +6,8 @@ import { useCloudPlans } from "@/hooks/useCloudPlans";
 import { useSavedPlans } from "@/hooks/useSavedPlans";
 import { dayItems } from "@/lib/itinerary";
 import { SavedPlanEntry } from "./SavedPlanEntry";
+import { useBookings } from "@/hooks/useBookings";
+import { wonByPlanName } from "@/lib/salesStats";
 import { buttonClass, SaveCurrentSection, StoreSelector, type StoreKind } from "./saved/SaveSections";
 import type { DayPlan, ItineraryItem } from "@/types";
 import {
@@ -76,11 +78,14 @@ export function SavedPlansMenu({ snapshot, onLoad, onImportDay }: Props) {
   const [importDays, setImportDays] = useState<Record<string, { theme: string; items: ItineraryItem[] }[]>>({});
   const [importLoadingId, setImportLoadingId] = useState<string | null>(null);
 
+  const bookings = useBookings("");
   const store: StoreKind = preferred === "cloud" && cloud.status !== "unavailable" ? "cloud" : "local";
-  const entries: PlanIndexEntry[] = useMemo(
-    () => (store === "cloud" ? cloud.plans : local.plans.map(indexEntryOf)),
-    [store, cloud.plans, local.plans],
-  );
+  // 성약(예약 관리에서 계약 이후)이 많은 일정 = 잘 팔린 코스를 위로
+  const won = useMemo(() => wonByPlanName(bookings.list ?? []), [bookings.list]);
+  const entries: PlanIndexEntry[] = useMemo(() => {
+    const list = store === "cloud" ? cloud.plans : local.plans.map(indexEntryOf);
+    return [...list].sort((a, b) => (won.get(b.name) ?? 0) - (won.get(a.name) ?? 0));
+  }, [store, cloud.plans, local.plans, won]);
 
   const currentKey = useMemo(() => JSON.stringify(snapshot), [snapshot]);
   const hasWork = snapshot.days.length > 0;
@@ -116,6 +121,7 @@ export function SavedPlansMenu({ snapshot, onLoad, onImportDay }: Props) {
     setPending(null);
     setPreferred(readStorePref());
     void cloud.refresh();
+    void bookings.refresh();
     setOpen(true);
   };
 
@@ -306,6 +312,7 @@ export function SavedPlansMenu({ snapshot, onLoad, onImportDay }: Props) {
                     <SavedPlanEntry
                       key={entry.id}
                       entry={entry}
+                      won={won.get(entry.name) ?? 0}
                       confirming={pending?.id === entry.id ? pending.action : null}
                       busy={busy}
                       dirty={dirty}

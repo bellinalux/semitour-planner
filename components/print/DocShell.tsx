@@ -14,6 +14,8 @@ export interface DocProps {
   rawQuote?: QuoteData;
   meta: CourseMeta | null;
   company: CompanyProfile;
+  /** 영문 문서용 번역 (한글 글 → 영어) */
+  translations?: Record<string, string>;
 }
 
 interface ShellProps {

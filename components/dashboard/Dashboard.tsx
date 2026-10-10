@@ -18,6 +18,7 @@ import type { CourseSegment, SegmentKind } from "@/lib/segmentLibrary";
 import type { SettingsSection } from "@/components/form/settingsFocus";
 import { ExportBar } from "./ExportBar";
 import { DocumentBar } from "./DocumentBar";
+import { ShareLinkBox } from "./ShareLinkBox";
 import type { BudgetFitView } from "@/hooks/useBudgetFit";
 import { ItineraryPanel, type AccessibilityCheckView, type FeeCheckView, type OptionSuggestView } from "./ItineraryPanel";
 import { CourseLibraryPanel } from "./library/CourseLibraryPanel";
@@ -95,6 +96,8 @@ interface Props {
   accessibilityCheck: AccessibilityCheckView;
   library: LibraryView;
   documents: React.ComponentProps<typeof DocumentBar>;
+  /** 고객용 웹 일정표 링크 */
+  share?: React.ComponentProps<typeof ShareLinkBox>;
   /** 견적 화면에서 입력값(할인 시나리오·가격안 등)을 바꾼다 */
   onInputChange: (patch: Partial<TripInput>) => void;
   /** 가격 낮추기에서 일정을 바꿀 때 */
@@ -128,6 +131,7 @@ export function Dashboard({
   accessibilityCheck,
   library,
   documents,
+  share,
   onInputChange,
   onReplaceDays,
   onOpenSettings,
@@ -204,6 +208,7 @@ export function Dashboard({
       <UspPanel {...usp} />
       <ExportBar {...exporter} />
       <DocumentBar {...documents} />
+      {share && !documents.disabled && <ShareLinkBox {...share} />}
     </div>
   );
 }

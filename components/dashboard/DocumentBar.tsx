@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Bus, Calculator, Columns3, FileSignature, FileText, Printer, Receipt, Sparkles } from "lucide-react";
+import { AlertTriangle, Bus, Calculator, Columns3, Languages, FileSignature, FileText, Printer, Receipt, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { DOC_LABELS, type DocKind } from "@/components/print/PrintDocuments";
 
@@ -19,6 +19,7 @@ const BUTTONS: { kind: DocKind; icon: typeof FileText; description: string }[] =
   { kind: "quote", icon: Printer, description: "요금·결제 조건" },
   { kind: "options", icon: Columns3, description: "숙소 등급만 다른 A/B/C안과 인원별(출발 요일별) 1인 요금표 — 상담·브로셔용" },
   { kind: "invoice", icon: Receipt, description: "청구 내역·입금 안내" },
+  { kind: "english", icon: Languages, description: "외국인 고객용 영어 일정표·요금 (일정 이름·설명을 AI로 번역해 인쇄)" },
   { kind: "contract", icon: FileSignature, description: "국외여행 표준약관 전문 첨부, 서명란 포함" },
 ];
 

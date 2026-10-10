@@ -39,6 +39,8 @@ interface Props {
   pipeline: VerifyPipelineView;
   /** 추정 원가를 "확인함"으로 */
   onConfirmCosts: (keys: CostKey[]) => void;
+  /** 지금 환율로 외화 업체 공급가를 다시 계산 */
+  onApplyFx?: () => void;
 }
 
 const STEP_MARK: Record<VerifyStepStatus, { mark: string; tone: string }> = {
@@ -148,7 +150,7 @@ function NumbersCard({ numbers, money }: { numbers: KeyNumbers; money: (v: numbe
  * 레이아웃3 — 요약·추천. 지금 견적의 핵심 숫자(판매가·원가·수익)를 위에 두고, 고치면 좋은 것을 중요한 순서로 보여 주며
  * 버튼으로 바로 적용한다(예산 맞추기·올리기·입력 폴더 열기·질문 복사). 자동 구성 진행도 여기서 본다.
  */
-export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight, dayTime, engine, competitorFind, pipeline, onConfirmCosts }: Props) {
+export function InsightPanel({ input, numbers, insights, budgetFit, build, auto, money, onFocus, onScrollTo, onAddTourOption, onInsertTour, onFixFlight, dayTime, engine, competitorFind, pipeline, onConfirmCosts, onApplyFx }: Props) {
   const [showAll, setShowAll] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const visible = showAll ? insights : insights.slice(0, SHOW);
@@ -166,6 +168,9 @@ export function InsightPanel({ input, numbers, insights, budgetFit, build, auto,
         break;
       case "fix-day-time":
         dayTime.run(action.days);
+        break;
+      case "apply-fx":
+        onApplyFx?.();
         break;
       case "confirm-costs":
         onConfirmCosts(action.keys);

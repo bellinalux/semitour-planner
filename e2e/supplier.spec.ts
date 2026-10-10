@@ -84,7 +84,9 @@ test("업체 견적서: 요금을 읽어 공급가로 넣고, 목표 판매가�
 
   await page.getByRole("button", { name: "코스 분석" }).click();
   await expect(page.getByText("업체 견적 검증 · 목표 원가")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("400 USD", { exact: true })).toBeVisible();
+  await expect(page.getByText("400 USD", { exact: true }).first()).toBeVisible();
+  // 읽은 업체 견적은 업체 견적 기록에도 쌓인다
+  await expect(page.getByRole("region", { name: "업체 견적 기록" })).toContainText("400 USD");
   await expect(page.getByText(/≈ ₩560,000/)).toBeVisible();
   // 목표 700,000 − 회사 수익 105,000 = 상한 595,000 → 지금 공급가 560,000은 상한 안
   const calc = page.getByLabel("업체 공급가 상한 계산");

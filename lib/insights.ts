@@ -5,6 +5,8 @@ import { lastPriceChange } from "@/lib/competitors";
 import type { DayMove } from "@/lib/dayBalance";
 import { calcDayLoad } from "@/lib/dayLoad";
 import { formatDuration } from "@/lib/format";
+import { FX_ALERT_PCT, type FxDrift } from "@/lib/fxDrift";
+import type { SeasonResponse } from "@/lib/schemas/season";
 import { flightMismatches, knownFlight } from "@/lib/flightRepair";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { buildPriceTiers, documentQuote } from "@/lib/pricing";
@@ -43,7 +45,8 @@ export type InsightAction =
   | { kind: "engine-move"; move: DayMove; label: string }
   | { kind: "group-areas"; day: number; label: string }
   | { kind: "find-competitors"; label: string }
-  | { kind: "confirm-costs"; keys: CostKey[]; label: string };
+  | { kind: "confirm-costs"; keys: CostKey[]; label: string }
+  | { kind: "apply-fx"; label: string };
 
 export interface Insight {
   id: string;
@@ -70,6 +73,10 @@ export interface InsightInput {
     zigzags?: Record<number, { area: string; from: string }[]>;
     zigzagFixable?: Record<number, boolean>;
   };
+  /** 외화 업체 견적의 환율 변동 */
+  fx?: FxDrift | null;
+  /** 출발 시기 확인 (날씨·공휴일·축제·휴관·혼잡) */
+  season?: SeasonResponse | null;
 }
 
 export function keyNumbers({ input, days, pmChoice, meta, quote, money }: InsightInput): KeyNumbers | null {
@@ -114,7 +121,7 @@ export function keyNumbers({ input, days, pmChoice, meta, quote, money }: Insigh
 
 const TONE_ORDER = { warn: 0, info: 1, good: 2 } as const;
 
-export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, money, engine }: InsightInput): Insight[] {
+export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, money, engine, fx, season }: InsightInput): Insight[] {
   const out: Insight[] = [];
 
   if (quote && !quote.ok)
@@ -171,6 +178,27 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
     }
   }
 
+  // 출발 시기 (날씨·현지 공휴일·축제·휴관·성수기) — 영향이 큰 것은 하나씩, 참고는 묶어서
+  if (season && (season.notes.length > 0 || season.weather)) {
+    const notice = [
+      `[${input.destination} 출발 시기 안내]`,
+      ...(season.weather ? [`· 날씨: ${season.weather}`] : []),
+      ...season.notes.map((n) => `· ${n.dates ? `${n.dates} ` : ""}${n.title} — ${n.detail}`),
+    ].join("\n");
+    const copy = { kind: "copy" as const, text: notice, label: "고객 안내 문구 복사" };
+    for (const n of season.notes.filter((x) => x.severity === "warn").slice(0, 3))
+      out.push({ id: `season-${n.title}`, tone: "warn", title: `출발 시기: ${n.title}`, detail: `${n.dates ? `${n.dates} · ` : ""}${n.detail}`, action: copy });
+    const infos = season.notes.filter((x) => x.severity === "info");
+    if (infos.length > 0 || season.weather)
+      out.push({
+        id: "season-info",
+        tone: "info",
+        title: `출발 시기 참고${infos.length > 0 ? ` ${infos.length}건` : ""}`,
+        detail: [season.weather, ...infos.map((n) => `${n.dates ? `${n.dates} ` : ""}${n.title}`)].filter(Boolean).join(" · "),
+        action: copy,
+      });
+  }
+
   // ③ 업체 견적 (공급가 방식이거나 견적서를 읽었을 때)
   if (quote?.ok && (input.pricingMode === "supplier" || input.supplierQuote)) {
     const policy = ourPolicy(days, pmChoice, input, meta);
@@ -184,6 +212,18 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
         title: `업체 공급가를 1인 ${money(target.over)} 낮춰야 합니다`,
         detail: cuts.length > 0 ? `빼거나 바꾸면 좋은 것 ${cuts.length}개: ${cuts.map((c) => c.name).join(", ")}` : "업체에 공급가 조정을 요청하세요",
         action: { kind: "scroll", target: "supplier-check", label: "업체 견적 검증 보기" },
+      });
+    }
+    // 환율 변동 (외화 업체 견적) — 오르면 같은 외화 요금이 비싸져 마진이 준다
+    if (fx && Math.abs(fx.changePct) >= FX_ALERT_PCT) {
+      const up = fx.changePct > 0;
+      const rate = (v: number) => (v >= 100 ? v.toFixed(1) : v.toFixed(4).replace(/0+$/, ""));
+      out.push({
+        id: "fx-drift",
+        tone: up ? "warn" : "info",
+        title: `환율이 견적 받을 때보다 ${Math.abs(fx.changePct).toFixed(1)}% ${up ? "올랐습니다" : "내렸습니다"} (${fx.code} ${rate(fx.quoted)} → ${rate(fx.current)})`,
+        detail: `업체 공급가 1인 ${money(fx.priceThen)} → ${money(fx.priceNow)} (${up ? "+" : "−"}${money(Math.abs(fx.priceNow - fx.priceThen))}). ${up ? "업체에 원화 확정 요금을 받거나 지금 환율로 다시 계산하세요." : "지금 환율로 다시 계산하면 원가가 줄어듭니다."}`,
+        action: { kind: "apply-fx", label: "지금 환율로 다시 계산" },
       });
     }
     const verify = verifySupplierQuote(input, days, pmChoice, quote);

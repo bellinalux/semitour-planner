@@ -3,6 +3,8 @@
 import { AlertTriangle, Cloud, Download, HardDrive, History, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { useSession } from "@/components/SessionContext";
+import { useBookings } from "@/hooks/useBookings";
+import { SalesStatsPanel } from "./SalesStatsPanel";
 import type { QuoteLog } from "@/hooks/useQuoteLog";
 import type { TeamSyncStatus } from "@/hooks/useTeamSync";
 import { backupFileName, collectBackup, parseBackup, restoreBackup } from "@/lib/backup";
@@ -30,11 +32,13 @@ export function HistoryMenu({ log, teamSync }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pendingRestore, setPendingRestore] = useState<ReturnType<typeof parseBackup> | null>(null);
+  const bookings = useBookings(log.author);
 
   const open = () => {
     setNotice(null);
     setPendingRestore(null);
     void log.refresh();
+    void bookings.refresh();
     dialogRef.current?.showModal();
   };
   const close = () => dialogRef.current?.close();
@@ -119,6 +123,8 @@ export function HistoryMenu({ log, teamSync }: Props) {
                 />
               </section>
             )}
+
+            <SalesStatsPanel quotes={log.entries} bookings={bookings.list} />
 
             <section aria-label="견적 이력" className="space-y-2">
               <h3 className="text-xs font-semibold text-slate-700">
