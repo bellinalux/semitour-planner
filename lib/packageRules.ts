@@ -5,7 +5,7 @@ import { fixDayStructure } from "@/lib/dayStructure";
 import { dayWindow, fixImpossible } from "@/lib/feasibility";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { isRestStop } from "@/lib/mealTiming";
-import type { Companion, DayPlan, ItineraryItem, OperatingModel, ProductTier, TripInput } from "@/types";
+import type { Companion, DayPlan, ItineraryItem, OperatingModel, ProductTier, TourOption, TripInput } from "@/types";
 
 /**
  * 패키지 규칙표 — 업계(대형 여행사 등급 체계·패키지 유형·표준약관·정보제공 표준안·운전 규정) 조사로 만든 기본값.
@@ -343,12 +343,68 @@ export interface TripRuleIssue {
   text: string;
   /** 고치기: 미팅 시각 맞추기 (해당 날짜들) */
   meetingDays?: number[];
+  /** 고치기: 선택관광으로 옮기기 (항목 id) */
+  separateIds?: string[];
+}
+
+const SEPARATE = /별도\s*(진행|비용|요금|결제|구매)|가이드\s*(에게\s*)?문의|희망자|선택\s*관광|옵션\s*(진행|투어)/;
+
+/** 원문상 "별도 진행"인 관광·체험 (해양 액티비티 "가이드 문의 후 별도 진행" 등) */
+export function separateItems(days: DayPlan[], pmChoice: PmChoice): { day: number; item: ItineraryItem }[] {
+  return days.flatMap((d) =>
+    dayItems(d, pmChoice)
+      .filter((i) => ["sightseeing", "experience", "massage"].includes(i.type ?? "sightseeing") && SEPARATE.test(`${i.name} ${i.description ?? ""} ${i.caution ?? ""}`))
+      .map((item) => ({ day: d.day, item })),
+  );
+}
+
+/** 별도 진행 항목을 일정에서 빼 선택관광으로 — 현지 별도 결제, 미참여 시 대체일정 표기 (정보제공 표준안) */
+export function toOptionalTours(days: DayPlan[], ids: string[]): { days: DayPlan[]; options: TourOption[] } {
+  const options: TourOption[] = [];
+  const next = days.map((d) => {
+    const hit = d.items.filter((i) => ids.includes(i.id));
+    if (hit.length === 0) return d;
+    for (const i of hit)
+      options.push({
+        id: `opt-${i.id}`,
+        name: i.name,
+        description: i.description ?? "",
+        durationMinutes: Math.max(0, i.stayMinutes),
+        dayNo: d.day,
+        costPerPerson: i.entryFee,
+        pricePerPerson: i.entryFee,
+        minParticipants: 1,
+        participationRate: 50,
+        note: "현지 별도 진행 (불포함 사항)",
+        alternative: "미참여 시 개인 자유시간 (가이드 미동행) — 집결 시각·장소는 가이드 안내",
+      });
+    // 빠진 항목의 다음 이동은 앞 항목이 이어받는다
+    const items: ItineraryItem[] = [];
+    for (const it of d.items) {
+      if (ids.includes(it.id)) {
+        const prev = items.at(-1);
+        if (prev) items[items.length - 1] = { ...prev, travelMinutesToNext: Math.max(prev.travelMinutesToNext ?? 0, it.travelMinutesToNext ?? 0) };
+        continue;
+      }
+      items.push(it);
+    }
+    return refitDay({ ...d, items });
+  });
+  return { days: next, options };
 }
 
 /** 상품 전체 규칙 점검 (상품 규칙 패널) */
-export function tripRuleIssues(input: Pick<TripInput, "options" | "tipPerPerson" | "nights">, days: DayPlan[], pmChoice: PmChoice, r: PackageRules): TripRuleIssue[] {
+export function tripRuleIssues(input: Pick<TripInput, "options" | "tipPerPerson" | "nights"> & Partial<Pick<TripInput, "selectedFlight">>, days: DayPlan[], pmChoice: PmChoice, r: PackageRules): TripRuleIssue[] {
   const out: TripRuleIssue[] = [];
   const all = days.flatMap((d) => dayItems(d, pmChoice));
+  // 항공 시각 — 없으면 도착일·출국일 시각이 추정이다
+  const flightDays = days.filter((d) => d.items.some((i) => i.type === "flight"));
+  if (flightDays.length > 0 && !input.selectedFlight && !flightDays.some((d) => d.items.some((i) => i.type === "flight" && i.fixedTime)))
+    out.push({ key: "flight-time", text: `항공 시각이 없어 DAY ${flightDays.map((d) => d.day).join("·")} 시각이 추정입니다 — 항공편을 넣어야 도착일·출국일(공항 3시간 전)이 맞습니다` });
+  // 원문상 별도 진행 항목 — 일정이 아니라 선택관광으로
+  const separate = separateItems(days, pmChoice);
+  if (separate.length > 0)
+    out.push({ key: "separate", text: `원문에 "별도 진행"인 항목 ${separate.length}개 (${separate.map((s) => s.item.name).join(", ")}) — 기본 일정이 아니라 선택관광으로 (요금·미참여 시 대체일정 표기)`, separateIds: separate.map((s) => s.item.id) });
   // 미팅 시각
   const early = days.filter((d) => !startsWithFlight(d) && d.rest !== "free" && morningFreeItems(d.kind === "semi" ? d.amGuided : d.items).length === 0 && (parseClock(dayMeetingTime(d)) ?? 0) < (parseClock(r.earliestMeeting) ?? 0));
   if (r.model !== "airtel" && early.length > 0)
@@ -357,7 +413,7 @@ export function tripRuleIssues(input: Pick<TripInput, "options" | "tipPerPerson"
   const shops = all.filter(isShoppingCenter);
   if (r.shoppingMax !== null && shops.length > r.shoppingMax) out.push({ key: "shopping", text: `쇼핑센터 ${shops.length}회 (${shops.map((s) => s.name).join(", ")}) — ${r.shoppingMax === 0 ? "노쇼핑 등급" : `최대 ${r.shoppingMax}회`}` });
   // 선택관광
-  const paidOptions = input.options.filter((o) => o.pricePerPerson > 0);
+  const paidOptions = input.options.filter((o) => o.pricePerPerson > 0 && !/불포함|현지\s*별도/.test(o.note));
   if (r.options === "included" && paidOptions.length > 0) out.push({ key: "options-included", text: `별도 요금 선택관광 ${paidOptions.length}개 (${paidOptions.map((o) => o.name).join(", ")}) — 노옵션 등급은 주요 옵션을 기본일정에 포함` });
   if (r.options === "none" && input.options.length > 0) out.push({ key: "options-none", text: "에어텔·호텔팩은 선택관광을 일정에 넣지 않습니다 (참고용 추천으로)" });
   const noAlt = input.options.filter((o) => !o.alternative?.trim() || /차량\s*대기|버스\s*대기|주변\s*휴식/.test(o.alternative));

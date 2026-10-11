@@ -4,7 +4,8 @@ import { AlertTriangle, ClipboardCheck } from "lucide-react";
 import { createContext, useState } from "react";
 import { SectionCard } from "@/components/ui/SectionCard";
 import type { PmChoice } from "@/lib/itinerary";
-import { applyPackageRules, applyRuleMeeting, REGION_LABEL, tripRuleIssues, type PackageRules } from "@/lib/packageRules";
+import { applyPackageRules, applyRuleMeeting, REGION_LABEL, toOptionalTours, tripRuleIssues, type PackageRules } from "@/lib/packageRules";
+import type { TourOption } from "@/types";
 import type { DayPlan, TripInput } from "@/types";
 
 /** 일정 카드가 그날 규칙 점검·종료 기준에 쓰는 이 상품의 규칙 */
@@ -13,7 +14,7 @@ export const PackageRulesContext = createContext<PackageRules | null>(null);
 const OPTION_TEXT: Record<PackageRules["options"], string> = { allowed: "있음 (기본일정 뒤, 대체일정 표기)", reasonable: "합리적 가격 (기본일정 뒤)", included: "주요 옵션 포함 (노옵션)", none: "없음" };
 
 /** 상품 규칙 — 운영 방식·등급·고객·지역으로 정한 기준과 상품 전체 점검 */
-export function PackageRulesPanel({ input, rules, days, pmChoice, onApplyDays }: { input: TripInput; rules: PackageRules; days: DayPlan[]; pmChoice: PmChoice; onApplyDays?: (days: DayPlan[]) => void }) {
+export function PackageRulesPanel({ input, rules, days, pmChoice, onApplyDays, onOptions }: { input: TripInput; rules: PackageRules; days: DayPlan[]; pmChoice: PmChoice; onApplyDays?: (days: DayPlan[]) => void; onOptions?: (options: TourOption[]) => void }) {
   const issues = tripRuleIssues(input, days, pmChoice, rules);
   const [message, setMessage] = useState("");
   const rows: [string, string][] = [
@@ -67,6 +68,20 @@ export function PackageRulesPanel({ input, rules, days, pmChoice, onApplyDays }:
               <li key={i.key} className="flex flex-wrap items-start gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-amber-900">
                 <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
                 <span className="min-w-0 flex-1 text-pretty">{i.text}</span>
+                {i.separateIds && onApplyDays && onOptions && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const r = toOptionalTours(days, i.separateIds!);
+                      onApplyDays(r.days);
+                      onOptions([...input.options.filter((o) => !r.options.some((x) => x.id === o.id)), ...r.options]);
+                      setMessage(`${r.options.map((o) => o.name).join(", ")}을(를) 선택관광으로 옮겼습니다 (현지 별도 결제, 미참여 시 대체일정 표기).`);
+                    }}
+                    className="shrink-0 rounded border border-amber-400 bg-white px-2 py-0.5 font-semibold hover:bg-amber-100"
+                  >
+                    선택관광으로 옮기기
+                  </button>
+                )}
                 {i.meetingDays && onApplyDays && (
                   <button
                     type="button"

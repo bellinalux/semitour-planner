@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { applyDayMove, refitDay, roomOf } from "@/lib/dayBalance";
 import { computeItemTimings, dayTourStart } from "@/lib/dayLoad";
 import { bestInsert, dayHardIssues, dayWindow, fixImpossible, newHardIssues, openWindow } from "@/lib/feasibility";
-import { item } from "./fixtures";
+import { calcDayLoad } from "@/lib/dayLoad";
+import { enforceMealWindows } from "@/lib/mealTiming";
+import { packageRules, separateItems, toOptionalTours, tripRuleIssues } from "@/lib/packageRules";
+import { input } from "./fixtures";
+import { item, linearDay } from "./fixtures";
 import { pattayaTrip } from "./scenarioFixtures";
 
 describe("① 하루 사용 가능 시간", () => {
@@ -76,5 +80,37 @@ describe("③ 시각이 맞는 자리", () => {
     // DAY 2 → DAY 1(새벽 도착) 옮기기를 시켜도 시각 맞는 자리가 없으면 원래 방식 그대로 (관문이 막는다)
     const moved = applyDayMove(days, { fromDay: 2, toDay: 1, itemIds: ["nong"], label: "", minutes: 120 });
     expect(newHardIssues(days, moved, {}, "21:30").length).toBeGreaterThan(0);
+  });
+});
+
+describe("전체 검사에서 찾은 계산 문제", () => {
+  it("① 문 여는 시각까지 기다린다 — 아시아티크(16:00~)를 크루즈 앞에 두면 자유시간 뒤 16:00 시작", () => {
+    const out = enforceMealWindows([item("p", { name: "왕궁", stayMinutes: 90, travelMinutesToNext: 30 }), item("asia", { type: "shopping", name: "아시아티크", stayMinutes: 90 })], "12:40");
+    expect(out.map((i) => i.id)).toEqual(["p", "asia-free-0", "asia"]);
+    expect(out[1].stayMinutes).toBe(16 * 60 - (12 * 60 + 40 + 90 + 30));
+  });
+
+  it("② 항공 시각이 없어도 원문 '새벽 체크인'이면 새벽 도착일, 항공 시각 없음 알림", () => {
+    const d1 = linearDay(1, [item("f", { type: "flight", name: "김해 출발", stayMinutes: 0, travelMinutesToNext: 330 }), item("a", { type: "flight", name: "방콕 도착", stayMinutes: 40 }), item("h", { type: "hotel", name: "호텔 새벽 체크인", stayMinutes: 0 })]);
+    expect(dayWindow(d1, {}).kind).toBe("arrival-night");
+    const r = packageRules(input({ operatingModel: "full", destination: "방콕" }));
+    expect(tripRuleIssues(input({ options: [] }), [d1], {}, r).map((i) => i.key)).toContain("flight-time");
+  });
+
+  it("③ 자유시간은 하루 부담에 넣지 않는다", () => {
+    const d = linearDay(2, [item("a", { stayMinutes: 120, travelMinutesToNext: 20 }), item("f", { type: "free_time", stayMinutes: 200, travelMinutesToNext: 10 }), item("b", { stayMinutes: 60 })]);
+    expect(calcDayLoad(d, {}).totalMinutes).toBe(30 + 120 + 20 + 10 + 60);
+  });
+
+  it("④ 원문상 '별도 진행' 항목은 선택관광으로 (현지 별도 결제·대체일정)", () => {
+    const d = linearDay(3, [item("hop", { type: "experience", name: "산호섬 호핑 투어", stayMinutes: 120 }), item("act", { type: "experience", name: "해양 엑티비티", description: "바나나 보트, 제트스키 - 가이드 문의 후 별도 진행 가능", stayMinutes: 60, travelMinutesToNext: 20, entryFee: 16000 }), item("l", { type: "meal", name: "중식" })]);
+    expect(separateItems([d], {}).map((s) => s.item.id)).toEqual(["act"]);
+    const r = toOptionalTours([d], ["act"]);
+    expect(r.days[0].items.some((i) => i.id === "act")).toBe(false);
+    expect(r.options[0]).toMatchObject({ name: "해양 엑티비티", dayNo: 3, pricePerPerson: 16000, note: "현지 별도 진행 (불포함 사항)" });
+    expect(r.options[0].alternative).toContain("미참여 시");
+    // 현지 별도 진행 선택관광은 노옵션 점검에 걸리지 않는다
+    const prem = packageRules(input({ operatingModel: "full", productTier: "premium", destination: "파타야" }));
+    expect(tripRuleIssues(input({ options: r.options, tipPerPerson: 1 }), r.days, {}, prem).map((i) => i.key)).not.toContain("options-included");
   });
 });

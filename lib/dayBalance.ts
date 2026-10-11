@@ -76,11 +76,9 @@ function tourLoad(day: DayPlan, pmChoice: PmChoice): number {
  * 새벽·밤 도착일·출국일·일부러 쉬게 둔 날은 0 (관광을 옮겨 받지 않는다).
  */
 export function roomOf(day: DayPlan, pmChoice: PmChoice): number {
-  const items = dayItems(day, pmChoice);
-  const free = items.filter((i) => i.type === "free_time").reduce((s, i) => s + i.stayMinutes, 0);
+  // 하루 부담에는 자유시간이 빠져 있다 — 자유시간은 바꿔 쓸 수 있으니 그대로 여유
   const load = tourLoad(day, pmChoice);
-  // 자유시간은 바꿔 쓸 수 있으니 여유로 센다
-  return Math.min(Math.max(0, DAY_LOAD_OK_MAX - (load - free)), clockRoom(day, pmChoice));
+  return Math.min(Math.max(0, DAY_LOAD_OK_MAX - load), clockRoom(day, pmChoice));
 }
 
 export function suggestDayMoves(days: DayPlan[], pmChoice: PmChoice): DayMove[] {

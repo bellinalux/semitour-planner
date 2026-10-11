@@ -9,7 +9,7 @@ const day = (n: number, items: unknown[], patch: Record<string, unknown> = {}) =
 const DAYS = [
   day(1, [it("a", "sightseeing", "진리의 성전"), it("shop", "shopping", "라텍스 쇼핑센터")]),
   day(2, [it("mv", "transfer", "방콕으로 이동", { stayMinutes: 150, travelMinutesToNext: 10 }), it("b", "sightseeing", "왕궁"), it("cruise", "experience", "석식 (선상디너 크루즈)", { entryFee: 50000 })], { meetingTime: "07:30" }),
-  day(3, [it("c", "sightseeing", "매끌렁 시장")]),
+  day(3, [it("c", "sightseeing", "매끌렁 시장"), it("act", "experience", "해양 엑티비티", { description: "바나나 보트 - 가이드 문의 후 별도 진행 가능", entryFee: 16000 })]),
 ];
 
 test("운영 방식·등급을 고르면 상품 규칙이 바뀌고, 규칙대로 정리한다", async ({ page }) => {
@@ -45,4 +45,11 @@ test("운영 방식·등급을 고르면 상품 규칙이 바뀌고, 규칙대�
   expect(ids).not.toContain("shop");
   expect(saved.days[1].meetingTime).toBe("09:00");
   expect(saved.days[1].items.find((i: { id: string }) => i.id === "cruise").type).toBe("meal");
+
+  // 원문상 별도 진행 항목 → 선택관광으로 (현지 별도 결제·미참여 시 대체일정)
+  await panel.getByRole("button", { name: "선택관광으로 옮기기" }).click();
+  await expect(panel.getByRole("status")).toContainText("해양 엑티비티을(를) 선택관광으로 옮겼습니다");
+  await expect.poll(async () => (await page.evaluate(() => JSON.parse(localStorage.getItem("semitour-planner:input:v1") ?? "{}"))).options?.map((o: { name: string }) => o.name)).toEqual(["해양 엑티비티"]);
+  const after = await page.evaluate(() => JSON.parse(localStorage.getItem("semitour-planner:work:v1") ?? "{}"));
+  expect(after.days[2].items.some((i: { id: string }) => i.id === "act")).toBe(false);
 });

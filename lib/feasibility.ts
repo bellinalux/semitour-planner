@@ -42,6 +42,8 @@ function arrivalOf(slots: TimelineSlot[]): { at: number; leave: number } | null 
   return { at, leave };
 }
 
+const NIGHT_ARRIVAL = /새벽\s*(체크인|도착|입국)|심야\s*(도착|입국)|밤\s*늦게\s*도착|자정\s*(넘어|무렵)?\s*도착/;
+
 /** 그날 사용 가능 시간 (dayEnd: 상품 규칙의 종료 기준, 기본 19:00) */
 export function dayWindow(day: DayPlan, pmChoice: PmChoice, dayEnd = "19:00"): DayWindow {
   const items = dayItems(day, pmChoice).filter((i) => !isBreakfastItem(i));
@@ -54,6 +56,12 @@ export function dayWindow(day: DayPlan, pmChoice: PmChoice, dayEnd = "19:00"): D
   }
   // 도착일
   if (items[0]?.type === "flight") {
+    // 항공 시각이 없으면 원문 표기("호텔 새벽 체크인", "심야 도착")로 새벽·밤 도착을 알아본다
+    const text = `${day.theme} ${items.map((i) => `${i.name} ${i.description ?? ""}`).join(" ")}`;
+    if (!items.some((i) => i.type === "flight" && i.fixedTime) && NIGHT_ARRIVAL.test(text)) {
+      const leave = arrivalOf(slots)!.leave;
+      return { kind: "arrival-night", start: leave, end: leave, acceptsMoves: false, note: "새벽·밤 도착일 (원문 표기 — 항공 시각 없음)" };
+    }
     const arr = arrivalOf(slots)!;
     const at = mod(arr.at);
     if (at >= 22 * 60 || at < 6 * 60) return { kind: "arrival-night", start: arr.leave, end: arr.leave, acceptsMoves: false, note: `새벽·밤 도착일 (${formatClock(at)} 도착) — 호텔 체크인·휴식만` };

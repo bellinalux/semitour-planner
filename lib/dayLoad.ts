@@ -241,7 +241,8 @@ export function calcDayLoad(day: DayPlan, pmChoice: PmChoice): DayLoad {
   for (const item of list) {
     // 항공(비행시간)은 투어 시간이 아니다
     if (isBreakfastItem(item) || beforeMeeting.has(item) || item.type === "flight") continue;
-    stayMinutes += Math.max(0, item.stayMinutes);
+    // 자유시간은 쉬는 시간이라 하루 부담에 넣지 않는다 (그 뒤 이동은 센다)
+    if (item.type !== "free_time") stayMinutes += Math.max(0, item.stayMinutes);
     travelMinutes += Math.max(0, item.travelMinutesToNext ?? 0);
   }
   // 호텔 미팅 뒤 첫 장소까지 이동

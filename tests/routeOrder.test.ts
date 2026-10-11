@@ -25,8 +25,8 @@ describe("지그재그 동선 찾기·고치기", () => {
 
   it("구역이 처음 나온 순서대로 붙이고, 구역 안은 원래 순서, 식사·밤 일정·숙소는 제자리", () => {
     const next = groupByArea(zig());
-    // (점심 시간대를 맞추는 대기 자유시간은 빼고 본다)
-    expect(next.items.filter((i) => !i.id.startsWith("lunch-free")).map((i) => i.id)).toEqual(["a1", "a2", "lunch", "a3", "t1", "night", "hotel"]);
+    // (점심 시간대·문 여는 시각을 맞추는 대기 자유시간은 빼고 본다)
+    expect(next.items.filter((i) => !/-free-\d+$/.test(i.id)).map((i) => i.id)).toEqual(["a1", "a2", "lunch", "a3", "t1", "night", "hotel"]);
     expect(findZigzag(next, {})).toEqual([]);
     // 같은 구역 다음은 구역 안 걷기, 구역을 떠날 때는 원래 그 구역을 떠날 때 걸린 시간
     expect(next.items.find((i) => i.id === "a3")?.travelMinutesToNext).toBe(25);
