@@ -59,6 +59,8 @@ export const DEFAULT_INPUT: TripInput = {
   themes: [],
   notes: "",
   travelType: "semi",
+  operatingModel: "semi",
+  productTier: "standard",
   regionPlan: "",
   pace: "normal",
   companions: [],

@@ -77,7 +77,7 @@ export function LineupPanel({ input, days, pmChoice, onApply }: Props) {
                         type="button"
                         onClick={() => {
                           const { hotelGrade, lodgingRatePerNight, lodgingCityRates, supplierPricePerPerson, otherFixedCost, options } = t.input;
-                          onApply({ hotelGrade, lodgingRatePerNight, lodgingCityRates, supplierPricePerPerson, otherFixedCost, options }, t.days);
+                          onApply({ hotelGrade, lodgingRatePerNight, lodgingCityRates, supplierPricePerPerson, otherFixedCost, options, productTier: t.key === "basic" ? "value" : t.key }, t.days);
                           setMessage(`${t.label} 등급으로 바꿨습니다. 되돌리기는 화면 위 [되돌리기] (일정) · 입력은 다시 바꿔 주세요.`);
                         }}
                         className="rounded-md border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-50"

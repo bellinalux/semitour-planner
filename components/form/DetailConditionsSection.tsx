@@ -4,12 +4,19 @@ import { Field } from "@/components/ui/Field";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { TextField } from "@/components/ui/TextField";
 import { COMPANIONS, PACES, THEMES, TRAVEL_TYPES } from "@/lib/defaults";
+import { generalTravelType } from "./PackageKindFields";
 import type { Companion, ThemeId, TravelType } from "@/types";
 import type { SectionProps } from "./types";
 
 /** 고급: AI가 일정을 만들 때 참고할 상세 조건 — 여행 유형, 방문 지역 순서, 선호 테마, 추가 요청사항 */
 export function DetailConditionsSection({ input, onChange }: SectionProps) {
-  const travelTypeLabel = TRAVEL_TYPES.find((t) => t.id === input.travelType)?.label ?? "";
+  const travelTypeLabel = input.travelType === "semi" || input.travelType === "package" ? "" : (TRAVEL_TYPES.find((t) => t.id === input.travelType)?.label ?? "");
+  // 고객 유형 — 일반(운영 방식에 맞춰 세미·패키지) / 신혼 / 시니어 / 장애인
+  const customerTypes = [
+    { id: generalTravelType(input.operatingModel), label: "일반", hint: "운영 방식·등급 기준 그대로" },
+    ...TRAVEL_TYPES.filter((t) => t.id !== "semi" && t.id !== "package"),
+  ];
+  const isCustomer = (id: TravelType) => (id === "semi" || id === "package" ? input.travelType === "semi" || input.travelType === "package" : input.travelType === id);
   const summary = [
     travelTypeLabel,
     `강도 ${PACES.find((p) => p.id === input.pace)?.label ?? "보통"}`,
@@ -36,17 +43,17 @@ export function DetailConditionsSection({ input, onChange }: SectionProps) {
       summary={summary}
     >
       <div className="space-y-4">
-        <Field htmlFor="travelType" label="여행 유형" hint="유형에 맞는 특징을 웹에서 조사해 일정에 반영합니다">
-          <div id="travelType" role="radiogroup" aria-label="여행 유형" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {TRAVEL_TYPES.map((t) => (
+        <Field htmlFor="travelType" label="고객 유형" hint="걷는 양·휴식·출발 시각·하루 장소 수가 달라집니다 (유형 특징은 웹에서 조사해 반영)">
+          <div id="travelType" role="radiogroup" aria-label="고객 유형" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {customerTypes.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 role="radio"
-                aria-checked={input.travelType === t.id}
+                aria-checked={isCustomer(t.id)}
                 onClick={() => onChange({ travelType: t.id as TravelType })}
                 className={`rounded-md border px-2.5 py-1.5 text-left transition-colors ${
-                  input.travelType === t.id ? "border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600" : "border-slate-200 bg-white hover:border-indigo-300"
+                  isCustomer(t.id) ? "border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600" : "border-slate-200 bg-white hover:border-indigo-300"
                 }`}
               >
                 <span className="block text-xs font-semibold text-slate-800">{t.label}</span>

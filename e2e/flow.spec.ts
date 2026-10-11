@@ -11,9 +11,9 @@ test("입력 → 코스 → 자동 견적 → 인쇄 전 확인 → 예약 등�
   await page.getByLabel("여행지").fill("다낭");
   await page.getByRole("button", { name: "코스만" }).click();
 
-  // ② 코스: 시각은 10분 단위 (45분 체류 → 08:00–08:50, 다음 코스 09:00)
-  await expect(page.getByText("08:00 – 08:50")).toBeVisible();
-  await expect(page.getByText("09:00 – 10:10")).toBeVisible();
+  // ② 코스: 시각은 10분 단위 (세미패키지 미팅 09:00, 45분 체류 → 09:00–09:50, 다음 코스 10:00)
+  await expect(page.getByText("09:00 – 09:50")).toBeVisible();
+  await expect(page.getByText("10:00 – 11:10")).toBeVisible();
   const guide = page.getByRole("navigation", { name: "진행 단계" });
   await expect(guide.getByRole("button", { name: /코스.*3일 일정/ })).toBeVisible();
 

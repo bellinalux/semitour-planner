@@ -200,7 +200,7 @@ test("동선상 식당: 다른 지역 식당에 갔다가 되돌아오면 알리
   await expect(day1.getByText(/점심 식사 \(딤섬\)이\(가\) 코타이에 있어/)).toBeVisible();
   await day1.getByRole("button", { name: "콜로안 식당 찾기" }).click();
   await day1.getByRole("button", { name: "이 식당으로 바꾸기" }).click();
-  await expect(day1.getByText("점심 식사 (찬 셍 케이)")).toBeVisible();
+  await expect(day1.getByRole("heading", { name: "점심 식사 (찬 셍 케이)" })).toBeVisible();
   await expect(day1.getByText(/코타이에 있어/)).toHaveCount(0);
   await expect(day1.getByText(/지그재그 동선/)).toHaveCount(0);
 });

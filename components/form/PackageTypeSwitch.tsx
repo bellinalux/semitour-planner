@@ -9,7 +9,7 @@ interface Props {
 const OPTIONS: { id: PackageType; label: string; hint: string; icon: typeof Map }[] = [
   { id: "land", label: "랜드만", hint: "현지 프로그램만 판매", icon: Map },
   { id: "land_hotel", label: "랜드+숙박", hint: "현지 프로그램과 숙소", icon: BedDouble },
-  { id: "full", label: "풀패키지", hint: "항공·숙박·현지 프로그램", icon: Plane },
+  { id: "full", label: "항공 포함", hint: "항공·숙박·현지 프로그램 (판매 구성)", icon: Plane },
 ];
 
 export function PackageTypeSwitch({ value, onChange }: Props) {

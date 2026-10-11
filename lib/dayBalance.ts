@@ -113,10 +113,11 @@ export function suggestDayMoves(days: DayPlan[], pmChoice: PmChoice): DayMove[] 
   return out;
 }
 
-/** 시간이 바뀐 날의 식사 맞춤 자유시간을 다시 계산 (중간·끝에 항공이 있는 날은 그대로) */
+/** 시간이 바뀐 날의 식사 맞춤 자유시간을 다시 계산 (하루 중간에 항공이 있는 날은 그대로 — 귀국일처럼 끝에 항공·공항 이동만 있으면 다시 맞춘다) */
 export function refitDay(day: DayPlan): DayPlan {
   if (day.kind !== "linear") return day;
-  const flightLater = day.items.some((it, i) => it.type === "flight" && day.items.slice(0, i).some((p) => p.type !== "flight"));
+  const tail = (i: number) => day.items.slice(i + 1).every((p) => p.type === "flight" || p.type === "transfer" || p.type === "hotel");
+  const flightLater = day.items.some((it, i) => it.type === "flight" && day.items.slice(0, i).some((p) => p.type !== "flight") && !tail(i));
   return flightLater ? day : { ...day, items: refitMealWindows(day.items, dayTourStart(day)) };
 }
 

@@ -1,6 +1,8 @@
 import { REST_LABEL } from "@/lib/pace";
 import { dayMealIssues, fitCourse } from "@/lib/courseFit";
 import { dayStructureIssues, fixDayStructure } from "@/lib/dayStructure";
+import { dayRuleIssues, ruleDayEnd } from "@/lib/packageRules";
+import { PackageRulesContext } from "../PackageRulesPanel";
 import { ReorderButton } from "./ReorderButton";
 import { dayIntensity, INTENSITY_LABEL } from "@/lib/intensity";
 import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Compass, Flag, Plus, Sun, Sunset, Timer } from "lucide-react";
@@ -110,7 +112,11 @@ export function DayCard({
   const timings = computeItemTimings(dayItems(plan, pmChoiceForDay), tourStart);
   const isLastDay = days.length > 0 && plan.day === Math.max(...days.map((d) => d.day));
   const gap = calcDayGap(plan, pmChoiceForDay, isLastDay);
-  const dayEnd = calcDayEnd(plan, pmChoiceForDay);
+  // 상품 규칙 (운영 방식·등급·고객·지역) — 종료 기준과 그날 점검
+  const rules = useContext(PackageRulesContext);
+  const dayEnd = rules ? ruleDayEnd(plan, pmChoiceForDay, rules) : calcDayEnd(plan, pmChoiceForDay);
+  const dayIndex = days.findIndex((d) => d.day === plan.day);
+  const ruleIssues = rules && dayIndex >= 0 ? dayRuleIssues(days, dayIndex, pmChoiceForDay, rules) : [];
 
   // 이 날 확인할 것 — 한 줄로 접어 두고 펼치면 설명과 고치기 버튼
   const drives = continuousDriving(plan, pmChoiceForDay);
@@ -127,6 +133,7 @@ export function DayCard({
   const morningFree = plan.kind === "linear" ? morningFreeItems(plan.items) : [];
   const issueLabels = [
     ...(structureIssues.length > 0 ? ["일정 구성"] : []),
+    ...(ruleIssues.length > 0 ? ["상품 규칙"] : []),
     ...(closedHere.length > 0 ? ["휴무일"] : []),
     ...(mealIssues.length > 0 ? ["식사 시간"] : []),
     ...(load.level === "overloaded" ? ["일정 과부하"] : load.level === "tight" ? ["일정 빠듯"] : []),
@@ -251,6 +258,17 @@ export function DayCard({
           )}
         </div>
       ))}
+      {ruleIssues.length > 0 && rules && (
+        <div className="flex flex-wrap items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          <ul aria-label="상품 규칙 점검" className="min-w-0 flex-1 space-y-0.5 text-pretty">
+            {ruleIssues.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+          <span className="shrink-0 rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-amber-300">{rules.label}</span>
+        </div>
+      )}
       {structureIssues.length > 0 && (
         <div className="flex flex-wrap items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -333,7 +351,7 @@ export function DayCard({
       {dayEnd?.isLate && (
         <p className="flex items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-          이 날짜는 {dayEnd.endTime}에 끝나 표준 종료 시각({STANDARD_DAY_END})을 넘깁니다. 근교투어·야간투어처럼 늦게 복귀하는 일정이 아니라면 코스를 조정하세요.
+          이 날짜는 {dayEnd.endTime}에 끝나 {rules ? `${rules.label} 기준 종료 시각(${rules.dayEnd})` : `표준 종료 시각(${STANDARD_DAY_END})`}을 넘깁니다. 근교투어·야간투어처럼 늦게 복귀하는 일정이 아니라면 코스를 조정하세요.
         </p>
       )}
       </DayIssues>

@@ -4,6 +4,8 @@ import { isCostSource } from "@/lib/costSource";
 
 const TRAVEL_TYPE_IDS: Set<string> = new Set(TRAVEL_TYPES.map((t) => t.id));
 const COMPANION_IDS: Set<string> = new Set(COMPANIONS.map((c) => c.id));
+const OPERATING_MODEL_IDS: Set<string> = new Set(["full", "semi", "private", "small_group", "backpack", "airtel"]);
+const PRODUCT_TIER_IDS: Set<string> = new Set(["value", "standard", "premium", "signature"]);
 
 /**
  * 저장된(또는 파일에서 읽은) 입력값을 현재 TripInput 형태로 맞춘다.
@@ -34,6 +36,9 @@ export function normalizeInput(saved: unknown): TripInput {
     options: Array.isArray(s.options) ? s.options : DEFAULT_INPUT.options,
     travelAlert: typeof s.travelAlert === "object" && s.travelAlert !== null ? s.travelAlert : null,
     travelType: typeof s.travelType === "string" && TRAVEL_TYPE_IDS.has(s.travelType) ? s.travelType : DEFAULT_INPUT.travelType,
+    // 예전 저장값에는 없다 — 여행 유형이 세미투어면 세미패키지, 아니면 풀패키지
+    operatingModel: typeof s.operatingModel === "string" && OPERATING_MODEL_IDS.has(s.operatingModel) ? (s.operatingModel as TripInput["operatingModel"]) : s.travelType === "semi" || s.travelType === undefined ? "semi" : "full",
+    productTier: typeof s.productTier === "string" && PRODUCT_TIER_IDS.has(s.productTier) ? (s.productTier as TripInput["productTier"]) : DEFAULT_INPUT.productTier,
     pace: s.pace === "relaxed" || s.pace === "packed" ? s.pace : "normal",
     companions: Array.isArray(s.companions) ? s.companions.filter((c) => COMPANION_IDS.has(c)) : [],
     mustHave: typeof s.mustHave === "string" ? s.mustHave.slice(0, 300) : "",

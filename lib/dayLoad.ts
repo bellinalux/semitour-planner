@@ -298,7 +298,7 @@ export interface DayEndCheck {
  * 복귀가 늦어질 수 있는 일정이 하루에 하나라도 있으면 늦게 끝나도 예외로 본다(경고하지 않는다).
  * 항공 이동일처럼 일정이 없는 날(totalMinutes 0)은 대상이 아니다.
  */
-export function calcDayEnd(day: DayPlan, pmChoice: PmChoice): DayEndCheck | null {
+export function calcDayEnd(day: DayPlan, pmChoice: PmChoice, standardEnd: string = STANDARD_DAY_END, eveningOk = false): DayEndCheck | null {
   const load = calcDayLoad(day, pmChoice);
   if (load.totalMinutes === 0) return null;
   // 귀국일 끝의 공항 이동·항공은 투어 종료가 아니다 (밤 비행기는 정상)
@@ -307,8 +307,10 @@ export function calcDayEnd(day: DayPlan, pmChoice: PmChoice): DayEndCheck | null
   const endTime = slots.length > 0 ? formatClock(slots[slots.length - 1].end) : null;
   if (!endTime) return null;
   const endMinutes = parseClock(endTime);
-  const standardMinutes = parseClock(STANDARD_DAY_END);
+  const standardMinutes = parseClock(standardEnd);
   if (endMinutes === null || standardMinutes === null) return null;
-  const isLate = endMinutes > standardMinutes && !hasLateReturnException(dayItems(day, pmChoice));
+  // 저녁 일정이 정상인 지역(동남아)은 야시장·야경·쇼가 있으면 늦게 끝나도 예외
+  const evening = eveningOk && dayItems(day, pmChoice).some((i) => /야시장|야경|나이트|night|쇼|공연|크루즈|루프탑/i.test(i.name));
+  const isLate = endMinutes > standardMinutes && !evening && !hasLateReturnException(dayItems(day, pmChoice));
   return { endTime, isLate };
 }

@@ -22,6 +22,8 @@ import { ShareLinkBox } from "./ShareLinkBox";
 import { CourseMapPanel } from "./CourseMapPanel";
 import { PacePanel } from "./PacePanel";
 import { LineupPanel } from "./LineupPanel";
+import { PackageRulesContext, PackageRulesPanel } from "./PackageRulesPanel";
+import { packageRules } from "@/lib/packageRules";
 import { FreeTimeOptionsPanel } from "./FreeTimeOptionsPanel";
 import { DifferentiationPanel } from "./DifferentiationPanel";
 import { QualityScoreCard } from "./QualityScoreCard";
@@ -175,8 +177,11 @@ export function Dashboard({
   budgetFit,
 }: Props) {
   const { onAddTour, ...panelActions } = itemActions;
+  // 패키지 규칙표 — 운영 방식·등급·고객·지역 (일정 카드 점검이 컨텍스트로 읽는다)
+  const rules = packageRules(input, days.map((d) => d.overnightCity ?? ""));
 
   return (
+    <PackageRulesContext.Provider value={rules}>
     <div className="space-y-4 p-4">
       {itinerary.status === "success" && days.length > 0 && <QualityScoreCard input={input} days={days} pmChoice={pmChoice} />}
       <ItineraryPanel
@@ -223,6 +228,7 @@ export function Dashboard({
           }}
         />
       )}
+      {itinerary.status === "success" && days.length > 0 && <PackageRulesPanel input={input} rules={rules} days={days} pmChoice={pmChoice} onApplyDays={onProductDays} />}
       {itinerary.status === "success" && days.length > 0 && quote?.ok && onProductDays && (
         <LineupPanel
           input={input}
@@ -281,5 +287,6 @@ export function Dashboard({
       {share && !documents.disabled && <ShareLinkBox {...share} />}
       {notice && !documents.disabled && <CustomerNoticeBox {...notice} />}
     </div>
+    </PackageRulesContext.Provider>
   );
 }

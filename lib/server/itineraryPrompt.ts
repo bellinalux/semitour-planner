@@ -1,4 +1,5 @@
 import { THEMES } from "@/lib/defaults";
+import { packageRules, packageRulesPrompt } from "@/lib/packageRules";
 import type { ItineraryRequest } from "@/lib/schemas/itinerary";
 import type { Companion, TravelType, TripPace, TripScope } from "@/types";
 
@@ -10,7 +11,8 @@ export const ITINERARY_SYSTEM_PROMPT = `당신은 전 세계 여행지를 다루
 - late: 오전 자유(늦잠·호텔 휴식) 뒤 오후 관광(fullDay 2~4곳, 저녁 식사 포함 가능). 점심부터 시작하면 11:00 미팅, 아니면 13:00 출발.
 - pmfree: 오전 관광 2~3곳과 점심(fullDay, 점심이 마지막) 뒤 오후 자유시간 (앱이 자유시간을 붙입니다).
 - free: 전일 자유. fullDay는 비우고 freeNote에 고객이 할 만한 활동·선택관광 2~3가지를 적습니다.
-- 오전 미팅(투어 시작) 시각은 보통 08:00이므로, 앞 명소들의 체류·이동 시간 합계를 조절해 점심 식당 항목이 11:30~12:30 사이에 시작하도록 합니다.
+- 오전 미팅(투어 시작) 시각은 <package_rules>의 미팅 시각(없으면 08:00)이므로, 앞 명소들의 체류·이동 시간 합계를 조절해 점심 식당 항목이 11:30~12:30 사이에 시작하도록 합니다.
+- <package_rules>가 있으면 그 규칙(하루 장소 수·이동 시간·쇼핑·선택관광·식사·연박·종료 시각)을 반드시 지킵니다.
 - 고르지 않은 style의 칸은 빈 배열·빈 문자열로 둡니다.
 - 호텔 조식은 항목으로 넣지 않습니다 (앱이 일정표 첫 줄에 "호텔 조식 후", 식사 칸에 "조: 호텔식"으로 적습니다).
 - 오전을 호텔에서 쉬는 날은 fullDay 앞에 자유시간·수영장 항목을 넣지 말고 style을 late로 합니다. 이때 fullDay는 점심 또는 첫 관광지부터 시작합니다.
@@ -108,7 +110,10 @@ const COMPANION_RULE: Record<Companion, string> = {
 function needsBlock(req: ItineraryRequest): string {
   const lines = [
     `<pace_rule>${PACE_RULE[req.pace]}</pace_rule>`,
-    `기본 하루 구성: ${DEFAULT_DAY_STYLE[req.travelType]} (쉬는 날 규칙에 따라 일부 날은 late·pmfree·free로 바꿉니다)`,
+    // 운영 방식·등급을 고른 요청은 패키지 규칙표로, 예전 요청은 여행 유형의 기본 하루 구성으로
+    req.operatingModel
+      ? packageRulesPrompt(packageRules({ ...req, operatingModel: req.operatingModel, productTier: req.productTier ?? "standard" }))
+      : `기본 하루 구성: ${DEFAULT_DAY_STYLE[req.travelType]} (쉬는 날 규칙에 따라 일부 날은 late·pmfree·free로 바꿉니다)`,
     ...(req.companions.length > 0 ? ["<companions>", ...req.companions.map((c) => `- ${COMPANION_RULE[c]}`), "</companions>"] : []),
     ...(req.mustHave.trim() ? [`<must_have>${req.mustHave.trim()}</must_have>`, "<must_have>에 적힌 것은 여행지에 있으면 반드시 넣습니다. 없거나 맞지 않으면 caution에 이유를 적습니다."] : []),
     ...(req.avoid.trim() ? [`<avoid>${req.avoid.trim()}</avoid>`, "<avoid>에 적힌 것(장소 유형·활동)은 넣지 않습니다."] : []),

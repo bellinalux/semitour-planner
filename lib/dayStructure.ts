@@ -2,7 +2,7 @@ import { refitDay } from "@/lib/dayBalance";
 import { morningMeeting, parseClock } from "@/lib/dayLoad";
 import { isBreakfastItem, isHotelBreakfast } from "@/lib/documents";
 import { liftBreakfast } from "@/lib/dayTidy";
-import { stripMealPads } from "@/lib/mealTiming";
+import { isRestStop, stripMealPads } from "@/lib/mealTiming";
 import type { DayPlan, ItineraryItem } from "@/types";
 
 /**
@@ -19,7 +19,7 @@ export function mergeFreeRuns(items: ItineraryItem[]): ItineraryItem[] {
   const out: ItineraryItem[] = [];
   for (const it of items) {
     const prev = out.at(-1);
-    if (prev?.type === "free_time" && it.type === "free_time") {
+    if (prev?.type === "free_time" && it.type === "free_time" && !isRestStop(prev) && !isRestStop(it)) {
       out[out.length - 1] = {
         ...prev,
         name: GENERIC_FREE.test(prev.name) && !GENERIC_FREE.test(it.name) ? it.name : prev.name,
@@ -38,7 +38,7 @@ const tourList = (day: DayPlan) => (day.kind === "semi" ? day.amGuided : day.ite
 
 function hasFreeRun(items: ItineraryItem[]): boolean {
   const list = items.filter((i) => !isBreakfastItem(i));
-  return list.some((it, k) => k > 0 && it.type === "free_time" && list[k - 1].type === "free_time");
+  return list.some((it, k) => k > 0 && it.type === "free_time" && list[k - 1].type === "free_time" && !isRestStop(it) && !isRestStop(list[k - 1]));
 }
 
 /** 오전 자유인데 직접 정한 미팅이 자유시간 뒤 미팅보다 이르면 [정한 시각, 맞는 시각] */

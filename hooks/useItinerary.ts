@@ -1,5 +1,6 @@
 "use client";
 
+import { packageRules, withRuleMeetings } from "@/lib/packageRules";
 import { useCallback, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
 import { itineraryBudgetNote } from "@/lib/autoBuild";
@@ -86,6 +87,8 @@ async function requestItinerary(
       themes: input.themes,
       notes: input.notes,
       travelType: input.travelType,
+      operatingModel: input.operatingModel,
+      productTier: input.productTier,
       tripScope: input.tripScope,
       regionPlan: input.regionPlan,
       pace: input.pace,
@@ -136,7 +139,10 @@ export function useItinerary() {
       // 투숙 체류시간·20분 안 되는 자유시간처럼 이해 안 되는 항목은 정리해서 받는다
       const raw = await requestItinerary(input, courseFile, controller.signal);
       // 늦은 식사·같은 식사 두 줄·업체 코스의 지나치게 긴 도보 구역을 바로 다듬는다 (되돌리기는 일정 카드의 경고에서 다시 맞추기)
-      const fit = fitCourse(tidyDays(raw.days), { walk: input.mode === "paste" });
+      // AI 일정은 패키지 규칙의 미팅 시각으로 (프리미엄·시니어 09:00 등) — 그 시각으로 식사 시간대도 맞춘다
+      const tidied = tidyDays(raw.days);
+      const base = input.mode === "ai" ? withRuleMeetings(tidied, packageRules(input, raw.days.map((d) => d.overnightCity ?? ""))) : tidied;
+      const fit = fitCourse(base, { walk: input.mode === "paste" });
       const result = { ...raw, days: tidyDays(fit.days) };
       const choice = defaultPmChoice(result.days);
       setDays(result.days);
@@ -254,6 +260,8 @@ export function useItinerary() {
           themes: baseInput.themes,
           notes: baseInput.notes,
           travelType: baseInput.travelType,
+          operatingModel: baseInput.operatingModel,
+          productTier: baseInput.productTier,
           tripScope: baseInput.tripScope,
           regionPlan: "",
           pace: baseInput.pace,

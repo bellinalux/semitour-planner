@@ -124,7 +124,7 @@ export function mealLabel(slot: MealSlot, kind: "breakfast" | "lunch" | "dinner"
     return flightDay && fullPackage ? "기내식 또는 자유식" : "자유식";
   }
   const c = slot.cuisine.trim();
-  const base = SPECIAL.test(c) ? `특식(${c})` : /한식/.test(c) ? "한식" : c ? `현지식(${c})` : "현지식";
+  const base = SPECIAL.test(c) ? `특식(${c})` : /한식/.test(c) ? "한식" : c && !/^현지\s*식?$/.test(c) ? `현지식(${c})` : "현지식";
   return slot.mark === "현지 지불" ? `${base} · 현지 지불` : base;
 }
 
@@ -277,7 +277,9 @@ export function dayTable(
   if (morningFree.length > 0) first = false;
   // 미팅 뒤 첫 일정 (오전 자유가 있으면 그 다음 항목)
   const firstTour = morningFree.length > 0 ? flat.indexOf(morningFree[morningFree.length - 1]) + 1 : 0;
-  if (lead > 0 || morningFree.length > 0) {
+  // 차량 이동으로 시작하는 날(예: "방콕으로 이동 2시간 30분")도 미팅 시각을 정했으면 미팅 줄을 먼저
+  const transferFirst = Boolean(day.meetingTime?.trim()) && flat.find((i) => !isBreakfastItem(i))?.type === "transfer";
+  if (lead > 0 || morningFree.length > 0 || transferFirst) {
     rows.push({ key: "meeting", kind: "meeting", ...blank, transport: opts.vehicle ? "vehicle" : "", start: dayMeetingTime(day), end: dayMeetingTime(day), keyTime: true, afterBreakfast: !meetingKnown });
     if (lead > 0) rows.push({ key: "meeting-move", kind: "move", minutes: lead, ...blank });
     first = false;

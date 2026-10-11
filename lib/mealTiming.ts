@@ -72,7 +72,7 @@ export function enforceMealWindows(items: ItineraryItem[], meetingTime: string =
         const prev = result.at(-1);
         if (prev && beforeMeeting.has(prev)) {
           // 오전 자유 바로 뒤 — 미팅 시각을 고칠 일이다 (일정 카드 점검에 나온다)
-        } else if (prev?.type === "free_time" && !isBreakfastItem(prev)) {
+        } else if (prev?.type === "free_time" && !isBreakfastItem(prev) && !isRestStop(prev)) {
           result[result.length - 1] = { ...prev, stayMinutes: prev.stayMinutes + gap, mealPadMinutes: (prev.mealPadMinutes ?? 0) + gap };
           clock = windowStartMinutes;
         } else {
@@ -87,6 +87,9 @@ export function enforceMealWindows(items: ItineraryItem[], meetingTime: string =
   }
   return result;
 }
+
+/** 장거리 이동 중 휴게소 정차 (상품 규칙이 넣은 것) — 식사 맞춤으로 늘리거나 다른 자유시간과 합치지 않는다 */
+export const isRestStop = (item: ItineraryItem) => item.type === "free_time" && /-rest$/.test(item.id);
 
 /** enforceMealWindows가 끼워 넣은 자유시간인지 (사람이 넣은 자유시간은 건드리지 않는다) */
 export const isMealFiller = (item: ItineraryItem) => item.type === "free_time" && /-free-\d+$/.test(item.id) && item.description === FILLER_NOTE;

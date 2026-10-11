@@ -25,6 +25,10 @@ export type ThemeId =
  * senior: 무리 없는 동선·효도관광 인기 코스 / accessible: 휠체어 이용 편의시설 확인
  */
 export type TravelType = "semi" | "package" | "honeymoon" | "senior" | "accessible";
+/** 운영 방식 — 가이드·차량이 얼마나 붙나 (lib/packageRules) */
+export type OperatingModel = "full" | "semi" | "private" | "small_group" | "backpack" | "airtel";
+/** 상품 등급 — 쇼핑·옵션·팁·호텔·식사·여유 (lib/packageRules) */
+export type ProductTier = "value" | "standard" | "premium" | "signature";
 /** 일정 강도 — 여유(쉬는 날·늦은 출발 넉넉히) / 보통 / 알참(자유일 없이) */
 export type TripPace = "relaxed" | "normal" | "packed";
 /** 동반자 유형 — 일정의 걷는 양·쉬는 시간·식사를 맞춘다 */
@@ -239,6 +243,10 @@ export interface TripInput {
   notes: string;
   /** 여행 유형 (mode === "ai"일 때만 사용). 세미투어/패키지투어/신혼여행/시니어투어/장애인투어 */
   travelType: TravelType;
+  /** 운영 방식 (풀·세미·단독·소규모·단체배낭·에어텔) — 패키지 규칙표의 첫째 축 */
+  operatingModel: OperatingModel;
+  /** 상품 등급 (실속·스탠다드·프리미엄·시그니처) — 패키지 규칙표의 둘째 축 */
+  productTier: ProductTier;
   /** 사용자가 직접 지정한 방문 도시 순서·일수 (mode === "ai"일 때만 사용, 선택). 예: "로마 2일, 피렌체 2일, 베니스 2일". 비우면 AI가 알아서 도시를 구성한다 */
   regionPlan: string;
   /** 일정 강도 (AI 일정·쉬는 날 제안에 쓴다) */
