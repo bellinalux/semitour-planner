@@ -1,5 +1,6 @@
 "use client";
 
+import { originOfCourse } from "@/lib/flightOrigin";
 import { fixImpossible } from "@/lib/feasibility";
 import { refitDay } from "@/lib/dayBalance";
 import { packageRules, withRuleMeetings } from "@/lib/packageRules";
@@ -40,6 +41,8 @@ export interface DetectedTrip {
   days: number;
   nights: number;
   cities: string[];
+  /** 원문의 출발 공항 (김해·인천 등, 국내 공항일 때만) */
+  origin?: string;
 }
 
 export interface GeneratedItinerary {
@@ -72,7 +75,7 @@ async function requestItinerary(
     return {
       days: result.days,
       meta: result.meta,
-      detected: { days: result.totalDays, nights: result.nights, cities: result.meta.cities },
+      detected: { days: result.totalDays, nights: result.nights, cities: result.meta.cities, origin: originOfCourse(result.days) },
       sources: [],
       researched: false,
       supplierQuote: result.quote ?? null,

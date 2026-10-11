@@ -3,6 +3,8 @@ import { dayIntensity } from "@/lib/intensity";
 import { refitDay } from "@/lib/dayBalance";
 import { fixDayStructure } from "@/lib/dayStructure";
 import { dayWindow, fixImpossible } from "@/lib/feasibility";
+import { originMismatch } from "@/lib/flightOrigin";
+import { recalcFlights } from "@/lib/timezone";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { isRestStop } from "@/lib/mealTiming";
 import type { Companion, DayPlan, ItineraryItem, OperatingModel, ProductTier, TourOption, TripInput } from "@/types";
@@ -345,6 +347,8 @@ export interface TripRuleIssue {
   meetingDays?: number[];
   /** 고치기: 선택관광으로 옮기기 (항목 id) */
   separateIds?: string[];
+  /** 고치기: 출발 공항 맞추기 — 일정 공항(course)과 항공편·입력 출발지 공항(target) */
+  origin?: { course: string | null; target: string | null };
 }
 
 const SEPARATE = /별도\s*(진행|비용|요금|결제|구매)|가이드\s*(에게\s*)?문의|희망자|선택\s*관광|옵션\s*(진행|투어)/;
@@ -394,9 +398,12 @@ export function toOptionalTours(days: DayPlan[], ids: string[]): { days: DayPlan
 }
 
 /** 상품 전체 규칙 점검 (상품 규칙 패널) */
-export function tripRuleIssues(input: Pick<TripInput, "options" | "tipPerPerson" | "nights"> & Partial<Pick<TripInput, "selectedFlight">>, days: DayPlan[], pmChoice: PmChoice, r: PackageRules): TripRuleIssue[] {
+export function tripRuleIssues(input: Pick<TripInput, "options" | "tipPerPerson" | "nights"> & Partial<Pick<TripInput, "selectedFlight" | "originCity">>, days: DayPlan[], pmChoice: PmChoice, r: PackageRules): TripRuleIssue[] {
   const out: TripRuleIssue[] = [];
   const all = days.flatMap((d) => dayItems(d, pmChoice));
+  // 출발 공항 — 일정·입력 출발지·적용한 항공편이 같은 공항인가
+  const origin = originMismatch(days, input.originCity ?? "", input.selectedFlight);
+  if (origin) out.push({ key: "origin", text: origin.text, origin: { course: origin.course, target: origin.flight ?? origin.input } });
   // 항공 시각 — 없으면 도착일·출국일 시각이 추정이다
   const flightDays = days.filter((d) => d.items.some((i) => i.type === "flight"));
   if (flightDays.length > 0 && !input.selectedFlight && !flightDays.some((d) => d.items.some((i) => i.type === "flight" && i.fixedTime)))
@@ -559,10 +566,14 @@ export interface RuleFixResult {
  *  ④ 쇼핑센터: 노쇼핑 등급은 빼고, 횟수 초과는 뒤에서부터 빼고, 첫날·출국일·하루 2회는 다른 날로 ⑤ 식사 시간대 다시 맞추기.
  * 장소 수·특식·연박·선택관광·경비는 상품 판단이라 남은 점검으로 돌려준다.
  */
-export function applyPackageRules(days: DayPlan[], pmChoice: PmChoice, r: PackageRules, input: Pick<TripInput, "options" | "tipPerPerson" | "nights">): RuleFixResult {
+export function applyPackageRules(days: DayPlan[], pmChoice: PmChoice, r: PackageRules, input: Pick<TripInput, "options" | "tipPerPerson" | "nights"> & Partial<Pick<TripInput, "departureDate">>): RuleFixResult {
   const changes: string[] = [];
+  // ⓪-1 항공 비행시간·시차 — 시차가 빠진 추정값(예: 비행 5시간 40분을 현지 시각 차이로 쓴 것)을 노선표로 바로잡는다
+  const flights = recalcFlights(days, input.departureDate);
+  if (flights !== days) changes.push("항공 비행시간·시차 다시 계산 (노선 추정 — 실제 항공편을 넣으면 그 시각으로)");
+  const reflowed = flights === days ? days : flights.map((d, i) => (d === days[i] ? d : refitDay(d)));
   // ⓪ 불가능 시간 (새벽 도착일 관광·운영 시간 밖·체크인 뒤 등) — 맞는 자리·맞는 날로
-  const impossible = fixImpossible(days, pmChoice, refitDay, r.dayEnd);
+  const impossible = fixImpossible(reflowed, pmChoice, refitDay, r.dayEnd);
   changes.push(...impossible.changes);
   // ① 하루 구성
   let next = impossible.days.map((d) => {

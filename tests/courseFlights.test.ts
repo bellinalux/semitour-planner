@@ -114,10 +114,12 @@ describe("업체 코스표의 항공편 시각", () => {
     expect(d3.items[1]).toMatchObject({ name: "마카오 출발", travelMinutesToNext: 290 });
   });
 
-  it("원문에 항공편 시각이 없으면 일정을 건드리지 않는다", () => {
+  it("원문에 항공편 시각이 없으면 공항 이름으로 비행시간·시차를 계산한다 (AI가 40분으로 적어도)", () => {
     expect(courseFlightOption({ outbound: leg({ airline: "제주항공" }), inbound: leg() })).toBeNull();
     const plan = toCoursePlan(parsed({ outbound: leg(), inbound: leg() }));
-    expect(plan.days[0].items[0].travelMinutesToNext).toBe(40);
+    // 인천→마카오 약 3시간 45분, 시차 −1시간 → 현지 시각 차이 2시간 45분
+    expect(plan.days[0].items[0].travelMinutesToNext).toBe(165);
+    expect(plan.days[0].items[0].flightInfo).toEqual({ minutes: 225, tzMinutes: -60, estimated: true });
     expect(plan.days[0].meetingTime).toBeUndefined();
   });
 });

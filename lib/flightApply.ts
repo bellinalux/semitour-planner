@@ -4,6 +4,7 @@ import { TIME_STEP } from "@/lib/format";
 import { addDays, isBreakfastItem, parseDate } from "@/lib/documents";
 import { mapDayItems } from "@/lib/itinerary";
 import type { DayPlan, FlightOption, ItineraryItem, TripInput } from "@/types";
+import { recalcFlightDay, zoneOf } from "@/lib/timezone";
 
 /** 경유 횟수를 모르면(-1, 업체 코스표에서 읽은 항공편) 표시하지 않는다 */
 const stopsText = (stops: number) => (stops < 0 ? "" : stops === 0 ? "직항" : `경유 ${stops}회`);
@@ -204,13 +205,27 @@ export function applyFlightToDays(inputDays: DayPlan[], flight: FlightOption): D
     if (group.items.length >= 2) {
       const [dep, arr] = group.items;
       // 이름에 이미 출발·도착이 적혀 있으면(업체 코스표 원문) 그대로 두고, 원래 설명(가이드 미팅 등)도 남긴다
-      const keepName = (item: ItineraryItem, word: string) => item.name.includes(word) || !(word === "출발" ? leg.departAirport : leg.arriveAirport);
+      // 다른 공항이면(일정은 김해, 적용한 항공편은 인천) 적용한 항공편 공항 이름으로 바꾼다
+      const sameAirport = (item: ItineraryItem, airport: string) => {
+        const a = zoneOf(item.name);
+        const b = zoneOf(airport);
+        return !a || !b || a.key === b.key;
+      };
+      const keepName = (item: ItineraryItem, word: string) => {
+        const airport = word === "출발" ? leg.departAirport : leg.arriveAirport;
+        return !airport || (item.name.includes(word) && sameAirport(item, airport));
+      };
       const withLine = (item: ItineraryItem) => (item.description && !item.description.includes(line) ? `${line} · ${item.description}` : line);
+      // 비행 정보 — 현지 시각 차이(gap)에서 시차를 빼면 실제 비행시간
+      const fromZ = zoneOf(leg.departAirport) ?? zoneOf(dep.name);
+      const toZ = zoneOf(leg.arriveAirport) ?? zoneOf(arr.name);
+      const tz = fromZ && toZ ? Math.round((toZ.offset - fromZ.offset) * 60) : null;
       patches.set(dep.id, {
         name: keepName(dep, "출발") ? dep.name : `${leg.departAirport} 출발`,
         description: withLine(dep),
         stayMinutes: 0,
         travelMinutesToNext: gap ?? dep.travelMinutesToNext,
+        ...(gap !== null && tz !== null ? { flightInfo: { minutes: gap - tz, tzMinutes: tz, estimated: false } } : {}),
       });
       patches.set(arr.id, { name: keepName(arr, "도착") ? arr.name : `${leg.arriveAirport} 도착`, description: withLine(arr) });
     } else {
@@ -329,7 +344,9 @@ export function checkReturnDate(input: Pick<TripInput, "departureDate" | "days" 
  * 마지막 날은 귀국편 출발 시각에 맞춰 거꾸로 계산하므로 다시 계산하지 않는다(출발 시각이 어긋나지 않게).
  */
 export function applyFlightWithMeals(days: DayPlan[], flight: FlightOption): DayPlan[] {
-  const next = applyFlightToDays(days, flight);
+  // 도착 시각을 모르는 편은 공항 이름(바뀐 이름 포함)으로 노선 비행시간·시차를 다시 계산
+  const applied = applyFlightToDays(days, flight);
+  const next = applied.map((d, i) => (i === 0 || i === applied.length - 1 || i === applied.length - 2 ? recalcFlightDay(d, undefined, false) : d));
   if (next === days || next.length === 0 || next[0].kind !== "linear") return next;
   const first = next[0];
   return [{ ...first, items: refitMealWindows(first.items, dayTourStart(first)) }, ...next.slice(1)];

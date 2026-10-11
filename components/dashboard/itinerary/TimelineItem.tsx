@@ -1,6 +1,7 @@
 import { AlertCircle, BookmarkPlus, Bus, Check, ChevronDown, ChevronUp, Clock, ExternalLink, Eye, Ticket, Trash2, Utensils, Wallet } from "lucide-react";
 import { photoOf } from "@/lib/photo";
 import { isBreakfastItem } from "@/lib/documents";
+import { hm } from "@/lib/timezone";
 import { useState } from "react";
 import { DurationInput } from "@/components/ui/DurationInput";
 import { MoneyInput } from "@/components/ui/MoneyInput";
@@ -26,6 +27,10 @@ interface Props {
   timing?: ItemTiming;
   /** 오전 자유(미팅 전 자유시간) — 시각 대신 "호텔 조식 후", 마지막 줄 밑에 미팅 시각·호텔에서 이동 */
   beforeMeeting?: { last: boolean; meeting: string; lead: number };
+  /** 이 시각의 나라 (항공이 있는 날 — 시차를 보이게 시각 앞에 붙인다) */
+  zone?: string;
+  /** 다음 항목도 항공인가 (출발 → 도착 사이만 "비행", 도착 뒤는 지상 이동) */
+  nextIsFlight?: boolean;
   currency: CurrencyCode;
   /** 이 항목이 속한 일차 (추천 옵션을 "선택 옵션"으로 추가할 때 필요) */
   dayNo: number;
@@ -71,6 +76,8 @@ export function TimelineItem({
   isLast,
   timing,
   beforeMeeting,
+  zone,
+  nextIsFlight,
   currency,
   dayNo,
   days,
@@ -113,7 +120,8 @@ export function TimelineItem({
           </p>
         ) : (
           timing && (
-            <p className="mb-0.5 text-[11px] font-semibold tabular-nums text-indigo-600" title="오전 미팅 시각부터 계산한 예상 시작·종료 시각">
+            <p className="mb-0.5 text-[11px] font-semibold tabular-nums text-indigo-600" title="오전 미팅 시각부터 계산한 예상 시작·종료 시각 (그 나라 현지 시각)">
+              {zone && <span className="mr-1 rounded bg-indigo-50 px-1 text-[10px] font-semibold text-indigo-700 ring-1 ring-indigo-200">{zone}</span>}
               {timeRange(timing)}
             </p>
           )
@@ -407,9 +415,13 @@ export function TimelineItem({
         {!beforeMeeting && !isLast && item.travelMinutesToNext !== null && item.travelMinutesToNext > 0 && (
           <p className="mt-2.5 flex items-center gap-1.5 text-[11px] text-slate-400">
             <Bus className="h-3 w-3" aria-hidden />
-            {item.type === "flight"
-              ? `비행 ${formatDuration(item.travelMinutesToNext)} (현지 시각 기준, 시차 포함)`
-              : `다음 장소까지 이동 ${formatDuration(item.travelMinutesToNext)}`}
+            {item.type === "flight" && nextIsFlight
+              ? item.flightInfo
+                ? `비행 ${hm(item.flightInfo.minutes)}${item.flightInfo.estimated ? " (노선 추정)" : ""}${item.flightInfo.tzMinutes !== 0 ? ` · 시차 ${item.flightInfo.tzMinutes > 0 ? "+" : "−"}${hm(Math.abs(item.flightInfo.tzMinutes))} → 현지 시각 차이 ${hm(item.travelMinutesToNext)}` : ""}`
+                : `비행 ${formatDuration(item.travelMinutesToNext)} (현지 시각 차이 — 시차 포함)`
+              : item.type === "flight"
+                ? `공항에서 다음 장소까지 이동 ${formatDuration(item.travelMinutesToNext)}`
+                : `다음 장소까지 이동 ${formatDuration(item.travelMinutesToNext)}`}
           </p>
         )}
       </div>

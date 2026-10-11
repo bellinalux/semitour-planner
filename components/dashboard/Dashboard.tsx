@@ -228,7 +228,7 @@ export function Dashboard({
           }}
         />
       )}
-      {itinerary.status === "success" && days.length > 0 && <PackageRulesPanel input={input} rules={rules} days={days} pmChoice={pmChoice} onApplyDays={onProductDays} onOptions={optionActions.onChangeOptions} />}
+      {itinerary.status === "success" && days.length > 0 && <PackageRulesPanel input={input} rules={rules} days={days} pmChoice={pmChoice} onApplyDays={onProductDays} onOptions={optionActions.onChangeOptions} onInput={onInputChange} />}
       {itinerary.status === "success" && days.length > 0 && quote?.ok && onProductDays && (
         <LineupPanel
           input={input}

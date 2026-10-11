@@ -6,6 +6,7 @@ import { applyFlightWithMeals, looksLikeFlightItem } from "@/lib/flightApply";
 import { clampMealStay, enforceMealWindows } from "@/lib/mealTiming";
 import { dayTourStart } from "@/lib/dayLoad";
 import { tidyDay } from "@/lib/dayTidy";
+import { recalcFlightDay } from "@/lib/timezone";
 import type { CourseMeta, DayPlan, FlightOption, ItineraryItem } from "@/types";
 
 /** ---------- 클라이언트 → 서버 요청 ---------- */
@@ -364,7 +365,13 @@ export function toCoursePlan(parsed: ParsedCourse): {
 
   // 원문에 항공편 시각이 있으면: 비행 항목의 이동 시간 = 출발→도착(현지 시각 차이), 그날 일정은 출발 시각에 맞춰 시작
   const flight = courseFlightOption(parsed.flights, rawDays);
-  const days = flight ? applyFlightWithMeals(rawDays, flight) : rawDays;
+  // 항공 시각이 없으면 공항 이름으로 비행시간·시차를 계산하고, 그 시각으로 식사 시간대를 다시 맞춘다
+  const days = flight
+    ? applyFlightWithMeals(rawDays, flight)
+    : rawDays.map((d) => {
+        const r = recalcFlightDay(d);
+        return r === d ? d : { ...r, items: enforceMealWindows(r.items.filter((i) => !/-free-\d+$/.test(i.id)), dayTourStart(r)) };
+      });
 
   // 도시 순서는 일차별 숙박 도시에서 직접 계산한다 (AI가 도착 도시를 앞에 두는 경우가 있다)
   const stayCities = [...new Set(days.map((d) => d.overnightCity ?? "").filter(Boolean))];

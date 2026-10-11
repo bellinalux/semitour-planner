@@ -3,6 +3,7 @@ import { dayMealIssues, fitCourse } from "@/lib/courseFit";
 import { dayStructureIssues, fixDayStructure } from "@/lib/dayStructure";
 import { dayRuleIssues, ruleDayEnd } from "@/lib/packageRules";
 import { dayHardIssues, dayWindow, fixImpossible } from "@/lib/feasibility";
+import { diffText, zoneOf, zonesOfDay } from "@/lib/timezone";
 import { refitDay } from "@/lib/dayBalance";
 import { PackageRulesContext } from "../PackageRulesPanel";
 import { ReorderButton } from "./ReorderButton";
@@ -122,6 +123,11 @@ export function DayCard({
   // 불가능 시간 — 새벽 도착일 관광·운영 시간 밖·말이 안 되는 식사 시각·밤 체크인 뒤·출국 뒤
   const hardIssues = dayHardIssues(plan, pmChoiceForDay, rules?.dayEnd);
   const dayWin = dayWindow(plan, pmChoiceForDay, rules?.dayEnd);
+  // 시각의 나라 — 항공이 있는 날은 항목마다(출발 전·도착 뒤), 없는 날은 머리에 현지 시각 안내
+  const hasFlight = plan.items.some((i) => i.type === "flight");
+  const zones = zonesOfDay(plan, dayItems(plan, pmChoiceForDay), destination);
+  const korea = zoneOf("한국")!;
+  const localZone = zoneOf(`${plan.overnightCity ?? ""} ${destination}`);
 
   // 이 날 확인할 것 — 한 줄로 접어 두고 펼치면 설명과 고치기 버튼
   const drives = continuousDriving(plan, pmChoiceForDay);
@@ -169,6 +175,14 @@ export function DayCard({
           <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
             <BedDouble className="h-3 w-3" aria-hidden />
             {plan.overnightCity} 숙박{hotelName ? ` · ${hotelName}` : ""}
+          </span>
+        )}
+        {localZone && localZone.country !== korea.country && (
+          <span
+            className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200"
+            title="이 날 일정의 시각은 현지 시각입니다 (항공이 있는 날은 시각 앞에 나라를 붙입니다)"
+          >
+            현지 시각 · {localZone.country} ({diffText(korea, localZone)})
           </span>
         )}
         <label
@@ -413,6 +427,8 @@ export function DayCard({
                   order={index + 1}
                   isLast={index === plan.items.length - 1}
                   timing={timings.get(item.id)}
+                  zone={hasFlight ? zones.get(item.id)?.country : undefined}
+                  nextIsFlight={plan.items[index + 1]?.type === "flight"}
                   beforeMeeting={morningFree.includes(item) ? { last: item === morningFree[morningFree.length - 1], meeting: meetingTime, lead } : undefined}
                   currency={currency}
                   dayNo={plan.day}

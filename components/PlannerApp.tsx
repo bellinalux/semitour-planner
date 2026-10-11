@@ -1,5 +1,7 @@
 "use client";
 
+import { dateOfDay, recalcFlightDay } from "@/lib/timezone";
+import { refitDay } from "@/lib/dayBalance";
 import { newHardIssues } from "@/lib/feasibility";
 import { packageRules } from "@/lib/packageRules";
 import { useShowOps } from "@/hooks/useShowOps";
@@ -229,6 +231,8 @@ export function PlannerApp() {
         days: result.detected.days,
         nights: result.detected.nights,
         destination: result.detected.cities.length > 0 ? result.detected.cities.join(", ") : input.destination,
+        // 원문의 출발 공항(김해 등)으로 출발지를 맞춘다 — 항공 조회·견적이 같은 공항을 쓰게
+        ...(result.detected.origin ? { originCity: result.detected.origin } : {}),
       };
       update(patch);
       nextInput = { ...input, ...patch };
@@ -755,7 +759,18 @@ export function PlannerApp() {
             autoQuote={{ running: autoQuote.running, run: () => void autoQuote.run() }}
             budgetFit={budgetFit}
             itemActions={{
-              onChangeItem: itinerary.updateItem,
+              onChangeItem: (itemId, patch) => {
+                // 항공 항목의 공항 이름을 바꾸면 그 노선의 비행시간·시차로 다시 계산한다
+                const dayIndex = days.findIndex((d) => d.items.some((i) => i.id === itemId));
+                const it = days[dayIndex]?.items.find((i) => i.id === itemId);
+                if (it?.type === "flight" && patch.name !== undefined && patch.name !== it.name) {
+                  const day = { ...days[dayIndex], items: days[dayIndex].items.map((i) => (i.id === itemId ? { ...i, ...patch } : i)) };
+                  const next = recalcFlightDay(day, dateOfDay(input.departureDate, dayIndex), true);
+                  itinerary.replaceDays(days.map((d, k) => (k === dayIndex ? refitDay(next) : d)));
+                  return;
+                }
+                itinerary.updateItem(itemId, patch);
+              },
               onChangeDay: itinerary.updateDay,
               onDeleteItem: (itemId) => {
                 // AI가 넣은 장소를 직원이 지우면 지식 창고에 "뺀 곳"으로 배운다

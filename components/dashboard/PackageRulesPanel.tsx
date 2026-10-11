@@ -6,6 +6,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import type { PmChoice } from "@/lib/itinerary";
 import { applyPackageRules, applyRuleMeeting, REGION_LABEL, toOptionalTours, tripRuleIssues, type PackageRules } from "@/lib/packageRules";
 import type { TourOption } from "@/types";
+import { renameOrigin } from "@/lib/flightOrigin";
 import type { DayPlan, TripInput } from "@/types";
 
 /** 일정 카드가 그날 규칙 점검·종료 기준에 쓰는 이 상품의 규칙 */
@@ -14,7 +15,7 @@ export const PackageRulesContext = createContext<PackageRules | null>(null);
 const OPTION_TEXT: Record<PackageRules["options"], string> = { allowed: "있음 (기본일정 뒤, 대체일정 표기)", reasonable: "합리적 가격 (기본일정 뒤)", included: "주요 옵션 포함 (노옵션)", none: "없음" };
 
 /** 상품 규칙 — 운영 방식·등급·고객·지역으로 정한 기준과 상품 전체 점검 */
-export function PackageRulesPanel({ input, rules, days, pmChoice, onApplyDays, onOptions }: { input: TripInput; rules: PackageRules; days: DayPlan[]; pmChoice: PmChoice; onApplyDays?: (days: DayPlan[]) => void; onOptions?: (options: TourOption[]) => void }) {
+export function PackageRulesPanel({ input, rules, days, pmChoice, onApplyDays, onOptions, onInput }: { input: TripInput; rules: PackageRules; days: DayPlan[]; pmChoice: PmChoice; onApplyDays?: (days: DayPlan[]) => void; onOptions?: (options: TourOption[]) => void; onInput?: (patch: Partial<TripInput>) => void }) {
   const issues = tripRuleIssues(input, days, pmChoice, rules);
   const [message, setMessage] = useState("");
   const rows: [string, string][] = [
@@ -68,6 +69,31 @@ export function PackageRulesPanel({ input, rules, days, pmChoice, onApplyDays, o
               <li key={i.key} className="flex flex-wrap items-start gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-amber-900">
                 <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
                 <span className="min-w-0 flex-1 text-pretty">{i.text}</span>
+                {i.origin?.target && onApplyDays && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onApplyDays(renameOrigin(days, i.origin!.target!));
+                      onInput?.({ originCity: i.origin!.target! });
+                      setMessage(`일정의 공항을 ${i.origin!.target} 출발로 바꾸고 비행시간·시차를 다시 계산했습니다.`);
+                    }}
+                    className="shrink-0 rounded border border-amber-400 bg-white px-2 py-0.5 font-semibold hover:bg-amber-100"
+                  >
+                    일정을 {i.origin.target} 출발로
+                  </button>
+                )}
+                {i.origin?.course && onInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onInput({ originCity: i.origin!.course!, selectedFlight: null });
+                      setMessage(`출발지를 ${i.origin!.course}(으)로 바꿨습니다. 항공편은 ${i.origin!.course} 출발로 다시 조회하세요.`);
+                    }}
+                    className="shrink-0 rounded border border-amber-400 bg-white px-2 py-0.5 font-semibold hover:bg-amber-100"
+                  >
+                    출발지를 {i.origin.course}(으)로
+                  </button>
+                )}
                 {i.separateIds && onApplyDays && onOptions && (
                   <button
                     type="button"

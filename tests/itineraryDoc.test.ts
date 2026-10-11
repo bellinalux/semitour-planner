@@ -26,7 +26,7 @@ describe("일정표 표기", () => {
     expect(shortDescription("가".repeat(100)).length).toBe(69);
   });
 
-  it("이동은 연결 줄로 (5분 미만·항공 뒤는 생략, 이동 항목이 따로 있으면 그 줄 하나로)", () => {
+  it("이동은 연결 줄로 (5분 미만은 생략, 도착 항공 뒤 공항 → 장소 이동은 보임, 이동 항목이 따로 있으면 그 줄 하나로)", () => {
     const rows = docRows(
       [
         item("f", { type: "flight", name: "마카오 도착", travelMinutesToNext: 30 }),
@@ -37,7 +37,7 @@ describe("일정표 표기", () => {
       ],
       true,
     );
-    expect(rows.map((r) => (r.kind === "move" ? `→${r.text}` : r.item!.id))).toEqual(["f", "a", "b", "→호텔로 이동 (약 20분)", "h"]);
+    expect(rows.map((r) => (r.kind === "move" ? `→${r.text}` : r.item!.id))).toEqual(["f", "→전용차량 약 30분", "a", "b", "→호텔로 이동 (약 20분)", "h"]);
   });
 
   it("식사: 호텔식·현지식(메뉴)·특식·자유식·기내식", () => {

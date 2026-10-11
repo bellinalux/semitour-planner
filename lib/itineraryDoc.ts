@@ -107,7 +107,8 @@ export function docRows(items: ItineraryItem[], vehicle: boolean): DocRow[] {
     rows.push({ kind: "item", item: it });
     const next = items.slice(i + 1).find((x) => !isMealFiller(x));
     const travel = Math.max(0, it.travelMinutesToNext ?? 0);
-    if (next && next.type !== "transfer" && it.type !== "flight" && travel >= 5) rows.push({ kind: "move", text: `${how} 약 ${formatDuration(travel)}`, minutes: travel });
+    // 항공 출발 → 도착 사이는 비행이라 이동 줄을 넣지 않는다. 도착 항공 뒤(공항 → 호텔 등)는 지상 이동 줄
+    if (next && next.type !== "transfer" && !(it.type === "flight" && next.type === "flight") && travel >= 5) rows.push({ kind: "move", text: `${how} 약 ${formatDuration(travel)}`, minutes: travel });
   });
   return rows;
 }
