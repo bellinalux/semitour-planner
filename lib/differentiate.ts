@@ -1,4 +1,5 @@
 import { blockMinutes, refitDay, roomOf } from "@/lib/dayBalance";
+import { bestInsert } from "@/lib/feasibility";
 import { coursePlaces, findPlace, knowledgeKey, placeScore, type CityKnowledge } from "@/lib/knowledge";
 import type { PmChoice } from "@/lib/itinerary";
 import type { Competitor, DayPlan, ItineraryItem } from "@/types";
@@ -102,6 +103,9 @@ export function addPlace(days: DayPlan[], pmChoice: PmChoice, p: DiffPlace, kb: 
     day: target.d.day,
     days: days.map((d) => {
       if (d !== target.d) return d;
+      // 시각이 맞는 자리(운영 시간 안, 하루가 가장 일찍 끝나는 곳) — 없으면 숙소 줄 앞
+      const best = bestInsert(d, [item], pmChoice, refitDay);
+      if (best) return best;
       const at = d.items.findIndex((i) => i.type === "hotel");
       const items = at >= 0 ? [...d.items.slice(0, at), item, ...d.items.slice(at)] : [...d.items, item];
       return refitDay({ ...d, items });

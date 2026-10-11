@@ -2,6 +2,7 @@ import { calcDayEnd, dayMeetingTime, DEFAULT_MEETING_TIME, formatClock, morningF
 import { dayIntensity } from "@/lib/intensity";
 import { refitDay } from "@/lib/dayBalance";
 import { fixDayStructure } from "@/lib/dayStructure";
+import { dayWindow, fixImpossible } from "@/lib/feasibility";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { isRestStop } from "@/lib/mealTiming";
 import type { Companion, DayPlan, ItineraryItem, OperatingModel, ProductTier, TripInput } from "@/types";
@@ -274,6 +275,11 @@ export function dayRuleIssues(days: DayPlan[], index: number, pmChoice: PmChoice
   const n = placeCount(items);
   const max = index === 0 ? r.firstDayMax : r.placesPerDay[1];
   if (n > max && day.rest !== "free") out.push(`하루 ${n}곳 — ${r.label} 기준 ${index === 0 ? "첫날 " : ""}최대 ${max}곳`);
+  // 새벽·밤 도착 다음 날 — 10:00 이후 미팅 또는 오전 자유 (업계 관행)
+  if (index > 0 && dayWindow(days[index - 1], pmChoice, r.dayEnd).kind === "arrival-night" && !startsWithFlight(day) && morningFreeItems(day.kind === "semi" ? day.amGuided : day.items).length === 0) {
+    const m = parseClock(dayMeetingTime(day)) ?? 0;
+    if (m < 10 * 60) out.push(`새벽·밤 도착 다음 날인데 미팅 ${dayMeetingTime(day)} — 10:00 이후 미팅 또는 "호텔 조식 후 오전 자유"`);
+  }
   // 한 번 차량 이동
   const rides = items.map((i) => (isRestStop(i) ? Math.max(i.travelMinutesToNext ?? 0, 0) : i.type === "transfer" ? Math.max(i.stayMinutes, 0) + Math.max(i.travelMinutesToNext ?? 0, 0) : i.type === "flight" ? 0 : Math.max(i.travelMinutesToNext ?? 0, 0)));
   const longest = Math.max(0, ...rides);
@@ -499,8 +505,11 @@ export interface RuleFixResult {
  */
 export function applyPackageRules(days: DayPlan[], pmChoice: PmChoice, r: PackageRules, input: Pick<TripInput, "options" | "tipPerPerson" | "nights">): RuleFixResult {
   const changes: string[] = [];
+  // ⓪ 불가능 시간 (새벽 도착일 관광·운영 시간 밖·체크인 뒤 등) — 맞는 자리·맞는 날로
+  const impossible = fixImpossible(days, pmChoice, refitDay, r.dayEnd);
+  changes.push(...impossible.changes);
   // ① 하루 구성
-  let next = days.map((d) => {
+  let next = impossible.days.map((d) => {
     const f = fixDayStructure(d);
     if (f !== d) changes.push(`DAY ${d.day} 구성 정리 (조식·자유시간·오전 자유 미팅)`);
     return f;
@@ -524,6 +533,13 @@ export function applyPackageRules(days: DayPlan[], pmChoice: PmChoice, r: Packag
     next = applyRuleMeeting(next, meeting.meetingDays, r);
     changes.push(`DAY ${meeting.meetingDays.join("·")} 미팅 ${r.meeting}`);
   }
+  // ②-2 새벽·밤 도착 다음 날은 10:00 이후 미팅
+  next = next.map((d, k) => {
+    if (k === 0 || dayWindow(next[k - 1], pmChoice, r.dayEnd).kind !== "arrival-night" || startsWithFlight(d)) return d;
+    if (morningFreeItems(d.kind === "semi" ? d.amGuided : d.items).length > 0 || (parseClock(dayMeetingTime(d)) ?? 0) >= 10 * 60) return d;
+    changes.push(`DAY ${d.day} 새벽 도착 다음 날 — 미팅 10:00`);
+    return { ...d, meetingTime: "10:00" };
+  });
   // ③ 긴 이동 → 휴게소
   if (r.model !== "airtel") {
     next = next.map((d) => {

@@ -2,6 +2,8 @@ import { REST_LABEL } from "@/lib/pace";
 import { dayMealIssues, fitCourse } from "@/lib/courseFit";
 import { dayStructureIssues, fixDayStructure } from "@/lib/dayStructure";
 import { dayRuleIssues, ruleDayEnd } from "@/lib/packageRules";
+import { dayHardIssues, dayWindow, fixImpossible } from "@/lib/feasibility";
+import { refitDay } from "@/lib/dayBalance";
 import { PackageRulesContext } from "../PackageRulesPanel";
 import { ReorderButton } from "./ReorderButton";
 import { dayIntensity, INTENSITY_LABEL } from "@/lib/intensity";
@@ -117,6 +119,9 @@ export function DayCard({
   const dayEnd = rules ? ruleDayEnd(plan, pmChoiceForDay, rules) : calcDayEnd(plan, pmChoiceForDay);
   const dayIndex = days.findIndex((d) => d.day === plan.day);
   const ruleIssues = rules && dayIndex >= 0 ? dayRuleIssues(days, dayIndex, pmChoiceForDay, rules) : [];
+  // 불가능 시간 — 새벽 도착일 관광·운영 시간 밖·말이 안 되는 식사 시각·밤 체크인 뒤·출국 뒤
+  const hardIssues = dayHardIssues(plan, pmChoiceForDay, rules?.dayEnd);
+  const dayWin = dayWindow(plan, pmChoiceForDay, rules?.dayEnd);
 
   // 이 날 확인할 것 — 한 줄로 접어 두고 펼치면 설명과 고치기 버튼
   const drives = continuousDriving(plan, pmChoiceForDay);
@@ -132,6 +137,7 @@ export function DayCard({
   // 오전 자유(조식 뒤 자유시간 → 미팅) — 시각 대신 "호텔 조식 후", 마지막 줄 밑에 미팅·이동
   const morningFree = plan.kind === "linear" ? morningFreeItems(plan.items) : [];
   const issueLabels = [
+    ...(hardIssues.length > 0 ? ["불가능 시간"] : []),
     ...(structureIssues.length > 0 ? ["일정 구성"] : []),
     ...(ruleIssues.length > 0 ? ["상품 규칙"] : []),
     ...(closedHere.length > 0 ? ["휴무일"] : []),
@@ -258,6 +264,32 @@ export function DayCard({
           )}
         </div>
       ))}
+      {hardIssues.length > 0 && (
+        <div className="flex flex-wrap items-start gap-1.5 border-b border-slate-100 bg-rose-50 px-4 py-2 text-[11px] leading-4 text-rose-800">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <ul aria-label="불가능 시간" className="space-y-0.5 text-pretty">
+              {hardIssues.map((h) => (
+                <li key={h.key}>{h.text}</li>
+              ))}
+            </ul>
+            {dayWin.note && <p className="mt-0.5 text-rose-700/80">이 날: {dayWin.note}</p>}
+          </div>
+          {engine && (
+            <button
+              type="button"
+              onClick={() => {
+                const r = fixImpossible(days, { [plan.day]: selectedPmId }, refitDay, rules?.dayEnd);
+                if (r.changes.length > 0) engine.applyReorder(r.days);
+              }}
+              title="걸린 관광은 같은 날 맞는 자리로, 안 되면 같은 도시의 다른 날로 옮깁니다"
+              className="shrink-0 rounded border border-rose-300 bg-white px-2 py-0.5 font-semibold hover:bg-rose-100"
+            >
+              불가능 시간 고치기
+            </button>
+          )}
+        </div>
+      )}
       {ruleIssues.length > 0 && rules && (
         <div className="flex flex-wrap items-start gap-1.5 border-b border-slate-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />

@@ -10,6 +10,11 @@ export interface UndoHistoryView {
   undo: () => void;
   /** 일정을 바꾸는 함수에 이름표를 붙여, 바꾸기 전 일정을 기록에 쌓는다 */
   labeled: (label: string) => (days: DayPlan[]) => void;
+  /** 관문에 걸려 적용하지 않은 변경 (새 불가능 시간이 생기는 자동 변경) */
+  blocked: { label: string; reasons: string[] } | null;
+  /** 그래도 적용 / 닫기 */
+  applyBlocked: () => void;
+  dismissBlocked: () => void;
 }
 
 const LIMIT = 20;
@@ -18,8 +23,9 @@ const LIMIT = 20;
  * 되돌리기 하나로 — 시간 검증·코스 점검 적용·구역 묶기·식당 바꾸기·가격 낮추기처럼 일정을 통째로 바꾸는 작업을 한 기록에 쌓고,
  * 화면의 "되돌리기"나 Ctrl+Z로 가장 최근 것부터 되돌린다 (입력칸에서 글자를 고치는 중이면 Ctrl+Z는 그 칸의 되돌리기).
  */
-export function useUndoHistory(days: DayPlan[], replaceDays: (days: DayPlan[]) => void): UndoHistoryView {
+export function useUndoHistory(days: DayPlan[], replaceDays: (days: DayPlan[]) => void, guard?: (before: DayPlan[], after: DayPlan[]) => string[]): UndoHistoryView {
   const [stack, setStack] = useState<{ label: string; days: DayPlan[] }[]>([]);
+  const [blocked, setBlocked] = useState<{ label: string; reasons: string[]; before: DayPlan[]; next: DayPlan[] } | null>(null);
   const latest = useRef(days);
   useEffect(() => {
     latest.current = days;
@@ -47,14 +53,32 @@ export function useUndoHistory(days: DayPlan[], replaceDays: (days: DayPlan[]) =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stack]);
 
+  const commit = (label: string, before: DayPlan[], next: DayPlan[]) => {
+    setStack((s) => [...s.slice(-(LIMIT - 1)), { label, days: before }]);
+    replaceDays(next);
+  };
+
   return {
     last: stack[stack.length - 1]?.label ?? null,
     count: stack.length,
     undo,
+    // 관문: 자동 변경이 새 불가능 시간(새벽 도착일 관광·운영 시간 밖·체크인 뒤 등)을 만들면 적용하지 않고 이유를 보여 준다
     labeled: (label) => (next) => {
       const before = latest.current;
-      setStack((s) => [...s.slice(-(LIMIT - 1)), { label, days: before }]);
-      replaceDays(next);
+      const reasons = guard?.(before, next) ?? [];
+      if (reasons.length > 0) {
+        setBlocked({ label, reasons, before, next });
+        return;
+      }
+      setBlocked(null);
+      commit(label, before, next);
     },
+    blocked: blocked ? { label: blocked.label, reasons: blocked.reasons } : null,
+    applyBlocked: () => {
+      if (!blocked) return;
+      commit(blocked.label, blocked.before, blocked.next);
+      setBlocked(null);
+    },
+    dismissBlocked: () => setBlocked(null),
   };
 }

@@ -3,6 +3,7 @@ import { isCafeMeal } from "@/lib/engineDay";
 import { formatDuration } from "@/lib/format";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { refitMealWindows } from "@/lib/mealTiming";
+import { bestInsert, clockRoom, dayHardIssues } from "@/lib/feasibility";
 import type { DayPlan, ItineraryItem } from "@/types";
 
 /**
@@ -70,12 +71,16 @@ function tourLoad(day: DayPlan, pmChoice: PmChoice): number {
   return calcDayLoad(day, pmChoice).totalMinutes;
 }
 
+/**
+ * 일정을 옮겨 받을 여유(분) — 하루 부담(8시간 기준)과 시계(그날 사용 가능 시간) 중 작은 쪽.
+ * 새벽·밤 도착일·출국일·일부러 쉬게 둔 날은 0 (관광을 옮겨 받지 않는다).
+ */
 export function roomOf(day: DayPlan, pmChoice: PmChoice): number {
   const items = dayItems(day, pmChoice);
   const free = items.filter((i) => i.type === "free_time").reduce((s, i) => s + i.stayMinutes, 0);
   const load = tourLoad(day, pmChoice);
   // 자유시간은 바꿔 쓸 수 있으니 여유로 센다
-  return Math.max(0, DAY_LOAD_OK_MAX - (load - free));
+  return Math.min(Math.max(0, DAY_LOAD_OK_MAX - (load - free)), clockRoom(day, pmChoice));
 }
 
 export function suggestDayMoves(days: DayPlan[], pmChoice: PmChoice): DayMove[] {
@@ -157,6 +162,7 @@ export function applyDayMove(days: DayPlan[], move: DayMove): DayPlan[] {
           ]
         : [];
     const added = [...block, ...lunch];
+    const lunchIds = new Set(lunch.map((l) => l.id));
     const addedMinutes = move.minutes + lunch.reduce((s, i) => s + i.stayMinutes + (i.travelMinutesToNext ?? 0), 0);
     const freeIdx = items.findIndex((i) => i.type === "free_time");
     if (freeIdx >= 0) {
@@ -167,7 +173,14 @@ export function applyDayMove(days: DayPlan[], move: DayMove): DayPlan[] {
       const endIdx = items.findIndex((i) => i.type === "hotel");
       items.splice(endIdx >= 0 ? endIdx : items.length, 0, ...added);
     }
-    return refitDay({ ...d, ...(d.meetingTime?.trim() ? {} : { meetingTime: MOVED_MEETING }), items });
+    const base = { ...d, ...(d.meetingTime?.trim() ? {} : { meetingTime: MOVED_MEETING }) };
+    const placed = refitDay({ ...base, items });
+    // 넣은 자리가 불가능 시간(운영 시간 밖·도착 전·체크인 뒤)이면 시각이 맞는 자리를 찾는다 — 점심은 점심 시간에 맞을 때만
+    const bad = dayHardIssues(placed, {}).some((i) => ids.has(i.itemId) || lunchIds.has(i.itemId));
+    if (!bad) return placed;
+    const alt = bestInsert(base, block, {}, refitDay);
+    if (!alt) return placed;
+    return lunch.length ? (bestInsert(alt, lunch, {}, refitDay) ?? alt) : alt;
   });
 }
 

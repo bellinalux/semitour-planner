@@ -1,5 +1,7 @@
 "use client";
 
+import { newHardIssues } from "@/lib/feasibility";
+import { packageRules } from "@/lib/packageRules";
 import { useShowOps } from "@/hooks/useShowOps";
 import { OpsToggle } from "@/components/layout/OpsToggle";
 import { insertDays, placeNames, shiftOptions, shortenOne } from "@/lib/nightsChange";
@@ -119,7 +121,10 @@ export function PlannerApp() {
   const competitorItineraries = useCompetitorItineraries(input, update);
   const itinerary = useItinerary();
   // 일정을 통째로 바꾸는 작업의 되돌리기 기록 (화면 오른쪽 아래 "되돌리기"·Ctrl+Z)
-  const history = useUndoHistory(itinerary.days, itinerary.replaceDays);
+  // 관문: 자동 변경이 새 불가능 시간을 만들면 막는다 (상품 규칙의 종료 기준으로)
+  const history = useUndoHistory(itinerary.days, itinerary.replaceDays, (before, after) =>
+    newHardIssues(before, after, itinerary.pmChoice, packageRules(input, after.map((d) => d.overnightCity ?? "")).dayEnd).map((i) => `DAY ${i.day} ${i.text}`),
+  );
   const usp = useUsp();
   const [tab, setTab] = useState<PlannerTab>("input");
   const [settingsFocus, setSettingsFocus] = useState<SettingsFocus | null>(null);
@@ -580,6 +585,25 @@ export function PlannerApp() {
     <>
     <PrintDocuments kind={printKind} data={docData ? { ...docData, season: season.result } : null} />
     <div className="screen-only pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40 flex flex-col items-end gap-2 [&>*]:pointer-events-auto">
+    {history.blocked && (
+      <div role="alert" className="w-[min(26rem,calc(100vw-2rem))] rounded-xl border border-rose-300 bg-rose-50 p-3 text-[11px] leading-4 text-rose-900 shadow-md">
+        <p className="font-semibold">“{history.blocked.label}”을(를) 적용하지 않았습니다 — 할 수 없는 시간이 새로 생깁니다</p>
+        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-pretty">
+          {history.blocked.reasons.slice(0, 5).map((r) => (
+            <li key={r}>{r}</li>
+          ))}
+          {history.blocked.reasons.length > 5 && <li>그 밖에 {history.blocked.reasons.length - 5}건</li>}
+        </ul>
+        <div className="mt-2 flex gap-1.5">
+          <button type="button" onClick={history.applyBlocked} className="rounded-md border border-rose-300 bg-white px-2 py-0.5 font-semibold hover:bg-rose-100">
+            그래도 적용
+          </button>
+          <button type="button" onClick={history.dismissBlocked} className="rounded-md px-2 py-0.5 text-rose-700 hover:bg-rose-100">
+            닫기
+          </button>
+        </div>
+      </div>
+    )}
     {history.last && (
       <button
         type="button"

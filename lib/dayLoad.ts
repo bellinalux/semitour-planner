@@ -29,8 +29,12 @@ const MORNING_FREE_MEETING = "10:00";
  * 그 자유시간은 미팅 전 시간이다. 업계 일정표처럼 "호텔 조식 후 자유시간"으로 쓰고 시각을 매기지 않는다.
  * 전일 자유(자유시간만 있는 날)·체크아웃 뒤 공항 이동처럼 가이드 일정이 이어지지 않으면 빈 배열.
  */
+/** 식사 시간대 맞춤으로 앱이 넣은 자유시간 (mealTiming.isMealFiller와 같은 모양 — 순환 참조를 피해 여기서 다시 쓴다) */
+const isFiller = (i: ItineraryItem) => i.type === "free_time" && /-free-\d+$/.test(i.id);
+
 export function morningFreeItems(items: ItineraryItem[]): ItineraryItem[] {
-  const list = items.filter((i) => !isBreakfastItem(i));
+  // 앱이 넣은 식사 맞춤 자유시간은 오전 자유가 아니다 (그날 첫 일정이 점심이라 앞에 끼운 것)
+  const list = items.filter((i) => !isBreakfastItem(i) && !isFiller(i));
   let n = 0;
   while (n < list.length && list[n].type === "free_time") n++;
   if (n === 0 || n >= list.length) return [];
@@ -56,7 +60,7 @@ export function morningMeeting(day: Partial<Pick<DayPlan, "kind" | "items" | "am
   const list = tourList(day);
   const free = morningFreeItems(list);
   if (free.length === 0) return null;
-  const next = list.filter((i) => !isBreakfastItem(i))[free.length];
+  const next = list.filter((i) => !isBreakfastItem(i) && !isFiller(i))[free.length];
   if (!(next.type === "meal" && LUNCH_NAME.test(`${next.name} ${next.description ?? ""}`))) return MORNING_FREE_MEETING;
   const at = MORNING_FREE_LUNCH - morningLead(day, free);
   return formatClock(Math.floor(at / TIME_STEP) * TIME_STEP);
@@ -76,7 +80,7 @@ export function hotelLeadMinutes(day: Pick<DayPlan, "day" | "kind" | "items" | "
   if (free.length > 0) return morningLead(day, free);
   if (typeof day.hotelLeadMinutes === "number" && Number.isFinite(day.hotelLeadMinutes)) return Math.max(0, Math.round(day.hotelLeadMinutes));
   if (day.day <= 1) return 0;
-  const list = (day.kind === "semi" ? day.amGuided : day.items).filter((i) => !isBreakfastItem(i));
+  const list = (day.kind === "semi" ? day.amGuided : day.items).filter((i) => !isBreakfastItem(i) && !isFiller(i));
   const first = list[0];
   if (!first || NO_LEAD_TYPES.has(first.type ?? "sightseeing")) return 0;
   if (/미팅|로비|픽업|집결|출발|호텔/.test(first.name)) return 0;

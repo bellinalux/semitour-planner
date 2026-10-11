@@ -66,7 +66,12 @@ const isLastFlightDay = (days: DayPlan[], d: DayPlan) => d.day === days[days.len
 
 /** 늦은 출발 — 미팅을 10:00으로 (이미 늦으면 그대로) */
 export function lateStart(days: DayPlan[], dayNo: number): DayPlan[] {
-  return days.map((d) => (d.day === dayNo ? refitDay({ ...d, meetingTime: LATE_MEETING, rest: d.rest ?? "late" }) : d));
+  return days.map((d) => {
+    if (d.day !== dayNo) return d;
+    // 이미 10:00 이후에 시작하는 날(오전 자유 → 11:10 미팅 등)은 미팅을 앞당기지 않는다
+    if ((parseClock(dayMeetingTime(d)) ?? 0) >= (parseClock(LATE_MEETING) ?? 600)) return d;
+    return refitDay({ ...d, meetingTime: LATE_MEETING, rest: d.rest ?? "late" });
+  });
 }
 
 /** 관광을 여유 있는 다른 날로 옮긴다 (쉬는 날·마지막 항공일 빼고, 여유 큰 날부터). 다 못 옮기면 null */
@@ -158,7 +163,8 @@ export function paceIssues(days: DayPlan[], pmChoice: PmChoice, pace: TripPace):
     const startNext = parseClock(dayTourStart(next));
     if (!nextHeavy && startNext !== null && startNext >= 9 * 60 + 30) continue;
     const fixes: PaceFix[] = [];
-    fixes.push({ kind: "late", day: next.day, label: `DAY ${next.day} 늦은 출발 (${LATE_MEETING} 미팅)`, days: lateStart(days, next.day) });
+    const late = lateStart(days, next.day);
+    if (late !== days && late.some((d, k) => d !== days[k])) fixes.push({ kind: "late", day: next.day, label: `DAY ${next.day} 늦은 출발 (${LATE_MEETING} 미팅)`, days: late });
     if (next.kind === "linear") {
       const r = afternoonFree(days, next.day, pmChoice);
       fixes.push(r ? { kind: "pmfree", day: next.day, label: `DAY ${next.day} 오후 자유 (점심 뒤 관광은 다른 날로)`, days: r } : { kind: "pmfree", day: next.day, label: `DAY ${next.day} 오후 자유`, blocked: "점심 뒤 관광을 옮길 날의 여유가 없습니다" });

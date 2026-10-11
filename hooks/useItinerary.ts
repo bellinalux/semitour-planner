@@ -1,5 +1,7 @@
 "use client";
 
+import { fixImpossible } from "@/lib/feasibility";
+import { refitDay } from "@/lib/dayBalance";
 import { packageRules, withRuleMeetings } from "@/lib/packageRules";
 import { useCallback, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
@@ -141,9 +143,12 @@ export function useItinerary() {
       // 늦은 식사·같은 식사 두 줄·업체 코스의 지나치게 긴 도보 구역을 바로 다듬는다 (되돌리기는 일정 카드의 경고에서 다시 맞추기)
       // AI 일정은 패키지 규칙의 미팅 시각으로 (프리미엄·시니어 09:00 등) — 그 시각으로 식사 시간대도 맞춘다
       const tidied = tidyDays(raw.days);
-      const base = input.mode === "ai" ? withRuleMeetings(tidied, packageRules(input, raw.days.map((d) => d.overnightCity ?? ""))) : tidied;
+      const rules = packageRules(input, raw.days.map((d) => d.overnightCity ?? ""));
+      const base = input.mode === "ai" ? withRuleMeetings(tidied, rules) : tidied;
       const fit = fitCourse(base, { walk: input.mode === "paste" });
-      const result = { ...raw, days: tidyDays(fit.days) };
+      // AI가 만든 일정은 불가능 시간(새벽 도착일 관광·운영 시간 밖 등)을 바로 고친다 — 업체 코스는 원문을 지키고 일정 카드에 빨갛게 보여 준다
+      const fitted = tidyDays(fit.days);
+      const result = { ...raw, days: input.mode === "ai" ? fixImpossible(fitted, {}, refitDay, rules.dayEnd).days : fitted };
       const choice = defaultPmChoice(result.days);
       setDays(result.days);
       setPmChoice(choice);
