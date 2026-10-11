@@ -30,12 +30,33 @@ export function tidyItems(items: ItineraryItem[]): ItineraryItem[] {
   return changed ? out : items;
 }
 
+/**
+ * 호텔 조식 줄을 빼기 전에 그 줄의 "다음까지 이동"(호텔 → 첫 일정)을 살린다 — 업체 코스는 "호텔 조식 후 방콕으로 이동(2시간 30분)"처럼
+ * 조식 줄에 이동 시간이 붙어 온다. 다음 줄이 시간 없는 이동(차량)이면 그 이동 시간으로, 장소면 호텔→첫 장소 이동으로 옮긴다.
+ */
+export function liftBreakfast(day: DayPlan): DayPlan {
+  const semi = day.kind === "semi";
+  const list = semi ? day.amGuided : day.items;
+  const k = list.findIndex(isHotelBreakfast);
+  if (k < 0) return day;
+  const travel = Math.max(0, list[k].travelMinutesToNext ?? 0);
+  const next = list.slice(k + 1).find((i) => !isHotelBreakfast(i));
+  let kept = list.filter((i) => !isHotelBreakfast(i));
+  let lead: number | undefined;
+  if (travel >= 5 && next && list.slice(0, k).every(isHotelBreakfast)) {
+    if (next.type === "transfer" && next.stayMinutes <= 0) kept = kept.map((i) => (i === next ? { ...i, stayMinutes: travel } : i));
+    else if (!["transfer", "flight", "hotel", "free_time"].includes(next.type ?? "sightseeing") && day.hotelLeadMinutes === undefined && !/미팅|로비|픽업|집결|출발|호텔/.test(next.name)) lead = travel;
+  }
+  return { ...day, ...(semi ? { amGuided: kept } : { items: kept }), ...(lead !== undefined ? { hotelLeadMinutes: lead } : {}) };
+}
+
 /** 하루 일정 전체 (오전 가이드·오후 자유 선택 포함). 바뀐 게 없으면 같은 객체 */
 export function tidyDay(day: DayPlan): DayPlan {
-  const items = tidyItems(day.items);
-  const amGuided = tidyItems(day.amGuided);
-  if (items === day.items && amGuided === day.amGuided) return day;
-  return { ...day, items, amGuided };
+  const base = liftBreakfast(day);
+  const items = tidyItems(base.items);
+  const amGuided = tidyItems(base.amGuided);
+  if (base === day && items === day.items && amGuided === day.amGuided) return day;
+  return { ...base, items, amGuided };
 }
 
 export function tidyDays(days: DayPlan[]): DayPlan[] {

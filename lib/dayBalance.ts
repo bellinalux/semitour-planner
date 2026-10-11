@@ -65,12 +65,9 @@ function blocks(items: ItineraryItem[]): ItineraryItem[][] {
 }
 
 /** 여유 있는 날 — 항공 이동일(첫날·마지막 날)은 빼고, 하루 부담이 8시간 이하인 날. 자유일정만 있는 날이 가장 좋다 */
-/** 하루 부담에서 항공(비행·공항 대기)은 뺀다 — 비행 3시간은 관광 일정을 옮겨도 줄지 않는다 */
+/** 하루 부담 — 항공(비행·공항 대기)은 calcDayLoad에서 이미 빠진다 (비행 3시간은 관광 일정을 옮겨도 줄지 않는다) */
 function tourLoad(day: DayPlan, pmChoice: PmChoice): number {
-  const flight = dayItems(day, pmChoice)
-    .filter((i) => i.type === "flight")
-    .reduce((s, i) => s + Math.max(0, i.stayMinutes) + Math.max(0, i.travelMinutesToNext ?? 0), 0);
-  return calcDayLoad(day, pmChoice).totalMinutes - flight;
+  return calcDayLoad(day, pmChoice).totalMinutes;
 }
 
 export function roomOf(day: DayPlan, pmChoice: PmChoice): number {

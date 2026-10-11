@@ -235,7 +235,8 @@ export function calcDayLoad(day: DayPlan, pmChoice: PmChoice): DayLoad {
   // 오전 자유는 투어 시간이 아니다 (호텔에서 첫 일정까지 이동은 아래 미팅 이동으로 센다)
   const beforeMeeting = new Set(morningFreeItems(list));
   for (const item of list) {
-    if (isBreakfastItem(item) || beforeMeeting.has(item)) continue;
+    // 항공(비행시간)은 투어 시간이 아니다
+    if (isBreakfastItem(item) || beforeMeeting.has(item) || item.type === "flight") continue;
     stayMinutes += Math.max(0, item.stayMinutes);
     travelMinutes += Math.max(0, item.travelMinutesToNext ?? 0);
   }
@@ -300,7 +301,10 @@ export interface DayEndCheck {
 export function calcDayEnd(day: DayPlan, pmChoice: PmChoice): DayEndCheck | null {
   const load = calcDayLoad(day, pmChoice);
   if (load.totalMinutes === 0) return null;
-  const endTime = timelineEndTime(dayItems(day, pmChoice), dayTourStart(day));
+  // 귀국일 끝의 공항 이동·항공은 투어 종료가 아니다 (밤 비행기는 정상)
+  const slots = walkTimeline(dayItems(day, pmChoice), dayTourStart(day));
+  while (slots.length > 1 && ["flight", "transfer"].includes(slots[slots.length - 1].item.type ?? "")) slots.pop();
+  const endTime = slots.length > 0 ? formatClock(slots[slots.length - 1].end) : null;
   if (!endTime) return null;
   const endMinutes = parseClock(endTime);
   const standardMinutes = parseClock(STANDARD_DAY_END);

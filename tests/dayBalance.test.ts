@@ -32,7 +32,7 @@ const trip = () => [
 describe("날짜 사이 일정 나누기", () => {
   it("10시간 넘는 날의 구역 하나를 자유일정 날로 옮기자고 제안하고, 미포함 일정이면 비용을 주의시킨다", () => {
     const days = trip();
-    expect(calcDayLoad(days[0], {}).totalMinutes - 230).toBeGreaterThan(600); // 항공 230분 빼고도
+    expect(calcDayLoad(days[0], {}).totalMinutes).toBeGreaterThan(600); // 항공(230분)은 이미 빠진 값
     const [move] = suggestDayMoves(days, {});
     expect(move).toMatchObject({ fromDay: 1, toDay: 3 });
     expect(move.label).toMatch(/구역\(\d+곳, .+\)을 DAY 3로 옮기기/);
@@ -99,7 +99,8 @@ describe("옮기지 않는 경우", () => {
   it("비행 시간 때문에 긴 날은 옮기자고 하지 않는다", () => {
     const days = trip();
     days[0].items = days[0].items.filter((i) => !["t1", "t2"].includes(i.id));
-    expect(calcDayLoad(days[0], {}).totalMinutes).toBeGreaterThan(600);
+    // 비행 시간은 하루 부담에 넣지 않는다 — 관광만 보면 과부하가 아니다
+    expect(calcDayLoad(days[0], {}).totalMinutes).toBeLessThanOrEqual(600);
     expect(suggestDayMoves(days, {})).toEqual([]);
   });
 });

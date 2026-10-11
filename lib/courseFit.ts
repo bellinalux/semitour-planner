@@ -304,6 +304,8 @@ export function fitCourse(days: DayPlan[], o: { walk: boolean; slot?: boolean })
       cur = r.day;
       if (r.note) notes.push(r.note);
     }
+    // 식사 맞춤 자유시간을 그날 실제 시작 시각으로 다시 (예전 08:00 기준으로 넣은 것 바로잡기)
+    cur = refitDay(cur);
     if (notes.length) changes.push({ day: d.day, note: notes.join(" · ") });
     return cur;
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { computeItemTimings, dayMeetingTime, dayTourStart, hotelLeadMinutes, morningFreeItems } from "@/lib/dayLoad";
-import { tidyItems } from "@/lib/dayTidy";
+import { calcDayEnd, calcDayLoad, computeItemTimings, dayMeetingTime, dayTourStart, hotelLeadMinutes, morningFreeItems } from "@/lib/dayLoad";
+import { tidyDay, tidyItems } from "@/lib/dayTidy";
 import { dayStructureIssues, fixDayStructure, mergeFreeRuns } from "@/lib/dayStructure";
 import { fitCourse } from "@/lib/courseFit";
 import { dayTable } from "@/lib/itineraryDoc";
@@ -111,5 +111,22 @@ describe("문서 일정표 — 호텔 조식 후 자유시간 → 미팅 → 이
     expect(t.rows[1]).toMatchObject({ start: "11:10", keyTime: true });
     expect(t.rows[2].minutes).toBe(20);
     expect(t.rows[3]).toMatchObject({ key: "lunch", start: "11:30", keyTime: true, afterBreakfast: false });
+  });
+});
+
+describe("방콕·파타야 전체 검사에서 찾은 계산 문제", () => {
+  it("조식 줄에 붙은 이동 시간은 살린다 — 다음이 차량 이동이면 그 시간, 장소면 호텔→첫 장소", () => {
+    const toBkk = tidyDay(linearDay(4, [item("bf", { type: "meal", name: "호텔 조식", travelMinutesToNext: 150 }), item("mv", { type: "transfer", name: "방콕으로 이동", stayMinutes: 0, travelMinutesToNext: 10 }), lunch]));
+    expect(toBkk.items[0]).toMatchObject({ id: "mv", stayMinutes: 150 });
+    const maeklong = tidyDay(linearDay(5, [item("bf", { type: "meal", name: "호텔 조식", travelMinutesToNext: 70 }), item("mk", { name: "매끌렁 시장" }), lunch]));
+    expect(maeklong.items.map((i) => i.id)).toEqual(["mk", "lunch"]);
+    expect(hotelLeadMinutes(maeklong)).toBe(70);
+    expect(computeItemTimings(maeklong.items, dayTourStart(maeklong)).get("mk")?.start).toBe("09:10");
+  });
+
+  it("비행 시간은 하루 부담에 넣지 않고, 귀국일 공항 이동·출국은 늦은 종료로 보지 않는다", () => {
+    const last = linearDay(5, [item("s", { stayMinutes: 120, travelMinutesToNext: 20 }), item("d", { type: "meal", name: "저녁 식사", stayMinutes: 70, travelMinutesToNext: 40 }), item("t", { type: "transfer", name: "공항으로 이동", stayMinutes: 0, travelMinutesToNext: 40 }), item("f", { type: "flight", name: "출국", stayMinutes: 120, travelMinutesToNext: 330, fixedTime: "22:30" })], { meetingTime: "14:00" });
+    expect(calcDayLoad(last, {}).totalMinutes).toBe(30 + 120 + 20 + 70 + 40 + 40); // 호텔→첫 장소 30분 포함, 비행 120+330분은 뺀다
+    expect(calcDayEnd(last, {})).toMatchObject({ isLate: false });
   });
 });

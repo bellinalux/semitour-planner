@@ -1,6 +1,7 @@
 import { refitDay } from "@/lib/dayBalance";
 import { morningMeeting, parseClock } from "@/lib/dayLoad";
 import { isBreakfastItem, isHotelBreakfast } from "@/lib/documents";
+import { liftBreakfast } from "@/lib/dayTidy";
 import { stripMealPads } from "@/lib/mealTiming";
 import type { DayPlan, ItineraryItem } from "@/types";
 
@@ -65,8 +66,9 @@ export function dayStructureIssues(day: DayPlan): string[] {
 /** 구성 문제를 한 번에 고친다 — 조식 빼기, 자유시간 합치기, 오전 자유 뒤 미팅, 식사 시간대 다시 맞추기. 고칠 게 없으면 같은 객체 */
 export function fixDayStructure(day: DayPlan): DayPlan {
   if (dayStructureIssues(day).length === 0) return day;
-  const clean = (list: ItineraryItem[], pads: boolean) => mergeFreeRuns((pads ? stripMealPads(list) : list).filter((i) => !isHotelBreakfast(i)));
-  const next: DayPlan = { ...day, items: clean(day.items, day.kind === "linear"), amGuided: clean(day.amGuided, false) };
+  const clean = (list: ItineraryItem[], pads: boolean) => mergeFreeRuns(pads ? stripMealPads(list) : list);
+  const lifted = liftBreakfast(day);
+  const next: DayPlan = { ...lifted, items: clean(lifted.items, day.kind === "linear"), amGuided: clean(lifted.amGuided, false) };
   if (earlyMeeting(day)) delete next.meetingTime;
   return day.kind === "linear" ? refitDay(next) : next;
 }

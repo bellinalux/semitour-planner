@@ -4,6 +4,8 @@ import { isSupportedCourseFile, MAX_COURSE_FILE_BYTES } from "@/lib/courseFile";
 import { roundMinutes } from "@/lib/format";
 import { applyFlightWithMeals, looksLikeFlightItem } from "@/lib/flightApply";
 import { clampMealStay, enforceMealWindows } from "@/lib/mealTiming";
+import { dayTourStart } from "@/lib/dayLoad";
+import { tidyDay } from "@/lib/dayTidy";
 import type { CourseMeta, DayPlan, FlightOption, ItineraryItem } from "@/types";
 
 /** ---------- 클라이언트 → 서버 요청 ---------- */
@@ -347,15 +349,17 @@ export function toCoursePlan(parsed: ParsedCourse): {
 } {
   const rawDays: DayPlan[] = parsed.days.map((day, index) => {
     const dayNo = index + 1;
-    return {
+    // 호텔 조식 줄은 빼고(이동 시간은 살려서), 오전 자유인 날은 미팅 뒤 시각으로 식사 시간대를 맞춘다
+    const base = tidyDay({
       day: dayNo,
       theme: day.title.trim(),
       kind: "linear",
       overnightCity: day.overnightCity.trim(),
       amGuided: [],
       pmFreeOptions: [],
-      items: enforceMealWindows(day.items.map((item, i) => toItem(item, `d${dayNo}-i${i + 1}`))),
-    };
+      items: day.items.map((item, i) => toItem(item, `d${dayNo}-i${i + 1}`)),
+    });
+    return { ...base, items: enforceMealWindows(base.items, dayTourStart(base)) };
   });
 
   // 원문에 항공편 시각이 있으면: 비행 항목의 이동 시간 = 출발→도착(현지 시각 차이), 그날 일정은 출발 시각에 맞춰 시작
