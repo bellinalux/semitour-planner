@@ -1,4 +1,5 @@
 import { refitDay } from "@/lib/dayBalance";
+import { tidyDay } from "@/lib/dayTidy";
 import { item, linearDay } from "./fixtures";
 
 /** 회귀 시나리오 — 실제로 올라온 상품 모양을 본뜬 일정 (자동 기능이 새 불가능 시간을 만들지 않는지 본다) */
@@ -115,3 +116,31 @@ export const macauTrip = () =>
       item("out", { type: "flight", name: "마카오 출발", fixedTime: "18:30", stayMinutes: 0, travelMinutesToNext: 180 }),
     ], { overnightCity: "", meetingTime: "09:30" }),
   ].map(refitDay);
+
+// AI가 만든 다낭 3일 모양 — 식당은 이름만(끼니 글자 없음), 관광지는 유형 없음, 항공 없음 (앱이 정리한 뒤)
+export const aiDanangTrip = () =>
+  [
+    linearDay(1, [
+      item("d1a", { type: undefined, name: "다낭 대성당 (핑크성당)", stayMinutes: 40, travelMinutesToNext: 20 }),
+      item("d1m", { type: "meal", name: "마담란 (Madame Lan)", cuisine: "현지식", stayMinutes: 80, travelMinutesToNext: 30, mealCost: 20000 }),
+      item("d1b", { type: undefined, name: "손짜반도 린응사", stayMinutes: 80, travelMinutesToNext: 20 }),
+      item("d1c", { type: undefined, name: "미케 비치", stayMinutes: 60, travelMinutesToNext: 20 }),
+      item("d1d", { type: "meal", name: "목식당 (Hai San Moc Quan)", cuisine: "씨푸드", stayMinutes: 80, mealCost: 35000 }),
+    ], { meetingTime: "08:30", hotelLeadMinutes: 30 }),
+    linearDay(2, [
+      item("d2a", { type: undefined, name: "썬월드 바나힐 & 골든 브릿지", stayMinutes: 150, travelMinutesToNext: 10, entryFee: 50000 }),
+      item("d2m", { type: "meal", name: "아라팡 뷔페", cuisine: "뷔페", stayMinutes: 80, travelMinutesToNext: 10, mealCost: 22000 }),
+      item("d2b", { type: undefined, name: "바나힐 판타지 파크", stayMinutes: 110, travelMinutesToNext: 50 }),
+      item("d2c", { type: "meal", name: "콩카페 1호점", cuisine: "카페", stayMinutes: 50, travelMinutesToNext: 20, mealCost: 5000 }),
+      item("d2d", { type: "shopping", name: "롯데마트 다낭점", stayMinutes: 60, travelMinutesToNext: 20 }),
+      item("d2e", { type: "meal", name: "벱꾸온 (Bep Cuon)", cuisine: "현지식", stayMinutes: 80, mealCost: 20000 }),
+    ], { meetingTime: "08:30" }),
+    linearDay(3, [
+      item("d3a", { type: undefined, name: "오행산 (마블마운틴)", stayMinutes: 80, travelMinutesToNext: 30 }),
+      item("d3b", { type: undefined, name: "깜탄 코코넛 마을 바구니배", stayMinutes: 60, travelMinutesToNext: 20 }),
+      item("d3m", { type: "meal", name: "모닝글로리", cuisine: "현지식", stayMinutes: 80, travelMinutesToNext: 10, mealCost: 20000 }),
+      item("d3c", { type: undefined, name: "호이안 올드타운", stayMinutes: 120, travelMinutesToNext: 10 }),
+      item("d3d", { type: "meal", name: "미쓰리 (Miss Ly)", cuisine: "현지식", stayMinutes: 70, travelMinutesToNext: 10, mealCost: 22000 }),
+      item("d3e", { type: undefined, name: "호이안 투본강 소원배 & 야시장", stayMinutes: 80 }),
+    ], { meetingTime: "08:30" }),
+  ].map((d) => refitDay(tidyDay(d)));

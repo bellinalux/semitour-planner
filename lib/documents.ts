@@ -79,6 +79,7 @@ function slotOf(item: ItineraryItem): MealSlot {
  * 하루 이동·체류 시간 합계(일정 과부하 판단)에는 넣지 않는다.
  */
 export function isBreakfastItem(item: ItineraryItem): boolean {
+  if (item.mealSlot) return item.mealSlot === "breakfast" && looksLikeMeal(item);
   return looksLikeMeal(item) && BREAKFAST.test(item.name);
 }
 
@@ -116,9 +117,12 @@ export function dayMeals(
   const items = dayItems(day, pmChoice).filter(looksLikeMeal);
   const rest: ItineraryItem[] = [];
   for (const item of items) {
-    if (DINNER.test(item.name)) meals.dinner = slotOf(item);
-    else if (LUNCH.test(item.name)) meals.lunch = slotOf(item);
-    else if (BREAKFAST.test(item.name)) meals.breakfast = slotOf(item);
+    // 식사 구분이 있으면 그대로 (카페·디저트는 조·중·석 칸에 넣지 않는다)
+    const slot = item.mealSlot;
+    if (slot === "cafe") continue;
+    if (slot === "dinner" || (!slot && DINNER.test(item.name))) meals.dinner = slotOf(item);
+    else if (slot === "lunch" || (!slot && LUNCH.test(item.name))) meals.lunch = slotOf(item);
+    else if (slot === "breakfast" || (!slot && BREAKFAST.test(item.name))) meals.breakfast = slotOf(item);
     else rest.push(item);
   }
   for (const item of rest) {

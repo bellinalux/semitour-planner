@@ -2,7 +2,7 @@ import { REST_LABEL } from "@/lib/pace";
 import { dayMealIssues, fitCourse } from "@/lib/courseFit";
 import { dayStructureIssues, fixDayStructure } from "@/lib/dayStructure";
 import { dayRuleIssues, ruleDayEnd } from "@/lib/packageRules";
-import { dayHardIssues, dayWindow, fixImpossible } from "@/lib/feasibility";
+import { dayHardIssues, dayWindow, fixImpossible, untimedIds } from "@/lib/feasibility";
 import { diffText, zoneOf, zonesOfDay } from "@/lib/timezone";
 import { refitDay } from "@/lib/dayBalance";
 import { PackageRulesContext } from "../PackageRulesPanel";
@@ -125,6 +125,8 @@ export function DayCard({
   const dayWin = dayWindow(plan, pmChoiceForDay, rules?.dayEnd);
   // 시각의 나라 — 항공이 있는 날은 항목마다(출발 전·도착 뒤), 없는 날은 머리에 현지 시각 안내
   const hasFlight = plan.items.some((i) => i.type === "flight");
+  // 항공 시각을 모르는 날은 항공·공항 쪽 시각을 비운다
+  const untimed = untimedIds(plan, pmChoiceForDay);
   const zones = zonesOfDay(plan, dayItems(plan, pmChoiceForDay), destination);
   const korea = zoneOf("한국")!;
   const localZone = zoneOf(`${plan.overnightCity ?? ""} ${destination}`);
@@ -426,7 +428,8 @@ export function DayCard({
                   item={item}
                   order={index + 1}
                   isLast={index === plan.items.length - 1}
-                  timing={timings.get(item.id)}
+                  timing={untimed.has(item.id) ? undefined : timings.get(item.id)}
+                  untimed={untimed.has(item.id)}
                   zone={hasFlight ? zones.get(item.id)?.country : undefined}
                   nextIsFlight={plan.items[index + 1]?.type === "flight"}
                   beforeMeeting={morningFree.includes(item) ? { last: item === morningFree[morningFree.length - 1], meeting: meetingTime, lead } : undefined}

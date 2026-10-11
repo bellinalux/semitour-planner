@@ -12,7 +12,8 @@ import type { DayPlan, OperatingModel, ProductTier, TravelType } from "@/types";
 import { flight, input } from "./fixtures";
 import { applyFlightWithMeals } from "@/lib/flightApply";
 import { renameOrigin } from "@/lib/flightOrigin";
-import { danangTrip, macauTrip, pattayaTrip } from "./scenarioFixtures";
+import { aiDanangTrip, danangTrip, macauTrip, pattayaTrip } from "./scenarioFixtures";
+import { restructurePlans } from "@/lib/restructure";
 
 /**
  * 회귀 시나리오 — 실제 상품 모양에 자동 기능을 하나씩 다 돌려, 새 불가능 시간(새벽 도착일 관광·운영 시간 밖·
@@ -22,6 +23,7 @@ const SCENARIOS: { name: string; days: () => DayPlan[]; destination: string; day
   { name: "파타야·방콕 4박6일 (새벽 도착)", days: pattayaTrip, destination: "파타야, 방콕", dayEnd: "21:30", depart: "20:30" },
   { name: "다낭 3박5일 (오전 도착·새벽 귀국)", days: danangTrip, destination: "다낭", dayEnd: "21:30", depart: "07:00" },
   { name: "마카오 2박3일 (오후 도착·저녁 출국)", days: macauTrip, destination: "마카오", dayEnd: "21:30", depart: "10:15" },
+  { name: "AI 다낭 3일 (이름만 있는 식당·유형 없음)", days: aiDanangTrip, destination: "다낭", dayEnd: "21:30", depart: "07:00" },
 ];
 
 const PRODUCTS: { model: OperatingModel; tier: ProductTier; travelType: TravelType }[] = [
@@ -71,6 +73,13 @@ for (const s of SCENARIOS) {
       const f = flight({ departAirport: "인천(ICN)", departTime: s.depart, arriveAirport: "", arriveTime: "", returnDepartAirport: "", returnDepartTime: "" });
       expectNoNew(applyFlightWithMeals(base, f), "항공편 적용");
       expectNoNew(renameOrigin(base, "인천"), "출발지 맞추기");
+    });
+
+    it("전체 일정 재구성 변경안 (균형·여유·알찬)", () => {
+      for (const p of PRODUCTS) {
+        const inp = input({ destination: s.destination, operatingModel: p.model, productTier: p.tier, travelType: p.travelType });
+        for (const plan of restructurePlans(base, {}, packageRules(inp))) expectNoNew(plan.days, `재구성 ${plan.label} (${p.model}·${p.tier})`);
+      }
     });
 
     it("휴무일 옮기기·인기 장소 넣기", () => {

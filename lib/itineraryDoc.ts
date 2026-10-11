@@ -6,6 +6,8 @@ import { formatDuration } from "@/lib/format";
 import { gradeText } from "@/lib/itemTypes";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { isMealFiller } from "@/lib/mealTiming";
+import { untimedIds } from "@/lib/feasibility";
+import { mealSlotOf } from "@/lib/mealSlot";
 import type { CourseMeta, DayPlan, ItineraryItem, QuoteData, TourOption, TripInput } from "@/types";
 
 /**
@@ -58,15 +60,22 @@ const SHOW_TIME = /공연|쇼|show|크루즈|야경|분수|불꽃|퍼레이드|�
 export function showsTime(item: ItineraryItem, index: number): boolean {
   if (index === 0) return true;
   if (item.type === "flight") return true;
-  if (item.type === "meal" && !isBreakfastItem(item) && /점심|중식|저녁|석식|런치|디너|lunch|dinner/i.test(`${item.name} ${item.description}`)) return true;
+  if (item.type === "meal" && !isBreakfastItem(item)) {
+    const slot = mealSlotOf(item);
+    if (slot === "lunch" || slot === "dinner") return true;
+  }
   return Boolean(item.timeNote) || SHOW_TIME.test(item.name);
 }
 
-/** 관광·체험 소요 표기 (식사·숙소·항공·이동·자유시간은 표기하지 않는다) */
+/** 소요 표기 — 관광·체험·마사지·쇼핑·자유시간·호텔 휴식(낮). 식사·항공은 쓰지 않는다. 차량 이동 줄은 이동 시간까지 */
 export function stayText(item: ItineraryItem): string {
   if (item.timeNote) return item.timeNote;
   const t = item.type ?? "sightseeing";
-  if (!["sightseeing", "experience", "massage", "shopping"].includes(t) || item.stayMinutes <= 0) return "";
+  if (t === "transfer") {
+    const m = Math.max(0, item.stayMinutes) + Math.max(0, item.travelMinutesToNext ?? 0);
+    return m > 0 ? `약 ${formatDuration(m)}` : "";
+  }
+  if (!["sightseeing", "experience", "massage", "shopping", "free_time", "hotel"].includes(t) || item.stayMinutes <= 0) return "";
   return `약 ${formatDuration(item.stayMinutes)}`;
 }
 
@@ -94,11 +103,16 @@ export interface DocRow {
  * 그날 표에 들어갈 줄 — 항공·관광·식사·숙소는 항목 줄, 이동(transfer)과 장소 사이 이동 시간은 연결 줄.
  * 식사 시간 맞춤 자유시간(앱이 넣은 것)은 고객 일정표에 넣지 않는다.
  */
-export function docRows(items: ItineraryItem[], vehicle: boolean): DocRow[] {
+export function docRows(items: ItineraryItem[], vehicle: boolean, leadTransferAsItem = false): DocRow[] {
   const how = vehicle ? "전용차량" : "이동";
   const rows: DocRow[] = [];
   items.forEach((it, i) => {
     if (isMealFiller(it)) return;
+    // 그날 첫 줄이 차량 이동이면 항목 줄로 — "호텔 조식 후 방콕으로 이동 (약 2시간 30분)" (업계 표기)
+    if (it.type === "transfer" && leadTransferAsItem && rows.length === 0 && items.slice(0, i).every((x) => isMealFiller(x) || isBreakfastItem(x))) {
+      rows.push({ kind: "item", item: it });
+      return;
+    }
     if (it.type === "transfer") {
       const m = Math.max(0, it.stayMinutes) + Math.max(0, it.travelMinutesToNext ?? 0);
       rows.push({ kind: "move", text: `${it.name}${m > 0 ? ` (약 ${formatDuration(m)})` : ""}`, minutes: m, moveName: it.name });
@@ -266,6 +280,10 @@ export function dayTable(
   }
   const rows: DayTableRow[] = [];
   let first = true;
+  // 항공 시각을 모르는 날은 항공·공항 쪽 줄에 시각을 쓰지 않는다 (지어내지 않는다)
+  const untimed = untimedIds(day, pmChoice);
+  // 가는 편: 출발 3시간 전 공항 집결 (업계 일정표 첫 줄)
+  if (index === 0 && flat.find((i) => !isBreakfastItem(i))?.type === "flight") rows.push({ key: "airport-meet", kind: "label", label: "공항 집결·탑승 수속 (출발 3시간 전)", ...blank });
   // 호텔에서 미팅하고 첫 장소로 이동하는 날: 미팅 줄 + 이동 줄을 먼저 (첫 장소 시각 = 미팅 + 이동)
   const lead = hotelLeadMinutes(day);
   // 오전 자유(조식 뒤 자유시간 → 미팅)인 날은 미팅 시각을 앱이 정한다 (자유시간 뒤, 점심이면 11:30 도착)
@@ -285,10 +303,10 @@ export function dayTable(
     if (lead > 0) rows.push({ key: "meeting-move", kind: "move", minutes: lead, ...blank });
     first = false;
   }
-  for (const block of blocks) {
+  for (const [bi, block] of blocks.entries()) {
     if (block.label) rows.push({ key: `b-${block.label}`, kind: "label", label: block.label, ...blank });
     let afterMorningFree = false;
-    for (const [n, r] of docRows(block.items, opts.vehicle).entries()) {
+    for (const [n, r] of docRows(block.items, opts.vehicle, bi === 0 && !flightDay).entries()) {
       // 오전 자유 줄(위에 이미 씀)과 그 뒤 이동 줄(미팅 이동 줄로 대신)은 건너뛴다
       if (r.kind === "item" && r.item && morningFree.includes(r.item)) {
         afterMorningFree = true;
@@ -313,10 +331,10 @@ export function dayTable(
         kind: "item",
         item: it,
         transport,
-        start: t?.start ?? "",
-        end: t?.end ?? "",
+        start: untimed.has(it.id) ? "" : (t?.start ?? ""),
+        end: untimed.has(it.id) ? "" : (t?.end ?? ""),
         // 미팅 시각을 모르는 날은 첫 장소 시각도 적지 않는다 (기본 08:00 기준이라 맞지 않을 수 있다)
-        keyTime: (lead > 0 || morningFree.length > 0) && idx === firstTour ? meetingKnown : showsTime(it, idx),
+        keyTime: untimed.has(it.id) ? false : (lead > 0 || morningFree.length > 0) && idx === firstTour ? meetingKnown : showsTime(it, idx),
         afterBreakfast: first && !day.meetingTime?.trim() && it.type !== "flight",
         returnFlight: lastDay && it.type === "flight",
       });
@@ -324,7 +342,7 @@ export function dayTable(
     }
   }
   // 일찍 끝나는 날 — 남은 오후는 자유시간으로 (호텔 줄 앞에)
-  const rest = restAfter(days, index, pmChoice, timings);
+  const rest = untimed.size > 0 ? null : restAfter(days, index, pmChoice, timings);
   if (rest) {
     const lastItem = [...rows].reverse().find((r) => r.kind === "item" && r.item?.type !== "hotel");
     const start = lastItem?.end ?? "";

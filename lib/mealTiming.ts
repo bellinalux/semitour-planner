@@ -1,3 +1,4 @@
+import { mealSlotOf } from "@/lib/mealSlot";
 import { clockMinutes, DEFAULT_MEETING_TIME, morningFreeItems, snapUp } from "@/lib/dayLoad";
 import { isBreakfastItem } from "@/lib/documents";
 import { openWindow } from "@/lib/feasibility";
@@ -10,9 +11,9 @@ const DINNER_WINDOW_START = "18:00";
 /** 조식은 계산에서 빠지므로(투어 시작 전) 다루지 않는다. 중식·석식만 시간대를 확인한다. */
 function mealWindowStart(item: ItineraryItem): string | null {
   if (item.type !== "meal" || isBreakfastItem(item)) return null;
-  const text = `${item.name} ${item.description ?? ""}`;
-  if (/중식|점심|런치|lunch/i.test(text)) return LUNCH_WINDOW_START;
-  if (/석식|저녁|디너|dinner/i.test(text)) return DINNER_WINDOW_START;
+  const slot = mealSlotOf(item);
+  if (slot === "lunch") return LUNCH_WINDOW_START;
+  if (slot === "dinner") return DINNER_WINDOW_START;
   return null;
 }
 

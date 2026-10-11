@@ -1,8 +1,9 @@
+import { mealSlotOf } from "@/lib/mealSlot";
 import { calcDayEnd, dayMeetingTime, DEFAULT_MEETING_TIME, formatClock, morningFreeItems, parseClock, walkTimeline, dayTourStart } from "@/lib/dayLoad";
 import { dayIntensity } from "@/lib/intensity";
 import { refitDay } from "@/lib/dayBalance";
 import { fixDayStructure } from "@/lib/dayStructure";
-import { dayWindow, fixImpossible } from "@/lib/feasibility";
+import { dayWindow, fixImpossible, flightTimeKnown } from "@/lib/feasibility";
 import { originMismatch } from "@/lib/flightOrigin";
 import { recalcFlights } from "@/lib/timezone";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
@@ -266,7 +267,6 @@ const isFlightDay = (d: DayPlan) => d.items.some((i) => i.type === "flight");
 const startsWithFlight = (d: DayPlan) => (d.kind === "semi" ? d.amGuided : d.items).find((i) => !/조식/.test(i.name))?.type === "flight";
 const range = ([a, b]: [number, number]) => (a === b ? `${a}곳` : `${a}~${b}곳`);
 const DINNER_NAME = /석식|저녁|디너|dinner/i;
-const LUNCH_NAME_ = /중식|점심|런치|lunch/i;
 
 /** 그날 규칙 점검 (일정 카드 "이 날 확인할 것") */
 export function dayRuleIssues(days: DayPlan[], index: number, pmChoice: PmChoice, r: PackageRules): string[] {
@@ -302,8 +302,9 @@ export function dayRuleIssues(days: DayPlan[], index: number, pmChoice: PmChoice
     for (const s of slots) {
       const name = s.item.name;
       if (s.item.type === "flight" || s.item.type === "transfer") continue;
-      if (DINNER_NAME.test(name) && s.start < 17 * 60) out.push(`${name}이 ${formatClock(s.start)} 시작 — 석식은 18:00~20:00 (디너 크루즈는 보통 저녁 출항, 실제 시각 확인)`);
-      else if (s.item.type === "meal" && LUNCH_NAME_.test(name) && s.start < 11 * 60) out.push(`${name}이 ${formatClock(s.start)} 시작 — 중식은 11:30~13:30`);
+      const slot = mealSlotOf(s.item);
+      if ((slot === "dinner" || (!slot && DINNER_NAME.test(name))) && s.start < 17 * 60) out.push(`${name}이 ${formatClock(s.start)} 시작 — 석식은 18:00~20:00 (디너 크루즈는 보통 저녁 출항, 실제 시각 확인)`);
+      else if (s.item.type === "meal" && slot === "lunch" && s.start < 11 * 60) out.push(`${name}이 ${formatClock(s.start)} 시작 — 중식은 11:30~13:30`);
     }
   }
   // 쇼핑센터: 하루 1회, 첫날·출국 직전 피함
@@ -311,7 +312,7 @@ export function dayRuleIssues(days: DayPlan[], index: number, pmChoice: PmChoice
   if (shops.length > 1) out.push(`쇼핑센터 하루 ${shops.length}회 — 하루 1회 이내`);
   if (shops.length > 0 && (index === 0 || (index === days.length - 1 && isFlightDay(day)))) out.push(`${index === 0 ? "첫날" : "출국일"} 쇼핑센터(${shops[0].name}) — 첫날·출국 직전은 피합니다`);
   // 호텔 체크인 15:00 전 도착 (항공으로 도착한 날)
-  if (isFlightDay(day)) {
+  if (isFlightDay(day) && flightTimeKnown(day)) {
     const slots = walkTimeline(items, dayTourStart(day));
     const hotel = slots.find((s) => s.item.type === "hotel" && /체크인/.test(s.item.name));
     const checkIn = parseClock(r.checkIn) ?? 900;

@@ -41,6 +41,7 @@ function kindOf(i: ItineraryItem): EngineDayRequest["places"][number]["kind"] {
 }
 /** 식사 종류 — 점심·저녁은 시간대를 지키고 카페·간식은 시간대가 없다. "식사"만 적혀 있으면 일정표 시각(15시 전후)으로 정한다 */
 function mealKind(i: ItineraryItem, start: number | undefined): "lunch" | "dinner" | "cafe" {
+  if (i.mealSlot) return i.mealSlot === "lunch" || i.mealSlot === "dinner" ? i.mealSlot : "cafe";
   const text = `${i.name} ${i.description ?? ""}`;
   if (/점심|중식|런치|lunch/i.test(text)) return "lunch";
   if (/저녁|석식|디너|dinner/i.test(text)) return "dinner";

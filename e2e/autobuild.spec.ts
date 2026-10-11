@@ -17,7 +17,8 @@ test("자동 구성: 판매가에서 시작 → 코스·예산 안 숙소·견�
 
   // 입력 화면 아래의 주 버튼으로 시작한다
   await page.getByRole("button", { name: "자동 구성", exact: true }).click();
-  await expect(page.getByText("09:00 – 09:50")).toBeVisible({ timeout: 30_000 });
+  // 항공 없이 만든 AI 일정의 첫날 — 09:00 미팅 + 호텔에서 30분
+  await expect(page.locator("#day-1").getByText("09:30 – 10:20")).toBeVisible({ timeout: 30_000 });
 
   // 숙소: 원가 예산에서 나온 1실 1박 상한 안에서 고른다 (비싼 호텔은 상한 밖)
   await expect(page.getByText(/알맞은 호텔 \(1실 1박 상한/)).toBeVisible({ timeout: 30_000 });

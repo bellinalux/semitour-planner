@@ -1,3 +1,4 @@
+import { mealSlotOf } from "@/lib/mealSlot";
 import { isBreakfastItem } from "@/lib/documents";
 import { dayTourStart, formatClock, morningFreeItems, parseClock, walkTimeline, type TimelineSlot } from "@/lib/dayLoad";
 import { dayItems, type PmChoice } from "@/lib/itinerary";
@@ -82,7 +83,7 @@ export function dayWindow(day: DayPlan, pmChoice: PmChoice, dayEnd = "19:00"): D
       k--;
     }
     if (k >= 0) toAirport += Math.max(0, slots[k].item.travelMinutesToNext ?? 0);
-    const latest = dep - 180 - toAirport;
+    const latest = flightTimeKnown(day) ? dep - 180 - toAirport : Number.POSITIVE_INFINITY;
     return { kind: "departure", start: startStd, end: Math.min(Math.max(endStd, 22 * 60), latest), acceptsMoves: false, note: `출국일 (${formatClock(dep)} 출발 — 공항 3시간 전 도착)` };
   }
   if (day.rest) return { kind: "rest", start: startStd, end: endStd, acceptsMoves: false, note: "일부러 쉬게 둔 날" };
@@ -98,6 +99,43 @@ export function clockRoom(day: DayPlan, pmChoice: PmChoice, dayEnd = "19:00"): n
   const last = [...slots].reverse().find((s) => s.item.type !== "hotel" && s.item.type !== "transfer");
   const free = items.filter((i) => i.type === "free_time").reduce((s, i) => s + Math.max(0, i.stayMinutes), 0);
   return Math.max(0, w.end - (last ? last.end : w.start) + free);
+}
+
+/* ── 항공 시각 미정 ── */
+
+/** 그날 항공 시각을 아는가 — 원문 시각, 적용한 항공편(설명의 "HH:mm 출발/도착"), 확인된 비행 정보 */
+export function flightTimeKnown(day: DayPlan): boolean {
+  const flights = day.items.filter((i) => i.type === "flight");
+  if (flights.length === 0) return true;
+  return flights.some((f) => f.fixedTime || f.flightInfo?.estimated === false || /\d{1,2}:\d{2}\s*(출발|도착)/.test(f.description ?? ""));
+}
+
+/**
+ * 항공 시각을 모르는 날, 시각을 찍으면 안 되는 항목 — 도착 쪽(항공 ~ 첫 관광 전)과 출국 쪽(마지막 관광 뒤 ~ 항공).
+ * 업계 일정표는 모르는 항공 시각을 지어내지 않는다. 관광이 없으면 그날 전부.
+ */
+export function untimedIds(day: DayPlan, pmChoice: PmChoice): Set<string> {
+  const out = new Set<string>();
+  if (flightTimeKnown(day)) return out;
+  const items = dayItems(day, pmChoice).filter((i) => !isBreakfastItem(i));
+  const tour = items.map((i, k) => (isTourItem(i) ? k : -1)).filter((k) => k >= 0);
+  if (tour.length === 0) {
+    for (const i of items) out.add(i.id);
+    return out;
+  }
+  if (items[0]?.type === "flight") for (const i of items.slice(0, tour[0])) out.add(i.id);
+  const after = items.slice(tour[tour.length - 1] + 1);
+  if (after.some((i) => i.type === "flight")) for (const i of after) out.add(i.id);
+  return out;
+}
+
+/** 시각이 정해진 교통편 — 기차는 20분, 배·페리는 30분, 국내선·국제선 환승은 60분 전 도착 */
+export function rideKind(it: ItineraryItem): { label: string; before: number } | null {
+  const t = `${it.name} ${it.description ?? ""}`;
+  if (/국내선|국내\s*항공|환승/.test(t)) return { label: "국내선", before: 60 };
+  if (/페리|배편|선박|여객선|크루즈선|보트\s*이동/.test(t)) return { label: "배", before: 30 };
+  if (/기차|열차|KTX|TGV|ICE|신칸센|고속철|유로스타|이탈로|트렌이탈리아|SRT/i.test(t)) return { label: "기차", before: 20 };
+  return null;
 }
 
 /* ── ② 운영 시간 ── */
@@ -143,12 +181,10 @@ export interface HardIssue {
   key: string;
   day: number;
   itemId: string;
-  kind: "window" | "open" | "meal" | "after-checkin" | "after-departure";
+  kind: "window" | "open" | "meal" | "after-checkin" | "after-departure" | "fixed";
   text: string;
 }
 
-const LUNCH = /중식|점심|런치|lunch/i;
-const DINNER = /석식|저녁|디너|dinner/i;
 const fmt = (m: number) => formatClock(mod(m));
 
 /** 그날 불가능 시간 */
@@ -161,8 +197,18 @@ export function dayHardIssues(day: DayPlan, pmChoice: PmChoice, dayEnd = "19:00"
   // 밤 호텔 체크인 시각 (그 뒤 관광은 불가)
   const nightCheckIn = slots.find((s) => s.item.type === "hotel" && /체크인|투숙/.test(s.item.name) && (mod(s.start) >= 21 * 60 || mod(s.start) < 5 * 60));
   const depIdx = w.kind === "departure" ? slots.findIndex((s, i) => s.item.type === "flight" && i > 0) : -1;
+  const tourStart = parseClock(dayTourStart(day)) ?? 0;
   slots.forEach((s, i) => {
     const it = s.item;
+    // 정해진 시각(공연·크루즈 출항·기차) — 앞 일정이 끝나고 도착하는 시각이 늦으면 못 맞춘다
+    if (it.fixedTime && it.type !== "flight") {
+      const fixed = parseClock(it.fixedTime);
+      const prev = slots[i - 1];
+      const arrive = prev ? prev.end + Math.max(0, prev.item.travelMinutesToNext ?? 0) : tourStart;
+      const ride = it.type === "transfer" ? rideKind(it) : null;
+      if (fixed !== null && ride && mod(arrive) > fixed - ride.before) return push(it, "fixed", `${it.name} ${it.fixedTime} 출발 — ${fmt(arrive)} 도착이라 ${ride.label} 출발 ${ride.before}분 전에 닿지 못합니다`);
+      if (fixed !== null && !ride && mod(arrive) > fixed + 10) return push(it, "fixed", `${it.name} 정해진 시각 ${it.fixedTime}에 못 맞춤 — 앞 일정 뒤 ${fmt(arrive)} 도착`);
+    }
     if (!isTourItem(it)) return;
     if (w.kind === "arrival-night") return push(it, "window", `${it.name} — ${w.note}이라 관광할 수 없습니다`);
     if ((w.kind === "arrival-morning" || w.kind === "arrival-afternoon") && s.start < w.start - 5) return push(it, "window", `${it.name} ${fmt(s.start)} — 공항 도착(${w.note}) 전입니다`);
@@ -171,8 +217,9 @@ export function dayHardIssues(day: DayPlan, pmChoice: PmChoice, dayEnd = "19:00"
     if (nightCheckIn && s.start > nightCheckIn.start) return push(it, "after-checkin", `${it.name} — 밤 호텔 체크인(${fmt(nightCheckIn.start)}) 뒤에 있습니다`);
     if (it.type === "meal" && !it.fixedTime) {
       const m = mod(s.start);
-      if (LUNCH.test(it.name) && (m < 10 * 60 + 30 || m > 15 * 60)) return push(it, "meal", `${it.name} ${fmt(s.start)} — 점심으로 볼 수 없는 시각 (보통 11:30~13:30)`);
-      if (DINNER.test(it.name) && (m < 16 * 60 + 30 || m > 22 * 60)) return push(it, "meal", `${it.name} ${fmt(s.start)} — 저녁으로 볼 수 없는 시각 (보통 18:00~20:00)`);
+      const slot = mealSlotOf(it);
+      if (slot === "lunch" && (m < 10 * 60 + 30 || m > 15 * 60)) return push(it, "meal", `${it.name} ${fmt(s.start)} — 점심으로 볼 수 없는 시각 (보통 11:30~13:30)`);
+      if (slot === "dinner" && (m < 16 * 60 + 30 || m > 22 * 60)) return push(it, "meal", `${it.name} ${fmt(s.start)} — 저녁으로 볼 수 없는 시각 (보통 18:00~20:00)`);
       return;
     }
     const ow = openWindow(it);

@@ -29,7 +29,10 @@ const NIGHT = /야경|야시장|야간|분수쇼|나이트|night|공연|쇼\b/i;
 export type MealSlot = "lunch" | "dinner";
 
 export function mealSlotOf(item: ItineraryItem): MealSlot | null {
-  if (item.type !== "meal" || isBreakfastItem(item) || isCafeMeal(item)) return null;
+  if (item.type !== "meal" || isBreakfastItem(item)) return null;
+  // 식사 구분이 있으면 그것 (이름만 있는 식당도 정리할 때 구분이 정해진다)
+  if (item.mealSlot) return item.mealSlot === "lunch" || item.mealSlot === "dinner" ? item.mealSlot : null;
+  if (isCafeMeal(item)) return null;
   const text = `${item.name} ${item.description ?? ""}`;
   if (/석식|저녁|디너|dinner/i.test(text)) return "dinner";
   if (/중식|점심|런치|lunch/i.test(text)) return "lunch";

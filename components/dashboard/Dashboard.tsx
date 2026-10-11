@@ -23,6 +23,7 @@ import { CourseMapPanel } from "./CourseMapPanel";
 import { PacePanel } from "./PacePanel";
 import { LineupPanel } from "./LineupPanel";
 import { PackageRulesContext, PackageRulesPanel } from "./PackageRulesPanel";
+import { RestructurePanel } from "./RestructurePanel";
 import { packageRules } from "@/lib/packageRules";
 import { FreeTimeOptionsPanel } from "./FreeTimeOptionsPanel";
 import { DifferentiationPanel } from "./DifferentiationPanel";
@@ -184,6 +185,7 @@ export function Dashboard({
     <PackageRulesContext.Provider value={rules}>
     <div className="space-y-4 p-4">
       {itinerary.status === "success" && days.length > 0 && <QualityScoreCard input={input} days={days} pmChoice={pmChoice} />}
+      {itinerary.status === "success" && days.length > 0 && <RestructurePanel input={input} rules={rules} days={days} pmChoice={pmChoice} onApplyDays={onProductDays} />}
       <ItineraryPanel
         state={itinerary}
         days={days}

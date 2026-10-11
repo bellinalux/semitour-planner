@@ -45,6 +45,14 @@ const accessibilitySchema = z.object({
 });
 
 const itemSchema = z.object({
+  type: z
+    .enum(["sightseeing", "experience", "meal", "shopping", "massage", "free_time"])
+    .optional()
+    .describe("항목 유형: sightseeing 관광지·명소 / experience 체험·투어·액티비티·공연 / meal 식당·카페 / shopping 쇼핑몰·시장·쇼핑센터 / massage 마사지·스파 / free_time 자유시간"),
+  mealSlot: z
+    .enum(["breakfast", "lunch", "dinner", "cafe", "none"])
+    .optional()
+    .describe("type이 meal이면 끼니: lunch 중식 / dinner 석식 / cafe 카페·디저트·간식 / breakfast 조식(호텔 조식은 넣지 않음). 식사가 아니면 none"),
   name: z.string().describe("명소/식당 이름 (현지에서 검색 가능한 실제 이름)"),
   description: z.string().describe("이 장소에서 하는 활동과 볼거리 1~2문장"),
   stayMinutes: z.number().describe("예상 체류 시간(분)"),
@@ -102,8 +110,9 @@ type RawItem = z.infer<typeof itemSchema>;
 function toItem(raw: RawItem, id: string, isLast: boolean): ItineraryItem {
   return {
     id,
-    // 음식 종류를 적은 항목은 식당 — 유형을 식사로 둔다(코스 엔진의 점심 판단·식대 입력칸·문서의 조중석 표기)
-    ...(raw.cuisine.trim() ? { type: "meal" as const } : {}),
+    // 유형 — 응답에 있으면 그것, 없으면 음식 종류를 적은 항목은 식당 (코스 엔진의 점심 판단·식대 입력칸·문서의 조중석 표기)
+    ...(raw.type ? { type: raw.type } : raw.cuisine.trim() ? { type: "meal" as const } : {}),
+    ...(raw.mealSlot && raw.mealSlot !== "none" && (raw.type === "meal" || raw.cuisine.trim()) ? { mealSlot: raw.mealSlot } : {}),
     name: raw.name.trim(),
     description: raw.description.trim(),
     stayMinutes: roundMinutes(raw.stayMinutes),

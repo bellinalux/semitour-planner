@@ -25,6 +25,8 @@ export type ThemeId =
  * senior: 무리 없는 동선·효도관광 인기 코스 / accessible: 휠체어 이용 편의시설 확인
  */
 export type TravelType = "semi" | "package" | "honeymoon" | "senior" | "accessible";
+/** 식사 구분 — 조식·중식·석식·카페(간식·디저트·바) */
+export type MealSlotKind = "breakfast" | "lunch" | "dinner" | "cafe";
 /** 운영 방식 — 가이드·차량이 얼마나 붙나 (lib/packageRules) */
 export type OperatingModel = "full" | "semi" | "private" | "small_group" | "backpack" | "airtel";
 /** 상품 등급 — 쇼핑·옵션·팁·호텔·식사·여유 (lib/packageRules) */
@@ -510,6 +512,8 @@ export interface ItineraryItem {
   /** 장소 사진 링크·출처 (위키미디어 공용 등 무료 라이선스) — 직접 올린 사진(photo)이 없을 때 쓴다 */
   photoUrl?: string;
   photoCredit?: string;
+  /** 식사 구분 (식사 항목) — 없으면 이름 글자로, 그것도 없으면 일정을 정리할 때 순서·시각으로 정한다 */
+  mealSlot?: MealSlotKind;
   /** 출발 항공 항목의 비행 정보 — 실제 비행시간(분)·시차(분, 도착 − 출발)·추정 여부. 다음까지 이동 = 비행시간 + 시차 */
   flightInfo?: { minutes: number; tzMinutes: number; estimated: boolean };
   /** 식사 시간대에 맞추려고 앱이 이 자유시간에 더한 분 — 다시 맞출 때 먼저 뺀다 (자유시간을 두 줄로 나누지 않으려고) */

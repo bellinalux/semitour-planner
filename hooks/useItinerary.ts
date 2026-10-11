@@ -147,7 +147,11 @@ export function useItinerary() {
       // AI 일정은 패키지 규칙의 미팅 시각으로 (프리미엄·시니어 09:00 등) — 그 시각으로 식사 시간대도 맞춘다
       const tidied = tidyDays(raw.days);
       const rules = packageRules(input, raw.days.map((d) => d.overnightCity ?? ""));
-      const base = input.mode === "ai" ? withRuleMeetings(tidied, rules) : tidied;
+      // 항공 이동일 없이 만든 AI 일정의 첫날은 호텔에서 출발한다 — 호텔 미팅 → 첫 장소 30분 (첫날 0분은 공항 도착일 기준)
+      const fromHotel = input.mode === "ai" && !input.includesFlights && tidied[0] && tidied[0].hotelLeadMinutes === undefined && !tidied[0].items.some((i) => i.type === "flight")
+        ? [{ ...tidied[0], hotelLeadMinutes: 30 }, ...tidied.slice(1)]
+        : tidied;
+      const base = input.mode === "ai" ? withRuleMeetings(fromHotel, rules) : fromHotel;
       const fit = fitCourse(base, { walk: input.mode === "paste" });
       // AI가 만든 일정은 불가능 시간(새벽 도착일 관광·운영 시간 밖 등)을 바로 고친다 — 업체 코스는 원문을 지키고 일정 카드에 빨갛게 보여 준다
       const fitted = tidyDays(fit.days);

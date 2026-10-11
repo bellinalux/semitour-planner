@@ -11,14 +11,17 @@ describe("일정표 표기", () => {
     expect(visitStyle(item("d", { type: "meal", admission: "none" }))).toBe("");
   });
 
-  it("시각은 첫 항목·항공·점심/저녁·공연만, 소요는 관광에만", () => {
+  it("시각은 첫 항목·항공·점심/저녁·공연만, 소요는 관광·자유시간·낮 호텔 휴식·차량 이동에 (식사는 안 씀)", () => {
     expect(showsTime(item("a"), 0)).toBe(true);
     expect(showsTime(item("b"), 2)).toBe(false);
     expect(showsTime(item("c", { type: "meal", name: "점심 딤섬" }), 3)).toBe(true);
     expect(showsTime(item("d", { name: "분수쇼 관람" }), 4)).toBe(true);
     expect(stayText(item("e", { stayMinutes: 90 }))).toBe("약 1시간 30분");
     expect(stayText(item("f", { type: "meal", stayMinutes: 60 }))).toBe("");
-    expect(stayText(item("g", { type: "hotel", stayMinutes: 60 }))).toBe("");
+    expect(stayText(item("g", { type: "hotel", stayMinutes: 60 }))).toBe("약 1시간");
+    expect(stayText(item("h", { type: "hotel", stayMinutes: 0 }))).toBe("");
+    expect(stayText(item("i", { type: "free_time", stayMinutes: 90 }))).toBe("약 1시간 30분");
+    expect(stayText(item("j", { type: "transfer", stayMinutes: 0, travelMinutesToNext: 150 }))).toBe("약 2시간 30분");
   });
 
   it("설명은 첫 문장 한 줄", () => {

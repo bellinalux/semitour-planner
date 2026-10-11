@@ -44,7 +44,7 @@ const MOVED_MEETING = "09:00";
 export const blockMinutes = (items: ItineraryItem[]) => items.reduce((s, i) => s + Math.max(0, i.stayMinutes) + Math.max(0, i.travelMinutesToNext ?? 0), 0);
 
 /** 옮길 묶음 후보 — 구역(timeCheck.area)이 있으면 구역 단위, 없으면 이어진 관광지 묶음 */
-function blocks(items: ItineraryItem[]): ItineraryItem[][] {
+export function blocks(items: ItineraryItem[]): ItineraryItem[][] {
   const out: ItineraryItem[][] = [];
   let cur: ItineraryItem[] = [];
   const flush = () => {

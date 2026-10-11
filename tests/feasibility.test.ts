@@ -114,3 +114,15 @@ describe("전체 검사에서 찾은 계산 문제", () => {
     expect(tripRuleIssues(input({ options: r.options, tipPerPerson: 1 }), r.days, {}, prem).map((i) => i.key)).not.toContain("options-included");
   });
 });
+
+describe("정해진 시각·시각이 정해진 교통편", () => {
+  it("공연·크루즈 정해진 시각에 못 맞추면 불가능 시간, 기차는 20분 전 도착", () => {
+    const show = linearDay(2, [item("a", { stayMinutes: 600, travelMinutesToNext: 30 }), item("s", { type: "experience", name: "알카자 쇼", fixedTime: "18:00", stayMinutes: 70 })], { meetingTime: "09:00" });
+    expect(dayHardIssues(show, {}).map((i) => i.kind)).toContain("fixed");
+    const train = linearDay(3, [item("a", { stayMinutes: 120, travelMinutesToNext: 30 }), item("t", { type: "transfer", name: "피렌체행 기차 (이탈로)", fixedTime: "11:50", stayMinutes: 90 })], { meetingTime: "09:00" });
+    // 09:30 도착 + 2시간 관광 + 30분 이동 = 12:00 역 도착 → 11:50 기차를 못 탄다
+    expect(dayHardIssues(train, {}).find((i) => i.itemId === "t")?.text).toContain("기차 출발 20분 전에 닿지 못합니다");
+    const ok = { ...train, items: train.items.map((i) => (i.id === "t" ? { ...i, fixedTime: "12:40" } : i)) };
+    expect(dayHardIssues(ok, {}).some((i) => i.itemId === "t")).toBe(false);
+  });
+});

@@ -31,6 +31,8 @@ interface Props {
   zone?: string;
   /** 다음 항목도 항공인가 (출발 → 도착 사이만 "비행", 도착 뒤는 지상 이동) */
   nextIsFlight?: boolean;
+  /** 항공 시각을 몰라 시각을 비운 항목 */
+  untimed?: boolean;
   currency: CurrencyCode;
   /** 이 항목이 속한 일차 (추천 옵션을 "선택 옵션"으로 추가할 때 필요) */
   dayNo: number;
@@ -78,6 +80,7 @@ export function TimelineItem({
   beforeMeeting,
   zone,
   nextIsFlight,
+  untimed,
   currency,
   dayNo,
   days,
@@ -119,7 +122,12 @@ export function TimelineItem({
             호텔 조식 후
           </p>
         ) : (
-          timing && (
+          untimed ? (
+            <p className="mb-0.5 text-[11px] font-semibold text-amber-700" title="항공편을 넣으면 실제 시각으로 계산합니다">
+              {zone && <span className="mr-1 rounded bg-amber-50 px-1 text-[10px] font-semibold ring-1 ring-amber-200">{zone}</span>}
+              항공 시각 미정
+            </p>
+          ) : timing && (
             <p className="mb-0.5 text-[11px] font-semibold tabular-nums text-indigo-600" title="오전 미팅 시각부터 계산한 예상 시작·종료 시각 (그 나라 현지 시각)">
               {zone && <span className="mr-1 rounded bg-indigo-50 px-1 text-[10px] font-semibold text-indigo-700 ring-1 ring-indigo-200">{zone}</span>}
               {timeRange(timing)}
@@ -242,6 +250,27 @@ export function TimelineItem({
             <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600" title="원문에 적힌 소요 시간 표기">
               {item.timeNote}
             </span>
+          )}
+          {/* 정해진 시각 — 공연·크루즈 출항·기차·페리처럼 시각이 정해진 것. 앞 일정이 그 시각에 맞춰지고, 못 맞추면 불가능 시간 */}
+          {editing && item.type !== "flight" ? (
+            <label className="inline-flex items-center gap-1 rounded-md bg-slate-100 py-0.5 pl-2 pr-1 text-[11px] font-medium text-slate-600" title="공연·크루즈 출항·기차처럼 시작 시각이 정해져 있으면 넣으세요">
+              정해진 시각
+              <input
+                type="time"
+                value={item.fixedTime ?? ""}
+                aria-label={`${item.name} 정해진 시각`}
+                onChange={(e) => onChangeItem(item.id, { fixedTime: e.target.value || undefined })}
+                className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] tabular-nums text-slate-900"
+              />
+            </label>
+          ) : (
+            item.fixedTime &&
+            item.type !== "flight" && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700 ring-1 ring-violet-200" title="시작 시각이 정해진 일정 — 앞 일정이 이 시각에 맞춰집니다">
+                <Clock className="size-3" aria-hidden />
+                {item.fixedTime} 고정
+              </span>
+            )
           )}
           {/* 체류 시간을 어디서 확인했는지: 구역 확인(하루 순서 통째로) / 장소 확인(장소 하나만) / AI 추정 */}
           {item.timeCheck?.basis === "area" ? (

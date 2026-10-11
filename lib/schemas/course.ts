@@ -65,6 +65,10 @@ const itemSchema = z.object({
     ),
   mealCost: z.number().describe("type이 meal일 때 1인 식대 추정 (요청 통화 단위). 그 외에는 0"),
   cuisine: z.string().describe("type이 meal이면 원문에 적힌(또는 이름으로 짐작되는) 음식 종류를 짧게(예: 현지식, 한식, 중식, 바베큐, 씨푸드, 뷔페). 그 외에는 빈 문자열"),
+  mealSlot: z
+    .enum(["breakfast", "lunch", "dinner", "cafe", "none"])
+    .optional()
+    .describe("type이 meal이면 원문의 끼니: 중식(점심)=lunch, 석식(저녁·디너)=dinner, 카페·디저트·간식·바=cafe, 조식=breakfast. 식사가 아니면 none"),
   paidLocally: z
     .boolean()
     .describe(
@@ -212,6 +216,7 @@ function toItem(raw: ParsedCourse["days"][number]["items"][number], id: string):
     isEstimated: true,
     caution: raw.caution.trim() || undefined,
     cuisine: raw.type === "meal" ? raw.cuisine.trim() || undefined : undefined,
+    ...(raw.type === "meal" && raw.mealSlot && raw.mealSlot !== "none" ? { mealSlot: raw.mealSlot } : {}),
     ...(raw.paidLocally ? { payment: "local" as const } : {}),
   };
 }

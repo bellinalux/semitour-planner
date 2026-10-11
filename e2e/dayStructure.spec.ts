@@ -39,7 +39,7 @@ test("오전 자유 날 — 구성 정리하기로 조식 빼기·자유시간 �
   // 호텔 조식은 불러올 때 이미 빠진다 (일정 정리)
   await expect(day2.getByRole("textbox", { name: "항목 이름" }).filter({ hasText: "호텔 조식" })).toHaveCount(0);
   await expect(day2.getByRole("heading", { name: "호텔 조식" })).toHaveCount(0);
-  await expect(issues).toContainText("자유시간이 연달아");
+  // 식사 맞춤 자유시간은 불러올 때 식사 시간대를 다시 맞추며 이미 풀린다 — 남은 것은 이른 미팅
   await expect(issues).toContainText("11:10 호텔 로비 미팅");
   await day2.getByRole("button", { name: "구성 정리하기" }).click();
 

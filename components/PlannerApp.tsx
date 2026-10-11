@@ -3,6 +3,7 @@
 import { dateOfDay, recalcFlightDay } from "@/lib/timezone";
 import { refitDay } from "@/lib/dayBalance";
 import { newHardIssues } from "@/lib/feasibility";
+import { separateItems, toOptionalTours } from "@/lib/packageRules";
 import { packageRules } from "@/lib/packageRules";
 import { useShowOps } from "@/hooks/useShowOps";
 import { OpsToggle } from "@/components/layout/OpsToggle";
@@ -254,6 +255,19 @@ export function PlannerApp() {
       // 업체 견적서를 읽었으면 우리 시세(견적서 호텔별 숙박·차량·가이드·팁·보험)를 바로 조회해 업체 몫 추정까지 보여 준다
       // 업체 견적서를 읽었으면 한 번에 검증: 시세 → 시간 검증 → 코스 점검 → 타업체 찾기 → 타업체 일정 가져오기
       if (!options.fromAutoBuild) verifyPipeline.start();
+    }
+
+    // 업체 코스의 "별도 진행" 항목(해양 액티비티 등)은 읽는 즉시 선택관광으로 — 현지 별도 결제·미참여 시 대체일정 표기
+    if (input.mode === "paste") {
+      const separate = separateItems(result.days, result.pmChoice);
+      if (separate.length > 0) {
+        const moved = toOptionalTours(result.days, separate.map((s) => s.item.id));
+        itinerary.replaceDays(moved.days);
+        result.days = moved.days;
+        const options = [...nextInput.options.filter((o) => !moved.options.some((x) => x.id === o.id)), ...moved.options];
+        update({ options });
+        nextInput = { ...nextInput, options };
+      }
     }
 
     // 타업체 상품을 자동으로 찾아 비교한다 — 자동 견적이 돌면 그쪽에서 찾으므로 그때는 건너뛴다

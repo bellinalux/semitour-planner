@@ -119,7 +119,8 @@ describe("방콕·파타야 전체 검사에서 찾은 계산 문제", () => {
     const toBkk = tidyDay(linearDay(4, [item("bf", { type: "meal", name: "호텔 조식", travelMinutesToNext: 150 }), item("mv", { type: "transfer", name: "방콕으로 이동", stayMinutes: 0, travelMinutesToNext: 10 }), lunch]));
     expect(toBkk.items[0]).toMatchObject({ id: "mv", stayMinutes: 150 });
     const maeklong = tidyDay(linearDay(5, [item("bf", { type: "meal", name: "호텔 조식", travelMinutesToNext: 70 }), item("mk", { name: "매끌렁 시장" }), lunch]));
-    expect(maeklong.items.map((i) => i.id)).toEqual(["mk", "lunch"]);
+    // (점심 시간대를 맞추는 대기 자유시간은 빼고 본다)
+    expect(maeklong.items.filter((i) => !/-free-\d+$/.test(i.id)).map((i) => i.id)).toEqual(["mk", "lunch"]);
     expect(hotelLeadMinutes(maeklong)).toBe(70);
     expect(computeItemTimings(maeklong.items, dayTourStart(maeklong)).get("mk")?.start).toBe("09:10");
   });

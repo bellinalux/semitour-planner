@@ -7,6 +7,7 @@ import type { PmChoice } from "@/lib/itinerary";
 import { applyPackageRules, applyRuleMeeting, REGION_LABEL, toOptionalTours, tripRuleIssues, type PackageRules } from "@/lib/packageRules";
 import type { TourOption } from "@/types";
 import { renameOrigin } from "@/lib/flightOrigin";
+import { productSummary } from "@/lib/productSummary";
 import type { DayPlan, TripInput } from "@/types";
 
 /** 일정 카드가 그날 규칙 점검·종료 기준에 쓰는 이 상품의 규칙 */
@@ -18,6 +19,7 @@ const OPTION_TEXT: Record<PackageRules["options"], string> = { allowed: "있음 
 export function PackageRulesPanel({ input, rules, days, pmChoice, onApplyDays, onOptions, onInput }: { input: TripInput; rules: PackageRules; days: DayPlan[]; pmChoice: PmChoice; onApplyDays?: (days: DayPlan[]) => void; onOptions?: (options: TourOption[]) => void; onInput?: (patch: Partial<TripInput>) => void }) {
   const issues = tripRuleIssues(input, days, pmChoice, rules);
   const [message, setMessage] = useState("");
+  const summary = productSummary(days, pmChoice, rules);
   const rows: [string, string][] = [
     ["미팅", `${rules.meeting} (${rules.earliestMeeting} 이전 출발 없음)`],
     ...(rules.placesPerDay[1] > 0 ? ([["하루 장소", `${rules.placesPerDay[0] === rules.placesPerDay[1] ? rules.placesPerDay[0] : `${rules.placesPerDay[0]}~${rules.placesPerDay[1]}`}곳 · 첫날 ${rules.firstDayMax}곳 이내`]] as [string, string][]) : []),
@@ -47,6 +49,14 @@ export function PackageRulesPanel({ input, rules, days, pmChoice, onApplyDays, o
         <p className="font-semibold text-slate-800">
           {rules.label} <span className="font-normal text-slate-500">· {REGION_LABEL[rules.region]}</span>
         </p>
+        {/* 상품 요약 — 등급 약속(장소 수·걷기·자유시간·특식·쇼핑)과 맞는지 한눈에 */}
+        <ul aria-label="상품 요약" className="flex flex-wrap gap-1.5">
+          {summary.map((s) => (
+            <li key={s.label} className={`rounded-full px-2 py-0.5 ring-1 ${s.ok ? "bg-slate-50 text-slate-700 ring-slate-200" : "bg-amber-50 text-amber-900 ring-amber-300"}`} title={s.hint}>
+              {s.label} <b className="tabular-nums">{s.value}</b>
+            </li>
+          ))}
+        </ul>
         {onApplyDays && (
           <button
             type="button"
@@ -92,6 +102,19 @@ export function PackageRulesPanel({ input, rules, days, pmChoice, onApplyDays, o
                     className="shrink-0 rounded border border-amber-400 bg-white px-2 py-0.5 font-semibold hover:bg-amber-100"
                   >
                     출발지를 {i.origin.course}(으)로
+                  </button>
+                )}
+                {i.key === "options-alt" && onOptions && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const filled = input.options.map((o) => (!o.alternative?.trim() || /차량\s*대기|버스\s*대기|주변\s*휴식/.test(o.alternative) ? { ...o, alternative: "미참여 시 개인 자유시간 (가이드 미동행) — 집결 시각·장소는 가이드 안내" } : o));
+                      onOptions(filled);
+                      setMessage("선택관광 미참여 시 대체일정 문구를 넣었습니다 (선택관광 칸에서 장소에 맞게 고칠 수 있습니다).");
+                    }}
+                    className="shrink-0 rounded border border-amber-400 bg-white px-2 py-0.5 font-semibold hover:bg-amber-100"
+                  >
+                    대체일정 문구 넣기
                   </button>
                 )}
                 {i.separateIds && onApplyDays && onOptions && (
