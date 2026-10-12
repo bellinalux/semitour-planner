@@ -91,6 +91,17 @@ test("인쇄 일정표에 전체·날짜별 코스 지도(지도 바탕 + 번호
   await expect(doc).toContainText("DAY 1 1.한 시장 2.바나힐");
 });
 
+test("날짜 칸 동선 그림: 펼치면 지도 바탕 위에 방문 순서 번호가 찍힌다", async ({ page }) => {
+  await setup(page);
+  await page.goto("/");
+  const sketch = page.locator("#day-1 details").filter({ has: page.locator("summary", { hasText: "동선 그림" }) });
+  await sketch.locator("summary").click();
+  const map = sketch.locator('figure[aria-label="DAY 1 동선 지도"]');
+  await expect(map.locator("img")).toHaveCount(1);
+  await expect(map.locator("svg circle")).toHaveCount(2);
+  await expect(sketch).toContainText("1.한 시장 → 2.바나힐");
+});
+
 test("고객 웹 일정표: 좌표가 있는 날은 '지도로 보기'를 펼치면 지도가 나온다", async ({ page }) => {
   await setup(page);
   await page.goto("/");

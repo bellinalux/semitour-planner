@@ -18,7 +18,7 @@ let queue: Promise<unknown> = Promise.resolve();
 const cache = new Map<string, Promise<MapShot | null>>();
 
 /** 지도가 다 그려질 때까지 이만큼만 기다린다 (그 뒤에는 좌표 그림으로 대신) */
-const TIMEOUT_MS = 8000;
+const TIMEOUT_MS = 10000;
 
 async function shoot(points: { lat: number; lng: number }[], width: number, height: number): Promise<MapShot | null> {
   if (typeof window === "undefined" || points.length === 0) return null;
@@ -46,12 +46,30 @@ async function shoot(points: { lat: number; lng: number }[], width: number, heig
     });
     const m = map;
     await new Promise<void>((resolve, reject) => {
-      const t = window.setTimeout(() => reject(new Error("timeout")), TIMEOUT_MS);
-      m.once("idle", () => {
-        window.clearTimeout(t);
-        resolve();
-      });
+      const started = Date.now();
+      let settled = false;
+      const finish = (err?: Error) => {
+        if (settled) return;
+        settled = true;
+        window.clearInterval(poll);
+        if (err) reject(err);
+        else resolve();
+      };
+      m.once("idle", () => finish());
+      // 화면 그리기(requestAnimationFrame)가 멈춘 탭·창(뒤에 있는 탭, 그리기를 쉬는 창)에서는 idle이 오지 않는다 —
+      // 직접 다시 그려 타일을 부르고, 다 불러왔으면 끝낸다
+      const poll = window.setInterval(() => {
+        if (Date.now() - started > TIMEOUT_MS) return finish(new Error("timeout"));
+        try {
+          if (!m.isStyleLoaded()) return;
+          m.redraw();
+          if (m.loaded() && m.areTilesLoaded()) finish();
+        } catch {
+          /* 다음 차례에 다시 */
+        }
+      }, 250);
     });
+    m.redraw();
     const url = m.getCanvas().toDataURL("image/png");
     if (!url.startsWith("data:image/png")) return null;
     const xy = points.map((p) => {
