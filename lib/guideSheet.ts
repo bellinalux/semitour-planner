@@ -50,8 +50,12 @@ export const guideSheetSchema = z.object({
         intro: str(400),
         points: z.array(z.object({ title: str(80), text: str(1200) })).max(8),
         cautions: z.array(str(240)).max(8),
-        meetPoint: str(240),
-        mustKnow: z.array(str(200)).max(5),
+        meetPoint: str(400),
+        mustKnow: z.array(str(300)).max(5),
+        /** 영어 원고 (있으면) */
+        en: z
+          .object({ intro: str(700), points: z.array(z.object({ title: str(160), text: str(2000) })).max(8), cautions: z.array(str(400)).max(8), meetPoint: str(400), mustKnow: z.array(str(300)).max(5) })
+          .optional(),
       }),
     )
     .max(80)
@@ -224,6 +228,7 @@ export function attachGuide(sheet: GuideSheet, scripts: GuideScript[], basics: G
       cautions: s.cautions,
       meetPoint: s.site.meetPoint,
       mustKnow: s.mustKnow,
+      ...(s.en ? { en: { intro: s.en.intro, points: s.en.points.map((p) => ({ title: p.title, text: p.text })), cautions: s.en.cautions, meetPoint: s.en.site.meetPoint, mustKnow: s.en.mustKnow } } : {}),
     })),
     tips: (basics?.sections ?? [])
       .filter((b) => b.group !== "상품 원칙" && b.lines.some((l) => l.trim()))

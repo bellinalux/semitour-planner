@@ -1,4 +1,4 @@
-import { BASICS_GROUPS, explainMinutes, stayBreakdown, type GuideBasics, type GuideScript, type Phrase } from "@/lib/guideBook";
+import { BASICS_GROUPS, explainMinutes, scriptIn, stayBreakdown, type GuideBasics, type GuideLang, type GuideScript, type Phrase } from "@/lib/guideBook";
 import type { CompanyProfile } from "@/types";
 import { DocSection, DocShell } from "./DocShell";
 
@@ -19,6 +19,8 @@ interface Props {
   emergency: { label: string; value: string }[];
   principles: string[];
   travelers: number;
+  /** 원고 언어 — 영어면 영어 원고 (없는 곳은 한국어로 두고 표시) */
+  lang?: GuideLang;
 }
 
 const SITE: [keyof GuideScript["site"], string][] = [
@@ -35,8 +37,10 @@ const AUDIENCE: [keyof GuideScript["audience"], string][] = [
   ["couple", "커플"],
 ];
 
-/** 장소 원고 한 장 (인쇄용) */
-function ScriptBlock({ s, travelers }: { s: GuideScript; travelers: number }) {
+/** 장소 원고 한 장 (인쇄용) — 영어로 고르면 영어 원고, 없으면 한국어 원고에 "영어 원고 없음" 표시 */
+function ScriptBlock({ s: base, travelers, lang = "ko" }: { s: GuideScript; travelers: number; lang?: GuideLang }) {
+  const en = lang === "en" ? scriptIn(base, "en") : null;
+  const s = en ?? base;
   const b = stayBreakdown(s, travelers);
   return (
     <div className="mb-3 border-b border-slate-200 pb-3">
@@ -44,6 +48,7 @@ function ScriptBlock({ s, travelers }: { s: GuideScript; travelers: number }) {
         {s.name}
         {s.area && <span className="ml-1.5 text-[10px] font-normal text-slate-500">{s.area}</span>}
         {s.status !== "reviewed" && <span className="ml-1.5 rounded bg-amber-50 px-1 text-[9px] font-semibold text-amber-800 ring-1 ring-amber-200">초안 — 검수 전</span>}
+        {lang === "en" && !en && <span className="ml-1.5 rounded bg-slate-100 px-1 text-[9px] font-semibold text-slate-600">영어 원고 없음 — 한국어</span>}
       </h3>
       <p className="text-[9.5px] tabular-nums text-slate-500" style={{ breakAfter: "avoid" }}>
         설명 짧게 {explainMinutes(s, "short")}분 · 기본 {explainMinutes(s, "basic")}분 · 자세히 {explainMinutes(s, "long")}분 — 체류 구성: 대기 {b.wait} + 설명 {b.explain} + 관람 {b.view} + 집결 {b.gather} = {b.total}분
@@ -98,7 +103,7 @@ function ScriptBlock({ s, travelers }: { s: GuideScript; travelers: number }) {
  * 가이드 해설집 — 상품용(날짜별 장소 원고)과 도시 교육 자료(그 도시 원고 전체) 두 가지.
  * 뒤에 상품 원칙·진행 멘트·기본기·비상 대응·비상 연락·현지 회화를 붙인다. 가격은 넣지 않는다.
  */
-export function GuideBookDoc({ company, title, subtitle, days, scripts, basics, phrases, emergency, principles, travelers }: Props) {
+export function GuideBookDoc({ company, title, subtitle, days, scripts, basics, phrases, emergency, principles, travelers, lang = "ko" }: Props) {
   const missing = (days ?? []).flatMap((d) => d.places.filter((p) => !p.script).map((p) => p.name));
   return (
     <DocShell title={title} subtitle={subtitle} company={company}>
@@ -144,14 +149,14 @@ export function GuideBookDoc({ company, title, subtitle, days, scripts, basics, 
         days.map((d) => (
           <DocSection key={d.label} title={d.label}>
             {d.places.length === 0 && <p className="text-slate-500">설명할 장소가 없는 날 (이동·자유일정)</p>}
-            {d.places.map((p) => (p.script ? <ScriptBlock key={p.name} s={p.script} travelers={travelers} /> : <p key={p.name} className="mb-2 text-slate-500">{p.name} — 원고 없음 (가이드 해설집에서 만드세요)</p>))}
+            {d.places.map((p) => (p.script ? <ScriptBlock key={p.name} s={p.script} travelers={travelers} lang={lang} /> : <p key={p.name} className="mb-2 text-slate-500">{p.name} — 원고 없음 (가이드 해설집에서 만드세요)</p>))}
           </DocSection>
         ))
       ) : (
         <DocSection title={`장소 설명 원고 (${scripts?.length ?? 0}곳)`}>
           {(scripts ?? []).length === 0 && <p className="text-slate-500">아직 원고가 없습니다.</p>}
           {(scripts ?? []).map((s) => (
-            <ScriptBlock key={s.key} s={s} travelers={travelers} />
+            <ScriptBlock key={s.key} s={s} travelers={travelers} lang={lang} />
           ))}
         </DocSection>
       )}

@@ -5,6 +5,7 @@ import { dayRegion, shoppingStops } from "@/lib/itineraryDoc";
 import { knowledgeKey } from "@/lib/knowledge";
 import type { DocProps } from "./DocShell";
 import { GuideBookDoc, type GuideDocDay } from "./GuideBookDoc";
+import { readGuideLang } from "@/lib/guideBookClient";
 
 const NOT_SCRIPT = new Set(["flight", "transfer", "hotel", "free_time", "meal"]);
 
@@ -49,11 +50,12 @@ export function ProductGuideDoc({ input, days, pmChoice, meta, company, quote, t
   ].filter(Boolean);
   const phrases = kits.flatMap((k) => k.phrases).filter((p, i, list) => list.findIndex((x) => x.ko === p.ko && x.local === p.local) === i);
   const places = Object.values(tripPlacesByCity(days, pmChoice, input.destination)).flat().length;
+  const lang = readGuideLang(input.tripScope);
 
   return (
     <GuideBookDoc
       company={company}
-      title="가이드 해설집"
+      title={lang === "en" ? "가이드 해설집 (English)" : "가이드 해설집"}
       subtitle={`${meta?.packageName || input.destination} · ${tripPeriod(input)} · ${quote.travelers}명 · 장소 ${places}곳`}
       days={docDays}
       basics={guide?.basics ?? withDefaultBasics(null)}
@@ -61,6 +63,7 @@ export function ProductGuideDoc({ input, days, pmChoice, meta, company, quote, t
       emergency={emergencyRows(travelInfo, company)}
       principles={principles}
       travelers={quote.travelers}
+      lang={lang}
     />
   );
 }

@@ -13,20 +13,21 @@ const toLines = (v: string) =>
     .filter(Boolean);
 
 /** 원고 고치기 — 저장하면 서버에 남고(고친 사람·날짜), 검수 완료는 따로 누른다 */
-export function ScriptEditor({ script, onSave, onCancel, busy }: { script: GuideScript; onSave: (next: GuideScript) => void; onCancel: () => void; busy?: boolean }) {
+export function ScriptEditor({ script, onSave, onCancel, busy, english = false }: { script: GuideScript; onSave: (next: GuideScript) => void; onCancel: () => void; busy?: boolean; english?: boolean }) {
   const [s, setS] = useState<GuideScript>(script);
   const set = (patch: Partial<GuideScript>) => setS((cur) => ({ ...cur, ...patch }));
 
   return (
     <form
-      aria-label={`${script.name} 원고 고치기`}
+      aria-label={`${script.name} ${english ? "영어 " : ""}원고 고치기`}
       onSubmit={(e) => {
         e.preventDefault();
         onSave(s);
       }}
       className="space-y-3 text-xs"
     >
-      <div className="grid gap-2 sm:grid-cols-[1fr_10rem]">
+      {english && <p className="rounded-md bg-indigo-50 px-2 py-1 text-indigo-900">영어 원고 고치기 — 장소 이름·대기·관람 시간은 한국어 원고와 같이 씁니다.</p>}
+      <div className={`grid gap-2 sm:grid-cols-[1fr_10rem] ${english ? "hidden" : ""}`}>
         <label className="space-y-0.5">
           <span className="font-semibold text-slate-600">장소 이름</span>
           <input value={s.name} onChange={(e) => set({ name: e.target.value })} className={input} required />
@@ -80,7 +81,7 @@ export function ScriptEditor({ script, onSave, onCancel, busy }: { script: Guide
             <input value={s.site[k]} onChange={(e) => set({ site: { ...s.site, [k]: e.target.value } })} className={input} />
           </label>
         ))}
-        <div className="grid grid-cols-2 gap-2">
+        <div className={`grid grid-cols-2 gap-2 ${english ? "hidden" : ""}`}>
           <label className="space-y-0.5">
             <span className="text-slate-500">대기(분)</span>
             <input type="number" min={0} max={240} value={s.waitMin} onChange={(e) => set({ waitMin: Math.max(0, Math.min(240, Math.round(Number(e.target.value) || 0))) })} className={input} />

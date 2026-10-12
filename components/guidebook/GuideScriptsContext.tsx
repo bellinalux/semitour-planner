@@ -12,12 +12,14 @@ export interface GuideScriptsView {
   drafting: string;
   draft: (city: string, name: string) => Promise<void>;
   error: string;
+  /** 원고를 처음 펼칠 때 언어 (국내 = 외국인 손님이면 영어) */
+  lang: "ko" | "en";
 }
 
 export const GuideScriptsContext = createContext<GuideScriptsView | null>(null);
 
 /** 도시들의 원고를 불러 두고, 해설집이 바뀌면(저장·초안·불러오기) 다시 읽는다. 못 불러오면 원고 없이 */
-export function useGuideScripts(cities: string[], travelers: number): GuideScriptsView {
+export function useGuideScripts(cities: string[], travelers: number, lang: "ko" | "en" = "ko"): GuideScriptsView {
   const key = [...new Set(cities.map((c) => c.trim()).filter(Boolean))].sort().join(",");
   const [scripts, setScripts] = useState<GuideScript[]>([]);
   const [drafting, setDrafting] = useState("");
@@ -53,5 +55,5 @@ export function useGuideScripts(cities: string[], travelers: number): GuideScrip
     }
   }, []);
 
-  return useMemo(() => ({ scripts: key ? scripts : [], travelers, drafting, draft, error }), [key, scripts, travelers, drafting, draft, error]);
+  return useMemo(() => ({ scripts: key ? scripts : [], travelers, drafting, draft, error, lang }), [key, scripts, travelers, drafting, draft, error, lang]);
 }

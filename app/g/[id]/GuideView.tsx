@@ -13,13 +13,25 @@ type SheetScript = GuideSheet["scripts"][number];
 const nameKey = (s: string) => s.replace(/\(.*?\)|\[.*?\]/g, "").toLowerCase().replace(/[\s·,.'"\-–_/!?~]/g, "");
 
 /** 일정 줄의 해설 원고 — 눌러서 펼친다 (한 줄 소개·설명 포인트·주의·집결·꼭 외울 것) */
-function RowScript({ s }: { s: SheetScript }) {
+function RowScript({ s: base }: { s: SheetScript }) {
+  const [en, setEn] = useState(false);
+  const s = en && base.en ? { ...base, ...base.en } : base;
   return (
     <details className="mt-1 rounded-md bg-violet-50 px-2 py-1 text-xs text-violet-950">
       <summary className="cursor-pointer font-semibold text-violet-800">
         🎙 해설 원고 {s.minutes}분{s.status === "reviewed" ? "" : " (초안)"}
+        {base.en && " · EN"}
       </summary>
       <div className="mt-1 space-y-1.5 text-slate-800">
+        {base.en && (
+          <div role="radiogroup" aria-label="원고 언어" className="inline-flex rounded border border-violet-200 bg-white p-0.5 text-[11px]">
+            {[false, true].map((v) => (
+              <button key={String(v)} type="button" role="radio" aria-checked={en === v} onClick={() => setEn(v)} className={`rounded px-2 py-0.5 ${en === v ? "bg-violet-600 text-white" : "text-violet-800"}`}>
+                {v ? "English" : "한국어"}
+              </button>
+            ))}
+          </div>
+        )}
         {s.intro && <p className="font-medium">{s.intro}</p>}
         <ol className="space-y-1">
           {s.points.map((p, i) => (

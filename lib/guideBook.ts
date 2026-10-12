@@ -46,6 +46,27 @@ export type GuideDraft = z.infer<typeof guideDraftSchema>;
 
 /* ── 저장 형식 ── */
 
+const siteSchema = z.object({ dropOff: str(400), tickets: str(400), meetPoint: str(400), restroom: str(400), photo: str(400) });
+const emptySite = { dropOff: "", tickets: "", meetPoint: "", restroom: "", photo: "" };
+const emptyAudience = { family: "", senior: "", student: "", couple: "" };
+
+/** 영어 원고 — 한국어 원고(검수한 사실)를 외국인 손님에게 말하는 자연스러운 영어로 다시 쓴 것. 검수는 따로 */
+export const englishScriptSchema = z.object({
+  intro: str(700).default(""),
+  points: z.array(z.object({ title: str(160), text: str(2000), more: str(2000).default("") })).max(8).default([]),
+  site: siteSchema.default(emptySite),
+  cautions: z.array(str(400)).max(8).default([]),
+  faq: z.array(z.object({ q: str(300), a: str(800) })).max(8).default([]),
+  audience: z.object({ family: str(400), senior: str(400), student: str(400), couple: str(400) }).default(emptyAudience),
+  mustKnow: z.array(str(300)).max(5).default([]),
+  status: z.enum(["draft", "reviewed"]).default("draft"),
+  updatedAt: str(40).default(""),
+  updatedBy: str(40).default(""),
+});
+export type EnglishScript = z.infer<typeof englishScriptSchema>;
+export type GuideLang = "ko" | "en";
+export const LANG_LABEL: Record<GuideLang, string> = { ko: "한국어", en: "English" };
+
 export const guideScriptSchema = z.object({
   key: str(80),
   city: str(60),
@@ -53,10 +74,10 @@ export const guideScriptSchema = z.object({
   area: str(60).default(""),
   intro: str(400).default(""),
   points: z.array(z.object({ title: str(80), text: str(1200), more: str(1200).default("") })).max(8).default([]),
-  site: z.object({ dropOff: str(240), tickets: str(240), meetPoint: str(240), restroom: str(240), photo: str(240) }).default({ dropOff: "", tickets: "", meetPoint: "", restroom: "", photo: "" }),
+  site: siteSchema.default(emptySite),
   cautions: z.array(str(240)).max(8).default([]),
   faq: z.array(z.object({ q: str(200), a: str(500) })).max(8).default([]),
-  audience: z.object({ family: str(240), senior: str(240), student: str(240), couple: str(240) }).default({ family: "", senior: "", student: "", couple: "" }),
+  audience: z.object({ family: str(240), senior: str(240), student: str(240), couple: str(240) }).default(emptyAudience),
   viewMin: z.number().int().min(0).max(480).default(30),
   waitMin: z.number().int().min(0).max(240).default(0),
   mustKnow: z.array(str(200)).max(5).default([]),
@@ -64,8 +85,34 @@ export const guideScriptSchema = z.object({
   status: z.enum(["draft", "reviewed"]).default("draft"),
   updatedAt: str(40).default(""),
   updatedBy: str(40).default(""),
+  en: englishScriptSchema.optional(),
 });
 export type GuideScript = z.infer<typeof guideScriptSchema>;
+
+/** 이 언어로 본 원고 (영어 원고가 없으면 null) — 장소 이름·대기·관람 시간은 공통 */
+export function scriptIn(s: GuideScript, lang: GuideLang): GuideScript | null {
+  if (lang === "ko") return s;
+  if (!s.en) return null;
+  const e = s.en;
+  return { ...s, intro: e.intro, points: e.points, site: e.site, cautions: e.cautions, faq: e.faq, audience: e.audience, mustKnow: e.mustKnow, status: e.status, updatedAt: e.updatedAt, updatedBy: e.updatedBy };
+}
+
+/** 영어로 고친 내용(원고 모양)을 영어 원고 칸에 담는다 */
+export function englishFrom(view: GuideScript, status: EnglishScript["status"], updatedAt: string, updatedBy: string): EnglishScript {
+  return englishScriptSchema.parse({ intro: view.intro, points: view.points, site: view.site, cautions: view.cautions, faq: view.faq, audience: view.audience, mustKnow: view.mustKnow, status, updatedAt, updatedBy });
+}
+
+/* ── 영어 원고 AI 형식 ── */
+
+export const englishDraftSchema = z.object({
+  intro: z.string().describe("30-second bus intro before arrival, 1-2 sentences"),
+  points: z.array(z.object({ title: z.string(), text: z.string().describe("2-4 spoken sentences"), more: z.string().describe("extra story for the long version, or empty") })).describe("same points in the same order"),
+  site: z.object({ dropOff: z.string(), tickets: z.string(), meetPoint: z.string(), restroom: z.string(), photo: z.string() }),
+  cautions: z.array(z.string()),
+  faq: z.array(z.object({ q: z.string(), a: z.string() })),
+  audience: z.object({ family: z.string(), senior: z.string(), student: z.string(), couple: z.string() }),
+  mustKnow: z.array(z.string()),
+});
 
 export const phraseSchema = z.object({ ko: str(80), local: str(120), say: str(120) });
 export type Phrase = z.infer<typeof phraseSchema>;
@@ -117,7 +164,9 @@ export function scriptFromDraft(city: string, name: string, draft: GuideDraft, s
 export function upsertScript(kit: GuideCityKit, script: GuideScript, force = false): { kit: GuideCityKit; kept: boolean } {
   const cur = kit.scripts.find((s) => s.key === script.key);
   if (cur && cur.status === "reviewed" && script.status === "draft" && !force) return { kit, kept: true };
-  const scripts = cur ? kit.scripts.map((s) => (s.key === script.key ? script : s)) : [...kit.scripts, script];
+  // 한국어 원고를 AI로 다시 만들면 영어 원고는 남기되 다시 검수하도록 초안으로 돌린다
+  const next = !script.en && cur?.en ? { ...script, en: { ...cur.en, status: "draft" as const } } : script;
+  const scripts = cur ? kit.scripts.map((s) => (s.key === script.key ? next : s)) : [...kit.scripts, next];
   return { kit: { ...kit, scripts: scripts.slice(0, 300), updatedAt: new Date().toISOString() }, kept: false };
 }
 
@@ -162,8 +211,15 @@ export const CHARS_PER_MIN = 250;
 const chars = (s: string) => s.replace(/\s/g, "").length;
 
 /** 말하는 시간(초) */
+/** 영어는 1분에 약 130단어 (단체 앞 안내 속도) */
+export const WORDS_PER_MIN = 130;
+
+/** 말하는 시간(초) — 한글이 많으면 글자 수, 영어면 단어 수로 */
 export function speakSeconds(text: string): number {
-  return Math.round((chars(text) / CHARS_PER_MIN) * 60);
+  const hangul = (text.match(/[가-힣]/g) ?? []).length;
+  if (hangul >= chars(text) * 0.2) return Math.round((chars(text) / CHARS_PER_MIN) * 60);
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return Math.round((words / WORDS_PER_MIN) * 60);
 }
 
 export type ScriptLength = "short" | "basic" | "long";

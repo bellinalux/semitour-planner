@@ -30,12 +30,31 @@ const draft = (city: string, name: string) => ({
   updatedBy: "",
 });
 
+const englishDraft = {
+  intro: "This is Da Nang Cathedral, famous for its pink walls. It was built in 1923.",
+  points: [{ title: "The Pink Church", text: "Locals call it the pink church because the whole building is pink. There is a rooster weather vane on top, so it is also called the rooster church.", more: "" }],
+  site: { dropOff: "", tickets: "Free", meetPoint: "In front of the Virgin Mary statue", restroom: "", photo: "" },
+  cautions: ["Shoulders and knees should be covered inside"],
+  faq: [],
+  audience: { family: "", senior: "", student: "", couple: "" },
+  mustKnow: ["Built in 1923"],
+  status: "draft",
+  updatedAt: "",
+  updatedBy: "",
+};
+
 async function setup(page: Page) {
   await mockAi(page);
   // 원고 초안: AI 대신 정해진 원고를 서버(개발용 메모리 저장소)에 저장하고 그 결과를 돌려준다
   await page.route("**/api/guidebook/draft", async (r) => {
-    const body = r.request().postDataJSON() as { city: string; name: string };
-    const res = await page.request.patch("/api/guidebook", { data: { action: "save", city: body.city, script: draft(body.city, body.name) } });
+    const body = r.request().postDataJSON() as { kind: string; city: string; name: string };
+    let script = draft(body.city, body.name);
+    if (body.kind === "english") {
+      // 영어 원고: 지금 저장된 한국어 원고에 영어를 붙인다
+      const cur = (await (await page.request.get(`/api/guidebook?city=${encodeURIComponent(body.city)}`)).json()) as { kit: { scripts: (typeof script)[] } };
+      script = { ...cur.kit.scripts.find((x) => x.name === body.name)!, en: englishDraft } as typeof script;
+    }
+    const res = await page.request.patch("/api/guidebook", { data: { action: "save", city: body.city, script } });
     await r.fulfill({ contentType: "application/json", body: JSON.stringify({ ...(await res.json()), searched: true }) });
   });
   await page.addInitScript(
@@ -79,6 +98,18 @@ test("가이드 해설집: 이 상품 장소 원고를 AI 초안으로 만들고
   await doc.getByRole("button", { name: "저장" }).click();
   await expect(doc).toContainText("다낭에서 가장 유명한 분홍 성당입니다.");
 
+  // 영어 원고: 한국어 원고를 영어로 → 검수
+  await dlg.getByRole("radiogroup", { name: "원고 언어" }).first().getByRole("radio", { name: "English 원고" }).click();
+  await expect(doc).toContainText("다낭 대성당 — 영어 원고가 없습니다");
+  await doc.getByRole("button", { name: "AI로 영어 원고 만들기" }).click();
+  await expect(doc).toContainText("English · 초안 — 검수 필요");
+  await expect(doc).toContainText("This is Da Nang Cathedral, famous for its pink walls.");
+  await doc.getByRole("button", { name: "검수 완료" }).click();
+  await expect(doc).toContainText("English · 검수 완료");
+  await expect(list.getByRole("button", { name: /다낭 대성당/ })).toContainText("EN");
+  await dlg.getByRole("radiogroup", { name: "원고 언어" }).first().getByRole("radio", { name: "한국어 원고" }).click();
+  await expect(doc).toContainText("다낭에서 가장 유명한 분홍 성당입니다.");
+
   // 교육 자료
   await dlg.getByRole("tab", { name: "진행 멘트·기본기·비상 대응" }).click();
   await expect(dlg).toContainText("공항 미팅 인사");
@@ -94,6 +125,10 @@ test("가이드 해설집: 이 상품 장소 원고를 AI 초안으로 만들고
   await expect(peek).toContainText("다낭에서 가장 유명한 분홍 성당입니다.");
   await expect(peek).toContainText("원고 기준 체류 35분 (지금 45분)");
   await peek.getByRole("button", { name: "체류를 35분으로 맞추기" }).click();
+  // 원고 언어 바꿔 보기 (영어 원고가 있는 곳)
+  await peek.getByRole("radio", { name: "English" }).click();
+  await expect(peek).toContainText("This is Da Nang Cathedral");
+  await peek.getByRole("radio", { name: "한국어" }).click();
   // 맞추면 안내가 사라지고 일정 시각도 다시 계산된다 (08:00 + 35분 → 10분 단위 08:40)
   await expect(peek).not.toContainText("원고 기준 체류");
   await expect(day1.getByText("08:00 – 08:40")).toBeVisible();
@@ -111,6 +146,17 @@ test("가이드 해설집: 이 상품 장소 원고를 AI 초안으로 만들고
   await expect(print).toContainText("한 시장 — 원고 없음");
   await expect(print).toContainText("노쇼핑 — 쇼핑센터 방문·권유를 하지 않습니다.");
   await expect(print).toContainText("늦는 손님 대응");
+  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+
+  // 영어 원고로 인쇄 (원고 없는 곳은 한국어로 두고 표시)
+  await page.getByRole("combobox", { name: "가이드 해설집 원고 언어" }).selectOption("en");
+  await page.getByRole("button", { name: "가이드 해설집 인쇄" }).click();
+  if (await confirm.isVisible().catch(() => false)) {
+    for (const c of await confirm.getByRole("checkbox").all()) await c.check();
+    await confirm.getByRole("button", { name: "인쇄", exact: true }).click();
+  }
+  await expect(print).toContainText("가이드 해설집 (English)");
+  await expect(print).toContainText("This is Da Nang Cathedral, famous for its pink walls.");
 
   // 도시 교육 자료 (신입 교육 교재) — 그 도시 원고 전체 + 교육 자료
   await page.goto("/gb?city=%EB%8B%A4%EB%82%AD");

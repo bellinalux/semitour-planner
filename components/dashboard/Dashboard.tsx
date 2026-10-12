@@ -184,7 +184,7 @@ export function Dashboard({
   // 패키지 규칙표 — 운영 방식·등급·고객·지역 (일정 카드 점검이 컨텍스트로 읽는다)
   const rules = packageRules(input, days.map((d) => d.overnightCity ?? ""));
   // 가이드 해설집 — 이 일정 도시들의 장소 설명 원고 (항목에 "해설 n분")
-  const guideScripts = useGuideScripts(Object.keys(tripPlacesByCity(days, pmChoice, input.destination)), input.travelers);
+  const guideScripts = useGuideScripts(Object.keys(tripPlacesByCity(days, pmChoice, input.destination)), input.travelers, input.tripScope === "domestic" ? "en" : "ko");
 
   return (
     <PackageRulesContext.Provider value={rules}>

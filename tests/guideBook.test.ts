@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_BASICS,
   emptyKit,
+  englishFrom,
   explainMinutes,
   findScript,
   gatherMinutes,
   guideScriptSchema,
   mergeKit,
   scriptFromDraft,
+  scriptIn,
   scriptText,
   speakSeconds,
   stayBreakdown,
@@ -116,5 +118,37 @@ describe("가이드 해설집 — 원고 저장·짝짓기", () => {
     expect(out.scripts[0].minutes).toBe(3);
     expect(out.tips.some((t) => t.title === "쇼핑·선택관광·가이드 경비 안내")).toBe(false);
     expect(out.tips.length).toBe(DEFAULT_BASICS.length - 1);
+  });
+});
+
+describe("가이드 해설집 — 영어 원고", () => {
+  const en = { intro: "Welcome to the Grand Palace.", points: [{ title: "History", text: "word ".repeat(130).trim(), more: "" }], site: { dropOff: "", tickets: "", meetPoint: "Main gate", restroom: "", photo: "" }, cautions: ["Cover your shoulders"], faq: [], audience: { family: "", senior: "", student: "", couple: "" }, mustKnow: ["1782"], status: "draft" as const, updatedAt: "", updatedBy: "" };
+
+  it("영어로 본 원고 — 내용만 바꾸고 이름·시간은 공통, 없으면 null", () => {
+    const s = script("왕궁", { en, viewMin: 60 });
+    const v = scriptIn(s, "en")!;
+    expect(v.name).toBe("왕궁");
+    expect(v.viewMin).toBe(60);
+    expect(v.intro).toBe("Welcome to the Grand Palace.");
+    expect(v.status).toBe("draft");
+    expect(scriptIn(script("왕궁"), "en")).toBeNull();
+  });
+
+  it("영어는 단어 수로 말하는 시간 (1분 130단어)", () => {
+    expect(speakSeconds("word ".repeat(130))).toBe(60);
+    expect(explainMinutes(scriptIn(script("왕궁", { en }), "en")!)).toBe(2);
+  });
+
+  it("한국어 원고를 AI로 다시 만들면 영어 원고는 남기되 다시 검수하도록 초안으로", () => {
+    const kit = { ...emptyKit("방콕"), scripts: [script("왕궁", { en: { ...en, status: "reviewed" } })] };
+    const r = upsertScript(kit, script("왕궁", { intro: "새 소개" }), true);
+    expect(r.kit.scripts[0].intro).toBe("새 소개");
+    expect(r.kit.scripts[0].en?.status).toBe("draft");
+    expect(r.kit.scripts[0].en?.intro).toBe("Welcome to the Grand Palace.");
+  });
+
+  it("고친 영어 내용을 영어 칸에 담기", () => {
+    const v = { ...script("왕궁"), intro: "Edited intro" };
+    expect(englishFrom(v, "reviewed", "t", "직원").intro).toBe("Edited intro");
   });
 });

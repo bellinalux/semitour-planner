@@ -29,7 +29,7 @@ const patchSchema = z.discriminatedUnion("action", [
   /** 원고 저장 (직원이 고친 것) — 이름이 바뀌면 열쇠도 바뀐다 */
   z.object({ action: z.literal("save"), city: str(60).min(1), prevKey: str(80).default(""), script: guideScriptSchema }),
   /** 검수 완료·풀기 */
-  z.object({ action: z.literal("review"), city: str(60).min(1), key: str(80), reviewed: z.boolean() }),
+  z.object({ action: z.literal("review"), city: str(60).min(1), key: str(80), reviewed: z.boolean(), lang: z.enum(["ko", "en"]).default("ko") }),
   z.object({ action: z.literal("remove"), city: str(60).min(1), key: str(80) }),
   z.object({ action: z.literal("phrases"), city: str(60).min(1), phrases: z.array(phraseSchema).max(60) }),
   z.object({ action: z.literal("basics"), basics: basicsSchema }),
@@ -72,8 +72,14 @@ export async function PATCH(request: Request) {
         const rest = a.prevKey && a.prevKey !== key ? { ...k, scripts: k.scripts.filter((s) => s.key !== a.prevKey) } : k;
         return upsertScript(rest, script, true).kit;
       }
-      case "review":
-        return { ...k, scripts: k.scripts.map((s) => (s.key === a.key ? { ...s, status: a.reviewed ? ("reviewed" as const) : ("draft" as const), updatedAt: now, updatedBy: by } : s)), updatedAt: now };
+      case "review": {
+        const status = a.reviewed ? ("reviewed" as const) : ("draft" as const);
+        return {
+          ...k,
+          scripts: k.scripts.map((s) => (s.key !== a.key ? s : a.lang === "en" ? (s.en ? { ...s, en: { ...s.en, status, updatedAt: now, updatedBy: by } } : s) : { ...s, status, updatedAt: now, updatedBy: by })),
+          updatedAt: now,
+        };
+      }
       case "remove":
         return { ...k, scripts: k.scripts.filter((s) => s.key !== a.key), updatedAt: now };
       case "phrases":

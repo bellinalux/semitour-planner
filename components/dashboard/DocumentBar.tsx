@@ -1,10 +1,15 @@
 "use client";
 
+import { GUIDE_LANG_EVENT, readGuideLang, writeGuideLang } from "@/lib/guideBookClient";
 import { OPS_PAGE_PER_DAY_KEY, readOpsPagePerDay } from "@/components/print/OperationDoc";
 import { AlertTriangle, BookMarked, Bus, Calculator, Columns3, FileSignature, FileText, Languages, Printer, Receipt, Sparkles } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 
 const PAGE_PER_DAY_EVENT = "semitour:ops-page-per-day";
+const subscribeGuideLang = (cb: () => void) => {
+  window.addEventListener(GUIDE_LANG_EVENT, cb);
+  return () => window.removeEventListener(GUIDE_LANG_EVENT, cb);
+};
 const subscribePagePerDay = (cb: () => void) => {
   window.addEventListener(PAGE_PER_DAY_EVENT, cb);
   return () => window.removeEventListener(PAGE_PER_DAY_EVENT, cb);
@@ -19,6 +24,8 @@ interface Props {
   /** 고객 문서 인쇄 전에 확인할 값 (직접 확인하지 않은 추정 원가 등). 있으면 인쇄 전에 한 번 묻는다 */
   unconfirmed: string[];
   onPrint: (kind: DocKind) => void;
+  /** 국내(외국인 손님)면 가이드 해설집 기본 언어를 영어로 */
+  tripScope?: string;
 }
 
 const BUTTONS: { kind: DocKind; icon: typeof FileText; description: string }[] = [
@@ -40,7 +47,8 @@ const INTERNAL: { kind: DocKind; icon: typeof FileText; description: string } = 
 };
 
 /** 고객용 문서를 브라우저 인쇄로 PDF 저장한다 */
-export function DocumentBar({ disabled, missingLegal, unconfirmed, onPrint }: Props) {
+export function DocumentBar({ disabled, missingLegal, unconfirmed, onPrint, tripScope }: Props) {
+  const guideLang = useSyncExternalStore(subscribeGuideLang, () => readGuideLang(tripScope), () => "ko" as const);
   // 운영 지시서 "하루 한 쪽" — 이 브라우저에 기억
   const pagePerDay = useSyncExternalStore(subscribePagePerDay, readOpsPagePerDay, () => false);
   const [pending, setPending] = useState<DocKind | null>(null);
@@ -175,6 +183,16 @@ export function DocumentBar({ disabled, missingLegal, unconfirmed, onPrint }: Pr
           <BookMarked className="h-4 w-4 text-slate-400" aria-hidden />
           가이드 해설집 인쇄
         </button>
+        <select
+          value={guideLang}
+          onChange={(e) => writeGuideLang(e.target.value === "en" ? "en" : "ko")}
+          aria-label="가이드 해설집 원고 언어"
+          title="영어로 고르면 영어 원고를 넣습니다 (영어 원고가 없는 곳은 한국어로 두고 표시)"
+          className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] text-slate-700"
+        >
+          <option value="ko">한국어 원고</option>
+          <option value="en">English 원고</option>
+        </select>
         <span className="text-[11px] text-slate-500">가이드·기사·랜드사에 넘기는 현장용 (가격 없음)</span>
       </div>
 

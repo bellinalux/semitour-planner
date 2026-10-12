@@ -2,7 +2,7 @@
 
 import { BookMarked, Check, Copy, Download, FileUp, Loader2, Pencil, Printer, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
-import { BASICS_GROUPS, DEFAULT_BASICS, emptyKit, explainMinutes, findScript, scriptKey, type BasicsSection, type GuideBasics, type GuideCityEntry, type GuideCityKit, type GuideScript, type Phrase } from "@/lib/guideBook";
+import { BASICS_GROUPS, DEFAULT_BASICS, emptyKit, englishFrom, explainMinutes, findScript, LANG_LABEL, scriptIn, scriptKey, type GuideLang, type BasicsSection, type GuideBasics, type GuideCityEntry, type GuideCityKit, type GuideScript, type Phrase } from "@/lib/guideBook";
 import { downloadKit, draftGuide, fetchGuideIndex, fetchKit, patchGuide, scriptAsText } from "@/lib/guideBookClient";
 import type { PlaceCard } from "@/lib/knowledge";
 import { ScriptEditor } from "./ScriptEditor";
@@ -55,6 +55,8 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
   const [tab, setTab] = useState<Tab>("scripts");
   const [selected, setSelected] = useState("");
   const [editing, setEditing] = useState(false);
+  // 작업 언어 — 한국어 원고 / 영어 원고 (보기·고치기·검수·인쇄)
+  const [lang, setLang] = useState<GuideLang>("ko");
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState<Msg>(null);
   const [filter, setFilter] = useState("");
@@ -146,6 +148,28 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
       setMsg({ kind: "ok", text: `원고 초안 ${done}곳을 만들었습니다. 다듬고 검수 완료를 눌러 주세요.` });
     });
 
+  const draftEnglish = (name: string, force = false) =>
+    run(`draft:${name} 영어`, async () => {
+      const r = await draftGuide({ kind: "english", city, name, force });
+      applyKit(r.kit, r.kept ? `${name} — 검수 완료된 영어 원고라 그대로 두었습니다.` : `${name} 영어 원고 초안을 만들었습니다. 다듬고 검수 완료를 눌러 주세요.`);
+    });
+
+  const draftEnglishAll = (names: string[]) =>
+    run("draftAll", async () => {
+      let done = 0;
+      for (const n of names) {
+        setBusy(`draftAll:${done + 1}/${names.length} ${n} 영어`);
+        try {
+          applyKit((await draftGuide({ kind: "english", city, name: n })).kit);
+          done++;
+        } catch (e) {
+          setMsg({ kind: "error", text: `${n}: ${e instanceof Error ? e.message : "실패"} (${done}곳 완료)` });
+          return;
+        }
+      }
+      setMsg({ kind: "ok", text: `영어 원고 초안 ${done}곳을 만들었습니다. 다듬고 검수 완료를 눌러 주세요.` });
+    });
+
   const save = (s: GuideScript, prevKey: string) =>
     run("save", async () => {
       const r = await patchGuide({ action: "save", city, prevKey, script: s });
@@ -155,7 +179,9 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
     });
 
   const review = (s: GuideScript, reviewed: boolean) =>
-    run("review", async () => applyKit((await patchGuide({ action: "review", city, key: s.key, reviewed })).kit, reviewed ? `${s.name} 검수 완료 — 이제 AI 초안이 덮어쓰지 않습니다.` : `${s.name} 검수를 풀었습니다.`));
+    run("review", async () =>
+      applyKit((await patchGuide({ action: "review", city, key: s.key, reviewed, lang })).kit, `${s.name}${lang === "en" ? " 영어 원고" : ""} ${reviewed ? "검수 완료 — 이제 AI 초안이 덮어쓰지 않습니다." : "검수를 풀었습니다."}`),
+    );
 
   const remove = (s: GuideScript) => {
     if (!window.confirm(`${s.name} 원고를 지울까요? 되돌릴 수 없습니다.`)) return;
@@ -185,6 +211,10 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
   // 일정 이름이 원고 이름을 품고 있으면 그 원고를 쓴다 (예: "왕궁, 에메랄드 사원 관광" → "왕궁")
   const scriptFor = (name: string) => scripts.find((s) => s.key === scriptKey(name)) ?? findScript(scripts, name);
   const missingTrip = tripNames.filter((n) => !scriptFor(n));
+  // 영어 원고가 없는 이 상품 장소 (한국어 원고가 있는 곳만)
+  const missingEn = [...new Map(tripNames.map(scriptFor).filter((s): s is GuideScript => !!s && !s.en).map((s) => [s.key, s.name])).values()];
+  const currentEn = current ? scriptIn(current, "en") : null;
+  const shownStatus = lang === "en" ? currentEn?.status : current?.status;
   // 목록: 이 상품 장소 → 원고 있는 곳 → 지식 창고 장소 (같은 장소는 한 번만)
   const rows: { name: string; group: string }[] = [];
   const seen = new Set<string>();
@@ -256,11 +286,28 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
                 열기
               </button>
             </form>
+            <div role="radiogroup" aria-label="원고 언어" className="inline-flex rounded-md border border-slate-300 bg-white p-0.5">
+              {(["ko", "en"] as const).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  role="radio"
+                  aria-checked={lang === l}
+                  onClick={() => {
+                    setLang(l);
+                    setEditing(false);
+                  }}
+                  className={`rounded px-2 py-0.5 font-medium ${lang === l ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                >
+                  {LANG_LABEL[l]} 원고
+                </button>
+              ))}
+            </div>
             <div className="ml-auto flex flex-wrap gap-1.5">
               <button
                 type="button"
                 disabled={!city}
-                onClick={() => window.open(`/gb?city=${encodeURIComponent(city)}`, "_blank", "noopener")}
+                onClick={() => window.open(`/gb?city=${encodeURIComponent(city)}&lang=${lang}`, "_blank", "noopener")}
                 className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 font-medium hover:bg-slate-50 disabled:opacity-50"
                 title="이 도시 장소 원고 전체 + 진행 멘트·기본기·비상 대응 + 현지 회화 (신입 교육 교재)"
               >
@@ -346,7 +393,18 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
                         추가
                       </button>
                     </form>
-                    {missingTrip.length > 0 && (
+                    {lang === "en" && missingEn.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={busy !== ""}
+                        onClick={() => void draftEnglishAll(missingEn)}
+                        className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                        title="한국어 원고가 있는 이 상품 장소 중 영어 원고가 없는 곳을 차례로 만듭니다 (한 곳에 30초 안팎)"
+                      >
+                        <Sparkles className="size-3.5" aria-hidden />이 상품 장소 영어 원고 모두 만들기 ({missingEn.length}곳)
+                      </button>
+                    )}
+                    {lang === "ko" && missingTrip.length > 0 && (
                       <button
                         type="button"
                         disabled={busy !== ""}
@@ -380,9 +438,13 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
                               <span className={`shrink-0 rounded px-1 text-[10px] font-semibold ring-1 ${s.status === "reviewed" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-50 text-amber-800 ring-amber-200"}`}>
                                 {s.status === "reviewed" ? "검수 완료" : "초안"} · {explainMinutes(s)}분
                               </span>
-                            ) : (
-                              <span className="shrink-0 text-[10px] text-slate-400">원고 없음</span>
-                            )}
+                            ) : null}
+                            {s?.en ? (
+                              <span className={`shrink-0 rounded px-1 text-[10px] font-semibold ring-1 ${s.en.status === "reviewed" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-sky-50 text-sky-800 ring-sky-200"}`} title={s.en.status === "reviewed" ? "영어 원고 검수 완료" : "영어 원고 초안"}>
+                                EN
+                              </span>
+                            ) : null}
+                            {!s && <span className="shrink-0 text-[10px] text-slate-400">원고 없음</span>}
                           </button>
                         </li>
                       );
@@ -392,7 +454,7 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
 
                 <section aria-label="원고" className="min-h-0 overflow-y-auto p-4">
                   {!selected && <p className="py-10 text-center text-slate-400">왼쪽에서 장소를 고르세요.</p>}
-                  {selected && editing && (
+                  {selected && editing && (lang !== "en" || !current) && (
                     <ScriptEditor
                       key={selected}
                       script={current ?? blankScript(city, selectedName || selected)}
@@ -401,17 +463,43 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
                       onSave={(s) => void save(s, current?.key ?? "")}
                     />
                   )}
-                  {selected && !editing && current && (
+                  {selected && editing && lang === "en" && current && (
+                    <ScriptEditor
+                      key={`${selected}-en`}
+                      english
+                      script={currentEn ?? { ...blankScript(city, current.name), key: current.key, area: current.area, viewMin: current.viewMin, waitMin: current.waitMin }}
+                      busy={busy === "save"}
+                      onCancel={() => setEditing(false)}
+                      onSave={(v) => void save({ ...current, en: englishFrom(v, current.en?.status ?? "draft", new Date().toISOString(), "") }, current.key)}
+                    />
+                  )}
+                  {selected && !editing && current && lang === "en" && !current.en && (
+                    <div className="space-y-3 py-8 text-center">
+                      <p className="text-sm font-semibold text-slate-800">{current.name} — 영어 원고가 없습니다</p>
+                      <p className="text-slate-500">한국어 원고(사실)를 외국인 손님에게 말하는 자연스러운 영어로 다시 씁니다. 새 사실은 더하지 않습니다.</p>
+                      <div className="flex justify-center gap-2">
+                        <button type="button" disabled={busy !== ""} onClick={() => void draftEnglish(current.name)} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+                          <Sparkles className="size-3.5" aria-hidden />
+                          AI로 영어 원고 만들기
+                        </button>
+                        <button type="button" onClick={() => setEditing(true)} className="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-50">
+                          직접 쓰기
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {selected && !editing && current && (lang === "ko" || current.en) && (
                     <article className="space-y-3">
                       <header className="flex flex-wrap items-center gap-2">
                         <h3 className="text-sm font-semibold text-slate-900">{current.name}</h3>
                         {current.area && <span className="text-slate-500">{current.area}</span>}
-                        <span className={`rounded px-1.5 py-0.5 text-[10.5px] font-semibold ring-1 ${current.status === "reviewed" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-50 text-amber-800 ring-amber-200"}`}>
-                          {current.status === "reviewed" ? "검수 완료" : "초안 — 검수 필요"}
+                        <span className={`rounded px-1.5 py-0.5 text-[10.5px] font-semibold ring-1 ${shownStatus === "reviewed" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-50 text-amber-800 ring-amber-200"}`}>
+                          {lang === "en" ? "English · " : ""}
+                          {shownStatus === "reviewed" ? "검수 완료" : "초안 — 검수 필요"}
                         </span>
-                        {current.updatedAt && (
+                        {(lang === "en" ? currentEn?.updatedAt : current.updatedAt) && (
                           <span className="text-[10.5px] text-slate-400">
-                            {new Date(current.updatedAt).toLocaleDateString("ko-KR")} {current.updatedBy || "AI 초안"}
+                            {new Date((lang === "en" ? currentEn?.updatedAt : current.updatedAt) ?? "").toLocaleDateString("ko-KR")} {(lang === "en" ? currentEn?.updatedBy : current.updatedBy) || "AI 초안"}
                           </span>
                         )}
                         <div className="ml-auto flex flex-wrap gap-1">
@@ -422,17 +510,19 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
                           <button
                             type="button"
                             disabled={busy !== ""}
-                            onClick={() => void review(current, current.status !== "reviewed")}
-                            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-semibold disabled:opacity-50 ${current.status === "reviewed" ? "border border-slate-300 text-slate-600 hover:bg-slate-50" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}
+                            onClick={() => void review(current, shownStatus !== "reviewed")}
+                            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-semibold disabled:opacity-50 ${shownStatus === "reviewed" ? "border border-slate-300 text-slate-600 hover:bg-slate-50" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}
                           >
                             <Check className="size-3.5" aria-hidden />
-                            {current.status === "reviewed" ? "검수 풀기" : "검수 완료"}
+                            {shownStatus === "reviewed" ? "검수 풀기" : "검수 완료"}
                           </button>
                           <button
                             type="button"
                             disabled={busy !== ""}
                             onClick={() => {
-                              if (current.status !== "reviewed" || window.confirm("검수 완료된 원고를 AI 초안으로 바꿀까요? 지금 원고는 사라집니다.")) void draft(current.name, true);
+                              if (shownStatus === "reviewed" && !window.confirm("검수 완료된 원고를 AI 초안으로 바꿀까요? 지금 원고는 사라집니다.")) return;
+                              if (lang === "en") void draftEnglish(current.name, true);
+                              else void draft(current.name, true);
                             }}
                             className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 hover:bg-slate-50 disabled:opacity-50"
                           >
@@ -442,7 +532,7 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
                           <button
                             type="button"
                             onClick={() => {
-                              void navigator.clipboard?.writeText(scriptAsText(current));
+                              void navigator.clipboard?.writeText(lang === "en" && currentEn ? scriptAsText(currentEn, "en") : scriptAsText(current));
                               setMsg({ kind: "ok", text: `${current.name} 원고를 복사했습니다.` });
                             }}
                             className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 hover:bg-slate-50"
@@ -455,7 +545,7 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
                           </button>
                         </div>
                       </header>
-                      <ScriptView script={current} travelers={travelers} />
+                      <ScriptView key={lang} script={current} travelers={travelers} defaultLang={lang} />
                     </article>
                   )}
                   {selected && !editing && !current && (

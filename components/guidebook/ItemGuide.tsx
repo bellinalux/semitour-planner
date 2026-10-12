@@ -46,6 +46,7 @@ export function ItemGuide({ itemName, city, stayMinutes, onStay, allowCreate }: 
       >
         <Mic className="size-3" aria-hidden />
         해설 {explainMinutes(script)}분{script.status === "reviewed" ? "" : " · 초안"}
+        {script.en && <span className="rounded bg-white/70 px-1 text-[9.5px] font-semibold">EN</span>}
       </button>
       {open && (
         <div role="region" aria-label={`${itemName} 가이드 원고`} className="mt-1 w-full basis-full rounded-md border border-violet-200 bg-white p-3">
@@ -57,7 +58,7 @@ export function ItemGuide({ itemName, city, stayMinutes, onStay, allowCreate }: 
               </button>
             </p>
           )}
-          <ScriptView script={script} travelers={guide.travelers} compact />
+          <ScriptView script={script} travelers={guide.travelers} compact defaultLang={guide.lang} />
         </div>
       )}
     </>

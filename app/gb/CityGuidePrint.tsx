@@ -22,7 +22,7 @@ function readCompany(): CompanyProfile {
  * 도시 교육 자료 — 그 도시 장소 원고 전체 + 진행 멘트·기본기·비상 대응·상품 원칙(공통) + 비상 연락 + 현지 회화.
  * 다 불러오면 인쇄 창을 연다 (PDF로 저장해 신입 교육 교재로 쓴다).
  */
-export function CityGuidePrint({ city }: { city: string }) {
+export function CityGuidePrint({ city, lang = "ko" }: { city: string; lang?: "ko" | "en" }) {
   const [data, setData] = useState<{ kit: GuideCityKit; basics: GuideBasics; info: TravelInfo | null; company: CompanyProfile } | null>(null);
   const [error, setError] = useState("");
 
@@ -70,7 +70,7 @@ export function CityGuidePrint({ city }: { city: string }) {
       <div className="print-root" style={{ display: "block" }}>
         <GuideBookDoc
           company={data.company}
-          title={`${data.kit.city} 가이드 교육 자료`}
+          title={`${data.kit.city} 가이드 교육 자료${lang === "en" ? " (English)" : ""}`}
           subtitle={`장소 원고 ${scripts.length}곳 (검수 완료 ${scripts.filter((s) => s.status === "reviewed").length}곳) · 진행 멘트·기본기·비상 대응 · 현지 회화`}
           scripts={scripts}
           basics={data.basics}
@@ -78,6 +78,7 @@ export function CityGuidePrint({ city }: { city: string }) {
           emergency={emergencyRows(data.info, data.company)}
           principles={[]}
           travelers={20}
+          lang={lang}
         />
       </div>
     </main>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { explainMinutes, LENGTH_LABEL, stayBreakdown, type GuideScript, type ScriptLength } from "@/lib/guideBook";
+import { explainMinutes, LANG_LABEL, LENGTH_LABEL, scriptIn, stayBreakdown, type GuideLang, type GuideScript, type ScriptLength } from "@/lib/guideBook";
 
 const SITE: { key: keyof GuideScript["site"]; label: string }[] = [
   { key: "dropOff", label: "하차·승차" },
@@ -17,9 +17,11 @@ const AUDIENCE: { key: keyof GuideScript["audience"]; label: string }[] = [
   { key: "couple", label: "커플" },
 ];
 
-/** 원고 읽기 — 길이(짧게·기본·자세히)를 고르면 그 길이의 원고와 말하는 시간, 체류 시간 구성 */
-export function ScriptView({ script, travelers = 10, compact = false }: { script: GuideScript; travelers?: number; compact?: boolean }) {
+/** 원고 읽기 — 언어(영어 원고가 있으면)·길이(짧게·기본·자세히)를 고르면 그 원고와 말하는 시간, 체류 시간 구성 */
+export function ScriptView({ script: base, travelers = 10, compact = false, defaultLang = "ko" }: { script: GuideScript; travelers?: number; compact?: boolean; defaultLang?: GuideLang }) {
   const [length, setLength] = useState<ScriptLength>("basic");
+  const [lang, setLang] = useState<GuideLang>(defaultLang);
+  const script = scriptIn(base, base.en ? lang : "ko") ?? base;
   const pts = length === "short" ? script.points.slice(0, 2) : script.points;
   const b = stayBreakdown(script, travelers);
   const site = SITE.filter((x) => script.site[x.key]);
@@ -28,6 +30,16 @@ export function ScriptView({ script, travelers = 10, compact = false }: { script
   return (
     <div className="space-y-3 text-xs leading-5 text-slate-700">
       <div className="flex flex-wrap items-center gap-2">
+        {base.en && (
+          <div role="radiogroup" aria-label="원고 언어" className="inline-flex rounded-md border border-slate-300 bg-white p-0.5">
+            {(["ko", "en"] as const).map((l) => (
+              <button key={l} type="button" role="radio" aria-checked={lang === l} onClick={() => setLang(l)} className={`rounded px-2 py-0.5 font-medium ${lang === l ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+                {LANG_LABEL[l]}
+                {l === "en" && base.en?.status !== "reviewed" ? " (초안)" : ""}
+              </button>
+            ))}
+          </div>
+        )}
         <div role="radiogroup" aria-label="원고 길이" className="inline-flex rounded-md border border-slate-300 bg-white p-0.5">
           {(Object.keys(LENGTH_LABEL) as ScriptLength[]).map((l) => (
             <button

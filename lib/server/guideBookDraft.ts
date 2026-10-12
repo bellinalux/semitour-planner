@@ -1,5 +1,6 @@
-import { guideDraftSchema, phrasesDraftSchema, type GuideDraft } from "@/lib/guideBook";
+import { englishDraftSchema, guideDraftSchema, phrasesDraftSchema, type GuideDraft, type GuideScript } from "@/lib/guideBook";
 import type { PlaceCard } from "@/lib/knowledge";
+import type { z } from "zod";
 import { generateGroundedText, generateJson, type GroundingSource } from "./gemini";
 
 /**
@@ -41,6 +42,24 @@ export async function draftScript(o: { city: string; name: string; area?: string
     temperature: 0.4,
   });
   return { draft, sources: memo.sources.slice(0, 8), searched: memo.searched };
+}
+
+/**
+ * 영어 원고 — 한국어 원고(직원이 검수한 사실)를 외국인 손님에게 말하는 자연스러운 영어로 다시 쓴다.
+ * 웹 검색 없이 한국어 원고만 근거로 (새 사실을 더하지 않는다). 직역이 아니라 말하는 영어로.
+ */
+export async function draftEnglish(s: GuideScript): Promise<z.infer<typeof englishDraftSchema>> {
+  const source = { place: s.name, area: s.area, intro: s.intro, points: s.points, site: s.site, cautions: s.cautions, faq: s.faq, audience: s.audience, mustKnow: s.mustKnow };
+  return generateJson({
+    system: [
+      "You are a senior tour guide trainer. Rewrite the Korean guide script into natural spoken English that a guide can read aloud to international tourists.",
+      "Keep every fact, number and name exactly as in the Korean script and do not add new facts. Use the common English names of places (with local names where helpful).",
+      "Tone: warm, clear, short sentences, easy for non-native listeners. Keep the same points in the same order. Empty fields stay empty.",
+    ].join(" "),
+    user: `<korean_script>\n${JSON.stringify(source)}\n</korean_script>`,
+    schema: englishDraftSchema,
+    temperature: 0.3,
+  });
 }
 
 /** 도시 현지 회화 (가이드·손님용) — 웹 검색 없이 표준 표현만 */

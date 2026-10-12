@@ -5,7 +5,7 @@ import { CityGuidePrint } from "./CityGuidePrint";
 
 export const metadata: Metadata = { title: "가이드 교육 자료", robots: { index: false, follow: false } };
 
-export default async function GuideBookPrintPage({ searchParams }: { searchParams: Promise<{ city?: string }> }) {
-  const { city = "" } = await searchParams;
-  return <CityGuidePrint city={city.slice(0, 60)} />;
+export default async function GuideBookPrintPage({ searchParams }: { searchParams: Promise<{ city?: string; lang?: string }> }) {
+  const { city = "", lang } = await searchParams;
+  return <CityGuidePrint city={city.slice(0, 60)} lang={lang === "en" ? "en" : "ko"} />;
 }

@@ -859,6 +859,7 @@ export function PlannerApp() {
             }}
             share={{ build: (showPrice, words, lang) => (docData ? buildSharedItinerary(docData, showPrice, new Date(), ruleNotices(loadPriceRules()), words, lang) : null), translate: (lang) => ensureForeign(lang), planKey }}
             documents={{
+              tripScope: input.tripScope,
               disabled: !quote?.ok,
               missingLegal: missingLegalFields(company),
               unconfirmed,
