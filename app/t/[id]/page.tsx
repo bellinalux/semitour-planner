@@ -82,7 +82,7 @@ export default async function SharedItineraryPage({ params }: { params: Promise<
                 </li>
               ))}
             </ol>
-            <SharedDayMap day={d.day} index={it.days.indexOf(d)} items={d.items} label={t.map} />
+            <SharedDayMap day={d.day} index={it.days.indexOf(d)} items={d.items} label={t.map} lang={lang} />
             {d.meals && <p className="mt-2 text-xs text-slate-600">🍴 {d.meals}</p>}
             {d.hotel && (
               <p className="mt-2 text-xs text-slate-500">

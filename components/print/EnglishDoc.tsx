@@ -195,7 +195,7 @@ export function EnglishDoc({ input, days, pmChoice, quote, meta, company, transl
 
       {routePoints.flat().length >= 2 && (
         <Section title={L.routeMap} color={accent}>
-          <MapFigure lines={routePoints} width={680} height={340} label={L.routeMap} fallback={<RouteFigure days={days} pmChoice={pmChoice} hotels={hotelPins(input.selectedHotels)} />} />
+          <MapFigure lines={routePoints} width={680} height={340} label={L.routeMap} lang={lang} fallback={<RouteFigure days={days} pmChoice={pmChoice} hotels={hotelPins(input.selectedHotels)} />} />
         </Section>
       )}
 

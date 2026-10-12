@@ -6,7 +6,7 @@ import type { Map as MlMap, Marker } from "maplibre-gl";
 import { backtrackLegs, type MapPoint } from "@/lib/regionPlan";
 import { BACKTRACK_COLOR, dayColor } from "./CourseMapColors";
 
-import { MAP_STYLE_URL } from "./CourseMapColors";
+import { localizeLabels, MAP_STYLE_URL, type MapLang } from "./CourseMapColors";
 export { BACKTRACK_COLOR, dayColor, MAP_STYLE_URL } from "./CourseMapColors";
 
 interface Props {
@@ -16,6 +16,8 @@ interface Props {
   editable?: boolean;
   onMovePoint?: (id: string, lat: number, lng: number) => void;
   className?: string;
+  /** 지도 글자 언어 (기본 한국어) */
+  lang?: MapLang;
 }
 
 function pinElement(p: MapPoint, color: string, editable: boolean): HTMLElement {
@@ -44,7 +46,7 @@ function pinElement(p: MapPoint, color: string, editable: boolean): HTMLElement 
  * 코스 지도 — 날짜별 색 번호 핀과 방문 순서 선, 떠났던 지역으로 되돌아가는 구간은 빨간 점선.
  * 화면에 보일 때(크기가 생길 때) 지도를 만든다 (접힌 칸 안에서도 안전). WebGL을 못 쓰면 안내만.
  */
-export function CourseMap({ days, editable = false, onMovePoint, className = "h-80" }: Props) {
+export function CourseMap({ days, editable = false, onMovePoint, className = "h-80", lang = "ko" }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MlMap | null>(null);
   const markers = useRef<Marker[]>([]);
@@ -65,7 +67,9 @@ export function CourseMap({ days, editable = false, onMovePoint, className = "h-
       try {
         const ml = (await import("maplibre-gl")).default;
         if (cancelled || mapRef.current) return;
-        const map = new ml.Map({ container: el, style: MAP_STYLE_URL, center: [127, 37.5], zoom: 3, attributionControl: { compact: true }, cooperativeGestures: true });
+        const map = new ml.Map({ container: el, center: [127, 37.5], zoom: 3, attributionControl: { compact: true }, cooperativeGestures: true });
+        // 지명·장소 이름은 화면 언어로 (그 언어 이름이 없는 곳은 현지 이름)
+        map.setStyle(MAP_STYLE_URL, { transformStyle: (_prev, next) => localizeLabels(next, lang) });
         map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
         map.on("error", (e) => {
           // 바탕 타일 하나가 안 와도 지도는 쓴다 — 스타일 자체를 못 읽을 때만 실패로
@@ -91,6 +95,8 @@ export function CourseMap({ days, editable = false, onMovePoint, className = "h-
       mapRef.current?.remove();
       mapRef.current = null;
     };
+    // 지도는 한 번만 만든다 (글자 언어는 화면마다 정해져 바뀌지 않는다)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 핀·선 그리기

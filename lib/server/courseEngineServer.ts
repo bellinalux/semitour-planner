@@ -23,6 +23,8 @@ export const enginePlaceSchema = z.object({
   area: z.string().max(120).optional(),
   region: z.string().max(60).optional(),
   lat: z.number().optional(), lng: z.number().optional(),
+  /** 확인되지 않은 좌표 (일정을 만들며 적은 것) — 장소 지식·구글 지도에서 못 찾을 때만 쓴다 */
+  guessLat: z.number().optional(), guessLng: z.number().optional(),
   stayMin: z.number().int().min(0).max(720),
   kind: z.enum(["sight", "meal", "meeting", "end", "free", "transfer"]).optional(),
   open: openSchema.optional(),
@@ -230,17 +232,23 @@ export async function planCourse(req: PlanRequest): Promise<PlanResponse> {
   const need = req.lookup ? real.filter(p => !know[p.name] && (!p.open || p.lat == null)) : [];
   let looked = 0;
   if (need.length) {
-    const anchor = req.places.find(p => p.lat != null && p.lng != null);
-    const found = await lookupPlaces(need, req.city, req.country, anchor ? { lat: anchor.lat!, lng: anchor.lng! } : undefined).catch(() => []);
+    const fix = req.places.find(p => p.lat != null && p.lng != null);
+    const guess = req.places.find(p => p.guessLat != null && p.guessLng != null);
+    const anchor = fix ? { lat: fix.lat!, lng: fix.lng! } : guess ? { lat: guess.guessLat!, lng: guess.guessLng! } : undefined;
+    const found = await lookupPlaces(need, req.city, req.country, anchor).catch(() => []);
     looked = found.length;
     await Promise.all(found.map(k => { know[k.name] = k; return putKnowledge(k); }));
   }
   const places = req.places.map(p => {
     const k = know[p.name];
+    // 좌표: 사람이 고친 것 → 장소 지식(구글 지도) → 확인되지 않은 참고 좌표
+    const ll = p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng }
+      : k?.lat != null && k?.lng != null ? { lat: k.lat, lng: k.lng }
+      : p.guessLat != null && p.guessLng != null ? { lat: p.guessLat, lng: p.guessLng } : {};
     const merged: EnginePlace & { knowledge?: PlaceKnowledge } = {
       id: p.id, name: p.name, kind: p.kind, priority: p.priority, fixedOrder: p.fixedOrder, fixedTime: p.fixedTime,
       stayMin: p.stayMin || k?.typicalStayMin || 60,
-      lat: p.lat ?? k?.lat, lng: p.lng ?? k?.lng,
+      ...ll,
       open: p.open ?? k?.open, lastEntry: p.lastEntry ?? k?.lastEntry, best: p.best ?? k?.best,
       ...(p.meal ? { meal: p.meal } : {}),
       ...(p.area ? { area: p.area } : {}),

@@ -101,9 +101,15 @@ describe("좌표 저장", () => {
     expect(withCoords(next, [{ id: "a", lat: 16, lng: 108 }])).toBe(next);
   });
 
-  it("엔진 요청에 일정 좌표를 넣는다", () => {
+  it("엔진 요청: 확인되지 않은 일정 좌표는 참고로만, 지도에서 고친 좌표는 그대로 보낸다", () => {
     const req = buildDayRequest(linearDay(1, [at("한 시장", C1), item("x")]), {}, { destination: "다낭", travelType: "semi" });
-    expect(req?.places[0]).toMatchObject({ lat: C1.lat, lng: C1.lng });
+    // 일정을 만들며 적은 좌표는 틀릴 수 있다 — 서버가 지도에서 다시 확인하도록 참고 좌표로
+    expect(req?.places[0]).toMatchObject({ guessLat: C1.lat, guessLng: C1.lng });
+    expect(req?.places[0].lat).toBeUndefined();
     expect(req?.places[1].lat).toBeUndefined();
+    expect(req?.places[1].guessLat).toBeUndefined();
+    const edited = buildDayRequest(linearDay(1, [{ ...at("한 시장", C1), coordEdited: true }, item("x")]), {}, { destination: "다낭", travelType: "semi" });
+    expect(edited?.places[0]).toMatchObject({ lat: C1.lat, lng: C1.lng });
+    expect(edited?.places[0].guessLat).toBeUndefined();
   });
 });

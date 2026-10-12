@@ -14,7 +14,7 @@ import { roundMinutes } from "@/lib/format";
 import { refitMealWindows } from "@/lib/mealTiming";
 
 export interface EngineDayRequest {
-  places: { id: string; name: string; stayMin: number; kind?: "sight" | "meal" | "free" | "transfer" | "end"; priority?: 1 | 2 | 3; fixedOrder?: "first" | "last"; meal?: "lunch" | "dinner" | "cafe"; area?: string; region?: string; best?: "night"; lat?: number; lng?: number }[];
+  places: { id: string; name: string; stayMin: number; kind?: "sight" | "meal" | "free" | "transfer" | "end"; priority?: 1 | 2 | 3; fixedOrder?: "first" | "last"; meal?: "lunch" | "dinner" | "cafe"; area?: string; region?: string; best?: "night"; lat?: number; lng?: number; guessLat?: number; guessLng?: number }[];
   city: string; country: string; date?: string; start: string; maxEnd: string;
   mode: "car" | "walk" | "public"; audience: "any" | "couple" | "family" | "senior" | "group"; reorder: boolean; lookup: boolean;
   /** 앱 일정표의 이동 시간 (이어지는 두 항목마다) — 엔진이 일정표와 같은 시계로 채점하게 */
@@ -97,8 +97,9 @@ export function buildDayRequest(day: DayPlan, pmChoice: PmChoice, o: { destinati
         ...(kind === "meal" ? { meal: mealKind(i, start) } : {}),
         ...(i.timeCheck?.basis === "area" && i.timeCheck.area ? { area: i.timeCheck.area } : {}),
         ...(i.timeCheck?.basis === "area" && i.timeCheck.region ? { region: i.timeCheck.region } : {}),
-        // 지도에서 고친 좌표(또는 지난 점검에서 찾은 좌표)를 그대로 쓴다
-        ...(isCoord(i.lat, i.lng) ? { lat: i.lat, lng: i.lng } : {}),
+        // 지도에서 직접 고친 좌표만 그대로 쓴다. 그 밖의 좌표(일정을 만들며 AI가 적은 것 등)는 틀릴 수 있어 참고로만 보내고,
+        // 서버가 장소 지식·구글 지도로 다시 확인한 좌표를 쓴다 (못 찾으면 참고 좌표)
+        ...(isCoord(i.lat, i.lng) ? (i.coordEdited ? { lat: i.lat, lng: i.lng } : { guessLat: i.lat, guessLng: i.lng }) : {}),
         // 야경·분수쇼 같은 밤 일정 — 숙소 쪽으로 돌아가며 하는 일정이라 지나온 구역이어도 지그재그로 보지 않는다
         ...(kind === "sight" && NIGHT.test(`${i.name} ${i.description}`) ? { best: "night" as const } : {}),
       };

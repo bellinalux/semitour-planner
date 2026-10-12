@@ -1,6 +1,7 @@
 "use client";
 
 import { CourseMap } from "./CourseMap";
+import type { MapLang } from "./CourseMapColors";
 import type { MapPoint } from "@/lib/regionPlan";
 
 interface Props {
@@ -8,10 +9,11 @@ interface Props {
   index: number;
   items: { name: string; kind: string; lat?: number; lng?: number }[];
   label: string;
+  lang?: MapLang;
 }
 
 /** 고객 웹 일정표의 날짜별 지도 — 펼칠 때 지도를 만든다 (좌표가 2곳 이상인 날만) */
-export function SharedDayMap({ day, index, items, label }: Props) {
+export function SharedDayMap({ day, index, items, label, lang = "ko" }: Props) {
   let order = 0;
   const points: MapPoint[] = items
     .filter((i) => typeof i.lat === "number" && typeof i.lng === "number")
@@ -20,7 +22,7 @@ export function SharedDayMap({ day, index, items, label }: Props) {
   return (
     <details className="mt-2 rounded-lg border border-slate-200 px-2 py-1.5 text-xs">
       <summary className="cursor-pointer font-medium text-slate-600">{label}</summary>
-      <CourseMap days={[{ day, index, points }]} className="mt-2 h-60" />
+      <CourseMap days={[{ day, index, points }]} className="mt-2 h-60" lang={lang} />
     </details>
   );
 }

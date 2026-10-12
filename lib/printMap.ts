@@ -5,7 +5,7 @@
  * 한 번에 하나씩 찍는다 (WebGL 화면을 여러 개 동시에 만들지 않게).
  */
 
-import { MAP_STYLE_URL } from "@/components/map/CourseMapColors";
+import { localizeLabels, MAP_STYLE_URL, type MapLang } from "@/components/map/CourseMapColors";
 
 export interface MapShot {
   /** PNG data URL */
@@ -20,7 +20,7 @@ const cache = new Map<string, Promise<MapShot | null>>();
 /** 지도가 다 그려질 때까지 이만큼만 기다린다 (그 뒤에는 좌표 그림으로 대신) */
 const TIMEOUT_MS = 10000;
 
-async function shoot(points: { lat: number; lng: number }[], width: number, height: number): Promise<MapShot | null> {
+async function shoot(points: { lat: number; lng: number }[], width: number, height: number, lang: MapLang): Promise<MapShot | null> {
   if (typeof window === "undefined" || points.length === 0) return null;
   const ml = await import("maplibre-gl");
   const el = document.createElement("div");
@@ -32,7 +32,6 @@ async function shoot(points: { lat: number; lng: number }[], width: number, heig
   try {
     map = new ml.Map({
       container: el,
-      style: MAP_STYLE_URL,
       interactive: false,
       attributionControl: false,
       fadeDuration: 0,
@@ -45,6 +44,8 @@ async function shoot(points: { lat: number; lng: number }[], width: number, heig
       fitBoundsOptions: { padding: 36, maxZoom: 15 },
     });
     const m = map;
+    // 지명·장소 이름은 문서 언어로 (그 언어 이름이 없는 곳은 현지 이름)
+    m.setStyle(MAP_STYLE_URL, { transformStyle: (_prev, next) => localizeLabels(next, lang) });
     await new Promise<void>((resolve, reject) => {
       const started = Date.now();
       let settled = false;
@@ -86,11 +87,11 @@ async function shoot(points: { lat: number; lng: number }[], width: number, heig
 }
 
 /** 지도 그림 (같은 점·크기는 한 번만 찍는다) */
-export function captureMap(points: { lat: number; lng: number }[], width: number, height: number): Promise<MapShot | null> {
-  const key = `${width}x${height}:${points.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(";")}`;
+export function captureMap(points: { lat: number; lng: number }[], width: number, height: number, lang: MapLang = "ko"): Promise<MapShot | null> {
+  const key = `${lang}:${width}x${height}:${points.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(";")}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const run = () => shoot(points, width, height);
+  const run = () => shoot(points, width, height, lang);
   const p = queue.then(run, run);
   queue = p.catch(() => null);
   cache.set(key, p);

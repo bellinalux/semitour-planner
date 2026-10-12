@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BACKTRACK_COLOR, dayColor } from "@/components/map/CourseMapColors";
+import { BACKTRACK_COLOR, dayColor, type MapLang } from "@/components/map/CourseMapColors";
 import { captureMap, type MapShot } from "@/lib/printMap";
 import { backtrackLegs, type MapPoint } from "@/lib/regionPlan";
 
@@ -10,19 +10,19 @@ import { backtrackLegs, type MapPoint } from "@/lib/regionPlan";
  * 지도 그림을 찍는 동안은 data-print-pending이 붙어 있어 인쇄가 기다린다. 못 찍으면 fallback(좌표 그림)을 보여 준다.
  * lines: 날짜마다 점들 / colorIndex: 첫 줄의 날짜 색 번호 (날짜별 작은 지도는 그날 색)
  */
-export function MapFigure({ lines, width, height, colorIndex = 0, label, fallback = null }: { lines: MapPoint[][]; width: number; height: number; colorIndex?: number; label: string; fallback?: React.ReactNode }) {
+export function MapFigure({ lines, width, height, colorIndex = 0, label, fallback = null, lang = "ko" }: { lines: MapPoint[][]; width: number; height: number; colorIndex?: number; label: string; fallback?: React.ReactNode; lang?: MapLang }) {
   const pts = lines.flat();
   const key = pts.map((p) => `${p.lat},${p.lng}`).join(";");
   const [shot, setShot] = useState<{ key: string; shot: MapShot | null } | null>(null);
   useEffect(() => {
     let alive = true;
-    void captureMap(pts, width, height).then((s) => alive && setShot({ key, shot: s }));
+    void captureMap(pts, width, height, lang).then((s) => alive && setShot({ key, shot: s }));
     return () => {
       alive = false;
     };
     // 점이 바뀔 때만 다시 찍는다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, width, height]);
+  }, [key, width, height, lang]);
   const done = shot?.key === key;
   if (!done) return <div data-print-pending="map" style={{ aspectRatio: `${width} / ${height}` }} className="w-full rounded border border-slate-200 bg-slate-50" aria-label={`${label} 지도 그리는 중`} />;
   if (!shot.shot) return <>{fallback}</>;
