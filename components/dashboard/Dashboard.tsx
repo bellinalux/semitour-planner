@@ -40,6 +40,7 @@ import { QuotePanel } from "./QuotePanel";
 import { OptionsPanel } from "./options/OptionsPanel";
 import { TourCatalogPanel } from "./tours/TourCatalogPanel";
 import { UspPanel } from "./UspPanel";
+import { PlaceSuggestContext } from "./itinerary/PlaceSuggest";
 
 interface UspView {
   state: AsyncState;
@@ -185,6 +186,7 @@ export function Dashboard({
     <PackageRulesContext.Provider value={rules}>
     <div className="space-y-4 p-4">
       {itinerary.status === "success" && days.length > 0 && <QualityScoreCard input={input} days={days} pmChoice={pmChoice} />}
+      <PlaceSuggestContext.Provider value={{ favorites: library.segments, days }}>
       <ItineraryPanel
         state={itinerary}
         days={days}
@@ -214,6 +216,7 @@ export function Dashboard({
         onRegenerateCity={regionActions.onRegenerateCity}
         {...panelActions}
       />
+      </PlaceSuggestContext.Provider>
       {/* 일정표를 먼저 보이고, 전체 재구성·지도·규칙 등 점검은 그 아래에 */}
       {itinerary.status === "success" && days.length > 0 && <RestructurePanel input={input} rules={rules} days={days} pmChoice={pmChoice} onApplyDays={onProductDays} />}
       {itinerary.status === "success" && days.length > 0 && onRegroupDays && (

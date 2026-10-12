@@ -34,6 +34,9 @@ test("시각 앞 나라·비행/지상 이동 문구, 출발 공항이 다르면
   // 도착 뒤 100분은 비행이 아니라 지상 이동
   await expect(day1.getByText("공항에서 다음 장소까지 이동 1시간 40분")).toBeVisible();
   await expect(page.locator("#day-2")).toContainText("현지 시각 · 태국 (한국보다 2시간 느림)");
+  // 출국 수속 업계 기준 — 국제선 출발 3시간 전 공항 도착, 탑승 수속 마감 60분 전
+  await expect(day1.getByRole("note", { name: "출국 수속 기준" })).toContainText("공항 도착 16:50 (국제선 출발 3시간 전, 성수기 3시간 30분 전) · 탑승 수속 마감 18:50 · 탑승구 마감 19:20");
+  await expect(page.locator("#day-3").getByRole("note", { name: "출국 수속 기준" })).toContainText("공항 도착 20:50");
 
   // 출발 공항: 일정 김해 · 입력 인천 → 출발지를 김해로
   const panel = page.locator("#package-rules");

@@ -1,7 +1,8 @@
-import { AlertCircle, BookmarkPlus, Bus, Check, ChevronDown, ChevronUp, Clock, ExternalLink, Eye, Ticket, Trash2, Utensils, Wallet } from "lucide-react";
+import { AlertCircle, BookmarkPlus, Bus, Check, ChevronDown, ChevronUp, Clock, ExternalLink, Eye, Plane, Ticket, Trash2, Utensils, Wallet } from "lucide-react";
 import { useItemView } from "./ItemView";
 import { TravelLine } from "./TravelLine";
 import { SelectBox } from "./Selection";
+import type { AirportPlan } from "@/lib/airportStandard";
 import { photoOf } from "@/lib/photo";
 import { isBreakfastItem } from "@/lib/documents";
 import { hm } from "@/lib/timezone";
@@ -36,6 +37,8 @@ interface Props {
   nextIsFlight?: boolean;
   /** 항공 시각을 몰라 시각을 비운 항목 */
   untimed?: boolean;
+  /** 출발 항공 — 공항 도착·탑승 수속 마감 업계 기준 */
+  airport?: AirportPlan;
   currency: CurrencyCode;
   /** 이 항목이 속한 일차 (추천 옵션을 "선택 옵션"으로 추가할 때 필요) */
   dayNo: number;
@@ -84,6 +87,7 @@ export function TimelineItem({
   zone,
   nextIsFlight,
   untimed,
+  airport,
   currency,
   dayNo,
   days,
@@ -226,6 +230,18 @@ export function TimelineItem({
           <h4 className="text-sm font-semibold text-slate-900">{item.name}</h4>
         )}
 
+        {airport && (
+          <div role="note" aria-label="출국 수속 기준" className={`mt-1 rounded-md px-2.5 py-1.5 text-[11px] leading-4 ${airport.warning ? "bg-rose-50 text-rose-800" : "bg-sky-50 text-sky-900"}`}>
+            <p className="flex items-start gap-1.5">
+              <Plane className="mt-px size-3.5 shrink-0" aria-hidden />
+              <span className="text-pretty">
+                <b>출국 수속</b> — {airport.text}
+              </span>
+            </p>
+            <p className="mt-0.5 pl-5 text-[10.5px] opacity-80">탑승 수속·보안 검색·출국 심사 시간 (업계 기준: 공항·항공사 안내, 단체는 여행사 공항 집결). 마감 시각은 발권 항공사로 확인</p>
+            {airport.warning && <p className="mt-1 pl-5 font-semibold">{airport.warning}</p>}
+          </div>
+        )}
         {editing && <RelocateControls item={item} dayNo={dayNo} days={days} onRelocateItem={onRelocateItem} />}
         {photoOf(item) && !compact && (
           // eslint-disable-next-line @next/next/no-img-element -- 직접 올린 사진 data URL

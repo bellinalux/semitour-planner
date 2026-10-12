@@ -6,6 +6,10 @@ import { DAYS, mockAi } from "./mocks";
 const work = { days: DAYS, pmChoice: {}, meta: { packageName: "다낭 3일", cities: ["다낭"], noShopping: true, noOption: true, hotelGrade: "4성급", highlights: [] }, generatedCurrency: "KRW", usps: [], uspKey: null };
 const input = { destination: "다낭", days: 3, nights: 2, travelers: 4, departureDate: "2026-11-05", vehicleCostPerDay: 150000, guideCostPerDay: 100000, pricingMode: "target_margin", targetMarginRate: 20, tripScope: "overseas" };
 
+// 지식 창고 (다낭) — 앱의 다른 곳도 같은 자료를 읽으므로 전체 모양을 갖춘다
+const emptyCity = { city: "다낭", places: [], courses: [], needs: [], fieldNotes: [], researchedAt: "", researchCount: 0, learnedCount: 0, updatedAt: "" };
+const place = { seen: 1, agencies: [], fits: [], likes: [], dislikes: [], tips: [], fieldNotes: [], sources: [], verified: true, updatedAt: "" };
+
 async function setup(page: Page) {
   await mockAi(page);
   await page.addInitScript(
@@ -60,15 +64,36 @@ test("날짜 바로가기: 날마다 상태와 날짜를 보이고 누르면 그
   await expect(page.locator("#day-3")).toBeInViewport();
 });
 
-test("사이에 넣기 · 이동 시간 고치기", async ({ page }) => {
+test("사이에 넣기(장소 자동완성) · 이동 시간 고치기", async ({ page }) => {
+  await page.route(
+    (url) => url.pathname === "/api/knowledge" && url.searchParams.get("city") === "다낭",
+    (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ doc: { ...emptyCity, places: [{ ...place, key: "dragon", name: "용다리 불쇼", area: "한강", kind: "night", popularity: 80, stayWeb: 30, stayField: { avg: 40, n: 2 } }] } }) }),
+  );
   await setup(page);
   const day1 = page.locator("#day-1");
   await day1.getByRole("button", { name: "다낭 대성당 다음에 항목 넣기" }).click();
-  await day1.getByRole("textbox", { name: "넣을 항목 이름" }).fill("콩 카페");
+  await day1.getByRole("combobox", { name: "넣을 항목 이름" }).fill("콩 카페");
   await day1.getByRole("combobox", { name: "넣을 항목 유형" }).selectOption("meal");
   await day1.getByRole("button", { name: "넣기", exact: true }).click();
   const names = await day1.locator("h4").allInnerTexts();
   expect(names.findIndex((n) => n.includes("콩 카페"))).toBe(names.findIndex((n) => n.includes("다낭 대성당")) + 1);
+
+  // 장소 자동완성 — 지식 창고(그 도시)와 이 일정의 다른 날에서 찾는다
+  await day1.getByRole("button", { name: "콩 카페 다음에 항목 넣기" }).click();
+  const box = day1.getByRole("combobox", { name: "넣을 항목 이름" });
+  await box.fill("용다");
+  const list = day1.getByRole("listbox", { name: "장소 후보" });
+  await expect(list.getByRole("option")).toHaveCount(1);
+  await expect(list.getByRole("option").first()).toContainText("지식 창고");
+  await box.press("Enter");
+  await expect(day1.getByText("지식 창고에서 고름 — 체류 40분")).toBeVisible();
+  await day1.getByRole("button", { name: "넣기", exact: true }).click();
+  await expect(day1.getByRole("button", { name: "용다리 불쇼", exact: true })).toBeVisible();
+  // 다른 날 장소도 후보 (금액까지 함께)
+  await day1.getByRole("button", { name: "용다리 불쇼 다음에 항목 넣기" }).click();
+  await day1.getByRole("combobox", { name: "넣을 항목 이름" }).fill("바나");
+  await day1.getByRole("option", { name: /바나힐/ }).click();
+  await expect(day1.getByText("이 일정에서 고름 — 체류 240분 · 금액 50,000")).toBeVisible();
 
   // 이동 줄을 눌러 그 자리에서 고친다
   await day1.getByRole("button", { name: "다음 장소까지 이동 10분" }).click();

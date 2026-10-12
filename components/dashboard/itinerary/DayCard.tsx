@@ -28,6 +28,13 @@ import { RouteSketch } from "./RouteSketch";
 import { SessionBlock } from "./SessionBlock";
 import { DayTitle } from "./DayTitle";
 import { InsertSlot } from "./InsertSlot";
+import { airportPlan } from "@/lib/airportStandard";
+
+const addClock = (hhmm: string, add: number) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  const t = (((h * 60 + m + add) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+};
 import { TimelineItem, type ItemPatch } from "./TimelineItem";
 
 const SCORE_TONE: Record<string, string> = {
@@ -135,6 +142,23 @@ export function DayCard({
   const untimed = untimedIds(plan, pmChoiceForDay);
   const zones = zonesOfDay(plan, dayItems(plan, pmChoiceForDay), destination);
   const korea = zoneOf("한국")!;
+  // 출발 항공(도착 편이 아닌 항공 — 앞 줄이 항공이 아니고, 첫 줄이면 전날 끝이 항공이 아님) — 공항 도착·탑승 수속 마감 업계 기준, 지금 일정으로 공항에 닿는 시각
+  const prevDayLast = dayIndex > 0 ? days[dayIndex - 1].items[days[dayIndex - 1].items.length - 1] : undefined;
+  const airportOf = (index: number) => {
+    const it = plan.items[index];
+    if (it?.type !== "flight") return undefined;
+    const before = index > 0 ? plan.items[index - 1] : prevDayLast;
+    if (before?.type === "flight") return undefined;
+    const next = plan.items[index + 1];
+    const from = zones.get(it.id)?.country;
+    const to = next?.type === "flight" ? zones.get(next.id)?.country : undefined;
+    const scope = tripScope === "domestic" || (from && to && from === to) ? "domestic" : "international";
+    const dep = untimed.has(it.id) ? undefined : (it.fixedTime ?? timings.get(it.id)?.start);
+    const prev = index > 0 ? plan.items[index - 1] : undefined;
+    const prevEnd = prev && !untimed.has(prev.id) ? timings.get(prev.id)?.end : undefined;
+    const arriveAt = prev && prevEnd ? addClock(prevEnd, Math.max(0, prev.travelMinutesToNext ?? 0)) : undefined;
+    return airportPlan(dep, scope, arriveAt);
+  };
   const localZone = zoneOf(`${plan.overnightCity ?? ""} ${destination}`);
 
   // 이 날 확인할 것 — 한 줄로 접어 두고 펼치면 설명과 고치기 버튼
@@ -454,6 +478,7 @@ export function DayCard({
                     untimed={untimed.has(item.id)}
                     zone={hasFlight ? zones.get(item.id)?.country : undefined}
                     nextIsFlight={plan.items[index + 1]?.type === "flight"}
+                    airport={airportOf(index)}
                     beforeMeeting={morningFree.includes(item) ? { last: item === morningFree[morningFree.length - 1], meeting: meetingTime, lead } : undefined}
                     currency={currency}
                     dayNo={plan.day}
@@ -473,6 +498,7 @@ export function DayCard({
                       <InsertSlot
                         dayNo={plan.day}
                         after={item.name}
+                        city={city ?? (destination.split(/[,·]/)[0]?.trim() || undefined)}
                         onInsert={(added) => onChangeDay(plan.day, { items: [...plan.items.slice(0, index + 1), added, ...plan.items.slice(index + 1)] })}
                       />
                     </li>
