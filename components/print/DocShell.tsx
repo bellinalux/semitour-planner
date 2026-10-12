@@ -1,4 +1,5 @@
 import { companyLines } from "@/lib/company";
+import type { GuideBasics, GuideCityKit } from "@/lib/guideBook";
 import { QrCode } from "./QrCode";
 import { formatToday } from "@/lib/documents";
 import type { CompanyProfile, CourseMeta, DayPlan, QuoteData, TripInput } from "@/types";
@@ -27,6 +28,8 @@ export interface DocProps {
   season?: SeasonResponse | null;
   /** 웹 일정표(공유 링크) 주소 — 있으면 QR 코드로 넣는다 */
   shareUrl?: string | null;
+  /** 가이드 해설집 (이 일정 도시들의 원고·교육 자료) — 가이드 해설집 인쇄 직전에 불러온다 */
+  guide?: { kits: GuideCityKit[]; basics: GuideBasics } | null;
 }
 
 interface ShellProps {

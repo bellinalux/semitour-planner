@@ -80,6 +80,7 @@ export function SessionBlock({
         {items.map((item, index) => (
           <TimelineItem
             key={item.id}
+            city={city}
             item={item}
             order={index + 1}
             isLast={index === items.length - 1}

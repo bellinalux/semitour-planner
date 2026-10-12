@@ -479,6 +479,7 @@ export function DayCard({
                     zone={hasFlight ? zones.get(item.id)?.country : undefined}
                     nextIsFlight={plan.items[index + 1]?.type === "flight"}
                     airport={airportOf(index)}
+                    city={city ?? (destination.split(/[,·]/)[0]?.trim() || undefined)}
                     beforeMeeting={morningFree.includes(item) ? { last: item === morningFree[morningFree.length - 1], meeting: meetingTime, lead } : undefined}
                     currency={currency}
                     dayNo={plan.day}

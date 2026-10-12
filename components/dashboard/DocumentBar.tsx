@@ -1,7 +1,7 @@
 "use client";
 
 import { OPS_PAGE_PER_DAY_KEY, readOpsPagePerDay } from "@/components/print/OperationDoc";
-import { AlertTriangle, Bus, Calculator, Columns3, Languages, FileSignature, FileText, Printer, Receipt, Sparkles } from "lucide-react";
+import { AlertTriangle, BookMarked, Bus, Calculator, Columns3, FileSignature, FileText, Languages, Printer, Receipt, Sparkles } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 
 const PAGE_PER_DAY_EVENT = "semitour:ops-page-per-day";
@@ -165,6 +165,16 @@ export function DocumentBar({ disabled, missingLegal, unconfirmed, onPrint }: Pr
           />
           하루 한 쪽
         </label>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onPrint("guidebook")}
+          title="이 상품 일정 순서대로 장소 설명 원고 + 진행 멘트·기본기·비상 대응 + 현지 회화 (가이드 해설집에서 만든 원고)"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <BookMarked className="h-4 w-4 text-slate-400" aria-hidden />
+          가이드 해설집 인쇄
+        </button>
         <span className="text-[11px] text-slate-500">가이드·기사·랜드사에 넘기는 현장용 (가격 없음)</span>
       </div>
 

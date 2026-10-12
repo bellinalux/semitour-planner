@@ -19,6 +19,7 @@ const DOCS: [kind: string, button: string][] = [
   ["options", "비교 견적서 (A/B/C안·인원별)"],
   ["english", "영문 일정표·견적서 (English)"],
   ["packing", "준비물 체크리스트 인쇄"],
+  ["guidebook", "가이드 해설집 인쇄"],
 ];
 
 /** 꼬리말을 뺀 본문 글자 명령이 이보다 적으면 "거의 빈 쪽" (제목 한 줄·표 머리만 남은 쪽) */
@@ -55,7 +56,7 @@ async function printToPdf(page: Page, button: string) {
   return { full, footerOnly };
 }
 
-test("인쇄 문서 10종: 빈 쪽·제목만 있는 쪽 없이 PDF로 나온다", async ({ page }) => {
+test("인쇄 문서 11종: 빈 쪽·제목만 있는 쪽 없이 PDF로 나온다", async ({ page }) => {
   test.setTimeout(300_000);
   await mockAi(page);
   // 영문 문서 번역은 원문 그대로 돌려준다

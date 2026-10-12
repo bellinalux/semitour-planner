@@ -23,7 +23,7 @@ interface Props {
   ops: OpsData;
   onChange: (next: OpsData) => void;
   /** 가이드 링크 (운영 지시서 휴대폰용) */
-  guide?: { build: (withNames: boolean) => GuideSheet | null; planKey: string; city?: string };
+  guide?: { build: (withNames: boolean) => GuideSheet | null; planKey: string; city?: string; cities?: string[] };
   /** 수배 요청 문구에 넣을 상품 이름·회사 이름 */
   title?: string;
   companyName?: string;
@@ -76,7 +76,7 @@ export function OpsPanel({ input, days, pmChoice, quote, ops, onChange, guide, t
         {tab === "checklist" && <Checklist items={items} ops={ops} onChange={onChange} overdue={due.overdue.map((i) => i.label)} soon={due.soon.map((i) => i.label)} />}
         {tab === "suppliers" && <SupplierBookingsTab input={input} days={days} pmChoice={pmChoice} ops={ops} onChange={onChange} title={title} companyName={companyName} />}
         {tab === "rooming" && <Rooming ops={ops} onChange={onChange} perRoom={input.guestsPerUnit} />}
-        {tab === "guide" && guide && <GuideLinkTab build={guide.build} planKey={guide.planKey} city={guide.city} />}
+        {tab === "guide" && guide && <GuideLinkTab build={guide.build} planKey={guide.planKey} city={guide.city} cities={guide.cities} />}
         {tab === "settlement" && !hideCosts && <SettlementView quote={quote} ops={ops} onChange={onChange} money={money} />}
       </div>
     </SectionCard>

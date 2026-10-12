@@ -66,6 +66,9 @@ import { useKnowledgeEdits } from "@/hooks/useKnowledgeEdits";
 import { usePreResearch } from "@/hooks/usePreResearch";
 import { KnowledgeMenu } from "@/components/layout/KnowledgeMenu";
 import { RateBookMenu } from "@/components/layout/RateBookMenu";
+import { GuideBookMenu } from "@/components/guidebook/GuideBookMenu";
+import { tripPlacesByCity, type GuideBasics, type GuideCityKit } from "@/lib/guideBook";
+import { fetchKits } from "@/lib/guideBookClient";
 import { addVersion, loadVersions, makeVersion, versionKey, type QuoteVersion } from "@/lib/quoteVersions";
 import { packingList, packingText } from "@/lib/packingList";
 import type { TravelInfo } from "@/lib/schemas/travelInfo";
@@ -171,13 +174,15 @@ export function PlannerApp() {
   // 일정표 「여행 정보」 (시차·전압·통화·입국·긴급 연락처) — 일정표를 인쇄할 때 한 번 찾는다
   const [travelInfo, setTravelInfo] = useState<{ key: string; info: TravelInfo } | null>(null);
   // 인쇄 문서는 견적이 준비된 뒤에만 만들 수 있다
+  // 가이드 해설집 인쇄용 — 이 일정 도시들의 원고·교육 자료 (인쇄 직전에 불러온다)
+  const [guideDocData, setGuideDocData] = useState<{ kits: GuideCityKit[]; basics: GuideBasics } | null>(null);
   const docData = useMemo(
     // 고객 문서는 선택한 판매 채널의 소비자가를 쓰고, 내부 검토서는 원래 견적(rawQuote)으로 모든 채널을 본다
     () =>
       quote?.ok
-        ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company, translations, translationsByLang, travelInfo: travelInfo?.key === input.destination.trim() ? travelInfo.info : null, shareUrl: shareUrlOf(suggestPlanName(input, meta)) }
+        ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company, translations, translationsByLang, travelInfo: travelInfo?.key === input.destination.trim() ? travelInfo.info : null, shareUrl: shareUrlOf(suggestPlanName(input, meta)), guide: guideDocData }
         : null,
-    [quote, input, days, pmChoice, meta, company, translations, translationsByLang, travelInfo],
+    [quote, input, days, pmChoice, meta, company, translations, translationsByLang, travelInfo, guideDocData],
   );
 
   const stays = useMemo(() => overnightNights(days), [days]);
@@ -563,7 +568,15 @@ export function PlannerApp() {
 
   /** 문서 인쇄 — 영문 문서는 아직 번역하지 않은 글을 먼저 번역하고, 일정표는 여행 정보를 먼저 찾는다 */
   const printDocument = async (kind: DocKind) => {
-    if (kind === "itinerary" || kind === "packing" || kind === "operation") await ensureTravelInfo();
+    if (kind === "itinerary" || kind === "packing" || kind === "operation" || kind === "guidebook") await ensureTravelInfo();
+    if (kind === "guidebook") {
+      try {
+        setGuideDocData(await fetchKits(Object.keys(tripPlacesByCity(days, pmChoice, input.destination))));
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : "가이드 해설집을 불러오지 못했습니다.");
+        return;
+      }
+    }
 
     const foreign: Partial<Record<DocKind, DocLang>> = { english: "en", japanese: "ja", chinese: "zh" };
     const lang = foreign[kind];
@@ -685,6 +698,12 @@ export function PlannerApp() {
               onAddOption={(tour, dayNo, price) =>
                 update({ options: [...input.options, { ...tourToOption(tour, dayNo, input), costPerPerson: price.cost, pricePerPerson: price.sale }] })
               }
+              buttonClassName="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 [&>span]:hidden sm:[&>span]:inline"
+            />
+            <GuideBookMenu
+              defaultCity={citiesOf(input.destination)[0] ?? ""}
+              tripPlaces={tripPlacesByCity(days, pmChoice, input.destination)}
+              travelers={input.travelers}
               buttonClassName="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 [&>span]:hidden sm:[&>span]:inline"
             />
             <AccountMenu />
@@ -831,7 +850,7 @@ export function PlannerApp() {
               onGenerate: handleGenerateUsp,
             }}
             exporter={exporter}
-            ops={!showOps ? undefined : { ...ops, title: planKey, companyName: company.name, guide: { planKey, city: citiesOf(input.destination)[0] ?? "", build: (withNames) => (docData ? buildGuideSheet(docData, withNames ? ops.data.participants : []) : null) } }}
+            ops={!showOps ? undefined : { ...ops, title: planKey, companyName: company.name, guide: { planKey, city: citiesOf(input.destination)[0] ?? "", cities: Object.keys(tripPlacesByCity(days, pmChoice, input.destination)), build: (withNames) => (docData ? buildGuideSheet(docData, withNames ? ops.data.participants : []) : null) } }}
             versions={{ versions, currency: input.currency, customer: input.customerName.trim(), onSaveNow: () => saveVersion("직접 저장") }}
             notice={!showOps ? undefined : {
               buildNotice: async () => (docData ? departureNotice(docData, await ensureTravelInfo(), season.result) : null),

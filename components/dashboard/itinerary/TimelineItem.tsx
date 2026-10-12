@@ -2,6 +2,7 @@ import { AlertCircle, BookmarkPlus, Bus, Check, ChevronDown, ChevronUp, Clock, E
 import { useItemView } from "./ItemView";
 import { TravelLine } from "./TravelLine";
 import { SelectBox } from "./Selection";
+import { ItemGuide } from "@/components/guidebook/ItemGuide";
 import type { AirportPlan } from "@/lib/airportStandard";
 import { photoOf } from "@/lib/photo";
 import { isBreakfastItem } from "@/lib/documents";
@@ -39,6 +40,8 @@ interface Props {
   untimed?: boolean;
   /** 출발 항공 — 공항 도착·탑승 수속 마감 업계 기준 */
   airport?: AirportPlan;
+  /** 이 항목의 도시 (가이드 원고를 만들 때) */
+  city?: string;
   currency: CurrencyCode;
   /** 이 항목이 속한 일차 (추천 옵션을 "선택 옵션"으로 추가할 때 필요) */
   dayNo: number;
@@ -88,6 +91,7 @@ export function TimelineItem({
   nextIsFlight,
   untimed,
   airport,
+  city,
   currency,
   dayNo,
   days,
@@ -117,6 +121,8 @@ export function TimelineItem({
   const canFold = !editing && view === "compact";
   const cost = (fee ? item.entryFee : 0) + (meal ? item.mealCost : 0);
   const showStay = item.stayMinutes > 0 && item.type !== "flight" && item.type !== "transfer";
+  // 가이드 원고를 붙일 항목 (장소만 — 항공·이동·숙소·자유시간·식사 제외)
+  const guideless = notPlace || ["flight", "transfer", "hotel", "free_time", "meal"].includes(item.type ?? "sightseeing");
   const estimated = item.isEstimated && !notPlace && (fee || meal || showStay) && !["flight", "transfer", "hotel"].includes(item.type ?? "");
 
   return (
@@ -330,6 +336,7 @@ export function TimelineItem({
                 </span>
               )}
               <FeeCheckBadges item={item} symbol={symbol} onChangeItem={onChangeItem} />
+              {!guideless && <ItemGuide itemName={item.name} city={city} stayMinutes={item.stayMinutes} onStay={(stayMinutes) => onChangeItem(item.id, { stayMinutes, stayEdited: true })} allowCreate={false} />}
             </div>
           </>
         ) : (
@@ -505,6 +512,7 @@ export function TimelineItem({
                 </button>
               )}
               <FeeCheckBadges item={item} symbol={symbol} onChangeItem={onChangeItem} />
+              {!guideless && !editing && <ItemGuide itemName={item.name} city={city} stayMinutes={item.stayMinutes} onStay={(stayMinutes) => onChangeItem(item.id, { stayMinutes, stayEdited: true })} allowCreate />}
             </div>
 
             {check && (check.sourceName || check.note) && (

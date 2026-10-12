@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { explainMinutes, findScript, type GuideBasics, type GuideScript } from "@/lib/guideBook";
 import { computeItemTimings, dayMeetingTime, dayTourStart } from "@/lib/dayLoad";
 import { timeRange } from "@/lib/dayTidy";
 import { dayDate, dayMeals, documentItems, tripPeriod } from "@/lib/documents";
@@ -39,6 +40,24 @@ export const guideSheetSchema = z.object({
     )
     .max(60),
   names: z.array(z.object({ name: str(60), room: z.number().int().min(0).max(999), note: str(80) })).max(200).default([]),
+  /** 가이드 해설집 원고 (이 일정 장소 중 원고가 있는 곳) — 현장에서 휴대폰으로 본다 */
+  scripts: z
+    .array(
+      z.object({
+        name: str(80),
+        status: z.enum(["draft", "reviewed"]),
+        minutes: z.number().int().min(0).max(240),
+        intro: str(400),
+        points: z.array(z.object({ title: str(80), text: str(1200) })).max(8),
+        cautions: z.array(str(240)).max(8),
+        meetPoint: str(240),
+        mustKnow: z.array(str(200)).max(5),
+      }),
+    )
+    .max(80)
+    .default([]),
+  /** 진행 멘트·기본기·비상 대응 (회사 교육 자료) */
+  tips: z.array(z.object({ title: str(60), lines: z.array(str(400)).max(20) })).max(20).default([]),
   updatedAt: str(40),
 });
 export type GuideSheet = z.infer<typeof guideSheetSchema>;
@@ -122,6 +141,8 @@ export function buildGuideSheet(
       };
     }),
     names: participants.slice(0, 200).map((p) => ({ name: cut(p.name, 60), room: p.room, note: cut(p.note, 80) })),
+    scripts: [],
+    tips: [],
     updatedAt: now.toISOString(),
   };
 }
@@ -180,4 +201,33 @@ export function fieldStays(sheet: Pick<GuideSheet, "days">, state: Pick<GuideSta
     }
   }
   return out;
+}
+
+/** 가이드 링크에 해설집 원고·교육 자료를 붙인다 — 일정 줄 이름에 맞는 원고만, 같은 원고는 한 번 */
+export function attachGuide(sheet: GuideSheet, scripts: GuideScript[], basics: GuideBasics | null): GuideSheet {
+  const picked = new Map<string, GuideScript>();
+  for (const d of sheet.days) {
+    for (const r of d.rows) {
+      if (r.move) continue;
+      const s = findScript(scripts, r.title);
+      if (s && !picked.has(s.key)) picked.set(s.key, s);
+    }
+  }
+  return {
+    ...sheet,
+    scripts: [...picked.values()].slice(0, 80).map((s) => ({
+      name: s.name,
+      status: s.status,
+      minutes: Math.min(240, explainMinutes(s)),
+      intro: s.intro,
+      points: s.points.map((p) => ({ title: p.title, text: p.text })),
+      cautions: s.cautions,
+      meetPoint: s.site.meetPoint,
+      mustKnow: s.mustKnow,
+    })),
+    tips: (basics?.sections ?? [])
+      .filter((b) => b.group !== "상품 원칙" && b.lines.some((l) => l.trim()))
+      .slice(0, 20)
+      .map((b) => ({ title: b.title, lines: b.lines.filter((l) => l.trim()).slice(0, 20) })),
+  };
 }

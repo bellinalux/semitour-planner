@@ -9,7 +9,42 @@ const when = (iso: string) => {
 };
 
 /** 가이드 화면 — 날짜 탭, 일정 진행 체크, 현장 기록 (변경·지연·사고, 고객 동의) */
+type SheetScript = GuideSheet["scripts"][number];
+const nameKey = (s: string) => s.replace(/\(.*?\)|\[.*?\]/g, "").toLowerCase().replace(/[\s·,.'"\-–_/!?~]/g, "");
+
+/** 일정 줄의 해설 원고 — 눌러서 펼친다 (한 줄 소개·설명 포인트·주의·집결·꼭 외울 것) */
+function RowScript({ s }: { s: SheetScript }) {
+  return (
+    <details className="mt-1 rounded-md bg-violet-50 px-2 py-1 text-xs text-violet-950">
+      <summary className="cursor-pointer font-semibold text-violet-800">
+        🎙 해설 원고 {s.minutes}분{s.status === "reviewed" ? "" : " (초안)"}
+      </summary>
+      <div className="mt-1 space-y-1.5 text-slate-800">
+        {s.intro && <p className="font-medium">{s.intro}</p>}
+        <ol className="space-y-1">
+          {s.points.map((p, i) => (
+            <li key={i}>
+              <b>
+                {i + 1}. {p.title}
+              </b>{" "}
+              {p.text}
+            </li>
+          ))}
+        </ol>
+        {s.meetPoint && <p className="text-slate-600">집결: {s.meetPoint}</p>}
+        {s.cautions.length > 0 && <p className="text-amber-800">주의: {s.cautions.join(" · ")}</p>}
+        {s.mustKnow.length > 0 && <p className="text-emerald-800">꼭 외울 것: {s.mustKnow.join(" · ")}</p>}
+      </div>
+    </details>
+  );
+}
+
 export function GuideView({ id, sheet, initial }: { id: string; sheet: GuideSheet; initial: GuideState }) {
+  // 일정 줄 이름에 맞는 원고 (같은 이름 먼저, 없으면 한쪽 이름이 다른 쪽에 들어 있는 것)
+  const scriptOf = (title: string): SheetScript | undefined => {
+    const k = nameKey(title);
+    return sheet.scripts.find((s) => nameKey(s.name) === k) ?? sheet.scripts.filter((s) => nameKey(s.name).length >= 2 && k.includes(nameKey(s.name))).sort((a, b) => b.name.length - a.name.length)[0];
+  };
   const [state, setState] = useState(initial);
   const [dayNo, setDayNo] = useState(sheet.days[0]?.day ?? 1);
   const [draft, setDraft] = useState<GuideLogInput>({ type: "일정 변경", day: sheet.days[0]?.day ?? 1, text: "", consent: "na", by: "" });
@@ -110,6 +145,7 @@ export function GuideView({ id, sheet, initial }: { id: string; sheet: GuideShee
                       </span>
                     ))}
                     {done && <span className="block text-[11px] text-emerald-700">✓ {when(done)} 진행</span>}
+                    {scriptOf(r.title) && <RowScript s={scriptOf(r.title)!} />}
                   </span>
                 </li>
               );
@@ -122,6 +158,24 @@ export function GuideView({ id, sheet, initial }: { id: string; sheet: GuideShee
             </p>
           ))}
         </section>
+      )}
+
+      {sheet.tips.length > 0 && (
+        <details className="rounded-xl border border-slate-200 p-3 text-xs">
+          <summary className="cursor-pointer font-semibold">진행 멘트·기본기·비상 대응</summary>
+          <div className="mt-2 space-y-2">
+            {sheet.tips.map((t) => (
+              <div key={t.title}>
+                <p className="font-semibold">{t.title}</p>
+                <ul className="list-disc space-y-0.5 pl-4 text-slate-700">
+                  {t.lines.map((l, i) => (
+                    <li key={i}>{l}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </details>
       )}
 
       {sheet.names.length > 0 && (

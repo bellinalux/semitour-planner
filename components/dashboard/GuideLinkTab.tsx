@@ -4,7 +4,8 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { CopyButton } from "@/components/dashboard/CopyButton";
 import { postJson } from "@/lib/api";
-import { fieldReport, fieldStays, type GuideSheet, type GuideState } from "@/lib/guideSheet";
+import { attachGuide, fieldReport, fieldStays, type GuideSheet, type GuideState } from "@/lib/guideSheet";
+import { fetchKits } from "@/lib/guideBookClient";
 
 const LINKS_KEY = "semitour-planner:guideLinks";
 const readLinks = (): Record<string, string> => {
@@ -19,7 +20,7 @@ const readLinks = (): Record<string, string> => {
  * 가이드 링크·현장 기록 — 운영 지시서를 가이드 휴대폰용 링크로 만들고(같은 상품은 같은 링크), 가이드가 남긴 진행 체크·변경·사고 기록을
  * 불러와 현장 보고서로 복사한다. 명단은 "명단 포함"을 고를 때만 링크에 넣는다.
  */
-export function GuideLinkTab({ build, planKey, city = "" }: { build: (withNames: boolean) => GuideSheet | null; planKey: string; city?: string }) {
+export function GuideLinkTab({ build, planKey, city = "", cities = [] }: { build: (withNames: boolean) => GuideSheet | null; planKey: string; city?: string; cities?: string[] }) {
   const [withNames, setWithNames] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -28,18 +29,22 @@ export function GuideLinkTab({ build, planKey, city = "" }: { build: (withNames:
   const url = id && typeof window !== "undefined" ? `${window.location.origin}/g/${id}` : "";
 
   const publish = async () => {
-    const sheet = build(withNames);
-    if (!sheet) return;
+    const built = build(withNames);
+    if (!built) return;
     setBusy(true);
     setMessage("");
     try {
+      // 가이드 해설집 원고·교육 자료를 함께 넣는다 (못 불러오면 원고 없이)
+      const guide = await fetchKits(cities.length > 0 ? cities : [city]).catch(() => null);
+      const sheet = guide ? attachGuide(built, guide.kits.flatMap((k) => k.scripts), guide.basics) : built;
       const r = await postJson<{ id: string }>("/api/guide", { ...(id ? { id } : {}), sheet });
       try {
         localStorage.setItem(LINKS_KEY, JSON.stringify({ ...readLinks(), [planKey]: r.id }));
       } catch {
         /* 다음에 새 링크 */
       }
-      setMessage(id ? "같은 링크의 일정을 고쳤습니다 (현장 기록은 그대로)." : "가이드 링크를 만들었습니다.");
+      const extra = sheet.scripts.length > 0 ? ` 해설 원고 ${sheet.scripts.length}곳을 함께 넣었습니다.` : "";
+      setMessage((id ? "같은 링크의 일정을 고쳤습니다 (현장 기록은 그대로)." : "가이드 링크를 만들었습니다.") + extra);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "링크를 만들지 못했습니다.");
     } finally {

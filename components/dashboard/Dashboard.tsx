@@ -41,6 +41,8 @@ import { OptionsPanel } from "./options/OptionsPanel";
 import { TourCatalogPanel } from "./tours/TourCatalogPanel";
 import { UspPanel } from "./UspPanel";
 import { PlaceSuggestContext } from "./itinerary/PlaceSuggest";
+import { GuideScriptsContext, useGuideScripts } from "@/components/guidebook/GuideScriptsContext";
+import { tripPlacesByCity } from "@/lib/guideBook";
 
 interface UspView {
   state: AsyncState;
@@ -181,11 +183,14 @@ export function Dashboard({
   const { onAddTour, ...panelActions } = itemActions;
   // 패키지 규칙표 — 운영 방식·등급·고객·지역 (일정 카드 점검이 컨텍스트로 읽는다)
   const rules = packageRules(input, days.map((d) => d.overnightCity ?? ""));
+  // 가이드 해설집 — 이 일정 도시들의 장소 설명 원고 (항목에 "해설 n분")
+  const guideScripts = useGuideScripts(Object.keys(tripPlacesByCity(days, pmChoice, input.destination)), input.travelers);
 
   return (
     <PackageRulesContext.Provider value={rules}>
     <div className="space-y-4 p-4">
       {itinerary.status === "success" && days.length > 0 && <QualityScoreCard input={input} days={days} pmChoice={pmChoice} />}
+      <GuideScriptsContext.Provider value={guideScripts}>
       <PlaceSuggestContext.Provider value={{ favorites: library.segments, days }}>
       <ItineraryPanel
         state={itinerary}
@@ -217,6 +222,7 @@ export function Dashboard({
         {...panelActions}
       />
       </PlaceSuggestContext.Provider>
+      </GuideScriptsContext.Provider>
       {/* 일정표를 먼저 보이고, 전체 재구성·지도·규칙 등 점검은 그 아래에 */}
       {itinerary.status === "success" && days.length > 0 && <RestructurePanel input={input} rules={rules} days={days} pmChoice={pmChoice} onApplyDays={onProductDays} />}
       {itinerary.status === "success" && days.length > 0 && onRegroupDays && (
