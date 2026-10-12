@@ -1,7 +1,14 @@
 "use client";
 
+import { OPS_PAGE_PER_DAY_KEY, readOpsPagePerDay } from "@/components/print/OperationDoc";
 import { AlertTriangle, Bus, Calculator, Columns3, Languages, FileSignature, FileText, Printer, Receipt, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+
+const PAGE_PER_DAY_EVENT = "semitour:ops-page-per-day";
+const subscribePagePerDay = (cb: () => void) => {
+  window.addEventListener(PAGE_PER_DAY_EVENT, cb);
+  return () => window.removeEventListener(PAGE_PER_DAY_EVENT, cb);
+};
 import { useHideCosts } from "@/components/SessionContext";
 import { DOC_LABELS, type DocKind } from "@/components/print/PrintDocuments";
 
@@ -34,6 +41,8 @@ const INTERNAL: { kind: DocKind; icon: typeof FileText; description: string } = 
 
 /** 고객용 문서를 브라우저 인쇄로 PDF 저장한다 */
 export function DocumentBar({ disabled, missingLegal, unconfirmed, onPrint }: Props) {
+  // 운영 지시서 "하루 한 쪽" — 이 브라우저에 기억
+  const pagePerDay = useSyncExternalStore(subscribePagePerDay, readOpsPagePerDay, () => false);
   const [pending, setPending] = useState<DocKind | null>(null);
   const hideCosts = useHideCosts();
   const [checked, setChecked] = useState(false);
@@ -140,6 +149,22 @@ export function DocumentBar({ disabled, missingLegal, unconfirmed, onPrint }: Pr
           <Bus className="h-4 w-4 text-slate-400" aria-hidden />
           운영 지시서
         </button>
+        <label className="inline-flex items-center gap-1 text-[11px] text-slate-600" title="켜면 날마다 새 쪽에서 시작합니다 (현장에서 하루 한 장씩 나눠 줄 때). 끄면 이어서 인쇄해 종이를 아낍니다">
+          <input
+            type="checkbox"
+            checked={pagePerDay}
+            onChange={(e) => {
+              try {
+                localStorage.setItem(OPS_PAGE_PER_DAY_KEY, e.target.checked ? "1" : "0");
+              } catch {
+                /* 무시 */
+              }
+              window.dispatchEvent(new Event(PAGE_PER_DAY_EVENT));
+            }}
+            className="size-3.5"
+          />
+          하루 한 쪽
+        </label>
         <span className="text-[11px] text-slate-500">가이드·기사·랜드사에 넘기는 현장용 (가격 없음)</span>
       </div>
 

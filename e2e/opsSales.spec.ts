@@ -130,7 +130,7 @@ test("영문 웹 일정표 링크 · 시리즈 출발 할인 · 채널 등록 �
   await expect(page.getByRole("link", { name: "Call us" }).or(page.getByText("Last updated"))).toBeVisible();
 });
 
-test("여행일정표: 업계 표 형식(일자·지역·교통편·시간·일정·식사)과 조건 표식·쇼핑·선택관광·가이드 경비·여행 정보", async ({ page }) => {
+test("여행일정표: 날짜별 표(머리 띠·시간·일정·교통편, 끝 줄 식사·호텔)와 조건 표식·쇼핑·선택관광·가이드 경비·여행 정보", async ({ page }) => {
   await mockAi(page);
   await page.addInitScript(() => {
     window.print = () => undefined;
@@ -151,8 +151,10 @@ test("여행일정표: 업계 표 형식(일자·지역·교통편·시간·일�
   const doc = page.locator(".print-root");
   await expect(doc).toContainText("일자별 일정");
   // 인쇄 영역은 화면 읽기에서 숨겨져(aria-hidden) 있어 태그로 확인한다
-  await expect(doc.locator("th")).toContainText(["일자", "지역", "교통편", "시간", "일정", "식사"]);
-  await expect(doc).toContainText("제1일");
+  // 날마다 표 하나: 머리 띠(제n일 · 날짜 · 지역) + 시간·일정·교통편 칸, 끝 줄에 식사·호텔
+  await expect(doc.locator("thead").first()).toContainText("제1일");
+  await expect(doc.locator("th")).toContainText(["시간", "일정", "교통편"]);
+  await expect(doc).toContainText("🍴");
   // 둘째 날: 호텔 미팅 → 이동 → 첫 장소 (미팅 시각과 첫 장소 시각이 다르다)
   await expect(doc).toContainText("호텔 로비 미팅 후 출발");
   await expect(doc.locator('ul[aria-label="상품 조건"]')).toContainText("노쇼핑");

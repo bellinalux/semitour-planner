@@ -6,10 +6,8 @@ import type { Map as MlMap, Marker } from "maplibre-gl";
 import { backtrackLegs, type MapPoint } from "@/lib/regionPlan";
 import { BACKTRACK_COLOR, dayColor } from "./CourseMapColors";
 
-/** 지도 바탕 — OpenFreeMap (키·가입 없음, OpenStreetMap 자료). 나중에 다른 지도 공급원으로 바꿀 때 여기만 고친다 */
-export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
-
-export { BACKTRACK_COLOR, dayColor } from "./CourseMapColors";
+import { MAP_STYLE_URL } from "./CourseMapColors";
+export { BACKTRACK_COLOR, dayColor, MAP_STYLE_URL } from "./CourseMapColors";
 
 interface Props {
   /** 날짜별 점 (보여 줄 날만) */

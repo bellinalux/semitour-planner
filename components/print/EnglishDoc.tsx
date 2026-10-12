@@ -7,7 +7,10 @@ import { localPayRows } from "@/lib/fees";
 import { dayRegion, dayTable, shoppingStops, shortDescription, visitStyle } from "@/lib/itineraryDoc";
 import { singleSupplement } from "@/lib/pricing";
 import type { ItineraryItem } from "@/types";
-import { docAccent, type DocProps } from "./DocShell";
+import { docAccent, PageFooterStyle, type DocProps } from "./DocShell";
+import { MapFigure } from "./MapFigure";
+import { RouteFigure } from "./RouteFigure";
+import { hotelPins, mapPoints } from "@/lib/regionPlan";
 
 const STAY_TYPES = new Set(["sightseeing", "experience", "massage", "shopping"]);
 const STYLE_TONE = { 입장: "bg-emerald-100 text-emerald-800", 하차: "bg-sky-100 text-sky-800", 차창: "bg-slate-200 text-slate-700" } as const;
@@ -15,7 +18,7 @@ const COL_WIDTH = ["w-16", "w-20", "w-16", "w-12", "", "w-28"];
 
 function Section({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
   return (
-    <section className="mt-4 break-inside-avoid">
+    <section className="mt-4">
       <h2 className="mb-1 border-b pb-0.5 text-sm font-bold" style={{ color, borderColor: color }}>
         {title}
       </h2>
@@ -77,8 +80,14 @@ export function EnglishDoc({ input, days, pmChoice, quote, meta, company, transl
     );
   };
 
+  const routePoints = mapPoints(days, pmChoice, hotelPins(input.selectedHotels));
   return (
     <article lang={lang} className="mx-auto max-w-[190mm] break-keep bg-white p-8 text-[11px] leading-5 text-slate-900 print:p-0">
+      {/* 쪽마다 아래에 회사 연락처·쪽 번호 (문서 끝 블록이 혼자 다음 쪽으로 넘어가지 않게) */}
+      <PageFooterStyle
+        company={company}
+        text={[company.name.trim(), L.footer, [company.phone, company.email, company.emergencyContact.trim() && `${L.emergency} ${company.emergencyContact.trim()}`].filter(Boolean).join(" · ")].filter(Boolean).join(" · ")}
+      />
       <div className="h-1.5 rounded-t print:rounded-none" style={{ background: accent }} aria-hidden />
       <header className="flex items-end justify-between gap-4 border-b-2 px-1 pb-3 pt-3" style={{ borderColor: accent }}>
         <div className="flex items-end gap-2.5">
@@ -184,6 +193,12 @@ export function EnglishDoc({ input, days, pmChoice, quote, meta, company, transl
         </Section>
       )}
 
+      {routePoints.flat().length >= 2 && (
+        <Section title={L.routeMap} color={accent}>
+          <MapFigure lines={routePoints} width={680} height={340} label={L.routeMap} fallback={<RouteFigure days={days} pmChoice={pmChoice} hotels={hotelPins(input.selectedHotels)} />} />
+        </Section>
+      )}
+
       <Section title={L.dayByDay} color={accent}>
         <table className="w-full border-collapse text-[10.5px]">
           <thead>
@@ -207,7 +222,7 @@ export function EnglishDoc({ input, days, pmChoice, quote, meta, company, transl
               .join(" → ");
             const span = table.rows.length + (table.overnight ? 1 : 0);
             return (
-              <tbody key={d.day} className="break-inside-avoid border-b-2 border-slate-200 align-top">
+              <tbody key={d.day} className="border-b-2 border-slate-200 align-top">
                 {table.rows.map((r, i) => (
                   <tr key={r.key} className="border-b border-slate-100">
                     {i === 0 && (
@@ -362,23 +377,18 @@ export function EnglishDoc({ input, days, pmChoice, quote, meta, company, transl
         </Section>
       )}
 
-      <Section title={L.cancel} color={accent}>
-        <p className="text-slate-600">{L.cancelIntro}</p>
-        <ul className="list-disc pl-5 text-slate-700">
-          {L.cancelTerms.map((c) => (
-            <li key={c}>{c}</li>
-          ))}
-        </ul>
-      </Section>
+      {/* 짧은 끝 구획은 통째로 — 마지막 두어 줄만 다음 쪽에 혼자 남지 않게 */}
+      <div className="break-inside-avoid">
+        <Section title={L.cancel} color={accent}>
+          <p className="text-slate-600">{L.cancelIntro}</p>
+          <ul className="list-disc pl-5 text-slate-700">
+            {L.cancelTerms.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        </Section>
+      </div>
 
-      <footer className="mt-6 border-t border-slate-300 pt-3 text-[10px] leading-4 text-slate-600">
-        <p>{L.footer}</p>
-        {(company.phone || company.email || company.emergencyContact.trim()) && (
-          <p className="mt-1">
-            {L.contact}: {[company.phone, company.email, company.emergencyContact.trim() && `${L.emergency} ${company.emergencyContact.trim()}`].filter(Boolean).join(" · ")}
-          </p>
-        )}
-      </footer>
     </article>
   );
 }

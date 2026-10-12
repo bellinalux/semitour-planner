@@ -70,7 +70,7 @@ test("코스 지도: 날짜별 거리와 반복 지역을 보여 주고, 다시 
   await expect(group.getByRole("list", { name: "반복 이동 지역" })).toBeVisible();
 });
 
-test("인쇄 일정표에 날짜별 코스 그림이 들어간다", async ({ page }) => {
+test("인쇄 일정표에 전체·날짜별 코스 지도(지도 바탕 + 번호)가 들어간다", async ({ page }) => {
   await setup(page);
   await page.goto("/");
   await page.getByRole("button", { name: /^여행일정표/ }).first().click();
@@ -80,9 +80,15 @@ test("인쇄 일정표에 날짜별 코스 그림이 들어간다", async ({ pag
     await confirm.getByRole("button", { name: "인쇄" }).click();
   }
   const doc = page.locator(".print-root");
-  await expect(doc).toContainText("코스 그림");
-  await expect(doc.locator('svg[aria-label="날짜별 코스 그림"] circle')).toHaveCount(6);
-  await expect(doc).toContainText("DAY 1: 1.한 시장 2.바나힐");
+  await expect(doc).toContainText("코스 지도");
+  // 지도 바탕은 그림으로 찍어 넣고, 그 위에 번호를 얹는다
+  const whole = doc.locator('figure[aria-label="여행 전체 코스 지도"]');
+  await expect(whole.locator("img")).toHaveCount(1);
+  await expect(whole.locator("svg circle")).toHaveCount(6);
+  await expect(doc.locator("[data-print-pending]")).toHaveCount(0);
+  await expect(doc).toContainText("날짜별 코스 지도");
+  await expect(doc.locator('figure[aria-label="DAY 1 코스 지도"] img')).toHaveCount(1);
+  await expect(doc).toContainText("DAY 1 1.한 시장 2.바나힐");
 });
 
 test("고객 웹 일정표: 좌표가 있는 날은 '지도로 보기'를 펼치면 지도가 나온다", async ({ page }) => {

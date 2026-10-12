@@ -71,7 +71,7 @@ function OneCover({ recipient, breakBefore, data }: { recipient: DocRecipient; b
           </p>
         </DocSection>
 
-        <DocSection title="③ 서명">
+        <DocSection title="③ 서명" keep>
           <p className="mb-2 text-slate-600">
             위 내용으로 여행계약을 체결하며, 별도 첨부하는 국외여행 표준약관과 따로 교부하는 여행일정표를 계약 내용으로 합니다.
           </p>
@@ -108,7 +108,7 @@ function OneCover({ recipient, breakBefore, data }: { recipient: DocRecipient; b
  * 회사 고유의 특약사항이나 실제 계약서로 쓰기 전 법률 검토는 별도로 필요하다.
  */
 export function ContractDoc(data: DocProps) {
-  const { meta, company } = data;
+  const { meta } = data;
   const recipients = resolveRecipients(data.input, data.quote);
   const title = meta?.packageName?.trim() || `${data.input.destination} ${data.input.nights}박 ${data.input.days}일`;
 
@@ -118,25 +118,27 @@ export function ContractDoc(data: DocProps) {
         <OneCover key={recipient.name + i} recipient={recipient} breakBefore={i > 0} data={data} />
       ))}
 
-      <div style={{ breakBefore: "page" }}>
-        <DocShell title="여행계약서" subtitle={title} company={company}>
-          <DocSection title={`붙임: 국외여행 표준약관 (${CONTRACT_TERMS_REVISED})`}>
-            <div className="space-y-2.5">
-              {STANDARD_CONTRACT_TERMS.map((article) => (
-                <div key={article.title} className="break-inside-avoid">
-                  <p className="font-semibold text-slate-800">{article.title}</p>
-                  {article.body.map((line, i) => (
-                    <p key={i} className="pl-1 text-slate-600">
-                      {line}
-                    </p>
-                  ))}
-                </div>
+      {/* 붙임 약관 — 서명란 바로 아래부터 이어진다 (새 쪽으로 넘기면 서명만 있는 쪽·머리만 있는 쪽이 생긴다) */}
+      <section className="mx-auto mt-6 max-w-[190mm] break-keep border-t-2 border-emerald-600 bg-white p-8 pt-4 text-[12px] leading-[1.6] text-slate-900 print:p-0 print:pt-4">
+        <h2 className="mb-2 border-b-2 border-emerald-600 pb-1.5 text-[14px] font-bold text-emerald-900" style={{ breakAfter: "avoid" }}>
+          붙임: 국외여행 표준약관 ({CONTRACT_TERMS_REVISED}) <span className="text-[11px] font-normal text-slate-500">— {title} 여행계약서</span>
+        </h2>
+        <div className="space-y-2.5">
+          {STANDARD_CONTRACT_TERMS.map((article) => (
+            <div key={article.title}>
+              <p className="font-semibold text-slate-800" style={{ breakAfter: "avoid" }}>
+                {article.title}
+              </p>
+              {article.body.map((line, i) => (
+                <p key={i} className="pl-1 text-slate-700" style={{ breakInside: "avoid" }}>
+                  {line}
+                </p>
               ))}
             </div>
-            <p className="mt-2 text-[10px] text-slate-400">출처: {CONTRACT_TERMS_SOURCE}</p>
-          </DocSection>
-        </DocShell>
-      </div>
+          ))}
+        </div>
+        <p className="mt-2 text-[10px] text-slate-400">출처: {CONTRACT_TERMS_SOURCE}</p>
+      </section>
     </>
   );
 }

@@ -9,6 +9,7 @@ import { dayRegion, dayTable, defaultAlternative, mealLabel, shoppingStops, visi
 import { findZigzag, offRouteMeals } from "@/lib/routeOrder";
 import type { ItineraryItem } from "@/types";
 import { DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
+import { daySummary } from "@/lib/printSummary";
 
 const TYPE_LABELS: Record<string, string> = {
   flight: "항공",
@@ -43,7 +44,18 @@ function fieldNotes(item: ItineraryItem, travelers: number): string[] {
  * 현장용 정보를 더한다: 모든 항목의 시작–끝 시각, 관광 방식, 식사 예약·입장권·하차/픽업 지점, 그날 운영 경고(연속 운전 휴게·지그재그·
  * 동선 밖 식당·늦은 종료), 선택관광 미참여자 일정, 쇼핑 소요, 예약 확인 체크리스트. 판매가·원가는 넣지 않는다.
  */
+/** 운영 지시서를 하루 한 쪽으로 (현장에서 날마다 한 장씩 나눠 주기) — 문서 칸의 선택, 이 브라우저에 기억 */
+export const OPS_PAGE_PER_DAY_KEY = "semitour-planner:opsPagePerDay";
+export function readOpsPagePerDay(): boolean {
+  try {
+    return localStorage.getItem(OPS_PAGE_PER_DAY_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function OperationDoc({ input, days, pmChoice, quote, meta, company, travelInfo }: DocProps) {
+  const pagePerDay = readOpsPagePerDay();
   const title = meta?.packageName?.trim() || `${input.destination} ${input.nights}박 ${input.days}일`;
   const travelers = quote.travelers;
   const hotels = Object.values(input.selectedHotels).map((h) => h.name);
@@ -94,9 +106,12 @@ export function OperationDoc({ input, days, pmChoice, quote, meta, company, trav
           ...(end?.isLate ? [`종료 ${end.endTime} — 표준 종료(${STANDARD_DAY_END}) 이후, 기사 운행 시간 확인`] : []),
           ...(!day.meetingTime?.trim() && !table.flightDay ? ["미팅 시각이 정해지지 않았습니다 (계산은 08:00 기준) — 전날 고객에게 미팅 시각 안내"] : []),
         ];
+        const summary = daySummary(day, pmChoice, timings);
         return (
-          <DocSection key={day.day} title={`DAY ${day.day}${date ? ` · ${date}` : ""} · ${dayRegion(days, index, origin)}${day.theme ? ` · ${day.theme}` : ""}`}>
+          <div key={day.day} style={pagePerDay ? { breakBefore: "page" } : undefined}>
+          <DocSection title={`DAY ${day.day}${date ? ` · ${date}` : ""} · ${dayRegion(days, index, origin)}${day.theme ? ` · ${day.theme}` : ""}`}>
             <p className="mb-1 text-slate-600">
+              {summary && <b className="mr-1 text-slate-800">{summary} ·</b>}
               미팅 {dayMeetingTime(day)} · 식사 조 {mealLabel(meals.breakfast, "breakfast", table.flightDay, full)} / 중 {mealLabel(meals.lunch, "lunch", table.flightDay, full)} / 석{" "}
               {mealLabel(meals.dinner, "dinner", table.flightDay, full)}
             </p>
@@ -207,6 +222,7 @@ export function OperationDoc({ input, days, pmChoice, quote, meta, company, trav
               </ul>
             )}
           </DocSection>
+          </div>
         );
       })}
 

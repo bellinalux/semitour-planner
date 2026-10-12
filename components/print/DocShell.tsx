@@ -1,4 +1,5 @@
 import { companyLines } from "@/lib/company";
+import { QrCode } from "./QrCode";
 import { formatToday } from "@/lib/documents";
 import type { CompanyProfile, CourseMeta, DayPlan, QuoteData, TripInput } from "@/types";
 import type { PmChoice } from "@/lib/itinerary";
@@ -24,6 +25,8 @@ export interface DocProps {
   travelInfo?: TravelInfo | null;
   /** 출발 시기 확인 (날씨) */
   season?: SeasonResponse | null;
+  /** 웹 일정표(공유 링크) 주소 — 있으면 QR 코드로 넣는다 */
+  shareUrl?: string | null;
 }
 
 interface ShellProps {
@@ -37,12 +40,28 @@ interface ShellProps {
 /** 회사가 고른 문서 강조색 (없으면 기본 초록) */
 export const docAccent = (company: CompanyProfile) => company.docColor || "#059669";
 
-export function DocShell({ title, subtitle, company, children }: ShellProps) {
+/** CSS 문자열 안에 넣을 글 (따옴표·역슬래시·줄바꿈 처리) */
+const cssText = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\r\n]+/g, " ");
+
+/**
+ * 모든 쪽 아래 꼬리말 — 회사(법정 표시 항목)와 쪽 번호. 문서 끝에 따로 두면 마지막 쪽이 꽉 찼을 때 그 줄만 다음 쪽으로 넘어가
+ * 빈 쪽이 생겨서, 인쇄 쪽 여백(@page 아래)에 반복해서 찍는다.
+ */
+export function PageFooterStyle({ company, text }: { company: CompanyProfile; text?: string }) {
   const lines = companyLines(company);
+  const left = text ?? (lines.length > 0 ? lines.join(" · ") : "회사 정보 미입력 — 회사 설정에서 등록번호·보증보험을 입력하세요");
+  const emergency = text === undefined ? company.emergencyContact.trim() : "";
+  return (
+    <style>{`@media print { @page { @bottom-left { content: "${cssText(left)}${emergency ? ` · 비상연락 ${cssText(emergency)}` : ""}"; font-size: 6.5pt; color: #64748b; vertical-align: top; padding-top: 2mm; } @bottom-right { content: counter(page) " / " counter(pages); font-size: 7pt; color: #64748b; vertical-align: top; padding-top: 2mm; } } }`}</style>
+  );
+}
+
+export function DocShell({ title, subtitle, company, children }: ShellProps) {
   const accent = docAccent(company);
 
   return (
     <article className="mx-auto max-w-[190mm] break-keep bg-white p-8 text-[11px] leading-5 text-slate-900 print:p-0">
+      <PageFooterStyle company={company} />
       <div className="h-1.5 rounded-t print:rounded-none" style={{ background: accent }} aria-hidden />
       <header className="flex items-end justify-between gap-4 border-b-2 px-1 pb-3 pt-3" style={{ borderColor: accent }}>
         <div className="flex items-end gap-2.5">
@@ -60,23 +79,20 @@ export function DocShell({ title, subtitle, company, children }: ShellProps) {
       </header>
 
       <div className="mt-4 space-y-5">{children}</div>
-
-      <footer className="mt-6 break-inside-avoid border-t border-slate-300 pt-3 text-[10px] leading-4 text-slate-600">
-        {lines.length > 0 ? (
-          lines.map((line) => <p key={line}>{line}</p>)
-        ) : (
-          <p className="text-slate-400">회사 정보가 입력되지 않았습니다. 화면 위 &quot;회사 설정&quot;에서 등록번호와 보증보험 내용을 입력하세요.</p>
-        )}
-      </footer>
     </article>
   );
 }
 
-/** 문서 안의 한 구획 */
-export function DocSection({ title, children }: { title: string; children: React.ReactNode }) {
+/**
+ * 문서 안의 한 구획. 쪽 중간에서 나뉠 수 있다(통째로 다음 쪽으로 넘기면 앞 쪽이 비어서) — 제목만 다음 줄과 붙는다.
+ * keep: 짧은 구획(몇 줄짜리 표)은 한 쪽에 모아 둔다.
+ */
+export function DocSection({ title, children, keep = false }: { title: string; children: React.ReactNode; keep?: boolean }) {
   return (
-    <section className="break-inside-avoid">
-      <h2 className="mb-1.5 border-l-4 border-emerald-600 pl-2 text-[13px] font-bold text-emerald-900">{title}</h2>
+    <section className={keep ? "break-inside-avoid" : undefined}>
+      <h2 className="mb-1.5 border-l-4 border-emerald-600 pl-2 text-[13px] font-bold text-emerald-900" style={{ breakAfter: "avoid" }}>
+        {title}
+      </h2>
       {children}
     </section>
   );
@@ -146,7 +162,7 @@ export function DocCover({
 /**
  * 표지 — 고객 이름이 있으면 일정표 첫 장에 "○○님을 위한 여행" 표지를 붙인다 (회사 로고·강조색, 대표 사진이 있으면 함께).
  */
-export function DocCoverPage({ company, customer, title, period, travelers, photo }: { company: CompanyProfile; customer: string; title: string; period: string; travelers: string; photo?: string }) {
+export function DocCoverPage({ company, customer, title, period, travelers, photo, qr }: { company: CompanyProfile; customer: string; title: string; period: string; travelers: string; photo?: string; qr?: string }) {
   const accent = docAccent(company);
   return (
     <section className="mx-auto flex min-h-[250mm] max-w-[190mm] flex-col items-center justify-center gap-5 bg-white p-8 text-center" style={{ breakAfter: "page" }}>
@@ -165,6 +181,12 @@ export function DocCoverPage({ company, customer, title, period, travelers, phot
       <div className="mt-8 h-1 w-24 rounded" style={{ background: accent }} aria-hidden />
       {company.name && <p className="text-sm font-semibold text-slate-700">{company.name}</p>}
       {(company.phone || company.email) && <p className="text-xs text-slate-500">{[company.phone, company.email].filter(Boolean).join(" · ")}</p>}
+      {qr && (
+        <div className="mt-2 flex flex-col items-center gap-1">
+          <QrCode text={qr} size={92} />
+          <p className="text-[10px] text-slate-500">휴대폰으로 일정표 보기</p>
+        </div>
+      )}
     </section>
   );
 }

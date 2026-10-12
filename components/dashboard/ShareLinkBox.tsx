@@ -1,5 +1,6 @@
 "use client";
 
+import { SHARE_LINKS_KEY } from "@/lib/shareLinks";
 import type { DocLang } from "@/lib/foreignDoc";
 import { Link2, Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -7,7 +8,7 @@ import { CopyButton } from "@/components/dashboard/CopyButton";
 import { postJson } from "@/lib/api";
 import type { SharedItinerary } from "@/lib/shareItinerary";
 
-const LINKS_KEY = "semitour-planner:shareLinks";
+const LINKS_KEY = SHARE_LINKS_KEY;
 
 function readLinks(): Record<string, string> {
   try {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccessGate } from "@/components/AccessGate";
 import { useSession } from "@/components/SessionContext";
@@ -21,7 +21,7 @@ describe("인쇄 전 확인", () => {
 
     const printButton = screen.getByRole("button", { name: "인쇄" });
     expect((printButton as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(within(screen.getByRole("alertdialog", { name: "인쇄 전 확인" })).getByRole("checkbox"));
     fireEvent.click(printButton);
     expect(onPrint).toHaveBeenCalledWith("quote");
   });

@@ -7,6 +7,9 @@ import { buildTourCompare } from "@/lib/tourCompare";
 import { DocCover, DocCoverPage, DocSection, DocShell, type DocProps } from "./DocShell";
 import { dayIntensity, INTENSITY_LABEL, intensityText } from "@/lib/intensity";
 import { photoOf } from "@/lib/photo";
+import { hotelPins, mapPoints } from "@/lib/regionPlan";
+import { MapFigure } from "./MapFigure";
+import { RouteFigure } from "./RouteFigure";
 
 const SKIP = new Set(["meal", "transfer", "hotel", "flight", "free_time"]);
 
@@ -108,6 +111,11 @@ export function PitchDoc({ input, days, pmChoice, quote, meta, company }: DocPro
         <p className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-700">
           <b>활동 강도</b> {intensityText(days, pmChoice)}
         </p>
+      )}
+      {mapPoints(days, pmChoice, hotelPins(input.selectedHotels)).flat().length >= 2 && (
+        <DocSection title="코스 지도">
+          <MapFigure lines={mapPoints(days, pmChoice, hotelPins(input.selectedHotels))} width={680} height={320} label="여행 코스 지도" fallback={<RouteFigure days={days} pmChoice={pmChoice} hotels={hotelPins(input.selectedHotels)} />} />
+        </DocSection>
       )}
       <DocSection title="날짜별 하이라이트">
         <ol className="space-y-1">

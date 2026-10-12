@@ -8,7 +8,11 @@ import { singleSupplement } from "@/lib/pricing";
 import type { ItineraryItem } from "@/types";
 import { intensityText } from "@/lib/intensity";
 import { photoCredits, photoOf } from "@/lib/photo";
-import { hotelPins, mapPoints } from "@/lib/regionPlan";
+import { dayDistance, hotelPins, mapPoints } from "@/lib/regionPlan";
+import { dayColor } from "@/components/map/CourseMapColors";
+import { daySummary } from "@/lib/printSummary";
+import { MapFigure } from "./MapFigure";
+import { QrCode } from "./QrCode";
 import { RouteFigure } from "./RouteFigure";
 import { DocCover, DocCoverPage, DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
 
@@ -49,7 +53,7 @@ function ItemCell({ item, input }: { item: ItineraryItem; input: DocProps["input
  * (쇼핑 횟수·품목·소요시간, 선택관광 요금·소요·대체 일정, 가이드 경비, 일정 변경 고지), 관광진흥법 시행규칙 §21의 표시 항목,
  * 표준약관의 취소 규정을 담는다. 시각은 주요한 것만 적고 관광은 소요시간으로 적는다.
  */
-export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, travelInfo, season }: DocProps) {
+export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, travelInfo, season, shareUrl }: DocProps) {
   const localPay = localPayRows(days, pmChoice);
   const { included, excluded } = includeLists(quote, input, localPay.rows.length > 0);
   const money = (v: number) => moneyWithKrw(v, input.currency, input.exchangeRateToKrw);
@@ -76,6 +80,8 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
     { label: "여행사 비상연락", value: company.emergencyContact.trim() },
   ].filter((r) => r.value);
 
+  const hotels = hotelPins(input.selectedHotels);
+  const allPoints = mapPoints(days, pmChoice, hotels);
   const heroItem = days.flatMap((d) => documentItems(d, pmChoice).flatMap((b) => b.items)).find((i) => photoOf(i));
   const heroPhoto = heroItem ? photoOf(heroItem)!.src : undefined;
   return (
@@ -88,6 +94,7 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
         period={`${tripPeriod(input)} (${input.nights}박 ${input.days}일)`}
         travelers={`${quote.travelers}명`}
         photo={heroPhoto}
+        qr={shareUrl ?? undefined}
       />
     )}
     <DocShell title="여행일정표" subtitle={title} company={company}>
@@ -169,23 +176,25 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
         </DocSection>
       )}
 
-      {mapPoints(days, pmChoice).flat().length >= 3 && (
-        <DocSection title="코스 그림">
-          <RouteFigure days={days} pmChoice={pmChoice} hotels={hotelPins(input.selectedHotels)} />
+      {allPoints.flat().length >= 2 && (
+        <DocSection title="코스 지도">
+          <MapFigure lines={allPoints} width={680} height={300} label="여행 전체 코스 지도" fallback={<RouteFigure days={days} pmChoice={pmChoice} hotels={hotels} />} />
+          <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[9.5px] text-slate-600">
+            {days.map((d, i) =>
+              allPoints[i].length > 0 ? (
+                <span key={d.day} className="inline-flex items-center gap-1">
+                  <span className="inline-block size-2 rounded-full" style={{ background: dayColor(i) }} />
+                  DAY {d.day}: {allPoints[i].filter((q) => q.kind === "sight").map((q) => `${q.order}.${q.name}`).join(" ")}
+                </span>
+              ) : null,
+            )}
+          </p>
         </DocSection>
       )}
+
       <DocSection title="일자별 일정">
-        <table className="w-full border-collapse text-[10.5px]">
-          <thead>
-            <tr className="border-b-2 border-emerald-600 bg-emerald-50 text-left text-emerald-900">
-              <th scope="col" className="w-16 px-1.5 py-1 font-semibold">일자</th>
-              <th scope="col" className="w-20 px-1.5 py-1 font-semibold">지역</th>
-              <th scope="col" className="w-16 px-1.5 py-1 font-semibold">교통편</th>
-              <th scope="col" className="w-12 px-1.5 py-1 font-semibold">시간</th>
-              <th scope="col" className="px-1.5 py-1 font-semibold">일정</th>
-              <th scope="col" className="w-24 px-1.5 py-1 font-semibold">식사</th>
-            </tr>
-          </thead>
+        {/* 날마다 표 하나 — 머리 띠(제n일·날짜·지역·요약)는 표 머리라서 다음 쪽으로 넘어가도 반복된다 */}
+        <div className="space-y-3">
           {days.map((day, index) => {
             const meals = dayMeals(days, index, pmChoice, input);
             const date = dayDate(input, day.day);
@@ -194,10 +203,21 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
             const table = dayTable(days, index, pmChoice, { vehicle, flight: flightNos, selectedHotels: input.selectedHotels }, timings);
             const flightDay = table.flightDay;
             const hotelName = table.overnight?.hotel ?? undefined;
-            type Row = { key: string; transport: string; time: string; body: React.ReactNode; tone?: string };
-            const rows: Row[] = table.rows.map((r) => {
-              if (r.kind === "free")
-                return {
+            const summary = daySummary(day, pmChoice, timings);
+            // 줄 만들기 — 장소 사이 이동은 앞 장소 아래 작은 줄로 붙인다 (이동 항목이 따로 있으면 그 줄 하나)
+            type Row = { key: string; transport: string; time: string; body: React.ReactNode; move?: string; tone?: string };
+            const rows: Row[] = [];
+            for (const r of table.rows) {
+              if (r.kind === "move" && !r.moveName && rows.length > 0) {
+                rows[rows.length - 1].move = `${vehicle ? "전용차량" : "이동"} 약 ${formatDuration(r.minutes ?? 0)}`;
+                continue;
+              }
+              if (r.kind === "move") {
+                rows.push({ key: r.key, transport: "", time: "", body: <span>🚌 {r.moveName ?? (vehicle ? "전용차량" : "이동")}{r.minutes ? ` (약 ${formatDuration(r.minutes)})` : ""}</span>, tone: "text-slate-600" });
+                continue;
+              }
+              if (r.kind === "free") {
+                rows.push({
                   key: r.key,
                   transport: "",
                   time: "",
@@ -207,19 +227,18 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
                       {r.tips && r.tips.length > 0 && <span className="block text-slate-500">추천: {r.tips.join(" / ")}</span>}
                     </>
                   ),
-                };
-              if (r.kind === "label") return { key: r.key, transport: "", time: "", body: <b className="text-slate-700">{r.label}</b> };
-              if (r.kind === "meeting")
-                return { key: r.key, transport: r.transport === "vehicle" ? "전용차량" : "", time: r.afterBreakfast ? "조식 후" : r.start, body: <span className="font-medium">🏨 호텔 로비 미팅 후 출발</span> };
-              if (r.kind === "move")
-                return {
-                  key: r.key,
-                  transport: "",
-                  time: "",
-                  body: <span className="text-slate-400">↓ {r.moveName ? `${r.moveName}${r.minutes ? ` (약 ${formatDuration(r.minutes)})` : ""}` : `${vehicle ? "전용차량" : "이동"} 약 ${formatDuration(r.minutes ?? 0)}`}</span>,
-                  tone: "text-slate-400",
-                };
-              return {
+                });
+                continue;
+              }
+              if (r.kind === "label") {
+                rows.push({ key: r.key, transport: "", time: "", body: <b className="text-slate-700">{r.label}</b> });
+                continue;
+              }
+              if (r.kind === "meeting") {
+                rows.push({ key: r.key, transport: r.transport === "vehicle" ? "전용차량" : "", time: r.afterBreakfast ? "조식 후" : r.start, body: <span className="font-medium">🏨 호텔 로비 미팅 후 출발</span> });
+                continue;
+              }
+              rows.push({
                 key: r.key,
                 // 항공은 편명(모르면 "항공"), 그날 첫 차량 이동은 "전용차량"
                 transport: r.transport === "vehicle" ? "전용차량" : r.transport === "flight" ? "항공" : r.transport,
@@ -231,54 +250,76 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
                     {r.returnFlight && <span className="block text-slate-500">출발 2~3시간 전 공항 도착 · 출국 수속</span>}
                   </>
                 ),
-              };
-            });
-            const span = rows.length + (day.overnightCity ? 1 : 0);
+              });
+            }
             return (
-              <tbody key={day.day} className="break-inside-avoid border-b-2 border-emerald-200 align-top">
-                {rows.map((r, i) => (
-                  <tr key={r.key} className="border-b border-slate-100">
-                    {i === 0 && (
-                      <>
-                        <td rowSpan={span} className="px-1.5 py-1 font-bold text-emerald-900">
-                          제{day.day}일
-                          {date && <span className="block font-normal text-slate-600">{date.slice(5)}</span>}
-                        </td>
-                        <td rowSpan={span} className="px-1.5 py-1 text-slate-700">
-                          {dayRegion(days, index, origin)}
-                          {day.theme && <span className="block text-[9.5px] text-slate-400">{day.theme}</span>}
-                        </td>
-                      </>
-                    )}
-                    <td className="px-1.5 py-1 text-slate-600">{r.transport}</td>
-                    <td className="px-1.5 py-1 font-semibold tabular-nums text-emerald-700">{r.time}</td>
-                    <td className={`px-1.5 py-1 ${r.tone ?? ""}`}>{r.body}</td>
-                    {i === 0 && (
-                      <td rowSpan={span} className="px-1.5 py-1 text-[10px] leading-4 text-slate-700">
-                        <span className="block">조: {mealLabel(meals.breakfast, "breakfast", flightDay, full)}</span>
-                        <span className="block">중: {mealLabel(meals.lunch, "lunch", flightDay, full)}</span>
-                        <span className="block">석: {mealLabel(meals.dinner, "dinner", flightDay, full)}</span>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-                {day.overnightCity && (
+              <table key={day.day} className="w-full border-collapse text-[10.5px]" aria-label={`제${day.day}일 일정`}>
+                <thead>
                   <tr>
+                    <th colSpan={3} className="bg-emerald-700 px-2 py-1 text-left font-normal text-white">
+                      <span className="text-[12px] font-bold">제{day.day}일</span>
+                      {date && <span className="ml-1.5">{date.slice(5)}</span>}
+                      <span className="ml-1.5">· {dayRegion(days, index, origin)}</span>
+                      {day.theme && <span className="ml-1.5 text-emerald-100">· {day.theme}</span>}
+                      {summary && <span className="float-right text-[9.5px] text-emerald-100">{summary}</span>}
+                    </th>
+                  </tr>
+                  <tr className="border-b border-emerald-200 bg-emerald-50 text-left text-[9.5px] text-emerald-900">
+                    <th scope="col" className="w-14 px-1.5 py-0.5 font-medium">시간</th>
+                    <th scope="col" className="px-1.5 py-0.5 font-medium">일정</th>
+                    <th scope="col" className="w-16 px-1.5 py-0.5 font-medium">교통편</th>
+                  </tr>
+                </thead>
+                <tbody className="align-top">
+                  {rows.map((r) => (
+                    <tr key={r.key} className="border-b border-slate-100">
+                      <td className="px-1.5 py-1 font-semibold tabular-nums text-emerald-700">{r.time}</td>
+                      <td className={`px-1.5 py-1 ${r.tone ?? ""}`}>
+                        {r.body}
+                        {r.move && <span className="mt-0.5 block text-[9.5px] text-slate-400">↓ {r.move}</span>}
+                      </td>
+                      <td className="px-1.5 py-1 text-slate-600">{r.transport}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-b-2 border-emerald-200 bg-slate-50 text-[10px]">
                     <td colSpan={3} className="px-1.5 py-1 text-slate-700">
-                      🏨 HOTEL: {hotelName ?? `${day.overnightCity} 시내 호텔`} 또는 동급{grade ? ` (${grade})` : ""}
-                      <span className="text-slate-400"> · 체크인 15:00 / 체크아웃 11:00 전후 (호텔 규정)</span>
+                      🍴 조: {mealLabel(meals.breakfast, "breakfast", flightDay, full)} · 중: {mealLabel(meals.lunch, "lunch", flightDay, full)} · 석: {mealLabel(meals.dinner, "dinner", flightDay, full)}
+                      {day.overnightCity && (
+                        <span className="block">
+                          🏨 HOTEL: {hotelName ?? `${day.overnightCity} 시내 호텔`} 또는 동급{grade ? ` (${grade})` : ""}
+                          <span className="text-slate-400"> · 체크인 15:00 / 체크아웃 11:00 전후 (호텔 규정)</span>
+                        </span>
+                      )}
                     </td>
                   </tr>
-                )}
-              </tbody>
+                </tbody>
+              </table>
             );
           })}
-        </table>
+        </div>
         <p className="mt-1.5 text-[10px] text-slate-600">
           ※ 상기 일정은 항공 및 현지 사정(교통·날씨·운영 시간)에 따라 순서·시간이 변경될 수 있으며, 일정을 바꿀 때는 미리 안내하고 동의를 받습니다. 표의 시각은 주요 일정만 적은 예정 시각입니다.
         </p>
         <p className="text-[10px] text-slate-500">관광 표기 — 입장: 내부 관람 · 하차: 외관 관람·사진 · 차창: 차 안에서 관람</p>
       </DocSection>
+
+      {allPoints.filter((p) => p.length >= 2).length > 0 && (
+        <DocSection title="날짜별 코스 지도">
+          <div className="grid grid-cols-2 gap-2">
+            {days.map((d, i) =>
+              allPoints[i].length >= 2 ? (
+                <figure key={d.day} className="break-inside-avoid">
+                  <MapFigure lines={[allPoints[i]]} width={340} height={210} colorIndex={i} label={`DAY ${d.day} 코스 지도`} />
+                  <figcaption className="mt-0.5 text-[9.5px] text-slate-600">
+                    <b style={{ color: dayColor(i) }}>DAY {d.day}</b> {allPoints[i].filter((q) => q.kind === "sight").map((q) => `${q.order}.${q.name}`).join(" ")}
+                    <span className="text-slate-400"> · 약 {dayDistance(allPoints[i]).km}km</span>
+                  </figcaption>
+                </figure>
+              ) : null,
+            )}
+          </div>
+        </DocSection>
+      )}
 
       <DocSection title="포함 · 불포함 사항">
         <DocFacts
@@ -396,7 +437,7 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
         </DocSection>
       )}
 
-      <DocSection title="취소 및 환불 규정">
+      <DocSection title="취소 및 환불 규정" keep>
         <p className="mb-1 text-slate-600">국외여행 표준약관 및 소비자분쟁해결기준에 따릅니다. (여행개시일 기준)</p>
         <table className="w-full border-collapse">
           <thead>
@@ -427,6 +468,16 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
         </ul>
         {company.emergencyContact.trim() && <p className="mt-1.5 font-medium">비상연락처: {company.emergencyContact.trim()}</p>}
       </DocSection>
+      {shareUrl && (
+        <section className="flex items-center gap-3 rounded border border-slate-200 p-2" style={{ breakInside: "avoid" }}>
+          <QrCode text={shareUrl} size={84} />
+          <p className="text-[10px] leading-4 text-slate-600">
+            <b className="text-slate-800">휴대폰으로 보는 일정표</b>
+            <span className="block">QR 코드를 찍으면 같은 일정표를 휴대폰에서 볼 수 있습니다 (지도·사진 포함).</span>
+            <span className="block break-all text-slate-400">{shareUrl}</span>
+          </p>
+        </section>
+      )}
       {photoCredits(days, pmChoice).length > 0 && <p className="text-[9px] text-slate-400">사진 출처 — {photoCredits(days, pmChoice).join(" / ")}</p>}
     </DocShell>
     </>

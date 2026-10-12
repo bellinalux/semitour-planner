@@ -45,7 +45,22 @@ input[type="number"] {
   }
   @page {
     size: A4;
-    margin: 12mm;
+    margin: 12mm 12mm 16mm;
+  }
+  /* 표가 다음 쪽으로 넘어가면 머리줄을 반복하고, 한 줄은 쪽 중간에서 자르지 않는다 */
+  .print-root thead {
+    display: table-header-group;
+  }
+  .print-root tr,
+  .print-root img,
+  .print-root figure {
+    break-inside: avoid;
+  }
+  /* 제목이 쪽 끝에 혼자 남지 않게 */
+  .print-root h1,
+  .print-root h2,
+  .print-root h3 {
+    break-after: avoid;
   }
 }
 

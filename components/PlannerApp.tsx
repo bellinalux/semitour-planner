@@ -3,6 +3,7 @@
 import { dateOfDay, recalcFlightDay } from "@/lib/timezone";
 import { refitDay } from "@/lib/dayBalance";
 import { newHardIssues } from "@/lib/feasibility";
+import { shareUrlOf } from "@/lib/shareLinks";
 import { separateItems, toOptionalTours } from "@/lib/packageRules";
 import { packageRules } from "@/lib/packageRules";
 import { useShowOps } from "@/hooks/useShowOps";
@@ -174,7 +175,7 @@ export function PlannerApp() {
     // 고객 문서는 선택한 판매 채널의 소비자가를 쓰고, 내부 검토서는 원래 견적(rawQuote)으로 모든 채널을 본다
     () =>
       quote?.ok
-        ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company, translations, translationsByLang, travelInfo: travelInfo?.key === input.destination.trim() ? travelInfo.info : null }
+        ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company, translations, translationsByLang, travelInfo: travelInfo?.key === input.destination.trim() ? travelInfo.info : null, shareUrl: shareUrlOf(suggestPlanName(input, meta)) }
         : null,
     [quote, input, days, pmChoice, meta, company, translations, translationsByLang, travelInfo],
   );

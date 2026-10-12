@@ -123,7 +123,7 @@ function OneQuote({ recipient, isGroup, breakBefore, data }: { recipient: DocRec
           />
         </DocSection>
 
-        <DocSection title="취소 및 환불 규정">
+        <DocSection title="취소 및 환불 규정" keep>
           <table className="w-full border-collapse">
             <tbody>
               {CANCELLATION_TERMS.map((term) => (

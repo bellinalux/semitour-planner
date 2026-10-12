@@ -38,6 +38,7 @@ interface Dict {
   meeting: string;
   meetingDefault: (origin: string) => string;
   dayByDay: string;
+  routeMap: string;
   cols: [string, string, string, string, string, string];
   dayN: (n: number) => string;
   vehicle: string;
@@ -117,6 +118,7 @@ export const DICT: Record<DocLang, Dict> = {
     meeting: "Meeting",
     meetingDefault: (o) => `${o} Airport, 3 hours before departure (exact counter will be sent 2–3 days before)`,
     dayByDay: "Day-by-day itinerary",
+    routeMap: "Route map",
     cols: ["Day", "Area", "Transport", "Time", "Schedule", "Meals"],
     dayN: (n) => `Day ${n}`,
     vehicle: "Private vehicle",
@@ -194,6 +196,7 @@ export const DICT: Record<DocLang, Dict> = {
     meeting: "集合",
     meetingDefault: (o) => `出発3時間前に${o}空港（カウンター位置は出発2〜3日前にご案内）`,
     dayByDay: "日程表",
+    routeMap: "コース地図",
     cols: ["日次", "地域", "交通", "時間", "スケジュール", "食事"],
     dayN: (n) => `${n}日目`,
     vehicle: "専用車",
@@ -271,6 +274,7 @@ export const DICT: Record<DocLang, Dict> = {
     meeting: "集合",
     meetingDefault: (o) => `航班起飞前3小时于${o}机场集合（具体柜台出发前2–3天通知）`,
     dayByDay: "每日行程",
+    routeMap: "路线地图",
     cols: ["日期", "地区", "交通", "时间", "行程", "餐食"],
     dayN: (n) => `第${n}天`,
     vehicle: "专车",
