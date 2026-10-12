@@ -26,6 +26,10 @@ import type {
   TripScope,
 } from "@/types";
 import { DayCard } from "./itinerary/DayCard";
+import { DayJumpBar } from "./itinerary/DayJumpBar";
+import { ItemViewSwitch } from "./itinerary/ItemView";
+import { BulkBar, SelectionContext, useSelectionState } from "./itinerary/Selection";
+import { dateOfDay } from "@/lib/timezone";
 import { CourseEnginePanel } from "./CourseEnginePanel";
 import { FxContext } from "./itinerary/FxContext";
 import {
@@ -133,6 +137,8 @@ export function ItineraryPanel({
   onRegenerateCity,
 }: Props) {
   const [editing, setEditing] = useState(false);
+  // 편집 중 여러 항목 고르기 → 아래 막대에서 한꺼번에 바꾸기
+  const selection = useSelectionState();
 
   const verifyButton =
     state.status === "success" ? (
@@ -181,7 +187,10 @@ export function ItineraryPanel({
       <button
         type="button"
         aria-pressed={editing}
-        onClick={() => setEditing((v) => !v)}
+        onClick={() => {
+          if (editing) selection.clear();
+          setEditing((v) => !v);
+        }}
         className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
           editing
             ? "border-indigo-600 bg-indigo-600 text-white"
@@ -199,19 +208,33 @@ export function ItineraryPanel({
       title="일정표"
       description={meta ? "붙여넣은 코스를 구조화한 결과입니다. AI가 잘못 읽은 곳은 편집으로 고치세요" : "오전 가이드 투어 + 오후 반자유 일정"}
       icon={CalendarDays}
-      action={
-        <div className="flex flex-wrap justify-end gap-2">
-          {state.status === "success" && days.length > 0 && <ReorderButton />}
-          {(state.status === "success" || state.status === "loading") && days.length > 0 && onVariant && <VariantButton onMake={onVariant} />}
-          {state.status === "success" && days.length > 0 && <PhotoFillButton days={days} pmChoice={pmChoice} city={destination.split(/[,·]/)[0]?.trim() ?? ""} onChangeItem={onChangeItem} />}
-          {state.status === "success" && days.length > 1 && nights && <NightsButton nights={nights.nights} days={nights.days} onChange={nights.onChange} />}
-          {verifyButton}
-          {suggestButton}
-          {accessibilityButton}
-          {editToggle}
-        </div>
-      }
+      action={editToggle}
     >
+      {(state.status === "success" || state.status === "loading") && days.length > 0 && (
+        // 일정표 도구 — 하는 일별로 묶는다: 보기 · 바꾸기 · 확인 · 꾸미기
+        <div role="toolbar" aria-label="일정표 도구" className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-slate-50 px-3 py-2">
+          <ToolGroup label="보기">
+            <ItemViewSwitch />
+          </ToolGroup>
+          <ToolGroup label="바꾸기">
+            {state.status === "success" && <ReorderButton />}
+            {onVariant && <VariantButton onMake={onVariant} />}
+            {state.status === "success" && days.length > 1 && nights && <NightsButton nights={nights.nights} days={nights.days} onChange={nights.onChange} />}
+          </ToolGroup>
+          {state.status === "success" && (
+            <ToolGroup label="확인">
+              {verifyButton}
+              {suggestButton}
+              {accessibilityButton}
+            </ToolGroup>
+          )}
+          {state.status === "success" && (
+            <ToolGroup label="꾸미기">
+              <PhotoFillButton days={days} pmChoice={pmChoice} city={destination.split(/[,·]/)[0]?.trim() ?? ""} onChangeItem={onChangeItem} />
+            </ToolGroup>
+          )}
+        </div>
+      )}
       {state.status === "loading" && <ItinerarySkeleton />}
 
       {state.status === "error" && (
@@ -256,73 +279,89 @@ export function ItineraryPanel({
               . 장소 옆 <b>근거</b>는 여행자 후기 인기·다른 여행사 포함·우리 고객 평가·현장 실측입니다.
             </p>
           )}
-          <p className="flex items-start gap-1.5 rounded-md bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-500">
-            <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-            입장료·식대·체류 시간은 AI 추정치입니다. &quot;입장료·체류시간 웹 확인&quot;으로 현지 통화 금액과 통상적인 체류 시간을 확인하고, 각 항목의 &quot;현지 지불(불포함)&quot; 버튼으로 고객이 현지에서 직접 내는 항목을 표시하세요. 금액·시간은 직접 수정할 수 있고, 수정하면 견적과 아래 소요 시간이 바로 다시 계산됩니다.
-          </p>
-          <DayLoadSummary days={days} pmChoice={pmChoice} />
-          {engine && <CourseEnginePanel days={days} departureDate={engine.departureDate} onDepartureDate={engine.onDepartureDate} />}
           <FeeCheckNotice view={feeCheck} />
           <OptionSuggestNotice view={optionSuggest} />
           <AccessibilityCheckNotice view={accessibilityCheck} />
+          <DayJumpBar days={days} pmChoice={pmChoice} departureDate={engine?.departureDate} />
           <TransferNote icon={PlaneLanding} label="공항 픽업" note={pickupNote} />
-          <FxContext.Provider value={{ currency, rate: krwRate }}>
-            {(() => {
-              const dayCard = (plan: DayPlan) => (
-                <DayCard
-                  key={plan.day}
-                  plan={plan}
-                  days={days}
-                  hotelName={plan.overnightCity ? selectedHotels[plan.overnightCity.trim()]?.name : undefined}
-                  destination={destination}
-                  travelers={travelers}
-                  tripScope={tripScope}
-                  currency={currency}
-                  selectedPmId={pmChoice[plan.day] ?? "A"}
-                  editing={editing}
-                  onSelectPm={(id) => onSelectPm(plan.day, id)}
-                  onChangeItem={onChangeItem}
-                  onChangeDay={onChangeDay}
-                  onDeleteItem={onDeleteItem}
-                  onAddItem={onAddItem}
-                  onAddSuggestedOption={onAddSuggestedOption}
-                  onMoveItem={onMoveItem}
-                  onRelocateItem={onRelocateItem}
-                  onSaveSegment={onSaveSegment}
-                  onReorderItems={onReorderItems}
-                  onInsertItems={onInsertItems}
-                />
-              );
-              const groups = groupDaysByCity(days);
-              const showGroups = groups.filter((g) => g.city).length >= 2;
-              if (!showGroups) return <div className="space-y-4">{days.map(dayCard)}</div>;
-              return (
-                <div className="space-y-5">
-                  {groups.map((group, gi) => {
-                    if (!group.city) return <div key={gi} className="space-y-4">{group.days.map(dayCard)}</div>;
-                    const first = group.days[0].day;
-                    const last = group.days[group.days.length - 1].day;
-                    const dayRange = first === last ? `DAY ${first}` : `DAY ${first}~${last} · ${group.days.length}일`;
-                    return (
-                      <div key={gi} className="space-y-3">
-                        <CityGroupHeader
-                          city={group.city}
-                          dayRange={dayRange}
-                          canRegenerate={canRegenerateRegion}
-                          regenState={cityRegenState[first] ?? { status: "idle" }}
-                          onRegenerate={() => onRegenerateCity(group.city, group.days.map((d) => d.day))}
-                        />
-                        <div className="space-y-4">{group.days.map(dayCard)}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </FxContext.Provider>
+          <SelectionContext.Provider value={editing ? selection : null}>
+            <FxContext.Provider value={{ currency, rate: krwRate }}>
+              {(() => {
+                const dayCard = (plan: DayPlan) => (
+                  <DayCard
+                    key={plan.day}
+                    plan={plan}
+                    days={days}
+                    hotelName={plan.overnightCity ? selectedHotels[plan.overnightCity.trim()]?.name : undefined}
+                    date={dateOfDay(engine?.departureDate, days.indexOf(plan))}
+                    destination={destination}
+                    travelers={travelers}
+                    tripScope={tripScope}
+                    currency={currency}
+                    selectedPmId={pmChoice[plan.day] ?? "A"}
+                    editing={editing}
+                    onSelectPm={(id) => onSelectPm(plan.day, id)}
+                    onChangeItem={onChangeItem}
+                    onChangeDay={onChangeDay}
+                    onDeleteItem={onDeleteItem}
+                    onAddItem={onAddItem}
+                    onAddSuggestedOption={onAddSuggestedOption}
+                    onMoveItem={onMoveItem}
+                    onRelocateItem={onRelocateItem}
+                    onSaveSegment={onSaveSegment}
+                    onReorderItems={onReorderItems}
+                    onInsertItems={onInsertItems}
+                  />
+                );
+                const groups = groupDaysByCity(days);
+                const showGroups = groups.filter((g) => g.city).length >= 2;
+                if (!showGroups) return <div className="space-y-4">{days.map(dayCard)}</div>;
+                return (
+                  <div className="space-y-5">
+                    {groups.map((group, gi) => {
+                      if (!group.city) return <div key={gi} className="space-y-4">{group.days.map(dayCard)}</div>;
+                      const first = group.days[0].day;
+                      const last = group.days[group.days.length - 1].day;
+                      const dayRange = first === last ? `DAY ${first}` : `DAY ${first}~${last} · ${group.days.length}일`;
+                      return (
+                        <div key={gi} className="space-y-3">
+                          <CityGroupHeader
+                            city={group.city}
+                            dayRange={dayRange}
+                            canRegenerate={canRegenerateRegion}
+                            regenState={cityRegenState[first] ?? { status: "idle" }}
+                            onRegenerate={() => onRegenerateCity(group.city, group.days.map((d) => d.day))}
+                          />
+                          <div className="space-y-4">{group.days.map(dayCard)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </FxContext.Provider>
+            <BulkBar onChangeItem={onChangeItem} />
+          </SelectionContext.Provider>
           <TransferNote icon={PlaneTakeoff} label="공항 샌딩" note={sendingNote} />
+          {/* 점검·안내 — 일정 아래에 모아 둔다 (날짜별 상태는 위 날짜 바로가기 색으로 먼저 보인다) */}
+          <DayLoadSummary days={days} pmChoice={pmChoice} />
+          {engine && <CourseEnginePanel days={days} departureDate={engine.departureDate} onDepartureDate={engine.onDepartureDate} />}
+          <p className="flex items-start gap-1.5 rounded-md bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-500">
+            <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+            입장료·식대·체류 시간은 AI 추정치입니다(항목의 주황 점 = 추정). &quot;입장료·체류시간 웹 확인&quot;으로 현지 금액과 통상적인 체류 시간을 확인하고, 항목을 눌러 펼친 뒤 &quot;현지 지불(불포함)&quot;로 고객이 현지에서 내는 항목을 표시하세요. 금액·시간을 고치면 견적과 소요 시간이 바로 다시 계산됩니다.
+          </p>
         </div>
       )}
     </SectionCard>
+  );
+}
+
+/** 일정표 도구 줄의 한 묶음 — 작은 이름표 + 버튼들 */
+function ToolGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div role="group" aria-label={label} className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[11px] font-semibold text-slate-400">{label}</span>
+      {children}
+    </div>
   );
 }

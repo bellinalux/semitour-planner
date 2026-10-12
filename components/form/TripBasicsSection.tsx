@@ -19,7 +19,7 @@ interface Props extends SectionProps {
 }
 
 /** 폴더 1. 여행 기본 — 입력 방식, 여행지, 기간, 인원, 출발일·출발지 (코스를 만들 때 꼭 필요한 것만) */
-export function TripBasicsSection({ input, onChange, courseFile, onCourseFileChange }: Props) {
+export function TripBasicsSection({ input, onChange, courseFile, onCourseFileChange, foldSignal }: Props) {
   const isPaste = input.mode === "paste";
 
   // 여행지가 한국 지명이면 국내여행(항공 이동일 없음)으로, 한국 지명을 지우면 다시 해외여행으로 자동 전환한다
@@ -50,6 +50,7 @@ export function TripBasicsSection({ input, onChange, courseFile, onCourseFileCha
       icon={MapPin}
       collapsible
       summary={summary}
+      foldSignal={foldSignal}
     >
       <div className="space-y-4">
         <ModeSwitch value={input.mode} onChange={(mode) => onChange({ mode })} />

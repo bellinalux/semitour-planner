@@ -63,6 +63,14 @@ export function TripInputForm({
   const signal = (s: SettingsFocus["section"]) => (focus?.section === s ? focus.n : undefined);
   // 초기화는 입력값을 모두 지워 되돌릴 수 없으므로 한 번 더 확인한다
   const [confirmReset, setConfirmReset] = useState(false);
+  // 1~3 폴더 모두 접기·펴기 — 코스를 다 만들면 한 번 접어 한 줄 요약만 보인다 (다시 펴서 고칠 수 있다)
+  const [fold, setFold] = useState<{ n: number; open: boolean }>({ n: 0, open: true });
+  const busy = isGenerating || autoBuilding;
+  const [wasBusy, setWasBusy] = useState(busy);
+  if (busy !== wasBusy) {
+    setWasBusy(busy);
+    if (!busy) setFold((f) => ({ n: f.n + 1, open: false }));
+  }
 
   // 다른 화면에서 항목으로 이동시키면, 폴더가 펼쳐진 뒤 그 항목으로 스크롤한다
   useEffect(() => {
@@ -81,9 +89,18 @@ export function TripInputForm({
     >
       <div className="flex-1 space-y-3 p-4">
         {!isPaste && <OneLineRequest input={input} onChange={onChange} />}
-        <TripBasicsSection input={input} onChange={onChange} courseFile={courseFile} onCourseFileChange={onCourseFileChange} />
-        <SalesSetupSection input={input} onChange={onChange} onApplyFlight={onApplyFlight} />
-        <PriceSection input={input} onChange={onChange} openSignal={signal("pricing")} />
+        <div className="flex items-center justify-end gap-1 text-[11px]">
+          <span className="mr-auto px-1 font-semibold text-slate-500">입력 폴더</span>
+          <button type="button" onClick={() => setFold((f) => ({ n: f.n + 1, open: false }))} className="rounded px-2 py-0.5 font-medium text-slate-600 hover:bg-white hover:text-slate-900">
+            모두 접기
+          </button>
+          <button type="button" onClick={() => setFold((f) => ({ n: f.n + 1, open: true }))} className="rounded px-2 py-0.5 font-medium text-slate-600 hover:bg-white hover:text-slate-900">
+            모두 펴기
+          </button>
+        </div>
+        <TripBasicsSection input={input} onChange={onChange} courseFile={courseFile} onCourseFileChange={onCourseFileChange} foldSignal={fold.n ? fold : undefined} />
+        <SalesSetupSection input={input} onChange={onChange} onApplyFlight={onApplyFlight} foldSignal={fold.n ? fold : undefined} />
+        <PriceSection input={input} onChange={onChange} openSignal={signal("pricing")} foldSignal={fold.n ? fold : undefined} />
         <p className="px-1 text-pretty text-[11px] leading-4 text-slate-500">
           여기까지 채우고 아래 <span className="font-semibold text-slate-700">자동 구성</span>을 누르면 코스 → 숙소 → 차량·가이드·입장료·시세 → 경쟁 상품 → 추천
           투어까지 한 번에 채웁니다. 아래 폴더는 필요할 때만 여세요.

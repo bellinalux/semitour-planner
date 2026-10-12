@@ -18,19 +18,26 @@ interface Props {
   summary?: React.ReactNode;
   /** 이 값이 바뀌면(값이 있을 때) 접혀 있어도 펼친다. 다른 화면에서 이 항목으로 이동시킬 때 쓴다 */
   openSignal?: number;
+  /** 모두 접기·펴기 신호 — n이 바뀌면 open대로 접거나 편다 */
+  foldSignal?: { n: number; open: boolean };
   /** 이동·스크롤 대상으로 쓰는 id */
   anchorId?: string;
   /** 폴더 안의 하위 항목 — 그림자 없이 옅게 */
   nested?: boolean;
 }
 
-export function SectionCard({ title, description, icon: Icon, action, children, collapsible, defaultOpen = true, summary, openSignal, anchorId, nested }: Props) {
+export function SectionCard({ title, description, icon: Icon, action, children, collapsible, defaultOpen = true, summary, openSignal, foldSignal, anchorId, nested }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   // 신호가 바뀌면(다른 화면에서 이 항목으로 이동시킨 경우) 렌더 중에 바로 펼친다
   const [seenSignal, setSeenSignal] = useState(openSignal);
   if (openSignal !== seenSignal) {
     setSeenSignal(openSignal);
     if (openSignal) setOpen(true);
+  }
+  const [seenFold, setSeenFold] = useState(foldSignal?.n);
+  if (foldSignal && foldSignal.n !== seenFold) {
+    setSeenFold(foldSignal.n);
+    setOpen(foldSignal.open);
   }
   const expanded = !collapsible || open;
 

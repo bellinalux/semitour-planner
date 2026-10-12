@@ -23,7 +23,7 @@ export const packagePatch = (packageType: PackageType) => (packageType === "full
  * 폴더 2. 상품 구성 — 무엇을 묶어 팔지(랜드·숙박·항공), 숙소 종류·등급, 항공 이동일과 항공편.
  * 자동 구성이 이 값으로 숙소를 찾으므로 코스를 만들기 전에 정한다. 숙소 종류·등급·항공편은 여기서만 고른다.
  */
-export function SalesSetupSection({ input, onChange, onApplyFlight }: SectionProps & { onApplyFlight: (flight: FlightOption) => void }) {
+export function SalesSetupSection({ input, onChange, onApplyFlight, foldSignal }: SectionProps & { onApplyFlight: (flight: FlightOption) => void }) {
   const hasLodging = input.packageType !== "land";
   const overseas = input.tripScope === "overseas";
   // 등급 무관이면 요약에 등급을 쓰지 않는다
@@ -43,6 +43,7 @@ export function SalesSetupSection({ input, onChange, onApplyFlight }: SectionPro
       icon={Store}
       collapsible
       summary={summary}
+      foldSignal={foldSignal}
     >
       <div className="space-y-4">
         <PackageTypeSwitch value={input.packageType} onChange={(packageType) => onChange(packagePatch(packageType))} />

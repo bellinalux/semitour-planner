@@ -9,7 +9,7 @@ import { PackageRulesContext } from "../PackageRulesPanel";
 import { ReorderButton } from "./ReorderButton";
 import { dayIntensity, INTENSITY_LABEL } from "@/lib/intensity";
 import { AlertTriangle, BedDouble, BookmarkPlus, Clock, Compass, Flag, Plus, Sun, Sunset, Timer } from "lucide-react";
-import { useContext } from "react";
+import { Fragment, useContext } from "react";
 import { CourseEngineContext } from "@/hooks/useCourseEngine";
 import { DayTimeCheckContext } from "@/hooks/useDayTimeCheck";
 import { calcDayEnd, calcDayGap, calcDayLoad, computeItemTimings, dayMeetingTime, dayTourStart, hotelLeadMinutes, morningFreeItems, STANDARD_DAY_END, timelineEndTime, type DayLoadLevel } from "@/lib/dayLoad";
@@ -26,6 +26,8 @@ import { PmOptionSwitch } from "./PmOptionSwitch";
 import { RouteCheckPanel } from "./RouteCheckPanel";
 import { RouteSketch } from "./RouteSketch";
 import { SessionBlock } from "./SessionBlock";
+import { DayTitle } from "./DayTitle";
+import { InsertSlot } from "./InsertSlot";
 import { TimelineItem, type ItemPatch } from "./TimelineItem";
 
 const SCORE_TONE: Record<string, string> = {
@@ -52,6 +54,8 @@ interface Props {
   days: DayPlan[];
   /** 이 날짜의 숙박 도시에서 선택해 둔 호텔 이름 (없으면 표시하지 않는다) */
   hotelName?: string;
+  /** 이 날짜 (YYYY-MM-DD, 출발일을 넣었을 때) */
+  date?: string;
   /** 동선 확인에 쓰는 여행지 (국가·지역) */
   destination: string;
   /** 인원 (동선상 식당을 찾을 때 단체 수용 기준) */
@@ -78,6 +82,7 @@ export function DayCard({
   plan,
   days,
   hotelName,
+  date,
   destination,
   travelers,
   tripScope,
@@ -97,6 +102,7 @@ export function DayCard({
   onInsertItems,
 }: Props) {
   const city = (plan.overnightCity ?? "").trim() || undefined;
+  const dateLabel = date ? `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}(${"일월화수목금토"[new Date(`${date}T12:00:00Z`).getUTCDay()]})` : "";
   const selected = plan.pmFreeOptions.find((o) => o.id === selectedPmId) ?? plan.pmFreeOptions[0];
   const pmChoiceForDay = { [plan.day]: selectedPmId };
   const load = calcDayLoad(plan, pmChoiceForDay);
@@ -158,113 +164,126 @@ export function DayCard({
   ];
 
   return (
-    <article id={`day-${plan.day}`} className="scroll-mt-3 rounded-lg border border-slate-200">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-100 bg-slate-50/70 px-4 py-3">
-        <span className="rounded-md bg-slate-900 px-2 py-1 text-xs font-bold text-white">DAY {plan.day}</span>
-        <h3 className="min-w-0 flex-1 basis-40 text-balance text-sm font-semibold text-slate-900">
-          {plan.theme}
-          {plan.rest && <span className="ml-1.5 rounded-full bg-emerald-50 px-2 py-0.5 align-middle text-[10.5px] font-medium text-emerald-700 ring-1 ring-emerald-200">{REST_LABEL[plan.rest]}</span>}
+    <article id={`day-${plan.day}`} className="scroll-mt-14 rounded-lg border border-slate-200">
+      <header className="border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
+        {/* 첫 줄: DAY · 날짜 · 제목(눌러서 고치기) · 그날 버튼 */}
+        <div className="flex flex-wrap items-start gap-x-2 gap-y-1.5">
+          <span className="mt-0.5 shrink-0 rounded-md bg-slate-900 px-2 py-0.5 text-xs font-bold text-white">DAY {plan.day}</span>
+          {dateLabel && <span className="mt-1 shrink-0 text-xs font-semibold tabular-nums text-slate-500">{dateLabel}</span>}
+          <DayTitle day={plan.day} theme={plan.theme} onChange={(theme) => onChangeDay(plan.day, { theme })}>
+            {plan.rest && <span className="ml-1.5 rounded-full bg-emerald-50 px-2 py-0.5 align-middle text-[10.5px] font-medium text-emerald-700 ring-1 ring-emerald-200">{REST_LABEL[plan.rest]}</span>}
+          </DayTitle>
+          <div className="flex shrink-0 flex-wrap items-center gap-1">
+            {dayTime && placeCount >= 2 && (
+              <button
+                type="button"
+                onClick={() => dayTime.run([plan.day])}
+                disabled={dayTime.running !== null}
+                title="하루 방문 순서를 웹에서 구역 단위(걸어서 함께 도는 장소 묶음)로 확인해 체류·이동 시간을 맞춥니다"
+                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium disabled:opacity-60 ${
+                  load.level === "overloaded" ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <Timer className="size-3.5" aria-hidden />
+                {dayTime.running?.includes(plan.day) ? "시간 확인 중..." : "시간 검증"}
+              </button>
+            )}
+            {placeCount >= 3 && <ReorderButton dayNo={plan.day} compact />}
+            {plan.kind === "linear" && plan.items.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onSaveSegment(plan.items, "day", plan.theme || `DAY ${plan.day}`)}
+                className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+              >
+                <BookmarkPlus className="h-3.5 w-3.5" aria-hidden />
+                즐겨찾기
+              </button>
+            )}
+          </div>
+        </div>
+        {/* 둘째 줄: 하루 요약 + 숙박·미팅·시간 */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {placeCount > 0 && (
+            <span className="mr-1 text-[11px] font-medium tabular-nums text-slate-600">
+              장소 {placeCount}곳{load.totalMinutes > 0 ? ` · 체류 ${formatDuration(load.stayMinutes)} · 이동 ${formatDuration(load.travelMinutes)}` : ""}
+            </span>
+          )}
           {intensity.km > 0 && (
             <span
               title={`걷는 거리 약 ${intensity.km}km${intensity.stairs.length ? ` · 계단·오르막: ${intensity.stairs.join(", ")}` : ""}`}
-              className={`ml-1.5 rounded-full px-2 py-0.5 align-middle text-[10.5px] font-medium ring-1 ${intensity.level === "hard" ? "bg-rose-50 text-rose-700 ring-rose-200" : intensity.level === "moderate" ? "bg-amber-50 text-amber-800 ring-amber-200" : "bg-slate-50 text-slate-600 ring-slate-200"}`}
+              className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium ring-1 ${intensity.level === "hard" ? "bg-rose-50 text-rose-700 ring-rose-200" : intensity.level === "moderate" ? "bg-amber-50 text-amber-800 ring-amber-200" : "bg-slate-50 text-slate-600 ring-slate-200"}`}
             >
               {INTENSITY_LABEL[intensity.level]} · 약 {intensity.km}km
             </span>
           )}
-        </h3>
-        {plan.overnightCity && (
-          <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
-            <BedDouble className="h-3 w-3" aria-hidden />
-            {plan.overnightCity} 숙박{hotelName ? ` · ${hotelName}` : ""}
-          </span>
-        )}
-        {localZone && localZone.country !== korea.country && (
-          <span
-            className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200"
-            title="이 날 일정의 시각은 현지 시각입니다 (항공이 있는 날은 시각 앞에 나라를 붙입니다)"
-          >
-            현지 시각 · {localZone.country} ({diffText(korea, localZone)})
-          </span>
-        )}
-        <label
-          className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200"
-          title="오전 미팅(투어 시작) 시각. 호텔 조식 이후 실제 투어가 시작되는 시각입니다."
-        >
-          <Flag className="h-3 w-3" aria-hidden />
-          미팅
-          <input
-            type="time"
-            value={meetingTime}
-            aria-label="오전 미팅 시각"
-            onChange={(e) => onChangeDay(plan.day, { meetingTime: e.target.value })}
-            className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] tabular-nums text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30"
-          />
-        </label>
-        {(lead > 0 || plan.hotelLeadMinutes !== undefined) && (
+          {plan.overnightCity && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+              <BedDouble className="h-3 w-3" aria-hidden />
+              {plan.overnightCity} 숙박{hotelName ? ` · ${hotelName}` : ""}
+            </span>
+          )}
+          {localZone && localZone.country !== korea.country && (
+            <span
+              className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200"
+              title="이 날 일정의 시각은 현지 시각입니다 (항공이 있는 날은 시각 앞에 나라를 붙입니다)"
+            >
+              현지 시각 · {localZone.country} ({diffText(korea, localZone)})
+            </span>
+          )}
           <label
-            className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200"
-            title="호텔에서 미팅한 뒤 첫 장소까지 이동 시간. 첫 장소 시각 = 미팅 + 이동"
+            className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200"
+            title="오전 미팅(투어 시작) 시각. 호텔 조식 이후 실제 투어가 시작되는 시각입니다."
           >
-            호텔→첫 장소
+            <Flag className="h-3 w-3" aria-hidden />
+            미팅
             <input
-              type="number"
-              min={0}
-              max={240}
-              step={5}
-              value={lead}
-              aria-label="호텔에서 첫 장소까지 이동 분"
-              onChange={(e) => onChangeDay(plan.day, { hotelLeadMinutes: Math.max(0, Math.min(240, Math.round(Number(e.target.value) || 0))) })}
-              className="w-12 rounded border border-slate-200 bg-white px-1 py-0.5 text-right text-[11px] tabular-nums text-slate-900 focus:border-indigo-500 focus:outline-none"
+              type="time"
+              value={meetingTime}
+              aria-label="오전 미팅 시각"
+              onChange={(e) => onChangeDay(plan.day, { meetingTime: e.target.value })}
+              className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] tabular-nums text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30"
             />
-            분{lead > 0 ? ` (도착 ${tourStart})` : ""}
           </label>
-        )}
-        {load.totalMinutes > 0 && (
-          <span
-            title={`체류 ${formatDuration(load.stayMinutes)} + 이동 ${formatDuration(load.travelMinutes)}`}
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium ring-1 ${LOAD_BADGE_TONE[load.level]}`}
-          >
-            <Clock className="h-3 w-3" aria-hidden />총 {formatDuration(load.totalMinutes)}
-            {endTime ? ` (~${endTime} 종료)` : ""}
-          </span>
-        )}
-        {score && (
-          <button
-            type="button"
-            onClick={() => document.getElementById("course-engine")?.scrollIntoView({ block: "start", behavior: "smooth" })}
-            title={score.top ? `가장 큰 감점 — ${score.top}` : "코스 엔진 점수"}
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold tabular-nums ring-1 ${SCORE_TONE[score.grade]}`}
-          >
-            <Compass className="size-3" aria-hidden />
-            {rescoring ? "다시 채점 중…" : `코스 ${score.score}점 ${score.grade}`}
-          </button>
-        )}
-        {dayTime && placeCount >= 2 && (
-          <button
-            type="button"
-            onClick={() => dayTime.run([plan.day])}
-            disabled={dayTime.running !== null}
-            title="하루 방문 순서를 웹에서 구역 단위(걸어서 함께 도는 장소 묶음)로 확인해 체류·이동 시간을 맞춥니다"
-            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium disabled:opacity-60 ${
-              load.level === "overloaded" ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            <Timer className="size-3.5" aria-hidden />
-            {dayTime.running?.includes(plan.day) ? "시간 확인 중..." : "시간 검증"}
-          </button>
-        )}
-        {placeCount >= 3 && <ReorderButton dayNo={plan.day} compact />}
-        {plan.kind === "linear" && plan.items.length > 0 && (
-          <button
-            type="button"
-            onClick={() => onSaveSegment(plan.items, "day", plan.theme || `DAY ${plan.day}`)}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
-          >
-            <BookmarkPlus className="h-3.5 w-3.5" aria-hidden />
-            즐겨찾기
-          </button>
-        )}
+          {(lead > 0 || plan.hotelLeadMinutes !== undefined) && (
+            <label
+              className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200"
+              title="호텔에서 미팅한 뒤 첫 장소까지 이동 시간. 첫 장소 시각 = 미팅 + 이동"
+            >
+              호텔→첫 장소
+              <input
+                type="number"
+                min={0}
+                max={240}
+                step={5}
+                value={lead}
+                aria-label="호텔에서 첫 장소까지 이동 분"
+                onChange={(e) => onChangeDay(plan.day, { hotelLeadMinutes: Math.max(0, Math.min(240, Math.round(Number(e.target.value) || 0))) })}
+                className="w-12 rounded border border-slate-200 bg-white px-1 py-0.5 text-right text-[11px] tabular-nums text-slate-900 focus:border-indigo-500 focus:outline-none"
+              />
+              분{lead > 0 ? ` (도착 ${tourStart})` : ""}
+            </label>
+          )}
+          {load.totalMinutes > 0 && (
+            <span
+              title={`체류 ${formatDuration(load.stayMinutes)} + 이동 ${formatDuration(load.travelMinutes)}`}
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium ring-1 ${LOAD_BADGE_TONE[load.level]}`}
+            >
+              <Clock className="h-3 w-3" aria-hidden />총 {formatDuration(load.totalMinutes)}
+              {endTime ? ` (~${endTime} 종료)` : ""}
+            </span>
+          )}
+          {score && (
+            <button
+              type="button"
+              onClick={() => document.getElementById("course-engine")?.scrollIntoView({ block: "start", behavior: "smooth" })}
+              title={score.top ? `가장 큰 감점 — ${score.top}` : "코스 엔진 점수"}
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ${SCORE_TONE[score.grade]}`}
+            >
+              <Compass className="size-3" aria-hidden />
+              {rescoring ? "다시 채점 중…" : `코스 ${score.score}점 ${score.grade}`}
+            </button>
+          )}
+        </div>
       </header>
       <DayIssues labels={issueLabels}>
       {closedHere.map((c) => (
@@ -419,32 +438,46 @@ export function DayCard({
                 onApply={onInsertItems}
               />
             )}
-            <RouteCheckPanel items={plan.items} destination={destination} city={city} onApply={onReorderItems} />
-            <RouteSketch plan={plan} items={plan.items} />
+            {/* 동선 — 지도로 보기와 웹으로 확인하기를 한 줄에 */}
+            <div className="mb-2 flex flex-wrap items-start gap-2">
+              <RouteSketch plan={plan} items={plan.items} />
+              <RouteCheckPanel items={plan.items} destination={destination} city={city} onApply={onReorderItems} className="min-w-0" />
+            </div>
             <ol>
               {plan.items.map((item, index) => (
-                <TimelineItem
-                  key={item.id}
-                  item={item}
-                  order={index + 1}
-                  isLast={index === plan.items.length - 1}
-                  timing={untimed.has(item.id) ? undefined : timings.get(item.id)}
-                  untimed={untimed.has(item.id)}
-                  zone={hasFlight ? zones.get(item.id)?.country : undefined}
-                  nextIsFlight={plan.items[index + 1]?.type === "flight"}
-                  beforeMeeting={morningFree.includes(item) ? { last: item === morningFree[morningFree.length - 1], meeting: meetingTime, lead } : undefined}
-                  currency={currency}
-                  dayNo={plan.day}
-                  days={days}
-                  tone="linear"
-                  editing={editing}
-                  onChangeItem={onChangeItem}
-                  onDeleteItem={onDeleteItem}
-                  onAddSuggestedOption={onAddSuggestedOption}
-                  onMoveItem={onMoveItem}
-                  onRelocateItem={onRelocateItem}
-                  onSaveSegment={onSaveSegment}
-                />
+                <Fragment key={item.id}>
+                  <TimelineItem
+                    item={item}
+                    order={index + 1}
+                    isLast={index === plan.items.length - 1}
+                    timing={untimed.has(item.id) ? undefined : timings.get(item.id)}
+                    untimed={untimed.has(item.id)}
+                    zone={hasFlight ? zones.get(item.id)?.country : undefined}
+                    nextIsFlight={plan.items[index + 1]?.type === "flight"}
+                    beforeMeeting={morningFree.includes(item) ? { last: item === morningFree[morningFree.length - 1], meeting: meetingTime, lead } : undefined}
+                    currency={currency}
+                    dayNo={plan.day}
+                    days={days}
+                    tone="linear"
+                    editing={editing}
+                    onChangeItem={onChangeItem}
+                    onDeleteItem={onDeleteItem}
+                    onAddSuggestedOption={onAddSuggestedOption}
+                    onMoveItem={onMoveItem}
+                    onRelocateItem={onRelocateItem}
+                    onSaveSegment={onSaveSegment}
+                  />
+                  {/* 사이에 끼워 넣기 */}
+                  {index < plan.items.length - 1 && (
+                    <li className="list-none">
+                      <InsertSlot
+                        dayNo={plan.day}
+                        after={item.name}
+                        onInsert={(added) => onChangeDay(plan.day, { items: [...plan.items.slice(0, index + 1), added, ...plan.items.slice(index + 1)] })}
+                      />
+                    </li>
+                  )}
+                </Fragment>
               ))}
             </ol>
             {editing && (

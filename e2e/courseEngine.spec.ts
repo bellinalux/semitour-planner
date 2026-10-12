@@ -153,8 +153,8 @@ test("지그재그 동선: 떠났던 구역으로 되돌아오는 날을 알리�
   await expect(day1.getByRole("button", { name: /이 날 확인할 것 \d+개/ })).toContainText("지그재그 동선");
   await day1.getByRole("button", { name: /이 날 확인할 것/ }).click();
   await expect(day1.getByText(/지그재그 동선 — 타이파 → 역사지구로 되돌아옴/)).toBeVisible();
-  // 동선 그림: 지역 흐름에서 되돌아온 곳은 ↩
-  await day1.getByText("동선 그림").click();
+  // 동선 지도: 지역 흐름에서 되돌아온 곳은 ↩
+  await day1.getByText("동선 지도").click();
   await expect(day1.getByLabel("지역 흐름")).toContainText("↩");
   await day1.getByRole("button", { name: "구역 순서대로 묶기" }).click();
   await expect(day1.getByText(/지그재그 동선/)).toHaveCount(0);

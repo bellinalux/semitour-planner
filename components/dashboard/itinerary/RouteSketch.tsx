@@ -15,7 +15,7 @@ interface Props {
 }
 
 /**
- * 동선 그림 — 그날 동선 방향을 눈으로 본다.
+ * 동선 지도 — 그날 동선 방향을 눈으로 본다 (날짜 카드에서 '동선 확인'과 한 줄에 놓인다).
  *  ① 지역 흐름: 그날 지나는 지역(시간 검증으로 붙은 큰 지역·구역)을 순서대로 화살표로, 떠났던 지역으로 되돌아오면 빨간색
  *  ② 동선 지도: 장소 좌표(코스 점검 결과, 없으면 장소에 저장된 좌표)가 2곳 이상이면 실제 지도 바탕 위에 방문 순서대로 번호를 찍고 선으로 잇는다.
  *     지도는 펼쳤을 때만 그린다 (닫힌 날까지 지도를 찍지 않게). 지도를 못 불러오면 좌표만으로 그린 그림을 보여 준다.
@@ -80,8 +80,8 @@ export function RouteSketch({ plan, items }: Props) {
   );
 
   return (
-    <details className="mb-2 rounded-md border border-slate-200 px-3 py-2 text-[11px] leading-4" onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary className="cursor-pointer font-semibold text-slate-700">동선 그림</summary>
+    <details className="min-w-0 flex-1 basis-64 rounded-md border border-slate-200 px-3 py-1.5 text-[11px] leading-4 open:basis-full" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary className="cursor-pointer font-semibold text-slate-700">동선 지도</summary>
       {flow.length >= 2 && (
         <p className="mt-2 flex flex-wrap items-center gap-1" aria-label="지역 흐름">
           {flow.map((f, i) => (

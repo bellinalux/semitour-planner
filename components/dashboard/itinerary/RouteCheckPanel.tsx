@@ -13,10 +13,11 @@ interface Props {
   city?: string;
   /** 제안된 순서(항목 id 배열)를 적용한다 */
   onApply: (orderedIds: string[]) => void;
+  className?: string;
 }
 
 /** AI 웹 검색으로 이 세션 방문 순서가 지그재그로 비효율적인지 확인하고, 더 나은 순서를 제안·적용한다. */
-export function RouteCheckPanel({ items, destination, city, onApply }: Props) {
+export function RouteCheckPanel({ items, destination, city, onApply, className = "mt-1.5" }: Props) {
   const { state, data, run } = useRequest<RouteCheckRequest, RouteCheckResponse>("/api/check-route");
   const canCheck = items.length >= 3 && destination.trim() !== "";
   if (!canCheck) return null;
@@ -33,7 +34,7 @@ export function RouteCheckPanel({ items, destination, city, onApply }: Props) {
   };
 
   return (
-    <div className="mt-1.5">
+    <div className={className}>
       <button
         type="button"
         onClick={check}

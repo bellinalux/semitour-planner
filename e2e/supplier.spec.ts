@@ -18,7 +18,9 @@ test("가격 모름 · 자동 견적: 코스·숙소·시세를 채워 권장 �
   await expect(page.getByRole("status").filter({ hasText: "자동 구성 끝" })).toBeVisible({ timeout: 30_000 });
   const costTable = page.locator("table", { has: page.locator("caption", { hasText: "원가 내역" }) });
   await expect(costTable.getByText(/출처: 고른 숙소/)).toBeVisible();
-  await expect(page.getByText("권장 판매가").first()).toBeVisible();
+  // 다 만들면 왼쪽 입력 폴더는 한 줄 요약으로 접힌다 — 권장 판매가는 결과 화면에서 보인다
+  await expect(page.getByText("권장 판매가").filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /1\. 여행 기본/ })).toHaveAttribute("aria-expanded", "false");
 });
 
 test("업체 견적서: 요금을 읽어 공급가로 넣고, 목표 판매가에서 공급가 상한을 계산", async ({ page }) => {

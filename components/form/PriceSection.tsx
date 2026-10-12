@@ -75,7 +75,7 @@ function DefaultsBar({ input }: { input: TripInput }) {
 }
 
 /** 폴더 3. 가격 방식 — 견적 통화, 견적 시작 방법과 그 가격, 판매 플랫폼, 회사 수익률 */
-export function PriceSection({ input, onChange, openSignal }: SectionProps) {
+export function PriceSection({ input, onChange, openSignal, foldSignal }: SectionProps) {
   const mode = PRICE_START_MODES.find((m) => m.id === input.pricingMode);
   const changeCurrency = async (currency: CurrencyCode) => {
     onChange({ currency });
@@ -92,6 +92,7 @@ export function PriceSection({ input, onChange, openSignal }: SectionProps) {
       collapsible
       anchorId="settings-pricing"
       openSignal={openSignal}
+      foldSignal={foldSignal}
       summary={`${mode?.label ?? ""} · 회사 수익 ${input.targetMarginRate}% · ${input.currency}`}
     >
       <div className="space-y-4">
