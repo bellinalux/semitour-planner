@@ -2,7 +2,7 @@
  * 스튜디오 보관소 — 상세페이지 스튜디오(tourdesign)를 어느 PC에서든 "접근 코드 로그인"만으로 이어 쓰게 한다 (2026-10-08)
  *  - 브라우저 저장 공간이 지워져도(정리 프로그램 등) 설정·보관함·템플릿·작업 중인 페이지를 서버에서 되살린다.
  *  - 다른 사이트에서 오는 요청이라 팀 보관함과 같은 방식(허용 사이트 + X-Studio-Code 헤더)으로 확인한다.
- *  GET  /api/studio/store?key=settings|snippets|templates|autosave → { key, value, savedAt } (없으면 value=null)
+ *  GET  /api/studio/store?key=settings|snippets|templates|autosave|board → { key, value, savedAt } (없으면 value=null)
  *  POST /api/studio/store { key, value }                            → { key, savedAt }
  *  저장 위치: PLANS KV  tds:{작업공간}:{key}
  */
@@ -10,7 +10,7 @@ import { workspaceId } from "@/lib/server/access";
 import { getKv } from "@/lib/server/planStore";
 import { allowedOrigin, corsHeaders, studioAccess } from "@/lib/server/studio";
 
-const STORE_KEYS = ["settings", "snippets", "templates", "autosave"] as const;
+const STORE_KEYS = ["settings", "snippets", "templates", "autosave", "board"] as const;   // board = 상품 등록 현황판 (2026-10-13)
 type StoreKey = (typeof STORE_KEYS)[number];
 const MAX_BYTES = 10 * 1024 * 1024;   // KV 한 값 25MB 한도 안쪽 — 사진이 든 템플릿·작업본도 들어가게
 const isKey = (k: string | null): k is StoreKey => !!k && (STORE_KEYS as readonly string[]).includes(k);

@@ -30,3 +30,12 @@ describe("스튜디오 보관소 (상세페이지 로그인 이어쓰기)", () =
     expect(r.status).toBe(400);
   });
 });
+
+describe("상품 등록 현황판 보관 칸", () => {
+  it("board 칸에 저장하고 다시 받는다", async () => {
+    const r1 = await POST(req("POST", "http://localhost/api/studio/store", "store-test-code", { key: "board", value: { items: [{ id: "m1", title: "수기 상품" }], deleted: {} } }));
+    expect(r1.status).toBe(200);
+    const j = await (await GET(req("GET", "http://localhost/api/studio/store?key=board", "store-test-code"))).json();
+    expect(j.value.items[0].title).toBe("수기 상품");
+  });
+});
