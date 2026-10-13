@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { explainMinutes, findScript, type GuideBasics, type GuideScript } from "@/lib/guideBook";
+import { explainMinutes, findScript, stopText, type GuideBasics, type GuideScript } from "@/lib/guideBook";
 import { computeItemTimings, dayMeetingTime, dayTourStart } from "@/lib/dayLoad";
 import { timeRange } from "@/lib/dayTidy";
 import { dayDate, dayMeals, documentItems, tripPeriod } from "@/lib/documents";
@@ -47,14 +47,16 @@ export const guideSheetSchema = z.object({
         name: str(80),
         status: z.enum(["draft", "reviewed"]),
         minutes: z.number().int().min(0).max(240),
-        intro: str(400),
-        points: z.array(z.object({ title: str(80), text: str(1200) })).max(8),
+        intro: str(1200),
+        /** 가이드 노트 (읽지 않는 배경) */
+        notes: z.array(str(1000)).max(12).default([]),
+        points: z.array(z.object({ title: str(160), text: str(12000) })).max(10),
         cautions: z.array(str(240)).max(8),
         meetPoint: str(400),
         mustKnow: z.array(str(300)).max(5),
         /** 영어 원고 (있으면) */
         en: z
-          .object({ intro: str(700), points: z.array(z.object({ title: str(160), text: str(2000) })).max(8), cautions: z.array(str(400)).max(8), meetPoint: str(400), mustKnow: z.array(str(300)).max(5) })
+          .object({ intro: str(1500), points: z.array(z.object({ title: str(160), text: str(12000) })).max(10), cautions: z.array(str(400)).max(8), meetPoint: str(400), mustKnow: z.array(str(300)).max(5) })
           .optional(),
       }),
     )
@@ -224,11 +226,12 @@ export function attachGuide(sheet: GuideSheet, scripts: GuideScript[], basics: G
       status: s.status,
       minutes: Math.min(240, explainMinutes(s)),
       intro: s.intro,
-      points: s.points.map((p) => ({ title: p.title, text: p.text })),
+      notes: s.guideNotes,
+      points: s.points.map((p) => ({ title: p.title, text: stopText(p, "basic") || p.text })),
       cautions: s.cautions,
       meetPoint: s.site.meetPoint,
       mustKnow: s.mustKnow,
-      ...(s.en ? { en: { intro: s.en.intro, points: s.en.points.map((p) => ({ title: p.title, text: p.text })), cautions: s.en.cautions, meetPoint: s.en.site.meetPoint, mustKnow: s.en.mustKnow } } : {}),
+      ...(s.en ? { en: { intro: s.en.intro, points: s.en.points.map((p) => ({ title: p.title, text: stopText(p, "basic") || p.text })), cautions: s.en.cautions, meetPoint: s.en.site.meetPoint, mustKnow: s.en.mustKnow } } : {}),
     })),
     tips: (basics?.sections ?? [])
       .filter((b) => b.group !== "상품 원칙" && b.lines.some((l) => l.trim()))

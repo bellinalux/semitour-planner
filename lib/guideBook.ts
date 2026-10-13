@@ -12,17 +12,34 @@ import type { DayPlan } from "@/types";
 
 const str = (n: number) => z.string().max(n);
 
+/* ── 장소 등급 · 분량 기준 (전문 유료 투어) ── */
+
+export type GuideTier = "major" | "standard" | "brief";
+export const TIER: Record<GuideTier, { label: string; stops: [number, number]; minutes: [number, number] }> = {
+  major: { label: "대표 명소", stops: [5, 8], minutes: [25, 40] },
+  standard: { label: "일반 명소", stops: [3, 4], minutes: [10, 15] },
+  brief: { label: "짧은 방문", stops: [1, 2], minutes: [3, 5] },
+};
+
 /* ── AI 초안 형식 (모델에게 보여 주는 스키마) ── */
 
-export const guidePointSchema = z.object({
-  title: z.string().describe("포인트 제목 (예: 왕궁이 지어진 이야기)"),
-  text: z.string().describe("가이드가 그대로 말할 수 있는 설명 2~4문장 (기본 버전)"),
-  more: z.string().describe("시간이 있을 때 덧붙일 이야기 1~3문장 (자세히 버전). 없으면 빈 문자열"),
+export const guideStopDraftSchema = z.object({
+  title: z.string().describe("지점 이름 — 동선 순서대로 (예: 정문 — 위셋차이시 문)"),
+  hook: z.string().describe("도착해서 첫 마디: 주의를 끄는 질문이나 한 줄. 연출 표시 [ ]를 넣어도 된다"),
+  look: z.string().describe("'여기 보세요' 관찰 포인트: 손으로 가리킬 것과 무엇을 보면 되는지 구체적으로 (연출 표시 포함)"),
+  story: z.string().describe("이야기: 역사·전설·일화를 사람과 사건 중심으로 생생하게. 분량 기준에 맞게 충분히 길게 (연출 표시 포함)"),
+  meaning: z.string().describe("의미 풀이: 상징·건축·종교·문화적 의미를 쉽게"),
+  korea: z.string().describe("한국과 비교 한마디: 한국 손님이 아는 것(궁궐·사찰·역사·음식 등)과 비교. 억지면 빈 문자열"),
+  question: z.string().describe("손님에게 던질 질문 1개와 괄호 안 답"),
+  transition: z.string().describe("다음 지점으로 넘어가는 연결 멘트. 마지막 지점이면 자유 관람·집결 안내"),
+  more: z.string().describe("시간이 있을 때 덧붙일 더 깊은 이야기 (자세히 버전)"),
 });
 
 export const guideDraftSchema = z.object({
-  intro: z.string().describe("버스에서 도착 전에 30초로 말하는 한 줄 소개 (1~2문장)"),
-  points: z.array(guidePointSchema).describe("핵심 설명 포인트 3~6개 — 역사·이야기·볼거리 순, 가장 중요한 것부터"),
+  tier: z.enum(["major", "standard", "brief"]).describe("장소 등급: major 대표 명소(지점 5~8곳, 해설 25~40분) / standard 일반 명소(3~4곳, 10~15분) / brief 짧은 방문(1~2곳, 3~5분)"),
+  intro: z.string().describe("버스에서 도착 전에 1분 안팎으로 말하는 소개 — 기대감을 주는 이야기로 시작"),
+  stops: z.array(guideStopDraftSchema).describe("동선 순서대로 지점별 해설 (등급의 지점 수와 분량을 지킨다)"),
+  guideNotes: z.array(z.string()).describe("가이드 노트 — 손님에게 읽지 않는 배경지식: 깊은 역사 배경, 숫자의 출처·해석이 갈리는 점, 헷갈리기 쉬운 점, 까다로운 질문 대비 4~8개"),
   site: z.object({
     dropOff: z.string().describe("버스 하차·승차 위치 (모르면 빈 문자열)"),
     tickets: z.string().describe("매표·입장 방법 (단체 입장, 예약, 신분증 등. 모르면 빈 문자열)"),
@@ -30,19 +47,32 @@ export const guideDraftSchema = z.object({
     restroom: z.string().describe("화장실 위치 (모르면 빈 문자열)"),
     photo: z.string().describe("사진 찍기 좋은 곳 (모르면 빈 문자열)"),
   }),
-  cautions: z.array(z.string()).describe("주의 사항 2~5개 (복장 규정, 소지품, 더위·계단, 금지 행동, 소매치기 등)"),
-  faq: z.array(z.object({ q: z.string(), a: z.string() })).describe("고객이 자주 묻는 질문과 짧은 답 2~5개"),
+  cautions: z.array(z.string()).describe("주의 사항 3~6개 (복장 규정, 소지품, 더위·계단, 금지 행동, 소매치기·호객 등)"),
+  faq: z.array(z.object({ q: z.string(), a: z.string() })).describe("고객이 실제로 자주 묻는 질문과 답 4~6개 (답은 가이드가 그대로 말할 수 있게)"),
   audience: z.object({
-    family: z.string().describe("아이 동반 가족에게 강조할 점 한 문장"),
-    senior: z.string().describe("시니어에게 강조·배려할 점 한 문장"),
-    student: z.string().describe("학생 단체에게 강조할 점 한 문장"),
-    couple: z.string().describe("커플·신혼에게 강조할 점 한 문장"),
+    family: z.string().describe("아이 동반 가족: 아이 눈높이로 바꿔 말할 이야기·배려할 점"),
+    senior: z.string().describe("시니어: 강조할 이야기·쉬어 갈 곳·배려할 점"),
+    student: z.string().describe("학생 단체: 교과·역사와 이어 줄 점"),
+    couple: z.string().describe("커플·신혼: 분위기·사진·이야기"),
   }),
-  viewMin: z.number().describe("설명을 들은 뒤 자유 관람·사진에 보통 쓰는 시간(분)"),
+  viewMin: z.number().describe("해설이 끝난 뒤 자유 관람·사진에 주는 시간(분). 해설 시간은 빼고"),
   waitMin: z.number().describe("매표·입장 대기·검색대 등 보통 기다리는 시간(분). 없으면 0"),
   mustKnow: z.array(z.string()).describe("초보 가이드가 꼭 외워야 할 사실 3개 (연도·높이·이름 등 짧게)"),
 });
 export type GuideDraft = z.infer<typeof guideDraftSchema>;
+
+/** 사실 확인 — 조사 근거와 맞지 않거나 근거가 없는 문장 */
+export const factCheckSchema = z.object({
+  issues: z
+    .array(
+      z.object({
+        where: z.string().describe("어디 (예: 지점 3 이야기, 가이드 노트, 자주 받는 질문 2)"),
+        claim: z.string().describe("문제가 되는 문장이나 숫자 (짧게)"),
+        reason: z.string().describe("왜 확인이 필요한지 (근거와 다름 / 근거 없음 / 원고 안에서 서로 다름) — 맞는 값을 알면 함께"),
+      }),
+    )
+    .describe("확인이 필요한 곳. 없으면 빈 배열"),
+});
 
 /* ── 저장 형식 ── */
 
@@ -50,14 +80,31 @@ const siteSchema = z.object({ dropOff: str(400), tickets: str(400), meetPoint: s
 const emptySite = { dropOff: "", tickets: "", meetPoint: "", restroom: "", photo: "" };
 const emptyAudience = { family: "", senior: "", student: "", couple: "" };
 
+/**
+ * 지점(스톱) — 도입 한마디 · 관찰 포인트 · 이야기(text) · 의미 · 한국과 비교 · 질문 · 연결 멘트 · 더 깊은 이야기.
+ * 예전 원고(포인트 = 제목 + 설명 + 덧붙임)도 그대로 읽힌다 (빈 칸은 빈 문자열).
+ */
+export const guideStopSchema = z.object({
+  title: str(160),
+  hook: str(800).default(""),
+  look: str(1500).default(""),
+  text: str(5000),
+  meaning: str(2500).default(""),
+  korea: str(1000).default(""),
+  question: str(600).default(""),
+  transition: str(600).default(""),
+  more: str(4000).default(""),
+});
+export type GuideStop = z.infer<typeof guideStopSchema>;
+
 /** 영어 원고 — 한국어 원고(검수한 사실)를 외국인 손님에게 말하는 자연스러운 영어로 다시 쓴 것. 검수는 따로 */
 export const englishScriptSchema = z.object({
-  intro: str(700).default(""),
-  points: z.array(z.object({ title: str(160), text: str(2000), more: str(2000).default("") })).max(8).default([]),
+  intro: str(1500).default(""),
+  points: z.array(guideStopSchema).max(10).default([]),
   site: siteSchema.default(emptySite),
   cautions: z.array(str(400)).max(8).default([]),
-  faq: z.array(z.object({ q: str(300), a: str(800) })).max(8).default([]),
-  audience: z.object({ family: str(400), senior: str(400), student: str(400), couple: str(400) }).default(emptyAudience),
+  faq: z.array(z.object({ q: str(300), a: str(1000) })).max(8).default([]),
+  audience: z.object({ family: str(600), senior: str(600), student: str(600), couple: str(600) }).default(emptyAudience),
   mustKnow: z.array(str(300)).max(5).default([]),
   status: z.enum(["draft", "reviewed"]).default("draft"),
   updatedAt: str(40).default(""),
@@ -72,16 +119,26 @@ export const guideScriptSchema = z.object({
   city: str(60),
   name: str(80).min(1),
   area: str(60).default(""),
-  intro: str(400).default(""),
-  points: z.array(z.object({ title: str(80), text: str(1200), more: str(1200).default("") })).max(8).default([]),
+  /** 원고 방식 — 1: 예전(포인트 목록), 2: 지점별 전문 해설 */
+  version: z.number().int().min(1).max(9).default(1),
+  tier: z.enum(["major", "standard", "brief"]).default("standard"),
+  intro: str(1200).default(""),
+  /** 지점(스톱) — 동선 순서 */
+  points: z.array(guideStopSchema).max(10).default([]),
+  /** 가이드 노트 — 손님에게 읽지 않는 배경지식 */
+  guideNotes: z.array(str(1000)).max(12).default([]),
+  /** 베테랑 가이드 메모 — 경력 가이드의 멘트·현장 팁 (다음 원고에 반영) */
+  veteran: str(3000).default(""),
+  /** 사실 확인이 필요한 곳 (AI 대조 결과 — 검수하며 지운다) */
+  checks: z.array(z.object({ where: str(160), claim: str(500), reason: str(600) })).max(20).default([]),
   site: siteSchema.default(emptySite),
-  cautions: z.array(str(240)).max(8).default([]),
-  faq: z.array(z.object({ q: str(200), a: str(500) })).max(8).default([]),
-  audience: z.object({ family: str(240), senior: str(240), student: str(240), couple: str(240) }).default(emptyAudience),
+  cautions: z.array(str(400)).max(8).default([]),
+  faq: z.array(z.object({ q: str(300), a: str(1000) })).max(8).default([]),
+  audience: z.object({ family: str(600), senior: str(600), student: str(600), couple: str(600) }).default(emptyAudience),
   viewMin: z.number().int().min(0).max(480).default(30),
   waitMin: z.number().int().min(0).max(240).default(0),
-  mustKnow: z.array(str(200)).max(5).default([]),
-  sources: z.array(z.object({ title: str(200), url: str(500) })).max(10).default([]),
+  mustKnow: z.array(str(300)).max(5).default([]),
+  sources: z.array(z.object({ title: str(200), url: str(500) })).max(12).default([]),
   status: z.enum(["draft", "reviewed"]).default("draft"),
   updatedAt: str(40).default(""),
   updatedBy: str(40).default(""),
@@ -89,7 +146,7 @@ export const guideScriptSchema = z.object({
 });
 export type GuideScript = z.infer<typeof guideScriptSchema>;
 
-/** 이 언어로 본 원고 (영어 원고가 없으면 null) — 장소 이름·대기·관람 시간은 공통 */
+/** 이 언어로 본 원고 (영어 원고가 없으면 null) — 장소 이름·등급·대기·관람 시간·가이드 노트는 공통 */
 export function scriptIn(s: GuideScript, lang: GuideLang): GuideScript | null {
   if (lang === "ko") return s;
   if (!s.en) return null;
@@ -104,9 +161,20 @@ export function englishFrom(view: GuideScript, status: EnglishScript["status"], 
 
 /* ── 영어 원고 AI 형식 ── */
 
+const englishStopSchema = z.object({
+  title: z.string(),
+  hook: z.string(),
+  look: z.string(),
+  story: z.string().describe("the story, as long and vivid as the Korean"),
+  meaning: z.string(),
+  korea: z.string().describe("a comparison international visitors relate to (replace Korea-specific comparisons), or empty"),
+  question: z.string(),
+  transition: z.string(),
+  more: z.string(),
+});
 export const englishDraftSchema = z.object({
-  intro: z.string().describe("30-second bus intro before arrival, 1-2 sentences"),
-  points: z.array(z.object({ title: z.string(), text: z.string().describe("2-4 spoken sentences"), more: z.string().describe("extra story for the long version, or empty") })).describe("same points in the same order"),
+  intro: z.string().describe("bus intro before arrival"),
+  stops: z.array(englishStopSchema).describe("same stops in the same order, same depth and length"),
   site: z.object({ dropOff: z.string(), tickets: z.string(), meetPoint: z.string(), restroom: z.string(), photo: z.string() }),
   cautions: z.array(z.string()),
   faq: z.array(z.object({ q: z.string(), a: z.string() })),
@@ -137,24 +205,39 @@ export function emptyKit(city: string): GuideCityKit {
 
 export const scriptKey = (name: string) => knowledgeKey(name);
 
-/** AI 초안 → 저장 형식 (검수 전 초안) */
-export function scriptFromDraft(city: string, name: string, draft: GuideDraft, sources: { title: string; url: string }[], area = ""): GuideScript {
+/** AI 초안 → 저장 형식 (지점별 전문 해설, 검수 전 초안) */
+export function scriptFromDraft(city: string, name: string, draft: GuideDraft, sources: { title: string; url: string }[], area = "", extra: { veteran?: string; checks?: GuideScript["checks"] } = {}): GuideScript {
   const clip = (s: string, n: number) => (s ?? "").trim().slice(0, n);
   return guideScriptSchema.parse({
     key: scriptKey(name),
     city,
     name: clip(name, 80),
     area: clip(area, 60),
-    intro: clip(draft.intro, 400),
-    points: draft.points.slice(0, 6).map((p) => ({ title: clip(p.title, 80), text: clip(p.text, 1200), more: clip(p.more, 1200) })),
-    site: { dropOff: clip(draft.site.dropOff, 240), tickets: clip(draft.site.tickets, 240), meetPoint: clip(draft.site.meetPoint, 240), restroom: clip(draft.site.restroom, 240), photo: clip(draft.site.photo, 240) },
-    cautions: draft.cautions.slice(0, 6).map((c) => clip(c, 240)),
-    faq: draft.faq.slice(0, 6).map((f) => ({ q: clip(f.q, 200), a: clip(f.a, 500) })),
-    audience: { family: clip(draft.audience.family, 240), senior: clip(draft.audience.senior, 240), student: clip(draft.audience.student, 240), couple: clip(draft.audience.couple, 240) },
+    version: 2,
+    tier: draft.tier,
+    intro: clip(draft.intro, 1200),
+    points: draft.stops.slice(0, 10).map((p) => ({
+      title: clip(p.title, 160),
+      hook: clip(p.hook, 800),
+      look: clip(p.look, 1500),
+      text: clip(p.story, 5000),
+      meaning: clip(p.meaning, 2500),
+      korea: clip(p.korea, 1000),
+      question: clip(p.question, 600),
+      transition: clip(p.transition, 600),
+      more: clip(p.more, 4000),
+    })),
+    guideNotes: draft.guideNotes.slice(0, 12).map((n) => clip(n, 1000)),
+    veteran: clip(extra.veteran ?? "", 3000),
+    checks: (extra.checks ?? []).slice(0, 20),
+    site: { dropOff: clip(draft.site.dropOff, 400), tickets: clip(draft.site.tickets, 400), meetPoint: clip(draft.site.meetPoint, 400), restroom: clip(draft.site.restroom, 400), photo: clip(draft.site.photo, 400) },
+    cautions: draft.cautions.slice(0, 8).map((c) => clip(c, 400)),
+    faq: draft.faq.slice(0, 8).map((f) => ({ q: clip(f.q, 300), a: clip(f.a, 1000) })),
+    audience: { family: clip(draft.audience.family, 600), senior: clip(draft.audience.senior, 600), student: clip(draft.audience.student, 600), couple: clip(draft.audience.couple, 600) },
     viewMin: Math.max(0, Math.min(480, Math.round(draft.viewMin || 30))),
     waitMin: Math.max(0, Math.min(240, Math.round(draft.waitMin || 0))),
-    mustKnow: draft.mustKnow.slice(0, 3).map((m) => clip(m, 200)),
-    sources: sources.slice(0, 8).map((s) => ({ title: clip(s.title, 200), url: clip(s.url, 500) })),
+    mustKnow: draft.mustKnow.slice(0, 3).map((m) => clip(m, 300)),
+    sources: sources.slice(0, 12).map((s) => ({ title: clip(s.title, 200), url: clip(s.url, 500) })),
     status: "draft",
     updatedAt: new Date().toISOString(),
   });
@@ -208,33 +291,52 @@ export function mergeKit(cur: GuideCityKit, incoming: { scripts: Record<string, 
 
 /** 단체 앞에서 말하는 속도 — 1분에 약 250자 (띄어쓰기 빼고, 쉼·질문 포함) */
 export const CHARS_PER_MIN = 250;
-const chars = (s: string) => s.replace(/\s/g, "").length;
-
-/** 말하는 시간(초) */
 /** 영어는 1분에 약 130단어 (단체 앞 안내 속도) */
 export const WORDS_PER_MIN = 130;
+const chars = (s: string) => s.replace(/\s/g, "").length;
 
-/** 말하는 시간(초) — 한글이 많으면 글자 수, 영어면 단어 수로 */
+/** 연출 표시 [잠시 멈춤]·[손으로 가리키며] — 말하지 않으니 시간 계산에서 뺀다 */
+export const CUE = /\[[^\]\n]{1,40}\]/g;
+export const stripCues = (text: string) => text.replace(CUE, " ");
+
+/** 말하는 시간(초) — 한글이 많으면 글자 수, 영어면 단어 수로 (연출 표시 제외) */
 export function speakSeconds(text: string): number {
-  const hangul = (text.match(/[가-힣]/g) ?? []).length;
-  if (hangul >= chars(text) * 0.2) return Math.round((chars(text) / CHARS_PER_MIN) * 60);
-  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  const t = stripCues(text);
+  const hangul = (t.match(/[가-힣]/g) ?? []).length;
+  if (hangul >= chars(t) * 0.2) return Math.round((chars(t) / CHARS_PER_MIN) * 60);
+  const words = t.trim().split(/\s+/).filter(Boolean).length;
   return Math.round((words / WORDS_PER_MIN) * 60);
 }
 
 export type ScriptLength = "short" | "basic" | "long";
 export const LENGTH_LABEL: Record<ScriptLength, string> = { short: "짧게", basic: "기본", long: "자세히" };
 
-/** 길이별 원고 — 짧게: 소개 + 앞 포인트 2개 / 기본: 소개 + 모든 포인트 / 자세히: 기본 + 덧붙일 이야기 */
+/** 지점 한 곳의 말할 글 — 짧게: 도입·관찰 / 기본: + 이야기·의미·한국 비교·질문·연결 / 자세히: + 더 깊은 이야기 */
+export function stopText(p: GuideStop, length: ScriptLength): string {
+  const short = [p.hook, p.look];
+  const basic = [...short, p.text, p.meaning, p.korea, p.question, p.transition];
+  const parts = length === "short" ? short : length === "basic" ? basic : [...basic, p.more];
+  return parts.filter((x) => x && x.trim()).join("\n");
+}
+
+/** 길이별 원고 전체 (소개 + 지점들). 예전 원고는 짧게 = 앞 지점 2곳 */
 export function scriptText(s: Pick<GuideScript, "intro" | "points">, length: ScriptLength): string {
-  const pts = length === "short" ? s.points.slice(0, 2) : s.points;
-  return [s.intro, ...pts.map((p) => (length === "long" && p.more ? `${p.text} ${p.more}` : p.text))].filter(Boolean).join("\n");
+  const legacy = s.points.every((p) => !p.hook && !p.look);
+  const pts = legacy && length === "short" ? s.points.slice(0, 2) : s.points;
+  const body = pts.map((p) => (legacy ? (length === "long" && p.more ? `${p.text} ${p.more}` : p.text) : stopText(p, length)));
+  return [s.intro, ...body].filter(Boolean).join("\n");
 }
 
 /** 길이별 설명 시간(분, 1분 단위 올림) */
 export function explainMinutes(s: Pick<GuideScript, "intro" | "points">, length: ScriptLength = "basic"): number {
   const sec = speakSeconds(scriptText(s, length));
   return sec === 0 ? 0 : Math.max(1, Math.ceil(sec / 60));
+}
+
+/** 지점 한 곳 기본 해설 시간(분) */
+export function stopMinutes(p: GuideStop): number {
+  const sec = speakSeconds(stopText(p, "basic") || p.text);
+  return sec === 0 ? 0 : Math.max(1, Math.round(sec / 60));
 }
 
 /** 하차·집결·재집결·탑승 — 인원이 많을수록 길다 (업계 감각: 소규모 10분, 15명↑ 15분, 30명↑ 20분) */
@@ -250,7 +352,7 @@ export interface StayBreakdown {
   total: number;
 }
 
-/** 체류 시간 구성 = 대기 + 설명(기본 원고) + 자유 관람 + 하차·집결 → 5분 단위 */
+/** 체류 시간 구성 = 대기 + 해설(기본 원고, 걸으며 지점마다) + 자유 관람 + 하차·집결 → 5분 단위 */
 export function stayBreakdown(s: Pick<GuideScript, "intro" | "points" | "viewMin" | "waitMin">, travelers: number): StayBreakdown {
   const wait = s.waitMin;
   const explain = explainMinutes(s, "basic");
@@ -258,6 +360,52 @@ export function stayBreakdown(s: Pick<GuideScript, "intro" | "points" | "viewMin
   const gather = gatherMinutes(travelers);
   const total = Math.ceil((wait + explain + view + gather) / 5) * 5;
   return { wait, explain, view, gather, total };
+}
+
+/* ── 원고 품질 (전문 투어 기준) ── */
+
+export interface ScriptQuality {
+  stops: number;
+  stories: number;
+  korea: number;
+  questions: number;
+  cues: number;
+  minutes: number;
+  checks: number;
+  /** 예전 방식(포인트 목록) 원고 */
+  legacy: boolean;
+  /** 등급 기준보다 얕다 (지점 수·해설 시간) */
+  shallow: boolean;
+  /** 부족한 점 한 줄 */
+  hint: string;
+}
+
+export function scriptQuality(s: GuideScript): ScriptQuality {
+  const t = TIER[s.tier];
+  const legacy = s.version < 2;
+  const stops = s.points.length;
+  const minutes = explainMinutes(s, "basic");
+  const cues = (scriptText(s, "long").match(CUE) ?? []).length;
+  const q: ScriptQuality = {
+    stops,
+    stories: s.points.filter((p) => speakSeconds(p.text) >= 40).length,
+    korea: s.points.filter((p) => p.korea.trim()).length,
+    questions: s.points.filter((p) => p.question.trim()).length,
+    cues,
+    minutes,
+    checks: s.checks.length,
+    legacy,
+    shallow: false,
+    hint: "",
+  };
+  const lacks = [
+    legacy && "예전 방식 원고 — 새 방식(지점별 전문 해설)으로 다시 만들기",
+    !legacy && stops < t.stops[0] && `지점 ${stops}곳 (${t.label} 기준 ${t.stops[0]}곳 이상)`,
+    !legacy && minutes < Math.floor(t.minutes[0] * 0.7) && `기본 해설 ${minutes}분 (${t.label} 기준 ${t.minutes[0]}~${t.minutes[1]}분)`,
+  ].filter(Boolean) as string[];
+  q.shallow = lacks.length > 0;
+  q.hint = lacks.join(" · ");
+  return q;
 }
 
 /* ── 일정 항목과 원고 짝짓기 ── */

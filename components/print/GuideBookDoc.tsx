@@ -1,4 +1,5 @@
-import { BASICS_GROUPS, explainMinutes, scriptIn, stayBreakdown, type GuideBasics, type GuideLang, type GuideScript, type Phrase } from "@/lib/guideBook";
+import { BASICS_GROUPS, explainMinutes, scriptIn, stayBreakdown, stopMinutes, type GuideBasics, type GuideLang, type GuideScript, type Phrase } from "@/lib/guideBook";
+import { Cued } from "@/components/guidebook/ScriptView";
 import type { CompanyProfile } from "@/types";
 import { DocSection, DocShell } from "./DocShell";
 
@@ -55,21 +56,60 @@ function ScriptBlock({ s: base, travelers, lang = "ko" }: { s: GuideScript; trav
       </p>
       {s.intro && (
         <p className="mt-1 rounded bg-indigo-50 px-2 py-1 text-indigo-950">
-          <b className="mr-1 text-[9.5px] text-indigo-700">한 줄 소개</b>
-          {s.intro}
+          <b className="mr-1 text-[9.5px] text-indigo-700">버스 안 소개</b>
+          <Cued text={s.intro} />
         </p>
       )}
-      <ol className="mt-1 space-y-1">
-        {s.points.map((p, i) => (
-          <li key={`${p.title}-${i}`} className="break-inside-avoid">
-            <b>
-              {i + 1}. {p.title}
-            </b>{" "}
-            {p.text}
-            {p.more && <span className="text-slate-600"> (더) {p.more}</span>}
-          </li>
-        ))}
+      <ol className="mt-1 space-y-1.5">
+        {s.points.map((p, i) =>
+          !p.hook && !p.look ? (
+            <li key={`${p.title}-${i}`} className="break-inside-avoid">
+              <b>
+                {i + 1}. {p.title}
+              </b>{" "}
+              {p.text}
+              {p.more && <span className="text-slate-600"> (더) {p.more}</span>}
+            </li>
+          ) : (
+            <li key={`${p.title}-${i}`}>
+              <p className="font-bold text-slate-900" style={{ breakAfter: "avoid" }}>
+                지점 {i + 1}. {p.title} <span className="text-[9px] font-normal text-slate-500">약 {stopMinutes(p)}분</span>
+              </p>
+              {(
+                [
+                  ["", p.hook, "font-semibold"],
+                  ["👀 ", p.look, ""],
+                  ["📖 ", p.text, ""],
+                  ["💡 ", p.meaning, "text-slate-700"],
+                  ["🇰🇷 ", p.korea, "text-indigo-900"],
+                  ["❓ ", p.question, "text-violet-900"],
+                  ["➡ ", p.transition, "text-slate-500"],
+                  ["➕ ", p.more, "text-slate-600"],
+                ] as const
+              )
+                .filter(([, v]) => v.trim())
+                .map(([icon, v, tone]) => (
+                  <p key={icon + v.slice(0, 20)} className={`break-inside-avoid ${tone}`}>
+                    {icon}
+                    <Cued text={v} />
+                  </p>
+                ))}
+            </li>
+          ),
+        )}
       </ol>
+      {base.guideNotes.length > 0 && (
+        <div className="mt-1 rounded bg-amber-50 px-2 py-1 text-[10px] text-amber-950">
+          <b>📝 가이드 노트 (읽지 않음)</b>
+          <ul className="list-disc pl-4">
+            {base.guideNotes.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {base.veteran.trim() && <p className="mt-1 whitespace-pre-line text-[10px] text-emerald-900">🧓 베테랑 메모: {base.veteran}</p>}
+      {base.status !== "reviewed" && base.checks.length > 0 && <p className="mt-1 text-[10px] text-rose-800">⚠ 사실 확인 필요: {base.checks.map((c) => `[${c.where}] ${c.claim}`).join(" · ")}</p>}
       {SITE.some(([k]) => s.site[k]) && (
         <p className="mt-1 text-[10px] text-slate-700">
           {SITE.filter(([k]) => s.site[k])

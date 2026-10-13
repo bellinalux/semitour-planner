@@ -10,9 +10,12 @@ import {
   mergeKit,
   scriptFromDraft,
   scriptIn,
+  scriptQuality,
   scriptText,
   speakSeconds,
   stayBreakdown,
+  stopText,
+  stripCues,
   tripPlacesByCity,
   upsertScript,
   withDefaultBasics,
@@ -25,12 +28,21 @@ const script = (name: string, patch: Partial<GuideScript> = {}): GuideScript =>
   guideScriptSchema.parse({ key: name.replace(/\s/g, ""), city: "방콕", name, intro: "가".repeat(50), points: [{ title: "1", text: "나".repeat(200) }, { title: "2", text: "다".repeat(200), more: "라".repeat(250) }, { title: "3", text: "마".repeat(100) }], ...patch });
 
 describe("가이드 해설집 — 말하는 시간·체류 구성", () => {
-  it("1분에 250자 (띄어쓰기 빼고)", () => {
+  it("1분에 250자 (띄어쓰기 빼고), 연출 표시는 빼고 센다", () => {
     expect(speakSeconds("가".repeat(250))).toBe(60);
     expect(speakSeconds("가 나 다")).toBe(1);
+    expect(speakSeconds(`[잠시 멈춤] ${"가".repeat(250)} [손으로 가리키며]`)).toBe(60);
+    expect(stripCues("자, [웃으며] 보세요")).toBe("자,   보세요");
   });
 
-  it("길이별: 짧게 = 소개 + 앞 포인트 2개, 기본 = 전부, 자세히 = 덧붙일 이야기까지", () => {
+  it("지점 한 곳: 짧게 = 도입·관찰, 기본 = + 이야기·의미·비교·질문·연결, 자세히 = + 더 깊은 이야기", () => {
+    const stop = { title: "정문", hook: "도입", look: "관찰", text: "이야기", meaning: "의미", korea: "비교", question: "질문", transition: "연결", more: "더" };
+    expect(stopText(stop, "short").split("\n")).toEqual(["도입", "관찰"]);
+    expect(stopText(stop, "basic").split("\n")).toEqual(["도입", "관찰", "이야기", "의미", "비교", "질문", "연결"]);
+    expect(stopText(stop, "long").split("\n")).toHaveLength(8);
+  });
+
+  it("예전 원고 길이별: 짧게 = 소개 + 앞 포인트 2개, 기본 = 전부, 자세히 = 덧붙일 이야기까지", () => {
     const s = script("왕궁");
     expect(scriptText(s, "short").split("\n")).toHaveLength(3);
     expect(explainMinutes(s, "short")).toBe(2); // 450자
@@ -45,14 +57,32 @@ describe("가이드 해설집 — 말하는 시간·체류 구성", () => {
 });
 
 describe("가이드 해설집 — 원고 저장·짝짓기", () => {
-  it("AI 초안 → 저장 형식 (초안, 길이 제한, 꼭 외울 것 3개)", () => {
+  it("AI 초안 → 저장 형식 (새 방식 · 지점 · 가이드 노트 · 사실 확인 · 베테랑 메모 이어받기)", () => {
+    const stop = { title: "선착장", hook: "[잠시 멈춤] 강 건너를 보세요", look: "탑의 도자기 조각", story: "새벽의 사원 이야기", meaning: "힌두 신화의 메루산", korea: "불국사 다보탑처럼", question: "몇 층일까요? (5층)", transition: "이제 위로 올라가 볼까요", more: "" };
     const s = scriptFromDraft(
       "방콕",
       "왓 아룬 (새벽사원)",
-      { intro: "새벽사원입니다", points: [{ title: "이름", text: "새벽의 사원", more: "" }], site: { dropOff: "", tickets: "", meetPoint: "선착장", restroom: "", photo: "" }, cautions: ["복장"], faq: [], audience: { family: "", senior: "계단 주의", student: "", couple: "" }, viewMin: 35.4, waitMin: -3, mustKnow: ["a", "b", "c", "d"] },
+      { tier: "standard", intro: "새벽사원입니다", stops: [stop], guideNotes: ["높이는 자료마다 70~82m로 갈림"], site: { dropOff: "", tickets: "", meetPoint: "선착장", restroom: "", photo: "" }, cautions: ["복장"], faq: [], audience: { family: "", senior: "계단 주의", student: "", couple: "" }, viewMin: 35.4, waitMin: -3, mustKnow: ["a", "b", "c", "d"] },
       [{ title: "관광청", url: "https://example.com" }],
+      "",
+      { veteran: "계단이 가팔라 시니어는 아래에서", checks: [{ where: "지점 1", claim: "5층", reason: "근거 없음" }] },
     );
-    expect(s).toMatchObject({ key: "왓아룬", status: "draft", viewMin: 35, waitMin: 0, mustKnow: ["a", "b", "c"] });
+    expect(s).toMatchObject({ key: "왓아룬", version: 2, tier: "standard", status: "draft", viewMin: 35, waitMin: 0, mustKnow: ["a", "b", "c"], veteran: "계단이 가팔라 시니어는 아래에서" });
+    expect(s.points[0]).toMatchObject({ hook: "[잠시 멈춤] 강 건너를 보세요", text: "새벽의 사원 이야기", korea: "불국사 다보탑처럼" });
+    expect(s.checks).toHaveLength(1);
+    expect(s.guideNotes).toEqual(["높이는 자료마다 70~82m로 갈림"]);
+  });
+
+  it("품질: 예전 원고는 다시 만들기, 등급 기준보다 지점·해설이 모자라면 얕음", () => {
+    expect(scriptQuality(script("왕궁")).legacy).toBe(true);
+    const longStop = (n: number) => ({ title: `지점${n}`, hook: "보세요 [잠시 멈춤]", look: "관찰", text: "가".repeat(1500), meaning: "의미", korea: "경복궁처럼", question: "질문 (답)", transition: "연결", more: "" });
+    const major = script("왕궁", { version: 2, tier: "major", points: [1, 2, 3, 4, 5].map(longStop) });
+    const q = scriptQuality(major);
+    expect(q).toMatchObject({ legacy: false, stops: 5, korea: 5, questions: 5, cues: 5, shallow: false });
+    expect(q.minutes).toBeGreaterThanOrEqual(25);
+    const thin = scriptQuality(script("왕궁", { version: 2, tier: "major", points: [longStop(1), longStop(2)] }));
+    expect(thin.shallow).toBe(true);
+    expect(thin.hint).toContain("지점 2곳 (대표 명소 기준 5곳 이상)");
   });
 
   it("검수 완료 원고는 초안이 덮지 않는다 (force면 덮는다)", () => {
@@ -122,7 +152,7 @@ describe("가이드 해설집 — 원고 저장·짝짓기", () => {
 });
 
 describe("가이드 해설집 — 영어 원고", () => {
-  const en = { intro: "Welcome to the Grand Palace.", points: [{ title: "History", text: "word ".repeat(130).trim(), more: "" }], site: { dropOff: "", tickets: "", meetPoint: "Main gate", restroom: "", photo: "" }, cautions: ["Cover your shoulders"], faq: [], audience: { family: "", senior: "", student: "", couple: "" }, mustKnow: ["1782"], status: "draft" as const, updatedAt: "", updatedBy: "" };
+  const en = { intro: "Welcome to the Grand Palace.", points: [{ title: "History", hook: "", look: "", text: "word ".repeat(130).trim(), meaning: "", korea: "", question: "", transition: "", more: "" }], site: { dropOff: "", tickets: "", meetPoint: "Main gate", restroom: "", photo: "" }, cautions: ["Cover your shoulders"], faq: [], audience: { family: "", senior: "", student: "", couple: "" }, mustKnow: ["1782"], status: "draft" as const, updatedAt: "", updatedBy: "" };
 
   it("영어로 본 원고 — 내용만 바꾸고 이름·시간은 공통, 없으면 null", () => {
     const s = script("왕궁", { en, viewMin: 60 });

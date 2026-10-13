@@ -24,7 +24,7 @@ export async function patchGuide<T = { kit?: GuideCityKit; basics?: GuideBasics;
   return r;
 }
 
-export async function draftGuide(body: { kind: "script" | "english"; city: string; name: string; area?: string; force?: boolean } | { kind: "phrases"; city: string }) {
+export async function draftGuide(body: { kind: "script" | "english"; city: string; name: string; area?: string; force?: boolean } | { kind: "deepen"; city: string; name: string; index: number } | { kind: "phrases"; city: string }) {
   const r = await call<{ kit: GuideCityKit; kept?: boolean; searched?: boolean; language?: string }>("/api/guidebook/draft", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -2,7 +2,7 @@
 
 import { BookMarked, Check, Copy, Download, FileUp, Loader2, Pencil, Printer, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
-import { BASICS_GROUPS, DEFAULT_BASICS, emptyKit, englishFrom, explainMinutes, findScript, LANG_LABEL, scriptIn, scriptKey, type GuideLang, type BasicsSection, type GuideBasics, type GuideCityEntry, type GuideCityKit, type GuideScript, type Phrase } from "@/lib/guideBook";
+import { BASICS_GROUPS, DEFAULT_BASICS, emptyKit, englishFrom, explainMinutes, findScript, LANG_LABEL, scriptIn, scriptKey, scriptQuality, type GuideLang, type BasicsSection, type GuideBasics, type GuideCityEntry, type GuideCityKit, type GuideScript, type Phrase } from "@/lib/guideBook";
 import { downloadKit, draftGuide, fetchGuideIndex, fetchKit, patchGuide, scriptAsText } from "@/lib/guideBookClient";
 import type { PlaceCard } from "@/lib/knowledge";
 import { ScriptEditor } from "./ScriptEditor";
@@ -25,8 +25,13 @@ const blankScript = (city: string, name: string): GuideScript => ({
   city,
   name,
   area: "",
+  version: 2,
+  tier: "standard",
   intro: "",
-  points: [{ title: "", text: "", more: "" }],
+  points: [{ title: "", hook: "", look: "", text: "", meaning: "", korea: "", question: "", transition: "", more: "" }],
+  guideNotes: [],
+  veteran: "",
+  checks: [],
   site: { dropOff: "", tickets: "", meetPoint: "", restroom: "", photo: "" },
   cautions: [],
   faq: [],
@@ -55,6 +60,8 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
   const [tab, setTab] = useState<Tab>("scripts");
   const [selected, setSelected] = useState("");
   const [editing, setEditing] = useState(false);
+  // 지금 더 깊게 다시 쓰는 지점 (-1 없음)
+  const [deepening, setDeepening] = useState(-1);
   // 작업 언어 — 한국어 원고 / 영어 원고 (보기·고치기·검수·인쇄)
   const [lang, setLang] = useState<GuideLang>("ko");
   const [busy, setBusy] = useState("");
@@ -170,6 +177,38 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
       setMsg({ kind: "ok", text: `영어 원고 초안 ${done}곳을 만들었습니다. 다듬고 검수 완료를 눌러 주세요.` });
     });
 
+  const deepen = (s: GuideScript, index: number) => {
+    setDeepening(index);
+    void run(`draft:${s.name} 지점 ${index + 1}`, async () => {
+      try {
+        applyKit((await draftGuide({ kind: "deepen", city, name: s.name, index })).kit, `${s.name} 지점 ${index + 1}을 더 깊게 다시 썼습니다 (다시 검수해 주세요).`);
+      } finally {
+        setDeepening(-1);
+      }
+    });
+  };
+
+  /** 예전 방식(포인트 목록)·얕은 원고를 새 방식으로 다시 — 영어 원고가 있던 곳은 영어도 다시 */
+  const remakeAll = (list: GuideScript[]) => {
+    const reviewed = list.filter((x) => x.status === "reviewed").length;
+    if (reviewed > 0 && !window.confirm(`검수 완료된 원고 ${reviewed}곳도 새 방식으로 다시 만듭니다 (지금 원고는 사라지고 초안이 됩니다. 베테랑 메모는 남습니다). 계속할까요?`)) return;
+    void run("draftAll", async () => {
+      let done = 0;
+      for (const x of list) {
+        setBusy(`draftAll:${done + 1}/${list.length} ${x.name}`);
+        try {
+          applyKit((await draftGuide({ kind: "script", city, name: x.name, force: true })).kit);
+          if (x.en) applyKit((await draftGuide({ kind: "english", city, name: x.name, force: true })).kit);
+          done++;
+        } catch (e) {
+          setMsg({ kind: "error", text: `${x.name}: ${e instanceof Error ? e.message : "실패"} (${done}곳 완료)` });
+          return;
+        }
+      }
+      setMsg({ kind: "ok", text: `${done}곳을 새 방식(지점별 전문 해설)으로 다시 만들었습니다. 확인 필요 표시를 보고 검수해 주세요.` });
+    });
+  };
+
   const save = (s: GuideScript, prevKey: string) =>
     run("save", async () => {
       const r = await patchGuide({ action: "save", city, prevKey, script: s });
@@ -211,6 +250,8 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
   // 일정 이름이 원고 이름을 품고 있으면 그 원고를 쓴다 (예: "왕궁, 에메랄드 사원 관광" → "왕궁")
   const scriptFor = (name: string) => scripts.find((s) => s.key === scriptKey(name)) ?? findScript(scripts, name);
   const missingTrip = tripNames.filter((n) => !scriptFor(n));
+  // 예전 방식이거나 기준보다 얕은 원고 (새 방식으로 다시 만들 곳)
+  const remakeList = scripts.filter((x) => scriptQuality(x).legacy || scriptQuality(x).shallow);
   // 영어 원고가 없는 이 상품 장소 (한국어 원고가 있는 곳만)
   const missingEn = [...new Map(tripNames.map(scriptFor).filter((s): s is GuideScript => !!s && !s.en).map((s) => [s.key, s.name])).values()];
   const currentEn = current ? scriptIn(current, "en") : null;
@@ -363,7 +404,7 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
               {busy && !msg ? (
                 <span className="inline-flex items-center gap-1 text-slate-600">
                   <Loader2 className="size-3 animate-spin" aria-hidden />
-                  {busy.startsWith("draftAll:") ? `원고 만드는 중 ${busy.slice(9)}` : busy.startsWith("draft:") ? `${busy.slice(6)} 원고 만드는 중 (웹 조사 1~2분)` : "처리 중…"}
+                  {busy.startsWith("draftAll:") ? `원고 만드는 중 ${busy.slice(9)}` : busy.startsWith("draft:") ? `${busy.slice(6)} 원고 만드는 중 (4갈래 웹 조사·사실 확인 3~5분)` : "처리 중…"}
                 </span>
               ) : (
                 msg?.text
@@ -404,13 +445,25 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
                         <Sparkles className="size-3.5" aria-hidden />이 상품 장소 영어 원고 모두 만들기 ({missingEn.length}곳)
                       </button>
                     )}
+                    {lang === "ko" && remakeList.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={busy !== ""}
+                        onClick={() => remakeAll(remakeList)}
+                        className="inline-flex w-full items-center justify-center gap-1 rounded-md border border-amber-400 bg-amber-50 px-2 py-1.5 font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                        title="예전 방식(포인트 목록)이거나 분량 기준보다 얕은 원고를 지점별 전문 해설로 다시 만듭니다 (한 곳에 3~5분)"
+                      >
+                        <RefreshCw className="size-3.5" aria-hidden />
+                        예전·얕은 원고 새 방식으로 다시 만들기 ({remakeList.length}곳)
+                      </button>
+                    )}
                     {lang === "ko" && missingTrip.length > 0 && (
                       <button
                         type="button"
                         disabled={busy !== ""}
                         onClick={() => void draftAll(missingTrip)}
                         className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-                        title="이 상품 일정의 장소 중 원고가 없는 곳을 차례로 만듭니다 (한 곳에 1~2분)"
+                        title="이 상품 일정의 장소 중 원고가 없는 곳을 차례로 만듭니다 (한 곳에 3~5분)"
                       >
                         <Sparkles className="size-3.5" aria-hidden />이 상품 장소 원고 모두 만들기 ({missingTrip.length}곳)
                       </button>
@@ -437,6 +490,11 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
                             {s ? (
                               <span className={`shrink-0 rounded px-1 text-[10px] font-semibold ring-1 ${s.status === "reviewed" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-50 text-amber-800 ring-amber-200"}`}>
                                 {s.status === "reviewed" ? "검수 완료" : "초안"} · {explainMinutes(s)}분
+                              </span>
+                            ) : null}
+                            {s && (scriptQuality(s).legacy || scriptQuality(s).shallow) ? (
+                              <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-900" title={scriptQuality(s).hint}>
+                                {scriptQuality(s).legacy ? "예전" : "얕음"}
                               </span>
                             ) : null}
                             {s?.en ? (
@@ -545,7 +603,7 @@ export function GuideBookMenu({ defaultCity, tripPlaces, travelers, buttonClassN
                           </button>
                         </div>
                       </header>
-                      <ScriptView key={lang} script={current} travelers={travelers} defaultLang={lang} />
+                      <ScriptView key={lang} script={current} travelers={travelers} defaultLang={lang} onDeepen={busy === "" ? (i) => deepen(current, i) : undefined} deepening={deepening} />
                     </article>
                   )}
                   {selected && !editing && !current && (

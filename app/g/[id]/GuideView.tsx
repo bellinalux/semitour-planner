@@ -33,16 +33,26 @@ function RowScript({ s: base }: { s: SheetScript }) {
           </div>
         )}
         {s.intro && <p className="font-medium">{s.intro}</p>}
-        <ol className="space-y-1">
+        <ol className="space-y-1.5">
           {s.points.map((p, i) => (
             <li key={i}>
               <b>
                 {i + 1}. {p.title}
-              </b>{" "}
-              {p.text}
+              </b>
+              <span className="block whitespace-pre-line">{p.text}</span>
             </li>
           ))}
         </ol>
+        {base.notes.length > 0 && (
+          <details className="rounded bg-amber-50 px-2 py-1 text-amber-950">
+            <summary className="cursor-pointer font-semibold">📝 가이드 노트 (읽지 않음)</summary>
+            <ul className="list-disc pl-4">
+              {base.notes.map((n) => (
+                <li key={n}>{n}</li>
+              ))}
+            </ul>
+          </details>
+        )}
         {s.meetPoint && <p className="text-slate-600">집결: {s.meetPoint}</p>}
         {s.cautions.length > 0 && <p className="text-amber-800">주의: {s.cautions.join(" · ")}</p>}
         {s.mustKnow.length > 0 && <p className="text-emerald-800">꼭 외울 것: {s.mustKnow.join(" · ")}</p>}
