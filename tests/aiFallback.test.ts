@@ -173,7 +173,10 @@ describe("Gemini 붐빔(503)", () => {
     const p = generateJson({ system: "s", user: "u", schema });
     await vi.runAllTimersAsync();
     expect(await p).toEqual({ city: "h", days: 3 });
-    expect(calls.filter((c) => c.url.includes("googleapis"))).toHaveLength(2);
+    // 같은 모델 2번 + 다른 Gemini 모델 1번
+    const g = calls.filter((c) => c.url.includes("googleapis"));
+    expect(g).toHaveLength(3);
+    expect(g[2].url).toContain("gemini-flash-latest");
     vi.useRealTimers();
   });
 
@@ -184,6 +187,20 @@ describe("Gemini 붐빔(503)", () => {
     const p = generateJson({ system: "s", user: "u", schema }).catch((e: unknown) => e);
     await vi.runAllTimersAsync();
     expect(((await p) as GeminiError).message).toContain("붐벼");
+    vi.useRealTimers();
+  });
+});
+
+describe("Gemini 다른 모델로 한 번 더", () => {
+  it("기본 모델이 계속 붐비면 다른 Gemini 모델이 답한다 (키 추가 없이)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    delete process.env.GROQ_API_KEY;
+    mockFetch((url) =>
+      url.includes("flash-lite") ? json({ error: { message: "high demand" } }, 503) : json({ candidates: [{ content: { parts: [{ text: '{"city":"i","days":4}' }] } }] }),
+    );
+    const p = generateJson({ system: "s", user: "u", schema });
+    await vi.runAllTimersAsync();
+    expect(await p).toEqual({ city: "i", days: 4 });
     vi.useRealTimers();
   });
 });

@@ -138,17 +138,33 @@ export function resolveKey(): string {
  * 대개 몇 초 안에 풀리므로, 대체 AI로 넘기거나 오류를 보이기 전에 한 번은 다시 시도한다.
  */
 export const GEMINI_BUSY_RETRY_MS = 2_000;
-async function callGemini(body: Record<string, unknown>, timeoutMs: number): Promise<CallResult> {
-  const first = await callGeminiOnce(body, timeoutMs);
-  if (first.ok || (first.status !== 503 && first.status !== 500)) return first;
-  console.error(`[gemini] ${first.status} — ${GEMINI_BUSY_RETRY_MS}ms 뒤 한 번 더: ${first.message.slice(0, 100)}`);
-  await new Promise((r) => setTimeout(r, GEMINI_BUSY_RETRY_MS));
-  return callGeminiOnce(body, timeoutMs);
+/** 기본 모델이 붐빌 때 한 번 더 시도할 다른 Gemini 모델 (GEMINI_FALLBACK_MODEL, "off"면 쓰지 않음) */
+export function fallbackModelName(): string | null {
+  const v = process.env.GEMINI_FALLBACK_MODEL?.trim();
+  if (v === "off") return null;
+  const alt = v || (/lite/i.test(modelName()) ? "gemini-flash-latest" : "gemini-flash-lite-latest");
+  return alt === modelName() ? null : alt;
 }
 
-async function callGeminiOnce(body: Record<string, unknown>, timeoutMs: number): Promise<CallResult> {
+const busy = (r: CallResult) => !r.ok && (r.status === 503 || r.status === 500);
+
+async function callGemini(body: Record<string, unknown>, timeoutMs: number): Promise<CallResult> {
+  const first = await callGeminiOnce(body, timeoutMs);
+  if (!busy(first)) return first;
+  console.error(`[gemini] ${!first.ok ? first.status : ""} — ${GEMINI_BUSY_RETRY_MS}ms 뒤 한 번 더`);
+  await new Promise((r) => setTimeout(r, GEMINI_BUSY_RETRY_MS));
+  const second = await callGeminiOnce(body, timeoutMs);
+  if (!busy(second)) return second;
+  // 같은 모델이 계속 붐비면 다른 Gemini 모델로 한 번 (모델마다 붐비는 정도가 다르다)
+  const alt = fallbackModelName();
+  if (!alt) return second;
+  console.error(`[gemini] 계속 붐빔 → 다른 모델(${alt})로 한 번 더`);
+  return callGeminiOnce(body, timeoutMs, alt);
+}
+
+async function callGeminiOnce(body: Record<string, unknown>, timeoutMs: number, modelOverride?: string): Promise<CallResult> {
   const apiKey = resolveKey();
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+  const model = modelOverride || modelName();
 
   let res: Response;
   const __t0 = performance.now();
