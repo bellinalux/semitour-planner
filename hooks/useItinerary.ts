@@ -1,18 +1,18 @@
 "use client";
 
 import { originOfCourse } from "@/lib/flightOrigin";
-import { fixImpossible } from "@/lib/feasibility";
-import { refitDay } from "@/lib/dayBalance";
-import { packageRules, withRuleMeetings } from "@/lib/packageRules";
 import { useCallback, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
 import { itineraryBudgetNote } from "@/lib/autoBuild";
-import { appendDay, defaultPmChoice, mapDayItems, moveItem, relocateItem, reorderItems, tourDayCount, withTravelDays, type PmChoice } from "@/lib/itinerary";
+import { appendDay, defaultPmChoice, mapDayItems, moveItem, relocateItem, reorderItems, type PmChoice } from "@/lib/itinerary";
+import { flightDaysRequest, flightTimesFor, insertBeforeAirport, returnBlockStart, withFlightDays } from "@/lib/flightPlan";
+import { applyFlightWithMeals } from "@/lib/flightApply";
 import { insertItem, insertItems } from "@/lib/tourItem";
 import type { CourseFile } from "@/lib/courseFile";
 import type { ParsedSupplierQuote } from "@/lib/schemas/course";
 import { tidyDay, tidyDays } from "@/lib/dayTidy";
-import { fitCourse, type FitChange } from "@/lib/courseFit";
+import { finishCourse } from "@/lib/courseFinish";
+import type { FitChange } from "@/lib/courseFit";
 import type {
   AsyncState,
   CourseMeta,
@@ -60,6 +60,14 @@ export interface GeneratedItinerary {
   supplierQuote: ParsedSupplierQuote | null;
 }
 
+/** AI 일정에 항공·공항·체크인/아웃을 붙이고, 고른 항공편이 있으면 편명·실제 시각까지 반영한다 */
+function flightWrapped(days: DayPlan[], input: TripInput): DayPlan[] {
+  const times = flightTimesFor(input);
+  if (!times) return days;
+  const wrapped = withFlightDays(days, input, times);
+  return !times.assumed && input.selectedFlight ? applyFlightWithMeals(wrapped, input.selectedFlight) : wrapped;
+}
+
 /** 입력 모드에 따라 AI가 세미투어를 만들거나, 붙여넣은(또는 사진·PDF로 올린) 업체 코스를 구조화한다. */
 async function requestItinerary(
   input: TripInput,
@@ -82,11 +90,15 @@ async function requestItinerary(
     };
   }
 
+  // 항공 포함 해외여행: 도착·출국 시각으로 도착일·출국일에 쓸 시간을 정해 AI가 그날도 짜게 한다 (lib/flightPlan.ts)
+  const flight = input.mode === "ai" ? flightDaysRequest(input) : null;
   const { days, sources, researched, knowledge } = await postJson<{ days: DayPlan[]; sources: SearchSource[]; researched: boolean; knowledge?: KnowledgeUse[] }>(
     "/api/generate-itinerary",
     {
       destination: input.destination,
-      days: tourDayCount(input),
+      days: flight ? flight.aiDays : input.days,
+      nights: input.nights,
+      ...(flight ? { flightDays: flight.flightDays } : {}),
       travelers: input.travelers,
       currency: input.currency,
       themes: input.themes,
@@ -106,7 +118,7 @@ async function requestItinerary(
     signal,
   );
   return {
-    days: input.includesFlights ? withTravelDays(days, input) : days,
+    days: flight ? flightWrapped(days, input) : days,
     meta: null,
     detected: null,
     sources,
@@ -145,17 +157,9 @@ export function useItinerary() {
       const raw = await requestItinerary(input, courseFile, controller.signal);
       // 늦은 식사·같은 식사 두 줄·업체 코스의 지나치게 긴 도보 구역을 바로 다듬는다 (되돌리기는 일정 카드의 경고에서 다시 맞추기)
       // AI 일정은 패키지 규칙의 미팅 시각으로 (프리미엄·시니어 09:00 등) — 그 시각으로 식사 시간대도 맞춘다
-      const tidied = tidyDays(raw.days);
-      const rules = packageRules(input, raw.days.map((d) => d.overnightCity ?? ""));
-      // 항공 이동일 없이 만든 AI 일정의 첫날은 호텔에서 출발한다 — 호텔 미팅 → 첫 장소 30분 (첫날 0분은 공항 도착일 기준)
-      const fromHotel = input.mode === "ai" && !input.includesFlights && tidied[0] && tidied[0].hotelLeadMinutes === undefined && !tidied[0].items.some((i) => i.type === "flight")
-        ? [{ ...tidied[0], hotelLeadMinutes: 30 }, ...tidied.slice(1)]
-        : tidied;
-      const base = input.mode === "ai" ? withRuleMeetings(fromHotel, rules) : fromHotel;
-      const fit = fitCourse(base, { walk: input.mode === "paste" });
-      // AI가 만든 일정은 불가능 시간(새벽 도착일 관광·운영 시간 밖 등)을 바로 고친다 — 업체 코스는 원문을 지키고 일정 카드에 빨갛게 보여 준다
-      const fitted = tidyDays(fit.days);
-      const result = { ...raw, days: input.mode === "ai" ? fixImpossible(fitted, {}, refitDay, rules.dayEnd).days : fitted };
+      const finished = finishCourse(raw.days, input);
+      const fit = { changes: finished.changes };
+      const result = { ...raw, days: finished.days };
       const choice = defaultPmChoice(result.days);
       setDays(result.days);
       setPmChoice(choice);
@@ -307,7 +311,8 @@ export function useItinerary() {
   /** 라이브러리에서 고른 코스 조각(오전/오후/장소)을 지정한 날짜·위치에 넣는다. id는 새로 발급한다. */
   const insertSegment = useCallback((dayNo: number, slot: TourSlot, items: ItineraryItem[]) => {
     const fresh = items.map((item) => ({ ...item, id: `seg-${crypto.randomUUID().slice(0, 8)}` }));
-    setDays((prev) => prev.map((day) => (day.day === dayNo ? insertItems(day, slot, fresh) : day)));
+    // 출국일(끝에 공항 이동·귀국편)은 공항 이동 앞에 넣고 귀국편 시각은 그대로 둔다
+    setDays((prev) => prev.map((day) => (day.day === dayNo ? (returnBlockStart(day) >= 0 ? insertBeforeAirport(day, fresh) : insertItems(day, slot, fresh)) : day)));
   }, []);
 
   /** 라이브러리에서 고른 하루 일정, 또는 다른 저장 일정의 하루를 맨 뒤 새 날짜로 추가한다. */

@@ -6,9 +6,11 @@ import { hotelCities, hotelPatch, lodgingDecided, pickHotel, pickTours, vehicleC
 import { budgetPlan } from "@/lib/budget";
 import { sumItineraryCosts } from "@/lib/cost";
 import { overnightNights, type PmChoice } from "@/lib/itinerary";
-import type { DayPlan, HotelCandidate, TourCandidate, TripInput } from "@/types";
+import type { DayPlan, FlightOption, HotelCandidate, TourCandidate, TripInput } from "@/types";
+import { pickFlightForCourse } from "@/lib/flightPlan";
+import { tripSpanFromFlight } from "@/lib/flightApply";
 
-export type BuildStepKey = "course" | "hotel" | "quote" | "tours";
+export type BuildStepKey = "flight" | "course" | "hotel" | "quote" | "tours";
 export type BuildStepStatus = "pending" | "running" | "done" | "skipped" | "error";
 
 export interface BuildStep {
@@ -19,6 +21,7 @@ export interface BuildStep {
 }
 
 const STEPS: Pick<BuildStep, "key" | "label">[] = [
+  { key: "flight", label: "항공편 고르기 (도착·출국 시각)" },
   { key: "course", label: "코스 만들기" },
   { key: "hotel", label: "숙소 고르기 (예산 안)" },
   { key: "quote", label: "차량·가이드·입장료·시세·경쟁 상품" },
@@ -33,10 +36,12 @@ interface Options {
   update: (patch: Partial<TripInput>) => void;
   days: DayPlan[];
   pmChoice: PmChoice;
-  /** 코스가 없으면 만든다. 만든 일정(실패하면 null) */
-  generate: () => Promise<DayPlan[] | null>;
+  /** 코스가 없으면 만든다. 만든 일정(실패하면 null). override: 방금 고른 항공편처럼 아직 화면 상태에 안 들어간 입력 */
+  generate: (override?: Partial<TripInput>) => Promise<DayPlan[] | null>;
   /** 자동 견적(빈 값 채우기) */
   runAutoQuote: () => Promise<void>;
+  /** 고른 항공편 반영 (항공료·출발일·기간·항공 이동일) */
+  applyFlight?: (flight: FlightOption) => void;
 }
 
 /** 도시별 숙소 후보와 고른 숙소 (다른 후보로 바꿀 수 있게 남겨 둔다) */
@@ -53,7 +58,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * 판매가·도매가에서 시작한 견적이면 원가 예산의 고르기 기준(1실 1박 상한, 1인 입장·투어 예산)을 지킨다.
  * 사람이 직접 정한 값(확정)은 바꾸지 않는다.
  */
-export function useAutoBuild({ input, update, days, pmChoice, generate, runAutoQuote }: Options) {
+export function useAutoBuild({ input, update, days, pmChoice, generate, runAutoQuote, applyFlight }: Options) {
   const [steps, setSteps] = useState<BuildStep[]>(initial);
   const [running, setRunning] = useState(false);
   const [hotelChoices, setHotelChoices] = useState<HotelChoice[]>([]);
@@ -74,11 +79,46 @@ export function useAutoBuild({ input, update, days, pmChoice, generate, runAutoQ
     setHotelChoices([]);
     setTours([]);
     try {
+      // 0. 항공편 — 코스를 만들기 전에 골라야 도착일·출국일을 실제 시각에 맞춰 짠다
+      let override: Partial<TripInput> | undefined;
+      {
+        const i = latest.current.input;
+        const hasTimes = !!i.selectedFlight && !!i.selectedFlight.arriveTime && !!i.selectedFlight.returnDepartTime;
+        if (!i.includesFlights || i.tripScope !== "overseas" || i.mode !== "ai") set("flight", "skipped", "항공 미포함 상품");
+        else if (hasTimes) set("flight", "skipped", `고른 항공편 사용 (현지 ${i.selectedFlight!.arriveTime} 도착 · ${i.selectedFlight!.returnDepartTime} 출발)`);
+        else if (latest.current.days.length > 0) set("flight", "skipped", "만들어 둔 코스가 있어 항공편은 항공 패널에서 고르세요");
+        else if (!applyFlight || !i.originCity.trim() || !i.destination.trim()) set("flight", "skipped", "출발지·여행지가 없어 예상 시각으로 만듭니다");
+        else {
+          set("flight", "running");
+          try {
+            const r = await postJson<{ flights: FlightOption[] }>("/api/search-flight-options", {
+              origin: i.originCity.trim(),
+              destination: i.destination.trim(),
+              days: i.days,
+              nights: i.nights,
+              departureDate: i.departureDate,
+              currency: i.currency,
+            });
+            const pick = pickFlightForCourse(r.flights ?? [], i, tripSpanFromFlight);
+            if (!pick) set("flight", "error", `${i.nights}박 ${i.days}일에 맞는 항공편을 찾지 못해 예상 시각으로 만듭니다`);
+            else {
+              applyFlight(pick);
+              // 코스 만들기는 이 실행이 시작될 때의 입력을 보므로, 고른 항공편과 그 기간을 직접 넘긴다
+              const span = tripSpanFromFlight(pick);
+              override = { selectedFlight: pick, includesFlights: true, ...(span ? { departureDate: span.departureDate, days: span.days, nights: span.nights } : {}) };
+              set("flight", "done", `${[pick.airline, pick.flightNumber].filter(Boolean).join(" ")} — 현지 ${pick.arriveTime} 도착 · ${pick.returnDepartTime} 출발`);
+            }
+          } catch {
+            set("flight", "error", "항공편을 찾지 못해 예상 시각으로 만듭니다");
+          }
+        }
+      }
+
       // 1. 코스
       if (latest.current.days.length > 0) set("course", "skipped", `만들어 둔 ${latest.current.days.length}일 코스를 씁니다`);
       else {
         set("course", "running");
-        const made = await generate();
+        const made = await generate(override);
         if (!made || made.length === 0) {
           set("course", "error", "코스를 만들지 못했습니다");
           return;
@@ -166,7 +206,7 @@ export function useAutoBuild({ input, update, days, pmChoice, generate, runAutoQ
     } finally {
       setRunning(false);
     }
-  }, [running, generate]);
+  }, [running, generate, applyFlight]);
 
   /** 다른 숙소 후보로 바꾼다 */
   const chooseHotel = (city: string, hotel: HotelCandidate) => {

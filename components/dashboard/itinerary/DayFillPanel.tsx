@@ -18,10 +18,12 @@ interface Props {
   /** 이미 일정에 있는 장소 이름 (중복 추천을 피하는 데 쓴다) */
   existingNames: string[];
   onApply: (dayNo: number, slot: TourSlot, items: ItineraryItem[]) => void;
+  /** 안내 문구를 바꿀 때 (출국일 공항 대기 등) */
+  message?: string;
 }
 
 /** 도착일처럼 오후~저녁이 통째로 비는 날짜에, 대상 관광객(한국인 또는 한국 방문 외국인)에게 인기 있는 코스를 웹 검색으로 추천해 채운다. */
-export function DayFillPanel({ dayNo, gap, destination, city, currency, tripScope, existingNames, onApply }: Props) {
+export function DayFillPanel({ dayNo, gap, destination, city, currency, tripScope, existingNames, onApply, message }: Props) {
   const { state, data, run } = useRequest<DayFillRequest, DayFillResponse>("/api/suggest-day-fill");
 
   const suggest = () =>
@@ -46,7 +48,7 @@ export function DayFillPanel({ dayNo, gap, destination, city, currency, tripScop
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="flex items-start gap-1.5 text-[11px] leading-4 text-indigo-900">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-indigo-500" aria-hidden />
-          {gap.fromTime}부터 저녁까지 약 {formatDuration(gap.freeMinutes)}이 비어 있습니다. 이대로 두면 버려지는 일정이 됩니다.
+          {message ?? `${gap.fromTime}부터 저녁까지 약 ${formatDuration(gap.freeMinutes)}이 비어 있습니다. 이대로 두면 버려지는 일정이 됩니다.`}
         </p>
         <button
           type="button"

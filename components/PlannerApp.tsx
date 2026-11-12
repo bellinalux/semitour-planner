@@ -388,7 +388,7 @@ export function PlannerApp() {
   };
 
   const autoQuote = useAutoQuote({ input, update, verifyFees: webChecks.verifyFees, hasItinerary: days.length > 0, itinerary: days });
-  const autoBuild = useAutoBuild({ input, update, days, pmChoice, generate: () => handleGenerate({ fromAutoBuild: true }), runAutoQuote: autoQuote.run });
+  const autoBuild = useAutoBuild({ input, update, days, pmChoice, generate: (override) => handleGenerate({ fromAutoBuild: true, override }), runAutoQuote: autoQuote.run, applyFlight: handleApplyFlight });
   // 판매가·도매가에서 시작한 견적: 예산을 넘으면 줄이고 남으면 올린다
   const budgetFit = useBudgetFit({
     input,

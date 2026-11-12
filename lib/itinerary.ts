@@ -1,5 +1,5 @@
 import { insertItems } from "@/lib/tourItem";
-import type { DayPlan, ItineraryItem, PmFreeOption, TourSlot, TripInput } from "@/types";
+import type { DayPlan, ItineraryItem, PmFreeOption, TourSlot } from "@/types";
 
 export type PmChoice = Record<number, PmFreeOption["id"]>;
 
@@ -76,61 +76,6 @@ export function groupDaysByCity(days: DayPlan[]): CityGroup[] {
     }
   }
   return groups;
-}
-
-/** 항공 이동일 항목은 비용이 없는 고정 문구다 */
-function travelItem(id: string, type: "flight" | "transfer" | "hotel", name: string): ItineraryItem {
-  return {
-    id,
-    type,
-    name,
-    description: "",
-    stayMinutes: 0,
-    travelMinutesToNext: null,
-    entryFee: 0,
-    mealCost: 0,
-    isEstimated: false,
-    admission: "none",
-  };
-}
-
-/** 항공 이동일 계획: 첫날(출발·도착·체크인)과 마지막 날(체크아웃·공항·귀국) */
-export function withTravelDays(tourDays: DayPlan[], input: Pick<TripInput, "originCity" | "destination">): DayPlan[] {
-  const origin = input.originCity.trim() || "출발지";
-  const destination = input.destination.trim() || "현지";
-  const empty = { amGuided: [], pmFreeOptions: [] };
-
-  const arrival: DayPlan = {
-    ...empty,
-    day: 1,
-    theme: "출국 · 도착",
-    kind: "linear",
-    overnightCity: destination,
-    items: [
-      travelItem("tv-in-1", "flight", `${origin} 출발`),
-      travelItem("tv-in-2", "transfer", `${destination} 도착 · 호텔 이동`),
-      travelItem("tv-in-3", "hotel", "호텔 체크인 및 휴식"),
-    ],
-  };
-  const departure: DayPlan = {
-    ...empty,
-    day: tourDays.length + 2,
-    theme: "귀국",
-    kind: "linear",
-    overnightCity: "",
-    items: [
-      travelItem("tv-out-1", "hotel", "호텔 체크아웃"),
-      travelItem("tv-out-2", "transfer", "공항 이동"),
-      travelItem("tv-out-3", "flight", `${origin} 도착`),
-    ],
-  };
-
-  return [arrival, ...tourDays.map((d, i) => ({ ...d, day: i + 2 })), departure];
-}
-
-/** 항공 이동일을 제외하고 AI가 만들어야 하는 관광일 수 */
-export function tourDayCount(input: Pick<TripInput, "days" | "includesFlights">): number {
-  return input.includesFlights ? Math.max(1, input.days - 2) : input.days;
 }
 
 /** ---------- 항목 재정렬·이동·복사, 날짜 가져오기 ---------- */

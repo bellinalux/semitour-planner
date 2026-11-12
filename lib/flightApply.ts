@@ -10,7 +10,7 @@ import { recalcFlightDay, zoneOf } from "@/lib/timezone";
 const stopsText = (stops: number) => (stops < 0 ? "" : stops === 0 ? "직항" : `경유 ${stops}회`);
 
 /** "23:45 (또는 익일 00:25)"처럼 설명이 붙어 오는 항공 시각에서 첫 HH:mm만 뽑는다. 없으면 빈 문자열 */
-function firstClock(text: string): string {
+export function firstClock(text: string): string {
   const m = /(\d{1,2}):(\d{2})/.exec(text);
   return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
 }
@@ -19,7 +19,7 @@ function firstClock(text: string): string {
 const NEXT_DAY_HINT = /다음\s*날|익일|\+\s*1/;
 
 /** 출발→도착이 자정을 넘기는지 (도착 시각이 더 이르거나, 도착 표기에 다음날 표시가 있으면) */
-function crossesMidnight(departTime: string, arriveTime: string): boolean {
+export function crossesMidnight(departTime: string, arriveTime: string): boolean {
   if (NEXT_DAY_HINT.test(arriveTime)) return true;
   const f = clockMinutes(firstClock(departTime));
   const t = clockMinutes(firstClock(arriveTime));
@@ -222,7 +222,8 @@ export function applyFlightToDays(inputDays: DayPlan[], flight: FlightOption): D
       const tz = fromZ && toZ ? Math.round((toZ.offset - fromZ.offset) * 60) : null;
       patches.set(dep.id, {
         name: keepName(dep, "출발") ? dep.name : `${leg.departAirport} 출발`,
-        description: withLine(dep),
+        // 앱이 만든 항공 줄(fl-)은 예상 시각 설명을 실제 편 정보로 바꾼다
+        description: dep.id.startsWith("fl-") ? line : withLine(dep),
         stayMinutes: 0,
         travelMinutesToNext: gap ?? dep.travelMinutesToNext,
         ...(gap !== null && tz !== null ? { flightInfo: { minutes: gap - tz, tzMinutes: tz, estimated: false } } : {}),
@@ -245,8 +246,15 @@ export function applyFlightToDays(inputDays: DayPlan[], flight: FlightOption): D
   }
   // 귀국편도 마찬가지로, 출발 항목(항목이 1개뿐이면 그 항목)의 시작 시각을 귀국편 출발 시각에 맞춘다.
   // 체크아웃·공항 이동처럼 앞선 항목이 있어도 그만큼 거슬러 올라가 미팅 시각을 계산하므로 정확히 맞는다.
+  // 단, 출발 시각이 고정된 귀국편(앱이 만든 출국일 — 앞에 관광이 있다)은 미팅 시각을 당기지 않고 출발 시각만 바꾼다.
+  // 거꾸로 맞추면 관광이 짧을 때 하루가 늦게 시작해 "체크아웃 뒤 공항 대기"가 된다 — 빈 시간은 채우기로 안내한다
   if (returnGroup && returnLeg.departTime) {
-    next = anchorMeetingTime(next, returnGroup.dayIndex, returnGroup.items[0].id, returnLeg.departTime);
+    const dep = returnGroup.items[0];
+    if (dep.fixedTime) {
+      next = next.map((d, i) => (i === returnGroup.dayIndex ? mapDayItems(d, (it) => (it.id === dep.id ? { ...it, fixedTime: returnLeg.departTime } : it)) : d));
+    } else {
+      next = anchorMeetingTime(next, returnGroup.dayIndex, dep.id, returnLeg.departTime);
+    }
   }
 
   return next;

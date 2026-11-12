@@ -155,6 +155,30 @@ function knowledgeBlock(memo: string): string {
   ].join("\n");
 }
 
+/** 항공 시각에 맞춘 도착일·출국일 규칙 — 도착 뒤 빈 오후, 공항 대기만 하는 출국일을 만들지 않게 */
+export function flightDaysBlock(req: ItineraryRequest): string {
+  const f = req.flightDays;
+  if (!f) return "";
+  const when = f.assumed ? " (항공편 미정 — 흔한 시각으로 가정)" : "";
+  const lines = ["<flight_days>"];
+  lines.push(
+    f.arrivalStart
+      ? `- Day 1은 현지 도착일입니다. 현지 ${f.arrive} 도착${when}, 입국·이동 뒤 ${f.arrivalStart}부터 관광할 수 있습니다. Day 1에는 ${f.arrivalStart} 이후에 할 수 있는 공항·숙소 근처의 가벼운 관광 2~3곳과 저녁 식사를 넣으세요. ${f.arrivalStart} 전 일정(오전 관광·조식·도착 전 점심)은 넣지 마세요. 비워 두면 안 됩니다.`
+      : `- Day 1은 현지 ${f.arrive}에 늦게 도착${when}하는 날입니다. 관광은 넣지 말고 저녁 식사 1곳만 넣거나(늦으면 비워 두기) 하세요.`,
+  );
+  lines.push(
+    f.departureEnd
+      ? `- Day ${f.departureDay}은 출국일입니다. 귀국편이 ${f.overnightReturn ? "그날 밤(자정 넘어) " : ""}${f.returnDepart}에 출발${when}해 출발 3시간 전에 공항에 가야 하므로, 호텔 체크아웃 뒤 ${f.departureEnd}까지 마칠 수 있는 관광·쇼핑·식사를 넣으세요. 공항 방향으로 동선을 짜고, ${f.departureEnd} 이후 일정은 넣지 마세요. 비워 두면 공항에서 기다리게 되니 시간을 채우세요.`
+      : `- Day ${f.departureDay}은 아침 일찍 출국하는 날입니다. 관광 없이 비워 두세요.`,
+  );
+  lines.push(
+    `- Day 1과 Day ${f.departureDay}은 style을 full로 하고 fullDay에 시간 순서대로 넣으세요. 항공·공항 이동·호텔 체크인/체크아웃 항목은 넣지 마세요(앱이 정확한 시각으로 넣습니다).`,
+    "</flight_days>",
+    "",
+  );
+  return lines.join("\n");
+}
+
 export function buildItineraryUserPrompt(req: ItineraryRequest, researchMemo = "", knowledge = ""): string {
   const themeLabels = req.themes
     .map((id) => THEMES.find((t) => t.id === id)?.label)
@@ -166,8 +190,9 @@ export function buildItineraryUserPrompt(req: ItineraryRequest, researchMemo = "
     knowledgeBlock(knowledge),
     regionPlanBlock(req.regionPlan),
     needsBlock(req),
+    flightDaysBlock(req),
     `여행지: ${req.destination}`,
-    `여행 일수: ${req.days}일`,
+    `여행 일수: ${req.days}일${req.nights !== undefined ? ` (현지 숙박 ${req.nights}박)` : ""}`,
     `예상 인원: ${req.travelers}명`,
     `견적 통화: ${req.currency} (모든 금액은 1인 기준, 이 통화 단위)`,
     `선호 테마: ${themeLabels || "지정 없음"}`,

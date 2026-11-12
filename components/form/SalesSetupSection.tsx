@@ -1,7 +1,7 @@
 import { Store } from "lucide-react";
 import { ChoiceGroup } from "@/components/ui/ChoiceGroup";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { tourDayCount } from "@/lib/itinerary";
+import { flightDayWindows, flightTimesFor } from "@/lib/flightPlan";
 import { HOTEL_GRADES } from "@/lib/itemTypes";
 import type { FlightOption, HotelGrade, LodgingType, PackageType } from "@/types";
 import { FlightQuickPick } from "./FlightQuickPick";
@@ -88,8 +88,8 @@ export function SalesSetupSection({ input, onChange, onApplyFlight, foldSignal }
             <span>
               <span className="block text-xs font-medium text-slate-800">항공 이동일 포함 (해외 패키지)</span>
               <span className="mt-0.5 block text-pretty text-[11px] leading-4 text-slate-500">
-                첫날(출발·도착)과 마지막 날(귀국)은 이동일로 두고, 그 사이 {tourDayCount(input)}일만 AI가 관광 일정을 만듭니다.
-                {input.includesFlights && input.days < 3 && <span className="font-medium text-red-600"> 총 일수는 3일 이상이어야 합니다.</span>}
+                {flightNote(input)}
+                {input.includesFlights && input.days < 2 && <span className="font-medium text-red-600"> 총 일수는 2일 이상이어야 합니다.</span>}
               </span>
             </span>
           </label>
@@ -99,4 +99,14 @@ export function SalesSetupSection({ input, onChange, onApplyFlight, foldSignal }
       </div>
     </SectionCard>
   );
+}
+
+/** 항공 시각으로 도착일·출국일에 관광할 수 있는 시간 안내 */
+function flightNote(input: Parameters<typeof flightTimesFor>[0]): string {
+  const t = flightTimesFor({ ...input, includesFlights: true });
+  if (!t) return "도착일·출국일도 항공 시각에 맞춰 관광을 넣습니다.";
+  const w = flightDayWindows(t, input.days);
+  const arrival = w.arrivalStart ? `도착일 ${w.arrivalStart}부터` : "도착일은 늦은 도착이라 휴식";
+  const departure = w.departureEnd ? `출국일 ${w.departureEnd}까지` : "출국일은 이른 출발이라 관광 없음";
+  return `${t.assumed ? "항공편 미정 — 흔한 시각으로 가정해" : "고른 항공편 시각으로"} ${arrival}, ${departure} 관광을 넣습니다 (현지 ${t.arrive} 도착 · ${t.returnDepart} 출발).`;
 }
