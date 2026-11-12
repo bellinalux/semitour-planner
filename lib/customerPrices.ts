@@ -1,4 +1,4 @@
-import { vehicleClassFor } from "@/lib/autoBuild";
+import { groundPlan, inputAtTravelers } from "@/lib/groundPlan";
 import { gradeText } from "@/lib/itemTypes";
 import type { PmChoice } from "@/lib/itinerary";
 import { gradeOptions, inputWithGrade, salePrice, weekdayPriceRows } from "@/lib/priceLevers";
@@ -100,12 +100,15 @@ export function priceGrid(input: TripInput, days: DayPlan[], pmChoice: PmChoice,
     columns: cols.map((c) => c.label),
     minTravelers,
     rows: sizes.map((n) => {
-      const vehicle = vehicleClassFor(n);
+      // 차종·대수·가이드 수가 지금과 다르면 그에 맞춰 차량비·가이드비를 바꿔 계산한다 (groundScale "fixed"면 그대로)
+      const plan = groundPlan(n, input.guideCapacity);
+      const now = groundPlan(current, input.guideCapacity);
+      const changed = plan.tier !== now.tier || plan.count !== now.count || plan.guides !== now.guides;
       return {
         travelers: n,
-        prices: cols.map((c) => salePrice({ ...c.apply(input), travelers: n }, days, pmChoice)),
+        prices: cols.map((c) => salePrice(inputAtTravelers(c.apply(input), n), days, pmChoice)),
         belowMin: minTravelers > 0 && n < minTravelers,
-        vehicleChange: ownCost && vehicle !== vehicleClassFor(current) ? vehicle : null,
+        vehicleChange: ownCost && changed ? `${plan.tierLabel}${plan.count > 1 ? ` ${plan.count}대` : ""}${plan.guides !== now.guides ? ` · 가이드 ${plan.guides}명` : ""}` : null,
         isCurrent: n === current,
       };
     }),

@@ -269,6 +269,15 @@ export interface TripInput {
   otherFixedCost: number;
   /** 차량·가이드가 실제로 붙는 일수. 0이면 일정에서 자동 계산 */
   groundDaysOverride: number;
+  /**
+   * 인원이 바뀔 때 차량비·가이드비 — auto: 차종·대수·가이드 수에 맞춰 바꿔 계산(인원별 가격표 등), fixed: 금액 그대로
+   * (lib/groundPlan.ts)
+   */
+  groundScale: "auto" | "fixed";
+  /** 가이드 1명이 맡는 최대 인원 (기본 45 — 버스 1대에 가이드 1명) */
+  guideCapacity: number;
+  /** [전세버스·가이드 조회]로 받은 차종별 1대 1일 요금 — 다른 인원으로 바꿔 계산할 때 비율로 쓴다 */
+  vehicleTierRates: Partial<Record<"car" | "suv" | "van" | "midbus" | "bus", number>>;
 
   packageType: PackageType;
   lodgingType: LodgingType;

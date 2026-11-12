@@ -39,6 +39,7 @@ import { RateStructurePanel } from "./quote/RateStructurePanel";
 import { ScenarioCompare } from "./quote/ScenarioCompare";
 import { UndecidedRange } from "./quote/UndecidedRange";
 import { priceIsGiven } from "@/lib/channels";
+import { groundPlan } from "@/lib/groundPlan";
 
 interface Props {
   /** 견적은 일정 결과에 의존하므로 일정 상태를 그대로 받는다 */
@@ -346,6 +347,17 @@ function QuoteContent({ quote, input, days, pmChoice, meta, generatedCurrency, o
               targetMarginRate={input.targetMarginRate}
               unitsFor={quote.lodgingUnits > 0 ? (n) => lodgingRoomsFor(n, input).bookedRooms : null}
               unitLabel={input.lodgingType === "bnb" ? "유닛" : "실"}
+              groundFor={
+                input.pricingMode !== "supplier" && input.vehicleCostPerDay + input.guideCostPerDay > 0
+                  ? (n) => {
+                      const p = groundPlan(n, input.guideCapacity);
+                      const now = groundPlan(input.travelers, input.guideCapacity);
+                      const short = `${p.tierLabel.replace(/\s*\(.*\)/, "")}${p.count > 1 ? ` ${p.count}대` : ""} · 가이드 ${p.guides}`;
+                      return { short, changed: p.tier !== now.tier || p.count !== now.count || p.guides !== now.guides };
+                    }
+                  : null
+              }
+              groundScaled={input.groundScale !== "fixed"}
             />
           </section>
 
