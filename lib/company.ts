@@ -1,5 +1,7 @@
 import { isPhotoData } from "@/lib/imageResize";
 import type { CompanyProfile } from "@/types";
+import { DEFAULT_SPECIAL_TERM_SETTINGS, normalizeSpecialTermSettings } from "@/lib/specialTerms";
+import { normalizeCancelPolicy, STANDARD_POLICY } from "@/lib/cancelPolicy";
 
 export const DEFAULT_COMPANY: CompanyProfile = {
   name: "",
@@ -21,6 +23,8 @@ export const DEFAULT_COMPANY: CompanyProfile = {
   emergencyContact: "",
   docColor: "",
   logo: "",
+  specialTerms: DEFAULT_SPECIAL_TERM_SETTINGS,
+  cancelPolicy: STANDARD_POLICY,
 };
 
 /** 저장된 값을 현재 형태로 맞춘다. 없는 키는 기본값으로 채운다. */
@@ -56,6 +60,8 @@ export function normalizeCompany(saved: unknown): CompanyProfile {
     emergencyContact: text(s.emergencyContact, ""),
     docColor: typeof s.docColor === "string" && /^#[0-9a-f]{6}$/i.test(s.docColor) ? s.docColor : "",
     logo: isPhotoData(s.logo, 40_000) ? s.logo : "",
+    specialTerms: normalizeSpecialTermSettings(s.specialTerms),
+    cancelPolicy: normalizeCancelPolicy(s.cancelPolicy),
   };
 }
 

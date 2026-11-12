@@ -3,6 +3,9 @@ import { ourPolicy, POLICY_LABELS } from "@/lib/competitorDiff";
 import { paymentPlan, resolveRecipients, tripPeriod, type DocRecipient } from "@/lib/documents";
 import { localPayRows, moneyWithKrw } from "@/lib/fees";
 import { DocFacts, DocSection, DocShell, type DocProps } from "./DocShell";
+import { contractTerms, entryNotes, REGION_LABEL } from "@/lib/specialTerms";
+import { effectivePolicy } from "@/lib/cancelPolicy";
+import { CancelPolicyTable } from "./CancelPolicyTable";
 
 /** 계약서 표지(①②③) 한 부. 개인별 문서면 사람마다 이 컴포넌트가 반복된다. */
 function OneCover({ recipient, breakBefore, data }: { recipient: DocRecipient; breakBefore: boolean; data: DocProps }) {
@@ -12,6 +15,12 @@ function OneCover({ recipient, breakBefore, data }: { recipient: DocRecipient; b
   const title = meta?.packageName?.trim() || `${input.destination} ${input.nights}박 ${input.days}일`;
   const localPay = localPayRows(days, pmChoice);
   const policy = ourPolicy(days, pmChoice, input, meta);
+  // 특약(제6조) — 여행지에 맞춰 고른 특약 + 회사 고유 특약 (lib/specialTerms.ts)
+  const terms = contractTerms(input, company.specialTerms);
+  const entries = input.tripScope === "overseas" ? entryNotes(input.destination) : [];
+  // 취소 규정이 특별약관이면 표준약관 제16조 대신 적용 — 특약으로 보여 주고 동의를 받는다
+  const cancel = effectivePolicy(company, input);
+  const special = terms.length > 0 || cancel.mode === "custom";
 
   return (
     <div style={breakBefore ? { breakBefore: "page" } : undefined}>
@@ -71,7 +80,42 @@ function OneCover({ recipient, breakBefore, data }: { recipient: DocRecipient; b
           </p>
         </DocSection>
 
-        <DocSection title="③ 서명" keep>
+        {special && (
+          <DocSection title="③ 특약 (표준약관 제6조)">
+            <p className="mb-1.5 text-slate-600">
+              아래 특약은 붙임 표준약관보다 우선 적용됩니다. 여행사는 각 특약의 내용과 표준약관과 다른 점을 설명했습니다.
+            </p>
+            {cancel.mode === "custom" && (
+              <div className="mb-2" style={{ breakInside: "avoid" }}>
+                <p className="font-semibold text-slate-800">취소 및 환불 규정 (특별약관 — 붙임 표준약관 제16조 대신 적용)</p>
+                <CancelPolicyTable policy={cancel} departureDate={input.departureDate} currency={input.currency} />
+              </div>
+            )}
+            <ol className="list-decimal space-y-1.5 pl-5">
+              {terms.map((t, i) => (
+                <li key={i} style={{ breakInside: "avoid" }}>
+                  <span className="font-semibold text-slate-800">{t.title}</span> — {t.text}
+                  <span className="block text-[10px] text-slate-500">표준약관과 다른 점: {t.differs}</span>
+                </li>
+              ))}
+            </ol>
+            {entries.length > 0 && (
+              <div className="mt-2 border border-slate-300 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600" style={{ breakInside: "avoid" }}>
+                <p className="font-semibold text-slate-700">입국 요건 안내</p>
+                {entries.map((e) => (
+                  <p key={e.region}>
+                    · {REGION_LABEL[e.region]}: {e.text} ({e.checked} 확인 — 출발 전 외교부 해외안전여행 0404.go.kr에서 다시 확인하세요)
+                  </p>
+                ))}
+              </div>
+            )}
+            <p className="mt-2 border border-slate-400 px-2 py-2 text-slate-700" style={{ breakInside: "avoid" }}>
+              여행자는 위 특약의 내용과 표준약관과 다른 점에 대해 설명을 듣고 이해했으며, 이에 동의합니다.　　여행자 {recipient.name} (서명) ________________
+            </p>
+          </DocSection>
+        )}
+
+        <DocSection title={special ? "④ 서명" : "③ 서명"} keep>
           <p className="mb-2 text-slate-600">
             위 내용으로 여행계약을 체결하며, 별도 첨부하는 국외여행 표준약관과 따로 교부하는 여행일정표를 계약 내용으로 합니다.
           </p>

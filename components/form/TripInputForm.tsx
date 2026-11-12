@@ -3,7 +3,7 @@
 import { Loader2, RotateCcw, Sparkles, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CourseFile } from "@/lib/courseFile";
-import type { FlightOption, TripInput } from "@/types";
+import type { CompanyProfile, FlightOption, TripInput } from "@/types";
 import { AdvancedFolder } from "./AdvancedFolder";
 import { CostFolder } from "./CostFolder";
 import { DocumentSection } from "./DocumentSection";
@@ -33,6 +33,8 @@ interface Props {
   stays: { city: string; nights: number }[];
   /** 다른 화면(견적 경고·진행 상황)에서 이 폴더·항목으로 이동시킬 때 */
   focus: SettingsFocus | null;
+  /** 회사 설정 (계약서 특약 금액 등) */
+  company?: CompanyProfile;
 }
 
 /**
@@ -55,6 +57,7 @@ export function TripInputForm({
   onShowProgress,
   stays,
   focus,
+  company,
 }: Props) {
   const isPaste = input.mode === "paste";
   const canGenerate = isPaste
@@ -106,7 +109,7 @@ export function TripInputForm({
           투어까지 한 번에 채웁니다. 아래 폴더는 필요할 때만 여세요.
         </p>
         <CostFolder input={input} onChange={onChange} stays={stays} focus={focus} />
-        <DocumentSection input={input} onChange={onChange} openSignal={signal("documents")} />
+        <DocumentSection input={input} onChange={onChange} openSignal={signal("documents")} company={company} />
         <AdvancedFolder input={input} onChange={onChange} focus={focus} />
       </div>
 

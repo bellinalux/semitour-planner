@@ -75,6 +75,9 @@ export const DEFAULT_INPUT: TripInput = {
   groundScale: "auto",
   guideCapacity: 45,
   vehicleTierRates: {},
+  specialTermOverrides: {},
+  customSpecialTerms: "",
+  cancelPolicy: null,
   otherFixedCost: 0,
   groundDaysOverride: 0,
 

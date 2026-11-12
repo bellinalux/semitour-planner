@@ -668,6 +668,8 @@ export function dayTourShare(
     packing: [],
     options: [],
     bookable: true,
+    cancel: [],
+    cancelNotes: [],
     tags: [c.length === "full" ? "당일 투어" : "반일 투어", ...(cost.vehicle ? ["전용차량"] : []), ...(cost.guides > 0 ? ["가이드 동행"] : [])],
   };
 }

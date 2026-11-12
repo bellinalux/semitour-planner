@@ -75,6 +75,9 @@ import { postJson } from "@/lib/api";
 import { DOC_LABELS, type DocKind } from "@/components/print/PrintDocuments";
 import { listenErrors } from "@/lib/errorReport";
 import { missingLegalFields } from "@/lib/company";
+import { contractTermRisks, contractTerms } from "@/lib/specialTerms";
+import { effectivePolicy, policyRisks } from "@/lib/cancelPolicy";
+import { cachedHolidays } from "@/hooks/useKoreanHolidays";
 import { calculateQuote } from "@/lib/cost";
 import { rememberCosts } from "@/lib/costMemory";
 import { useAutoQuote } from "@/hooks/useAutoQuote";
@@ -609,6 +612,8 @@ export function PlannerApp() {
             {showOps && <BookingsMenu
               author={session.user?.name || quoteLog.author}
               companyName={company.name}
+              cancelPolicy={company.cancelPolicy}
+              airCancelFee={company.specialTerms.airCancelFee}
               onFillInput={(patch) => {
                 update(patch);
                 setTab("input");
@@ -669,6 +674,7 @@ export function PlannerApp() {
             courseFile={courseFile}
             onCourseFileChange={setCourseFile}
             onApplyFlight={handleApplyFlight}
+            company={company}
             stays={stays}
             focus={settingsFocus}
             onAutoBuild={() => void autoBuild.run()}
@@ -791,6 +797,10 @@ export function PlannerApp() {
               disabled: !quote?.ok,
               missingLegal: missingLegalFields(company),
               unconfirmed,
+              contractRisks: [
+                ...contractTermRisks(contractTerms(input, company.specialTerms), company.specialTerms),
+                ...policyRisks(effectivePolicy(company, input), { departureDate: input.departureDate, perPerson: quote?.ok ? quote.scenario.pricePerPerson : 0, holidays: cachedHolidays() }).map((r) => `취소 규정: ${r}`),
+              ],
               onPrint: printDocument,
             }}
           />

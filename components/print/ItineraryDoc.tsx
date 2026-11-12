@@ -1,5 +1,7 @@
 import { computeItemTimings, dayTourStart } from "@/lib/dayLoad";
-import { CANCELLATION_TERMS, dayDate, dayMeals, documentItems, includeLists, noticeLines, tripPeriod } from "@/lib/documents";
+import { CancelPolicyTable } from "./CancelPolicyTable";
+import { effectivePolicy } from "@/lib/cancelPolicy";
+import { dayDate, dayMeals, documentItems, includeLists, noticeLines, tripPeriod } from "@/lib/documents";
 import { customerFeeNote, localPayRows, moneyWithKrw } from "@/lib/fees";
 import { formatDuration } from "@/lib/format";
 import { gradeText } from "@/lib/itemTypes";
@@ -438,23 +440,7 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
       )}
 
       <DocSection title="취소 및 환불 규정" keep>
-        <p className="mb-1 text-slate-600">국외여행 표준약관 및 소비자분쟁해결기준에 따릅니다. (여행개시일 기준)</p>
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b border-slate-300 bg-slate-50 text-left">
-              <th className="px-2 py-1 font-medium">취소 시점</th>
-              <th className="px-2 py-1 font-medium">위약금</th>
-            </tr>
-          </thead>
-          <tbody>
-            {CANCELLATION_TERMS.map((term) => (
-              <tr key={term.when} className="border-b border-slate-200">
-                <td className="px-2 py-1">{term.when}</td>
-                <td className="px-2 py-1">{term.fee}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <CancelPolicyTable policy={effectivePolicy(company, input)} departureDate={input.departureDate} currency={input.currency} />
       </DocSection>
 
       <DocSection title="유의사항">

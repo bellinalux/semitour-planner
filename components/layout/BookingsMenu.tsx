@@ -11,6 +11,8 @@ import { WON } from "@/lib/salesStats";
 import { InquiryInbox } from "./InquiryInbox";
 import { inquiryDate, STYLE_LABEL, type Inquiry } from "@/lib/inquiry";
 import type { TripInput } from "@/types";
+import { CancelCalculator } from "./CancelCalculator";
+import { STANDARD_POLICY, type CancelPolicy } from "@/lib/cancelPolicy";
 
 type Draft = Omit<Booking, "id" | "createdAt" | "updatedAt" | "owner" | "ownerId" | "history">;
 
@@ -20,6 +22,9 @@ interface Props {
   author: string;
   /** 고객 후기 화면에 보일 회사 이름 */
   companyName?: string;
+  /** 취소료 계산용 회사 취소 규정·항공 취소 수수료 */
+  cancelPolicy?: CancelPolicy;
+  airCancelFee?: number;
   /** 웹 견적 요청으로 입력 채우기 */
   onFillInput?: (patch: Partial<TripInput>) => void;
   buttonClassName?: string;
@@ -75,7 +80,7 @@ function Field({ label, children, wide }: { label: string; children: React.React
 }
 
 /** 상단 [예약 관리] — 견적 이후 예약 진행 상태·입금 기한·미수금을 관리한다 */
-export function BookingsMenu({ draftFromQuote, author, companyName = "", onFillInput, buttonClassName }: Props) {
+export function BookingsMenu({ draftFromQuote, author, companyName = "", cancelPolicy = STANDARD_POLICY, airCancelFee = 0, onFillInput, buttonClassName }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const bookings = useBookings(author);
   const [filter, setFilter] = useState<Filter>("active");
@@ -313,6 +318,17 @@ export function BookingsMenu({ draftFromQuote, author, companyName = "", onFillI
                   planName={editing.planName}
                   company={companyName}
                   onAppendMemo={(line) => set("memo", `${editing.memo ? `${editing.memo}\n` : ""}${line}`.slice(0, 2000))}
+                />
+                <CancelCalculator
+                  policy={cancelPolicy}
+                  departureDate={editing.departureDate}
+                  total={editing.totalPrice}
+                  deposit={editing.depositAmount}
+                  paid={editing.paidAmount}
+                  travelers={editing.travelers}
+                  currency={editing.currency}
+                  airFeePerPerson={airCancelFee}
+                  onRecord={(line) => set("memo", `${editing.memo ? `${editing.memo}\n` : ""}${line}`.slice(0, 2000))}
                 />
                 <p className="text-[11px] text-slate-500">
                   미수금 {formatMoney(Math.max(0, editing.totalPrice - editing.paidAmount), editing.currency)} · 계약금 기본값은 판매 금액의 10%, 잔금 기한은 출발 30일 전입니다(고칠 수 있음).

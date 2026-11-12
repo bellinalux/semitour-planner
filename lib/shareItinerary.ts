@@ -14,6 +14,7 @@ import { isPhotoData } from "@/lib/imageResize";
 import { packingList } from "@/lib/packingList";
 import { dayMeals } from "@/lib/documents";
 import type { CompanyProfile, CourseMeta, DayPlan, QuoteData, TripInput } from "@/types";
+import { cancelSchedule, dateLabel, effectivePolicy, freeCancelDeadline, policyDisclosure } from "@/lib/cancelPolicy";
 
 /**
  * 고객용 웹 일정표 — 휴대폰으로 보는 일정·포함 사항·문의 연락처를 링크 하나로 공유한다.
@@ -57,6 +58,9 @@ export const sharedItinerarySchema = z.object({
   options: z.array(z.object({ name: str(120), price: str(60), day: z.number().int().min(0).max(60) })).max(30).default([]),
   /** 웹에서 [이 일정으로 예약 요청]을 받을지 */
   bookable: z.boolean().default(false),
+  /** 취소 및 환불 규정 (구간·날짜·취소료) + 고지 문구 — 한국어 링크만 */
+  cancel: z.array(z.object({ range: str(60), date: str(60), charge: str(80) })).max(12).default([]),
+  cancelNotes: z.array(str(300)).max(6).default([]),
 });
 export type SharedItinerary = z.infer<typeof sharedItinerarySchema>;
 
@@ -160,6 +164,7 @@ export function buildSharedItinerary(
     }),
     included: included.slice(0, 40).map((s) => cut(s, 120)),
     excluded: excluded.slice(0, 40).map((s) => cut(s, 120)),
+    ...shareCancel(data, !en && !fl),
     notices: (D
       ? [...(localPay.rows.length > 0 ? [`${D.paidLocally}: ${localPay.rows.map((r) => tr(r.name)).join(", ")}`] : []), D.changeNote]
       : en
@@ -187,5 +192,20 @@ export function buildSharedItinerary(
       day: Math.max(0, Math.min(60, o.dayNo ?? 0)),
     })),
     bookable: true,
+  };
+}
+
+/** 웹 일정표의 취소 규정 (외국어 링크는 번역이 없어 넣지 않는다) */
+function shareCancel(data: { input: TripInput; company: CompanyProfile }, korean: boolean): Pick<SharedItinerary, "cancel" | "cancelNotes"> {
+  if (!korean) return { cancel: [], cancelNotes: [] };
+  const policy = effectivePolicy(data.company, data.input);
+  const rows = cancelSchedule(policy, data.input.departureDate, "", new Set(), data.input.currency);
+  const free = freeCancelDeadline(rows);
+  return {
+    cancel: rows.map((r) => ({ range: r.range.slice(0, 60), date: r.to ? (r.from ? `${dateLabel(r.from)} ~ ${dateLabel(r.to)}` : `~ ${dateLabel(r.to)}`) : "", charge: r.charge.slice(0, 80) })),
+    cancelNotes: [
+      ...policyDisclosure(policy),
+      ...(free && free.deadline !== free.date ? [`무료 취소 실제 마감: ${dateLabel(free.deadline)} ${policy.businessEnd} (영업일 기준)`] : []),
+    ].map((l) => l.slice(0, 300)).slice(0, 6),
   };
 }

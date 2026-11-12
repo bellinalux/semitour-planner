@@ -23,6 +23,8 @@ interface Props {
   missingLegal: string[];
   /** 고객 문서 인쇄 전에 확인할 값 (직접 확인하지 않은 추정 원가 등). 있으면 인쇄 전에 한 번 묻는다 */
   unconfirmed: string[];
+  /** 계약서 특약 중 무효가 될 수 있는 것 (계약서 인쇄 전에 알린다) */
+  contractRisks?: string[];
   onPrint: (kind: DocKind) => void;
   /** 국내(외국인 손님)면 가이드 해설집 기본 언어를 영어로 */
   tripScope?: string;
@@ -47,15 +49,16 @@ const INTERNAL: { kind: DocKind; icon: typeof FileText; description: string } = 
 };
 
 /** 고객용 문서를 브라우저 인쇄로 PDF 저장한다 */
-export function DocumentBar({ disabled, missingLegal, unconfirmed, onPrint, tripScope }: Props) {
+export function DocumentBar({ disabled, missingLegal, unconfirmed, contractRisks = [], onPrint, tripScope }: Props) {
   const guideLang = useSyncExternalStore(subscribeGuideLang, () => readGuideLang(tripScope), () => "ko" as const);
   // 운영 지시서 "하루 한 쪽" — 이 브라우저에 기억
   const pagePerDay = useSyncExternalStore(subscribePagePerDay, readOpsPagePerDay, () => false);
   const [pending, setPending] = useState<DocKind | null>(null);
   const hideCosts = useHideCosts();
   const [checked, setChecked] = useState(false);
+  const checksFor = (kind: DocKind) => [...unconfirmed, ...(kind === "contract" ? contractRisks.map((r) => `특약 — ${r}`) : [])];
   const askOrPrint = (kind: DocKind) => {
-    if (unconfirmed.length === 0) return onPrint(kind);
+    if (checksFor(kind).length === 0) return onPrint(kind);
     setChecked(false);
     setPending(kind);
   };
@@ -98,16 +101,16 @@ export function DocumentBar({ disabled, missingLegal, unconfirmed, onPrint, trip
         <div role="alertdialog" aria-label="인쇄 전 확인" className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[11px] leading-4 text-amber-900">
           <p className="flex items-center gap-1.5 text-xs font-semibold">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            {DOC_LABELS[pending]} 인쇄 전 확인 — 판매가에 들어간 값 중 직접 확인하지 않은 것이 있습니다
+            {DOC_LABELS[pending]} 인쇄 전 확인 — {unconfirmed.length > 0 ? "판매가에 들어간 값 중 직접 확인하지 않은 것" : "무효가 될 수 있는 특약"}이 있습니다
           </p>
           <ul className="list-disc space-y-0.5 pl-5">
-            {unconfirmed.map((u) => (
+            {checksFor(pending).map((u) => (
               <li key={u}>{u}</li>
             ))}
           </ul>
           <label className="flex items-center gap-1.5 font-medium">
             <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
-            위 값을 확인했고, 이 금액으로 고객에게 안내해도 됩니다
+            위 내용을 확인했고, 이대로 고객에게 안내해도 됩니다
           </label>
           <div className="flex gap-2">
             <button

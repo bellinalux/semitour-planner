@@ -6,11 +6,15 @@ import { useSession } from "@/components/SessionContext";
 import type { CompanyStorage } from "@/hooks/useCompanyProfile";
 import { missingLegalFields } from "@/lib/company";
 import { resizeImage } from "@/lib/imageResize";
-import type { CompanyProfile } from "@/types";
+import type { CompanyProfile, SpecialTermSettings } from "@/types";
+import { contractTermRisks, riskOf, SPECIAL_TERMS, REGION_LABEL } from "@/lib/specialTerms";
+import { CancelPolicyEditor } from "@/components/form/CancelPolicyEditor";
+
+const EMPTY_HOLIDAYS: ReadonlySet<string> = new Set();
 
 type FieldKey = Exclude<
   keyof CompanyProfile,
-  "depositRate" | "balanceDueDaysBeforeDeparture" | "useInterimPayment" | "interimPaymentRate" | "interimPaymentDaysBeforeDeparture" | "docColor" | "logo"
+  "depositRate" | "balanceDueDaysBeforeDeparture" | "useInterimPayment" | "interimPaymentRate" | "interimPaymentDaysBeforeDeparture" | "docColor" | "logo" | "specialTerms" | "cancelPolicy"
 >;
 
 const DOC_COLORS = [
@@ -391,6 +395,16 @@ export function CompanySettings({ company, storage, save }: Props) {
               )}
             </section>
 
+            <section aria-label="취소 및 환불 규정 (회사 기본)" className="space-y-1.5">
+              <h3 className="text-xs font-semibold text-slate-800">취소 및 환불 규정 (회사 기본)</h3>
+              <p className="text-[11px] leading-4 text-slate-500">
+                모든 상품의 일정표·견적서·계약서·웹 일정표에 들어갑니다. 상품마다 다르게 하려면 입력 화면 &quot;5. 고객·문서&quot;에서 바꿉니다. 특별약관(표준보다 높은 취소료)은 사유와 실제 손해 근거가 필요합니다.
+              </p>
+              <CancelPolicyEditor value={draft.cancelPolicy} onChange={(cancelPolicy) => setDraft((prev) => ({ ...prev, cancelPolicy }))} holidays={EMPTY_HOLIDAYS} />
+            </section>
+
+            <SpecialTermsSettingsSection value={draft.specialTerms} onChange={(specialTerms) => setDraft((prev) => ({ ...prev, specialTerms }))} />
+
             {notice && (
               <p
                 role={notice.kind === "error" ? "alert" : "status"}
@@ -425,5 +439,76 @@ export function CompanySettings({ company, storage, save }: Props) {
         </div>
       </dialog>
     </>
+  );
+}
+
+/** 여행계약서 특약 — 금액·영업시간·회사 고유 특약·쓰지 않을 특약 (상품별 선택은 입력 화면 5. 고객·문서) */
+function SpecialTermsSettingsSection({ value, onChange }: { value: SpecialTermSettings; onChange: (v: SpecialTermSettings) => void }) {
+  const set = <K extends keyof SpecialTermSettings>(k: K, v: SpecialTermSettings[K]) => onChange({ ...value, [k]: v });
+  const customRisks = value.custom
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => ({ line: l, risk: riskOf(l) }))
+    .filter((x) => x.risk);
+  const amountRisks = contractTermRisks([], value);
+  const field = "w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30";
+  return (
+    <section aria-label="여행계약서 특약" className="space-y-3">
+      <div>
+        <h3 className="text-xs font-semibold text-slate-800">여행계약서 특약 (표준약관 제6조)</h3>
+        <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
+          대형 여행사 약관에서 쓰는 특약을 공통·국가별로 준비해 두었습니다. 여행지에 맞는 특약이 계약서에 자동으로 추천되고, 상품마다 입력 화면 &quot;5. 고객·문서&quot;에서 켜고 끌 수 있습니다.
+          특약은 표준약관보다 우선하지만 설명·별도 동의가 필요하고, 전부 면책·과중한 위약금은 무효가 될 수 있습니다.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="text-[11px] font-medium text-slate-600">
+          항공권 발권 후 취소 수수료 (1인, 원)
+          <input type="number" min={0} step={10000} value={value.airCancelFee} onChange={(e) => set("airCancelFee", Math.max(0, Number(e.target.value) || 0))} className={`${field} mt-1 text-right tabular-nums`} />
+          <span className="mt-0.5 block font-normal text-slate-400">0이면 &quot;항공사 규정에 따른 실비&quot;</span>
+        </label>
+        <label className="text-[11px] font-medium text-slate-600">
+          노쇼 위약금 (1인, 원)
+          <input type="number" min={0} step={10000} value={value.noShowFee} onChange={(e) => set("noShowFee", Math.max(0, Number(e.target.value) || 0))} className={`${field} mt-1 text-right tabular-nums`} />
+          <span className="mt-0.5 block font-normal text-slate-400">출발 24시간 이내 취소·무연락 불참. 0이면 넣지 않음</span>
+        </label>
+        <label className="text-[11px] font-medium text-slate-600">
+          취소 접수 영업시간
+          <input value={value.businessHours} placeholder="예) 평일 09:00~18:00" onChange={(e) => set("businessHours", e.target.value)} className={`${field} mt-1`} />
+          <span className="mt-0.5 block font-normal text-slate-400">넣으면 &quot;영업일 기준 접수&quot; 특약을 추천</span>
+        </label>
+      </div>
+      <label className="block text-[11px] font-medium text-slate-600">
+        회사 고유 특약 (한 줄에 하나, 모든 계약서에 들어감)
+        <textarea rows={3} value={value.custom} onChange={(e) => set("custom", e.target.value)} className={`${field} mt-1 resize-y`} />
+      </label>
+      {[...customRisks.map((x) => `"${x.line.slice(0, 30)}…": ${x.risk}`), ...amountRisks].map((r) => (
+        <p key={r} role="alert" className="rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] leading-4 text-amber-800">
+          {r}
+        </p>
+      ))}
+      <details className="text-[11px] text-slate-600">
+        <summary className="cursor-pointer font-medium">준비된 특약 {SPECIAL_TERMS.length}개 — 회사에서 쓰지 않을 것 끄기</summary>
+        <ul className="mt-1.5 grid gap-1 sm:grid-cols-2">
+          {SPECIAL_TERMS.map((t) => (
+            <li key={t.id}>
+              <label className="flex items-start gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={!value.disabled.includes(t.id)}
+                  onChange={(e) => set("disabled", e.target.checked ? value.disabled.filter((x) => x !== t.id) : [...value.disabled, t.id])}
+                  className="mt-0.5"
+                />
+                <span>
+                  {t.title}
+                  {t.region && <span className="ml-1 text-slate-400">({REGION_LABEL[t.region]})</span>}
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </section>
   );
 }
