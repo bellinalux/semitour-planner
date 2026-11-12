@@ -5,6 +5,7 @@ import { guardRequest } from "@/lib/server/guard";
 import { deepenStop, draftEnglish, draftPhrases, draftScript } from "@/lib/server/guideBookDraft";
 import { getKit, updateKit } from "@/lib/server/guideBookStore";
 import { getCity } from "@/lib/server/knowledgeStore";
+import { withAiInfo } from "@/lib/server/aiProviders";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -39,7 +40,7 @@ const stopFrom = (d: { title: string; hook: string; look: string; story: string;
  *  script: 장소 설명 원고 (지점별 전문 해설 + 사실 확인). 검수 완료된 원고는 force 없이는 덮지 않는다. 베테랑 메모·등급은 이어서
  *  english: 영어 원고 / deepen: 지점 한 곳 더 깊게 / phrases: 도시 현지 회화 카드
  */
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const blocked = await guardRequest(request);
   if (blocked) return blocked;
   const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -111,3 +112,6 @@ export async function POST(request: Request) {
     return errorResponse("INTERNAL", err instanceof Error && err.message.includes("조사") ? err.message : "원고를 만들지 못했습니다. 잠시 뒤 다시 시도해 주세요.", 500);
   }
 }
+
+/** 대체 AI(Groq·Cloudflare)가 답하면 응답 머리글로 화면에 알린다 */
+export const POST = withAiInfo(handlePost);

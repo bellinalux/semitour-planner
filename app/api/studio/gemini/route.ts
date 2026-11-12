@@ -3,6 +3,7 @@
  *   다른 스튜디오(상세페이지 스튜디오 등)의 Gemini 요청을 서버 키로 대신 보낸다. 요청·응답 본문은 Gemini 그대로.
  *   헤더: X-Studio-Code(접근 코드, 필수), X-Studio-Cache: 1 이면 같은 요청을 하루 동안 저장해 다시 씀
  * GET  /api/studio/gemini — 연결 확인 { ok, codeRequired, codeOk }
+ * ※ Gemini 형식을 그대로 전달하므로 Groq·Cloudflare 자동 전환(lib/server/aiProviders.ts) 대상이 아니다.
  */
 import { isRunaway } from "@/lib/aiRepeat";
 import { resolveKey } from "@/lib/server/gemini";

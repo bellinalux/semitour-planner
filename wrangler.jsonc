@@ -44,6 +44,8 @@
     // 스튜디오 AI 중계(/api/studio/gemini)의 같은 요청 하루 저장용. id를 적지 않으면 배포할 때 자동으로 만들어 연결한다.
     { "binding": "AI_CACHE" }
   ],
+  // Cloudflare Workers AI — Gemini·Groq가 한도에 걸렸을 때 마지막 대체 AI (키 불필요, 하루 무료 사용량 안에서). lib/server/aiProviders.ts
+  "ai": { "binding": "AI" },
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",

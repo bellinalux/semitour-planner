@@ -1,6 +1,8 @@
 import { accessCodeWeak, accessRequired, getSession } from "@/lib/server/access";
 import { readSecret } from "@/lib/server/external";
 import { getKv } from "@/lib/server/planStore";
+import { providerStatus } from "@/lib/server/aiProviders";
+import { modelName } from "@/lib/server/gemini";
 import { APP_VERSION } from "@/lib/version";
 
 /** Cloudflare의 trace 응답("key=value" 줄들)에서 값을 읽는다 */
@@ -46,6 +48,9 @@ export async function GET(request: Request) {
     accessCode: accessCodeWeak() ? "weak" : "ok",
     geminiKey: rawKey && rawKey.trim() ? "set" : "missing",
     keyLength: rawKey ? rawKey.trim().length : 0,
+    geminiModel: modelName(),
+    // AI 업체 순서·키 등록·최근 한도 걸림 (쿨다운은 이 서버 인스턴스 기준)
+    aiProviders: await providerStatus(),
     // 시세 API 키 등록 여부 (없으면 해당 기능만 안내 문구로 대체된다)
     travelpayoutsToken: readSecret("TRAVELPAYOUTS_TOKEN") ? "set" : "missing",
     viatorKey: readSecret("VIATOR_API_KEY") ? "set" : "missing",

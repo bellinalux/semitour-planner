@@ -7,6 +7,7 @@
 import { Loader2, Route, Wand2 } from "lucide-react";
 import { useState } from "react";
 import type { ThemeId, TravelType, TripInput } from "@/types";
+import { notifyAiProvider } from "@/lib/api";
 
 interface Preset { id: string; label: string; hint: string; travelType: TravelType; themes: ThemeId[]; notes: string }
 
@@ -40,6 +41,7 @@ export function QuickStartPresets({ input, onChange }: { input: TripInput; onCha
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ city: parts[0], country: parts.length > 1 ? parts[parts.length - 1] : "", length: input.days > 1 ? "multi" : "day", audience: input.travelType === "senior" ? "senior" : input.travelType === "honeymoon" ? "couple" : "any" }),
       });
+      notifyAiProvider(r);
       const j = await r.json();
       setPat(r.ok ? { status: "done", data: j as PatternData } : { status: "error", message: j?.error?.message ?? "불러오지 못했습니다." });
     } catch { setPat({ status: "error", message: "서버에 연결하지 못했습니다." }); }

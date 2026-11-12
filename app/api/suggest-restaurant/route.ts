@@ -2,13 +2,14 @@ import { restaurantRequestSchema } from "@/lib/schemas/restaurant";
 import { GeminiError } from "@/lib/server/gemini";
 import { guardRequest } from "@/lib/server/guard";
 import { suggestRestaurants } from "@/lib/server/restaurantSuggest";
+import { withAiInfo } from "@/lib/server/aiProviders";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
 }
 
 /** 동선상 식당 찾기 — 식사 무렵 일행이 있는 지역 안의 식당 (다른 지역 식당에 갔다가 되돌아오는 지그재그를 없앤다) */
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const blocked = await guardRequest(request);
   if (blocked) return blocked;
 
@@ -32,3 +33,6 @@ export async function POST(request: Request) {
     return errorResponse("INTERNAL", "식당을 찾는 중 알 수 없는 오류가 발생했습니다.", 500);
   }
 }
+
+/** 대체 AI(Groq·Cloudflare)가 답하면 응답 머리글로 화면에 알린다 */
+export const POST = withAiInfo(handlePost);

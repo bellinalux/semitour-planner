@@ -7,6 +7,7 @@ import { z } from "zod";
 import { engineGuard, engineOptions } from "@/lib/server/engineGuard";
 import { generateGroundedText } from "@/lib/server/gemini";
 import { getKv } from "@/lib/server/planStore";
+import { withAiInfo } from "@/lib/server/aiProviders";
 
 export async function OPTIONS(request: Request) { return engineOptions(request); }
 
@@ -17,7 +18,7 @@ const reqSchema = z.object({
 });
 const LEN = { half: "반나절(3~5시간)", day: "하루(8~10시간)", multi: "1박 2일 이상" } as const;
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const g = await engineGuard(request, true); if (g instanceof Response) return g;
   const parsed = reqSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: { code: "BAD_REQUEST", message: "지역 정보가 올바르지 않습니다." } }, { status: 400, headers: g.headers });
@@ -48,3 +49,6 @@ JSON만 출력:
     return Response.json({ error: { code: "UPSTREAM", message: "인기 투어 동선을 정리하지 못했습니다. 잠시 뒤 다시 시도해 주세요." } }, { status: 502, headers: g.headers });
   }
 }
+
+/** 대체 AI(Groq·Cloudflare)가 답하면 응답 머리글로 화면에 알린다 */
+export const POST = withAiInfo(handlePost);

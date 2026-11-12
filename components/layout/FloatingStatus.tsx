@@ -2,15 +2,17 @@
 
 import { Undo2 } from "lucide-react";
 import type { UndoHistoryView } from "@/hooks/useUndoHistory";
+import { AiFallbackNotice } from "./AiFallbackNotice";
 import { TaskTray, type TrayTask } from "./TaskTray";
 
 /**
- * 화면 오른쪽 아래에 떠 있는 상태 표시 — 적용하지 않은 자동 변경 경고, 되돌리기 버튼, 진행 중인 작업 목록.
+ * 화면 오른쪽 아래에 떠 있는 상태 표시 — 대체 AI 안내, 적용하지 않은 자동 변경 경고, 되돌리기 버튼, 진행 중인 작업 목록.
  * (PlannerApp에서 떼어 냄)
  */
 export function FloatingStatus({ history, tasks }: { history: UndoHistoryView; tasks: TrayTask[] }) {
   return (
       <div className="screen-only pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40 flex flex-col items-end gap-2 [&>*]:pointer-events-auto">
+      <AiFallbackNotice />
       {history.blocked && (
         <div role="alert" className="w-[min(26rem,calc(100vw-2rem))] rounded-xl border border-rose-300 bg-rose-50 p-3 text-[11px] leading-4 text-rose-900 shadow-md">
           <p className="font-semibold">“{history.blocked.label}”을(를) 적용하지 않았습니다 — 할 수 없는 시간이 새로 생깁니다</p>

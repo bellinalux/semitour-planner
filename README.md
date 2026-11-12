@@ -44,7 +44,10 @@ CI(`.github/workflows/ci.yml`)는 푸시·PR마다 타입 검사 → 린트 → 
 | `GEMINI_API_KEY` | ✅ | AI 기능 전체 |
 | `APP_ACCESS_CODE` | 배포 시 ✅ | 관리자 접속 코드. 비우면 잠금이 꺼집니다(로컬 개발 전용). 스튜디오처럼 다른 사이트에서도 확인할 수 있으므로 **영문·숫자 섞어 12자 이상**을 쓰세요(짧으면 관리자 화면에 경고) |
 | `APP_WORKSPACE_ID` | 권장 | 서버 저장 공간 ID 고정(영문·숫자 8~64자). 없으면 접속 코드에서 만들어져, 코드를 바꾸면 저장 데이터가 안 보입니다 |
-| `GEMINI_MODEL` / `GEMINI_BASE_URL` | 선택 | 모델·중계 주소 변경 (예: Cloudflare AI Gateway) |
+| `GEMINI_MODEL` / `GEMINI_BASE_URL` | 선택 | 모델(기본 `gemini-flash-lite-latest`)·중계 주소 변경 |
+| `GROQ_API_KEY` | 권장 | 대체 AI. Gemini가 한도·크레딧 소진이면 Groq가 이어 받음 (모델: `GROQ_MODEL`, `GROQ_SEARCH_MODEL`, `GROQ_VISION_MODEL`) |
+| `AI_PROVIDERS` | 선택 | AI 순서 (기본 `gemini,groq,cloudflare`) |
+| `CF_AI_MODEL` | 선택 | Cloudflare Workers AI 모델 (기본 `@cf/meta/llama-3.3-70b-instruct-fp8-fast`) |
 | `STUDIO_ORIGINS` | 권장 | 상세페이지 스튜디오 등 AI 중계를 허용할 사이트(쉼표 구분). 비우면 모든 사이트 허용(코드는 여전히 필요) |
 | `GOOGLE_MAPS_API_KEY` | 선택 | 이동 시간(Google Routes)·지도. 없으면 거리로 어림 |
 | `KAKAO_REST_API_KEY` | 선택 | 국내 차량 길찾기·통행료 |
@@ -61,6 +64,21 @@ CI(`.github/workflows/ci.yml`)는 푸시·PR마다 타입 검사 → 린트 → 
 - `AUTH_RATE_LIMITER` — 접근 코드 확인 시도 제한 (로그인·스튜디오 공통, IP당 1분 120회)
 - `AUTH_FAIL_LIMITER` — 틀린 접근 코드가 IP당 1분 10회를 넘으면 그 IP를 10분 잠금 (잠금 기록은 KV `authlock:` 키)
 - KV `PLANS`(일정·예약·직원·견적 요청 등), `AI_CACHE`(스튜디오 AI 중계 캐시) — id를 비워 두면 배포 때 자동 생성
+
+## AI 자동 전환
+
+서버의 AI 호출(`lib/server/gemini.ts`의 `generateJson`, `generateGroundedText`)은 `AI_PROVIDERS` 순서로 시도합니다.
+
+| 순서 | 업체 | 일반 생성 | 웹 검색 조사 | 코스표 사진 | 코스표 PDF |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Gemini (무료 키, Flash-Lite) | ✅ | ✅ Google 검색 | ✅ | ✅ |
+| 2 | Groq (`GROQ_API_KEY`) | ✅ | 🟡 `groq/compound` 웹 검색 | ✅ | ❌ |
+| 3 | Cloudflare Workers AI (`AI` 바인딩) | ✅ | ❌ 검색 없음 → "웹 근거 없음" 표시 | ❌ | ❌ |
+
+- 402(크레딧 소진)·429(한도)·5xx·시간 초과·키 오류면 다음 업체로 넘어갑니다. 실패한 업체는 잠시 쉬게 합니다(크레딧·키 1시간, 한도 5분 또는 안내된 시간, 장애 1분). 쓸 수 있는 업체가 모두 쉬는 중이면 그래도 시도합니다.
+- 대체 업체가 답하면 응답에 `X-AI-Provider` 머리글이 붙고, 화면 오른쪽 아래에 "대체 AI가 답했습니다" 안내가 뜹니다.
+- 상태는 관리자로 `/api/health`의 `aiProviders`에서 봅니다(쉬는 상태는 서버 인스턴스마다 따로).
+- 상세페이지 스튜디오 중계(`/api/studio/gemini`)는 Gemini 형식을 그대로 전달하므로 자동 전환 대상이 아닙니다.
 
 ## 로그인과 권한
 

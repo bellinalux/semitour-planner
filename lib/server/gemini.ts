@@ -1,9 +1,17 @@
 import { z } from "zod";
 import { ANTI_REPEAT_NOTE, beforeRepeat, isRunaway, repeatedRun } from "@/lib/aiRepeat";
 import { recordServerEvent } from "@/lib/server/errorLog";
+import {
+  cfAi, cloudflareChat, coolingDown, groqChat, groqKey, markFailure, noteProviderUsed, PROVIDER_LABEL, providerOrder,
+  type ChatMessage, type ProviderId,
+} from "@/lib/server/aiProviders";
 
 const DEFAULT_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
-const DEFAULT_MODEL = "gemini-3.8-flash";
+/**
+ * 기본 모델 — 무료 키에서 하루 한도가 가장 넉넉한 Flash-Lite 최신판(별칭).
+ * 바꾸려면 환경변수 GEMINI_MODEL (예: gemini-3.8-flash).
+ */
+const DEFAULT_MODEL = "gemini-flash-lite-latest";
 
 /** 기본은 구글 주소. Cloudflare AI Gateway 같은 중계 주소를 쓰려면 GEMINI_BASE_URL(.../models까지)로 바꾼다. */
 export function endpoint(): string {
@@ -22,6 +30,8 @@ export class GeminiError extends Error {
     public code: GeminiErrorCode,
     message: string,
     public status: number,
+    /** AI 업체가 실제로 돌려준 HTTP 상태 (쿨다운 판단용, 모르면 status와 같다) */
+    public providerStatus: number = status,
   ) {
     super(message);
   }
@@ -138,9 +148,9 @@ async function callGemini(body: Record<string, unknown>, timeoutMs: number): Pro
     });
   } catch (err) {
     if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
-      throw new GeminiError("TIMEOUT", "AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.", 504);
+      throw new GeminiError("TIMEOUT", "Gemini 응답 시간이 초과되었습니다.", 504);
     }
-    throw new GeminiError("UPSTREAM", "AI 서버에 연결하지 못했습니다.", 502);
+    throw new GeminiError("UPSTREAM", "Gemini 서버에 연결하지 못했습니다.", 502);
   }
 
   const data = (await res.json().catch(() => ({}))) as GeminiResponse;
@@ -160,6 +170,7 @@ function upstreamError(failure: { status: number; message: string }): GeminiErro
       "UPSTREAM",
       "API 키가 올바르지 않거나 권한이 없습니다. 서버에 등록한 GEMINI_API_KEY 값에 따옴표, 공백, 'GEMINI_API_KEY=' 글자가 섞이지 않았는지 확인해 주세요.",
       502,
+      401,
     );
   }
   // 서버가 실행되는 지역이 Gemini 지원 지역이 아닌 경우 (Cloudflare Worker의 실행 위치가 원인일 수 있다)
@@ -168,17 +179,20 @@ function upstreamError(failure: { status: number; message: string }): GeminiErro
       "UPSTREAM",
       "AI 서비스(Gemini)가 서버가 실행되는 지역에서 지원되지 않습니다. 서버의 실행 지역 설정(placement)을 확인해 주세요.",
       502,
+      403,
     );
   }
   return null;
 }
 
 function genericUpstreamError(failure: { status: number; message: string }): GeminiError {
-  const hint =
-    failure.status === 429
-      ? "AI 사용량 한도를 초과했습니다. 잠시 후 다시 시도해 주세요."
-      : `AI 서버 오류 (${failure.status}). ${failure.message.slice(0, 120)}`;
-  return new GeminiError("UPSTREAM", hint, failure.status === 429 ? 429 : 502);
+  const credits = failure.status === 402 || /prepayment|credits? (are )?depleted|billing/i.test(failure.message);
+  const hint = credits
+    ? "Gemini 선불 크레딧이 소진되었습니다. AI Studio에서 충전하거나 무료 키로 바꿔 주세요."
+    : failure.status === 429
+      ? "Gemini 사용량 한도를 초과했습니다."
+      : `Gemini 서버 오류 (${failure.status}). ${failure.message.slice(0, 120)}`;
+  return new GeminiError("UPSTREAM", hint, failure.status === 429 ? 429 : 502, credits ? 402 : failure.status);
 }
 
 /** 응답 글 + 길이 제한에 잘렸는지. 잘림은 여기서 오류로 만들지 않고 부르는 쪽이 판단한다(되풀이면 다시 받기) */
@@ -215,7 +229,7 @@ function extractSources(data: GeminiResponse): GroundingSource[] {
  * Gemini에 JSON 응답을 요청하고 zod로 검증한다.
  * 형식이 어긋나면 1회 재시도하며, 구조화 출력(responseJsonSchema)이 거절되면 스키마 없이 재시도한다.
  */
-export async function generateJson<T extends z.ZodType>({
+async function geminiJson<T extends z.ZodType>({
   system,
   user,
   schema,
@@ -301,7 +315,7 @@ export async function generateJson<T extends z.ZodType>({
  * JSON 출력을 강제하면 모델이 검색을 건너뛰는 경향이 있어, 조사는 자유 서술로 하고
  * 구조화는 별도 호출(generateJson)로 한다. 검색을 실행하지 않으면 한 번 더 요청한다.
  */
-export async function generateGroundedText({
+async function geminiGrounded({
   user,
   temperature = 0.2,
   timeoutMs = 100_000,
@@ -346,4 +360,156 @@ export async function generateGroundedText({
     throw new GeminiError("BAD_OUTPUT", "검색 조사 결과를 받지 못했습니다. 다시 시도해 주세요.", 502);
   }
   return last;
+}
+
+// ── 대체 AI로 이어 받기 (lib/server/aiProviders.ts) ──────────────────────
+
+type JsonOptions<T extends z.ZodType> = GenerateJsonOptions<T>;
+
+/** 다음 업체로 넘어가도 되는 실패인가 (응답 형식 문제·안전 차단은 Gemini에서는 넘기지 않는다) */
+function switchable(err: unknown, provider: ProviderId): err is GeminiError {
+  if (!(err instanceof GeminiError)) return false;
+  if (err.code === "BAD_OUTPUT") return provider !== "gemini" && err.status !== 422;
+  return true;
+}
+
+async function available(p: ProviderId): Promise<boolean> {
+  if (p === "gemini") return !!process.env.GEMINI_API_KEY?.trim();
+  if (p === "groq") return !!groqKey();
+  return (await cfAi()) !== null;
+}
+
+/** 코드블록 울타리(```json)를 걷어낸다 */
+function stripFence(text: string): string {
+  const t = text.trim();
+  const m = t.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return m ? m[1] : t;
+}
+
+/** Groq·Cloudflare로 JSON 받기 — 스키마를 프롬프트에도 적고, zod로 검증하고, 한 번 고쳐 받는다 */
+async function chatJson<T extends z.ZodType>(provider: Exclude<ProviderId, "gemini">, o: JsonOptions<T>): Promise<z.output<T>> {
+  const files = o.files ?? [];
+  if (files.some((f) => !f.mimeType.startsWith("image/"))) {
+    throw new GeminiError("UPSTREAM", "PDF·문서 파일은 Gemini만 읽을 수 있습니다(사진으로 올리면 대체 AI도 읽습니다).", 502, 415);
+  }
+  const jsonSchema = stripUnsupported(z.toJSONSchema(o.schema)) as Record<string, unknown>;
+  const system = `${o.system}\n\n[출력 형식] 아래 JSON 스키마에 맞는 JSON 객체 하나만 출력하세요. 설명이나 코드블록(\`\`\`)은 쓰지 마세요.\n${JSON.stringify(jsonSchema)}`;
+  const call = provider === "groq" ? groqChat : cloudflareChat;
+  let lastProblem = "";
+  let temp = o.temperature ?? 0.7;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const userText = o.user + (lastProblem ? `\n\n[이전 응답 문제] ${lastProblem}\n문제를 고쳐서 지정된 스키마의 JSON만 다시 출력하세요.` : "");
+    const content: ChatMessage["content"] = files.length
+      ? [{ type: "text", text: userText }, ...files.map((f) => ({ type: "image_url" as const, image_url: { url: `data:${f.mimeType};base64,${f.data}` } }))]
+      : userText;
+    const r = await call({ messages: [{ role: "system", content: system }, { role: "user", content }], jsonSchema, temperature: temp, timeoutMs: o.timeoutMs ?? 90_000, vision: files.length > 0 });
+    if (!r.ok) throw new GeminiError("UPSTREAM", `${PROVIDER_LABEL[provider]} 오류 (${r.status || "-"}) ${r.message.slice(0, 120)}`, r.status === 429 ? 429 : 502, r.status);
+    if (isRunaway(r.text, r.truncated)) {
+      lastProblem = ANTI_REPEAT_NOTE;
+      temp = Math.min(temp, 0.3);
+      continue;
+    }
+    try {
+      const parsed = o.schema.safeParse(JSON.parse(stripFence(r.text)));
+      if (parsed.success) return parsed.data;
+      lastProblem = parsed.error.issues.slice(0, 5).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+    } catch {
+      lastProblem = "유효한 JSON이 아닙니다.";
+    }
+    console.error(`[${provider}] 응답 검증 실패 (시도 ${attempt + 1}): ${lastProblem}\n${r.text.slice(0, 300)}`);
+  }
+  throw new GeminiError("BAD_OUTPUT", `${PROVIDER_LABEL[provider]} 응답을 해석하지 못했습니다.`, 502);
+}
+
+/** Groq(웹 검색 포함 모델)·Cloudflare(검색 없음)로 조사 글 받기 */
+async function chatGrounded(provider: Exclude<ProviderId, "gemini">, o: { user: string; temperature: number; timeoutMs: number; fast: boolean }) {
+  const memo = o.fast ? FAST_MEMO_NOTE : "";
+  if (provider === "cloudflare") {
+    const r = await cloudflareChat({
+      messages: [{ role: "user", content: `${o.user}${memo}\n\n[주의] 지금은 웹 검색을 할 수 없습니다. 아는 범위에서만 답하고, 확실하지 않은 금액·시간·운영 정보는 "추정"이라고 밝히세요.` }],
+      temperature: o.temperature,
+      timeoutMs: o.timeoutMs,
+    });
+    if (!r.ok) throw new GeminiError("UPSTREAM", `Cloudflare AI 오류 (${r.status || "-"}) ${r.message.slice(0, 120)}`, r.status === 429 ? 429 : 502, r.status);
+    if (!r.text.trim()) throw new GeminiError("BAD_OUTPUT", "Cloudflare AI가 빈 답을 보냈습니다.", 502);
+    return { text: r.text, sources: [], searched: false };
+  }
+  let last: { text: string; sources: GroundingSource[]; searched: boolean } | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const prompt = `${o.user}${memo}${attempt ? "\n\n[이전 응답 문제] 웹 검색을 하지 않았습니다. 반드시 웹 검색으로 확인한 뒤 답하세요." : ""}`;
+    const r = await groqChat({ messages: [{ role: "user", content: prompt }], temperature: o.temperature, timeoutMs: o.timeoutMs, search: true });
+    if (!r.ok) throw new GeminiError("UPSTREAM", `Groq 오류 (${r.status || "-"}) ${r.message.slice(0, 120)}`, r.status === 429 ? 429 : 502, r.status);
+    const text = isRunaway(r.text, r.truncated) ? beforeRepeat(r.text) : r.text;
+    last = { text, sources: r.sources, searched: r.searched };
+    if (last.searched && text.trim()) return last;
+  }
+  if (!last || !last.text.trim()) throw new GeminiError("BAD_OUTPUT", "Groq 검색 조사 결과를 받지 못했습니다.", 502);
+  return last;
+}
+
+/**
+ * 업체 순서(AI_PROVIDERS)대로 시도한다. 한도·크레딧·장애로 실패한 업체는 잠시 쉬게 하고 다음 업체로 넘긴다.
+ * 모두 실패하면 업체별 이유를 모은 오류를 던진다.
+ */
+async function withProviders<R>(run: (p: ProviderId) => Promise<R>): Promise<R> {
+  const reasons: string[] = [];
+  let lastErr: GeminiError | null = null;
+  let tried = 0;
+  const order = providerOrder();
+  const ready = new Set<ProviderId>();
+  for (const p of order) if (await available(p)) ready.add(p);
+  // 쓸 수 있는 업체가 모두 쉬는 중이면 쉬는 것을 무시하고 시도한다 (대체 업체가 없을 때 계속 실패만 내지 않게)
+  const ignoreCooldown = [...ready].every((p) => coolingDown(p));
+  for (const p of order) {
+    if (!ready.has(p)) {
+      reasons.push(`${PROVIDER_LABEL[p]}: ${p === "cloudflare" ? "연결 없음" : "키 미등록"}`);
+      continue;
+    }
+    if (!ignoreCooldown && coolingDown(p)) {
+      reasons.push(`${PROVIDER_LABEL[p]}: 잠시 쉬는 중 (최근 한도·오류)`);
+      continue;
+    }
+    tried++;
+    try {
+      const out = await run(p);
+      const why = reasons.filter((r) => !/키 미등록|연결 없음/.test(r));
+      noteProviderUsed(p, p === "gemini" ? undefined : why.join(" / ") || undefined);
+      return out;
+    } catch (err) {
+      if (!switchable(err, p)) throw err;
+      lastErr = err;
+      markFailure(p, err.providerStatus, err.message);
+      reasons.push(`${PROVIDER_LABEL[p]}: ${err.message}`);
+      void recordServerEvent("ai", `${PROVIDER_LABEL[p]} 실패 → 다음 AI로 넘김`, err.message);
+    }
+  }
+  if (tried === 0 && !lastErr) {
+    const allMissing = reasons.every((r) => /키 미등록|연결 없음/.test(r));
+    if (allMissing) throw new GeminiError("NO_KEY", "서버에 쓸 수 있는 AI 키가 없습니다. GEMINI_API_KEY(또는 GROQ_API_KEY)를 등록해 주세요.", 500);
+  }
+  const msg = `지금 쓸 수 있는 AI가 없습니다. ${reasons.join(" · ")}`.slice(0, 400);
+  throw new GeminiError("UPSTREAM", msg, lastErr?.status === 429 || reasons.some((r) => /쉬는 중/.test(r)) ? 429 : 502);
+}
+
+/**
+ * JSON 응답을 요청하고 zod로 검증한다. Gemini가 안 되면 Groq → Cloudflare 순으로 이어 받는다(AI_PROVIDERS).
+ * Gemini에서는 형식이 어긋나면 1회 재시도하며, 구조화 출력이 거절되면 스키마 없이 재시도한다.
+ */
+export async function generateJson<T extends z.ZodType>(o: JsonOptions<T>): Promise<z.output<T>> {
+  return withProviders((p) => (p === "gemini" ? geminiJson(o) : chatJson(p, o)));
+}
+
+/**
+ * 웹 검색으로 자유롭게 조사한 결과(텍스트)와 참고한 출처를 돌려준다.
+ * Gemini(Google 검색) → Groq(compound 웹 검색) → Cloudflare(검색 없음, searched=false) 순으로 이어 받는다.
+ */
+export async function generateGroundedText(o: {
+  user: string;
+  temperature?: number;
+  timeoutMs?: number;
+  /** 빠른 모드: 생각 단계 low + 짧은 메모 (시세·요금 조회용) */
+  fast?: boolean;
+}): Promise<{ text: string; sources: GroundingSource[]; searched: boolean }> {
+  const opts = { user: o.user, temperature: o.temperature ?? 0.2, timeoutMs: o.timeoutMs ?? 100_000, fast: o.fast ?? false };
+  return withProviders((p) => (p === "gemini" ? geminiGrounded(opts) : chatGrounded(p, opts)));
 }

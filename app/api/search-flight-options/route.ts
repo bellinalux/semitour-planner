@@ -7,6 +7,7 @@ import {
 import { GeminiError, generateGroundedText, generateJson } from "@/lib/server/gemini";
 import { guardRequest } from "@/lib/server/guard";
 import { cached, HOUR } from "@/lib/server/aiCache";
+import { withAiInfo } from "@/lib/server/aiProviders";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -16,7 +17,7 @@ function errorResponse(code: string, message: string, status: number) {
  * API가 아니라 AI 웹 검색으로 개별 항공편을 여러 개 찾는다 (편명·시간·공항·직항 여부까지).
  * "/api/search-flight-price"(가격대만 빠르게)와 별개로, 실제 편을 골라 지정하고 싶을 때 쓴다.
  */
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const blocked = await guardRequest(request);
   if (blocked) return blocked;
 
@@ -63,3 +64,6 @@ export async function POST(request: Request) {
     return errorResponse("INTERNAL", "항공편 검색 중 알 수 없는 오류가 발생했습니다.", 500);
   }
 }
+
+/** 대체 AI(Groq·Cloudflare)가 답하면 응답 머리글로 화면에 알린다 */
+export const POST = withAiInfo(handlePost);

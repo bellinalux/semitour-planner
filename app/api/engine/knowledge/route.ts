@@ -7,6 +7,7 @@
 import { z } from "zod";
 import { engineGuard, engineOptions } from "@/lib/server/engineGuard";
 import { getKnowledge, putKnowledge } from "@/lib/server/courseEngineServer";
+import { withAiInfo } from "@/lib/server/aiProviders";
 
 export async function OPTIONS(request: Request) { return engineOptions(request); }
 
@@ -26,7 +27,7 @@ const manualSchema = z.object({
   address: z.string().max(300).optional(), lat: z.number().optional(), lng: z.number().optional(),
 });
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const g = await engineGuard(request, false); if (g instanceof Response) return g;
   const parsed = manualSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: { code: "BAD_REQUEST", message: "장소 정보가 올바르지 않습니다." } }, { status: 400, headers: g.headers });
@@ -35,3 +36,6 @@ export async function POST(request: Request) {
   await putKnowledge(merged as Parameters<typeof putKnowledge>[0]);
   return Response.json({ ok: true, knowledge: merged }, { headers: g.headers });
 }
+
+/** 대체 AI(Groq·Cloudflare)가 답하면 응답 머리글로 화면에 알린다 */
+export const POST = withAiInfo(handlePost);

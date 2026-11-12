@@ -2,6 +2,7 @@ import { travelInfoRequestSchema, travelInfoResultSchema, type TravelInfo } from
 import { cached, DAY } from "@/lib/server/aiCache";
 import { GeminiError, generateGroundedText, generateJson } from "@/lib/server/gemini";
 import { guardRequest } from "@/lib/server/guard";
+import { withAiInfo } from "@/lib/server/aiProviders";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -13,7 +14,7 @@ const SYSTEM = `당신은 여행 정보 메모를 JSON으로 정리하는 편집
 - 지정된 JSON 스키마의 JSON만 출력합니다.`;
 
 /** 일정표 「여행 정보」 — 시차·전압·통화·비자·긴급 연락처·대사관·그 달 날씨 (같은 여행지·달은 30일 동안 다시 쓴다) */
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const blocked = await guardRequest(request);
   if (blocked) return blocked;
   let body: unknown;
@@ -66,3 +67,6 @@ export async function POST(request: Request) {
     return errorResponse("INTERNAL", "여행 정보를 찾는 중 오류가 발생했습니다.", 500);
   }
 }
+
+/** 대체 AI(Groq·Cloudflare)가 답하면 응답 머리글로 화면에 알린다 */
+export const POST = withAiInfo(handlePost);

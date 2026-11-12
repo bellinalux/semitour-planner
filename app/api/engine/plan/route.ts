@@ -4,10 +4,11 @@
  */
 import { engineGuard, engineOptions } from "@/lib/server/engineGuard";
 import { planCourse, planRequestSchema } from "@/lib/server/courseEngineServer";
+import { withAiInfo } from "@/lib/server/aiProviders";
 
 export async function OPTIONS(request: Request) { return engineOptions(request); }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const g = await engineGuard(request, true); if (g instanceof Response) return g;
   let body: unknown;
   try { body = await request.json(); } catch { return Response.json({ error: { code: "BAD_REQUEST", message: "요청 형식이 올바르지 않습니다." } }, { status: 400, headers: g.headers }); }
@@ -23,3 +24,6 @@ export async function POST(request: Request) {
     return Response.json({ error: { code: "INTERNAL", message: e instanceof Error ? e.message : "코스 엔진 오류" } }, { status: 500, headers: g.headers });
   }
 }
+
+/** 대체 AI(Groq·Cloudflare)가 답하면 응답 머리글로 화면에 알린다 */
+export const POST = withAiInfo(handlePost);
