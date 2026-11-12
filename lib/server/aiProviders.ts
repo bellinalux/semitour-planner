@@ -7,13 +7,13 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { workerEnv } from "./cfEnv";
-import { readSecret } from "./external";
+import { aiSetting } from "./aiSettings";
 
 export type ProviderId = "gemini" | "groq" | "cloudflare";
 export const PROVIDER_LABEL: Record<ProviderId, string> = { gemini: "Gemini", groq: "Groq", cloudflare: "Cloudflare AI" };
 
 export function providerOrder(): ProviderId[] {
-  const raw = (process.env.AI_PROVIDERS ?? "gemini,groq,cloudflare").split(",").map((s) => s.trim().toLowerCase());
+  const raw = (aiSetting("AI_PROVIDERS") ?? "gemini,groq,cloudflare").split(",").map((s) => s.trim().toLowerCase());
   const valid = raw.filter((p): p is ProviderId => p === "gemini" || p === "groq" || p === "cloudflare");
   const unique = [...new Set(valid)];
   return unique.length ? unique : ["gemini", "groq", "cloudflare"];
@@ -69,7 +69,7 @@ export async function providerStatus() {
   };
   return {
     order: providerOrder(),
-    gemini: { key: !!readSecret("GEMINI_API_KEY"), ...view("gemini") },
+    gemini: { key: !!aiSetting("GEMINI_API_KEY"), ...view("gemini") },
     groq: { key: !!groqKey(), model: groqModel(), searchModel: groqSearchModel(), ...view("groq") },
     cloudflare: { binding: (await cfAi()) !== null, model: cfModel(), ...view("cloudflare") },
   };
@@ -136,7 +136,8 @@ interface ChatOptions {
 // ── Groq ──────────────────────────────────────────────
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-export const groqKey = () => readSecret("GROQ_API_KEY");
+/** 앱 "AI 키 설정"에 넣은 값 > Cloudflare 변수 */
+export const groqKey = () => aiSetting("GROQ_API_KEY");
 export const groqModel = () => process.env.GROQ_MODEL?.trim() || "openai/gpt-oss-120b";
 export const groqSearchModel = () => process.env.GROQ_SEARCH_MODEL?.trim() || "groq/compound";
 export const groqVisionModel = () => process.env.GROQ_VISION_MODEL?.trim() || "meta-llama/llama-4-scout-17b-16e-instruct";

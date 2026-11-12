@@ -7,6 +7,7 @@
  */
 import { isRunaway } from "@/lib/aiRepeat";
 import { resolveKey } from "@/lib/server/gemini";
+import { refreshAiSettings } from "@/lib/server/aiSettings";
 import { allowAiCall } from "@/lib/server/rateLimit";
 import {
   aiCache, allowedOrigin, CACHE_TTL_SECONDS, cacheKey, corsHeaders, MAX_BODY_BYTES, MODEL_PATH, studioAccess, studioBlockedResponse,
@@ -45,6 +46,7 @@ export async function GET(request: Request) {
   const access = await studioAccess(request);
   // 코드가 맞는지 알려 주는 주소라 무차별 대입에 쓰일 수 있다 — 막힌 동안은 맞는지 알려 주지 않는다
   if (access === "blocked") return studioBlockedResponse(headers);
+  await refreshAiSettings();
   let keyOk = true;
   try { resolveKey(); } catch { keyOk = false; }
   return json({ ok: access === "ok" && keyOk && !!origin, codeRequired: access !== "off", codeOk: access === "ok", keyOk, originOk: !!origin, origin: request.headers.get("origin") ?? "" }, 200, headers);
@@ -69,6 +71,7 @@ export async function POST(request: Request) {
   const body = await request.text();
   if (!body || body.length > MAX_BODY_BYTES) return err("BAD_REQUEST", "요청 본문이 비어 있거나 너무 큽니다.", 400, cors);
 
+  await refreshAiSettings(); // 앱 "AI 키 설정"의 Gemini 키
   let apiKey: string;
   try { apiKey = resolveKey(); } catch (e) { return err("NO_KEY", e instanceof Error ? e.message : "서버에 Gemini 키가 없습니다.", 500, cors); }
 

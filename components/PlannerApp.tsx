@@ -16,6 +16,7 @@ import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TripInputForm } from "@/components/form/TripInputForm";
 import { Header } from "@/components/layout/Header";
 import { CompanySettings } from "@/components/layout/CompanySettings";
+import { AiKeySettings } from "@/components/layout/AiKeySettings";
 import { PrintDocuments } from "@/components/print/PrintDocuments";
 import { SavedPlansMenu } from "@/components/layout/SavedPlansMenu";
 import { SendToTourdesign } from "@/components/layout/SendToTourdesign";
@@ -637,6 +638,7 @@ export function PlannerApp() {
               <WelcomeGuide />
               <InstallApp />
               <CompanySettings {...companyProfile} />
+              <AiKeySettings />
               <HistoryMenu log={quoteLog} teamSync={teamSync} />
               <KnowledgeMenu defaultCity={citiesOf(input.destination)[0] ?? ""} travelType={input.travelType} tripScope={input.tripScope} />
               <RateBookMenu defaultCity={citiesOf(input.destination)[0] ?? ""} />

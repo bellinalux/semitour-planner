@@ -2,6 +2,7 @@ import { accessCodeWeak, accessRequired, getSession } from "@/lib/server/access"
 import { readSecret } from "@/lib/server/external";
 import { getKv } from "@/lib/server/planStore";
 import { providerStatus } from "@/lib/server/aiProviders";
+import { aiSetting, refreshAiSettings } from "@/lib/server/aiSettings";
 import { modelName } from "@/lib/server/gemini";
 import { APP_VERSION } from "@/lib/version";
 
@@ -36,7 +37,8 @@ export async function GET(request: Request) {
   const session = await getSession(request);
   if (session?.role !== "admin") return Response.json({ ok: true, version: APP_VERSION });
 
-  const rawKey = process.env.GEMINI_API_KEY;
+  await refreshAiSettings();
+  const rawKey = aiSetting("GEMINI_API_KEY");
   const similarNames = Object.keys(process.env).filter((name) => /gemini|google|api_?key/i.test(name));
   const wantsProbe = new URL(request.url).searchParams.get("probe") === "1";
 

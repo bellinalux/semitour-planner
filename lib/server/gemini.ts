@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { ANTI_REPEAT_NOTE, beforeRepeat, isRunaway, repeatedRun } from "@/lib/aiRepeat";
 import { recordServerEvent } from "@/lib/server/errorLog";
+import { aiSetting, refreshAiSettings } from "@/lib/server/aiSettings";
 import {
-  cfAi, cloudflareChat, coolingDown, groqChat, groqKey, markFailure, noteProviderUsed, PROVIDER_LABEL, providerOrder,
+  cfAi, cfModel as cfModelName, cloudflareChat, coolingDown, groqChat, groqKey, groqModel as groqModelName, markFailure, noteProviderUsed, PROVIDER_LABEL, providerOrder,
   type ChatMessage, type ProviderId,
 } from "@/lib/server/aiProviders";
 
@@ -20,7 +21,7 @@ export function endpoint(): string {
 
 /** 지금 쓰는 모델 이름 (환경변수 GEMINI_MODEL > 기본값) */
 export function modelName(): string {
-  return process.env.GEMINI_MODEL || DEFAULT_MODEL;
+  return aiSetting("GEMINI_MODEL") || DEFAULT_MODEL;
 }
 
 export type GeminiErrorCode = "NO_KEY" | "UPSTREAM" | "TIMEOUT" | "BAD_OUTPUT";
@@ -121,14 +122,17 @@ function toResponseSchema(schema: z.ZodType) {
   return stripUnsupported(z.toJSONSchema(schema));
 }
 
-/** 환경변수의 API 키. 대시보드에 붙여넣다가 딸려 오기 쉬운 따옴표, 공백, 줄바꿈, "GEMINI_API_KEY=" 글자를 걷어낸다. */
+/**
+ * Gemini API 키 — 앱 "AI 키 설정"에 넣은 값 > Cloudflare 변수(GEMINI_API_KEY).
+ * 붙여넣다가 딸려 오기 쉬운 따옴표, 공백, 줄바꿈, "GEMINI_API_KEY=" 글자는 걷어낸다. (앱 값을 쓰려면 먼저 refreshAiSettings)
+ */
 export function resolveKey(): string {
-  const apiKey = process.env.GEMINI_API_KEY?.trim()
-    .replace(/^GEMINI_API_KEY\s*=\s*/, "")
+  const apiKey = aiSetting("GEMINI_API_KEY")
+    ?.replace(/^GEMINI_API_KEY\s*=\s*/, "")
     .replace(/^["']+|["']+$/g, "")
     .trim();
   if (!apiKey) {
-    throw new GeminiError("NO_KEY", "서버에 GEMINI_API_KEY가 설정되지 않았습니다. .env.local을 확인해 주세요.", 500);
+    throw new GeminiError("NO_KEY", "Gemini API 키가 없습니다. 더보기 → AI 키 설정(관리자)에서 넣어 주세요.", 500);
   }
   return apiKey;
 }
@@ -405,7 +409,7 @@ function switchable(err: unknown, provider: ProviderId): err is GeminiError {
 }
 
 async function available(p: ProviderId): Promise<boolean> {
-  if (p === "gemini") return !!process.env.GEMINI_API_KEY?.trim();
+  if (p === "gemini") return !!aiSetting("GEMINI_API_KEY");
   if (p === "groq") return !!groqKey();
   return (await cfAi()) !== null;
 }
@@ -483,6 +487,7 @@ async function chatGrounded(provider: Exclude<ProviderId, "gemini">, o: { user: 
  * 모두 실패하면 업체별 이유를 모은 오류를 던진다.
  */
 async function withProviders<R>(run: (p: ProviderId) => Promise<R>): Promise<R> {
+  await refreshAiSettings(); // 앱 "AI 키 설정"에 넣은 키·모델·순서 (30초 기억)
   const reasons: string[] = [];
   let lastErr: GeminiError | null = null;
   let tried = 0;
@@ -543,4 +548,28 @@ export async function generateGroundedText(o: {
 }): Promise<{ text: string; sources: GroundingSource[]; searched: boolean }> {
   const opts = { user: o.user, temperature: o.temperature ?? 0.2, timeoutMs: o.timeoutMs ?? 100_000, fast: o.fast ?? false };
   return withProviders((p) => (p === "gemini" ? geminiGrounded(opts) : chatGrounded(p, opts)));
+}
+
+/** 관리자 "연결 시험" — 아주 짧은 요청 하나를 보내 키·한도·연결을 확인한다 (대체 업체로 넘기지 않는다) */
+export async function testProvider(p: ProviderId): Promise<{ ok: boolean; ms: number; message: string; model: string }> {
+  await refreshAiSettings(true);
+  const t0 = Date.now();
+  const done = (ok: boolean, message: string, model: string) => ({ ok, ms: Date.now() - t0, message: message.slice(0, 200), model });
+  if (p === "gemini") {
+    if (!aiSetting("GEMINI_API_KEY")) return done(false, "키가 없습니다.", modelName());
+    const r = await callGeminiOnce({ contents: [{ role: "user", parts: [{ text: "Reply with the single word OK." }] }], generationConfig: { maxOutputTokens: 20, temperature: 0 } }, 20_000).catch(
+      (e: unknown) => ({ ok: false as const, status: 0, message: e instanceof Error ? e.message : "연결 실패" }),
+    );
+    if (r.ok) return done(true, "연결됨", modelName());
+    const friendly = upstreamError(r) ?? genericUpstreamError(r);
+    return done(false, friendly.message, modelName());
+  }
+  const call = p === "groq" ? groqChat : cloudflareChat;
+  if (p === "groq" && !groqKey()) return done(false, "키가 없습니다.", "");
+  if (p === "cloudflare" && !(await cfAi())) return done(false, "Cloudflare AI 연결(AI 바인딩)이 없습니다. 배포된 서버에서만 시험할 수 있습니다.", "");
+  const r = await call({ messages: [{ role: "user", content: "Reply with the single word OK." }], temperature: 0, timeoutMs: 20_000 });
+  const model = p === "groq" ? groqModelName() : cfModelName();
+  if (r.ok) return done(true, "연결됨", model);
+  const why = r.status === 401 || r.status === 403 ? "키가 올바르지 않거나 권한이 없습니다." : r.status === 429 ? "사용량 한도에 걸렸습니다." : r.status === 402 ? "결제·크레딧 문제입니다." : "";
+  return done(false, `${why} (${r.status || "-"}) ${r.message}`.trim(), model);
 }
