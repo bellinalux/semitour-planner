@@ -1,3 +1,4 @@
+import type { CancelPolicy } from "@/lib/cancelPolicy";
 export type CurrencyCode =
   | "KRW"
   | "USD"
@@ -280,6 +281,8 @@ export interface TripInput {
   specialTermOverrides: Record<string, boolean>;
   /** 이 상품만의 특약 (한 줄에 하나) */
   customSpecialTerms: string;
+  /** 이 상품만의 취소 규정 (없으면 회사 기본) */
+  cancelPolicy: CancelPolicy | null;
   /** [전세버스·가이드 조회]로 받은 차종별 1대 1일 요금 — 다른 인원으로 바꿔 계산할 때 비율로 쓴다 */
   vehicleTierRates: Partial<Record<"car" | "suv" | "van" | "midbus" | "bus", number>>;
 
@@ -472,6 +475,8 @@ export interface CompanyProfile {
   logo: string;
   /** 여행계약서 특약(표준약관 제6조) 금액·영업시간·회사 고유 특약 (lib/specialTerms.ts) */
   specialTerms: SpecialTermSettings;
+  /** 취소 및 환불 규정 기본값 (표준약관 또는 특별약관 구간, lib/cancelPolicy.ts) */
+  cancelPolicy: CancelPolicy;
 }
 
 export type RequestStatus = "idle" | "loading" | "error" | "success";

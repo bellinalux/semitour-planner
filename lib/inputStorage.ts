@@ -1,6 +1,7 @@
 import { COMPANIONS, DEFAULT_INPUT, TRAVEL_TYPES } from "@/lib/defaults";
 import type { TripInput } from "@/types";
 import { isCostSource } from "@/lib/costSource";
+import { normalizeCancelPolicy } from "@/lib/cancelPolicy";
 
 const TRAVEL_TYPE_IDS: Set<string> = new Set(TRAVEL_TYPES.map((t) => t.id));
 const COMPANION_IDS: Set<string> = new Set(COMPANIONS.map((c) => c.id));
@@ -74,6 +75,7 @@ export function normalizeInput(saved: unknown): TripInput {
         ? Object.fromEntries(Object.entries(s.specialTermOverrides).filter(([k, v]) => typeof k === "string" && typeof v === "boolean").slice(0, 60))
         : {},
     customSpecialTerms: typeof s.customSpecialTerms === "string" ? s.customSpecialTerms.slice(0, 2000) : "",
+    cancelPolicy: s.cancelPolicy ? normalizeCancelPolicy(s.cancelPolicy) : null,
     guideCapacity: typeof s.guideCapacity === "number" && s.guideCapacity >= 1 && s.guideCapacity <= 200 ? Math.round(s.guideCapacity) : DEFAULT_INPUT.guideCapacity,
     vehicleTierRates:
       typeof s.vehicleTierRates === "object" && s.vehicleTierRates !== null && !Array.isArray(s.vehicleTierRates)

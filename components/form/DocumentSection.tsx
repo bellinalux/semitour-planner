@@ -9,6 +9,7 @@ import { useRequest } from "@/hooks/useRequest";
 import { ALERT_LABELS, alertTone } from "@/lib/travelAlert";
 import type { CompanyProfile, TravelAlert } from "@/types";
 import { SpecialTermsPanel } from "./SpecialTermsPanel";
+import { CancelPolicyPanel } from "./CancelPolicyPanel";
 import type { SectionProps } from "./types";
 
 /** 여행경보 직접 입력 선택지 */
@@ -154,6 +155,7 @@ export function DocumentSection({ input, onChange, openSignal, company }: Sectio
           </p>
         )}
 
+        {company && <CancelPolicyPanel input={input} onChange={onChange} company={company} />}
         {company && <SpecialTermsPanel input={input} onChange={onChange} company={company} />}
 
         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/50 p-3">

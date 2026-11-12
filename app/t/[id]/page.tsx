@@ -107,6 +107,30 @@ export default async function SharedItineraryPage({ params }: { params: Promise<
         ))}
       </section>
 
+      {it.cancel.length > 0 && (
+        <section aria-label="취소 및 환불 규정" className="space-y-1 rounded-xl border border-slate-200 p-3 text-xs">
+          <h2 className="font-semibold text-slate-900">취소 및 환불 규정</h2>
+          <table className="w-full">
+            <tbody>
+              {it.cancel.map((c) => (
+                <tr key={c.range} className="border-b border-slate-100 align-top">
+                  <td className="py-1 pr-2 text-slate-700">
+                    {c.range}
+                    {c.date && <span className="block text-[11px] text-slate-400">{c.date}</span>}
+                  </td>
+                  <td className="py-1 text-right text-slate-900">{c.charge}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {it.cancelNotes.map((n) => (
+            <p key={n} className="text-pretty text-slate-500">
+              · {n}
+            </p>
+          ))}
+        </section>
+      )}
+
       {it.packing.length > 0 && (
         <section aria-label={t.packing} className="space-y-1 rounded-xl border border-slate-200 p-3 text-xs">
           <h2 className="font-semibold text-slate-900">{t.packing}</h2>

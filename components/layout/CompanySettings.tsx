@@ -8,10 +8,13 @@ import { missingLegalFields } from "@/lib/company";
 import { resizeImage } from "@/lib/imageResize";
 import type { CompanyProfile, SpecialTermSettings } from "@/types";
 import { contractTermRisks, riskOf, SPECIAL_TERMS, REGION_LABEL } from "@/lib/specialTerms";
+import { CancelPolicyEditor } from "@/components/form/CancelPolicyEditor";
+
+const EMPTY_HOLIDAYS: ReadonlySet<string> = new Set();
 
 type FieldKey = Exclude<
   keyof CompanyProfile,
-  "depositRate" | "balanceDueDaysBeforeDeparture" | "useInterimPayment" | "interimPaymentRate" | "interimPaymentDaysBeforeDeparture" | "docColor" | "logo" | "specialTerms"
+  "depositRate" | "balanceDueDaysBeforeDeparture" | "useInterimPayment" | "interimPaymentRate" | "interimPaymentDaysBeforeDeparture" | "docColor" | "logo" | "specialTerms" | "cancelPolicy"
 >;
 
 const DOC_COLORS = [
@@ -390,6 +393,14 @@ export function CompanySettings({ company, storage, save }: Props) {
                   표준약관(계약금 10%이하·잔금 출발 7일전)과 다른 조건이라, 여행계약서에 특약(제6조) 고지 문구가 자동으로 추가됩니다.
                 </p>
               )}
+            </section>
+
+            <section aria-label="취소 및 환불 규정 (회사 기본)" className="space-y-1.5">
+              <h3 className="text-xs font-semibold text-slate-800">취소 및 환불 규정 (회사 기본)</h3>
+              <p className="text-[11px] leading-4 text-slate-500">
+                모든 상품의 일정표·견적서·계약서·웹 일정표에 들어갑니다. 상품마다 다르게 하려면 입력 화면 &quot;5. 고객·문서&quot;에서 바꿉니다. 특별약관(표준보다 높은 취소료)은 사유와 실제 손해 근거가 필요합니다.
+              </p>
+              <CancelPolicyEditor value={draft.cancelPolicy} onChange={(cancelPolicy) => setDraft((prev) => ({ ...prev, cancelPolicy }))} holidays={EMPTY_HOLIDAYS} />
             </section>
 
             <SpecialTermsSettingsSection value={draft.specialTerms} onChange={(specialTerms) => setDraft((prev) => ({ ...prev, specialTerms }))} />

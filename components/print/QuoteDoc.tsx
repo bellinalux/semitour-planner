@@ -1,4 +1,6 @@
-import { CANCELLATION_TERMS, includeLists, paymentPlan, resolveRecipients, tripPeriod, type DocRecipient } from "@/lib/documents";
+import { CancelPolicyTable } from "./CancelPolicyTable";
+import { effectivePolicy } from "@/lib/cancelPolicy";
+import { includeLists, paymentPlan, resolveRecipients, tripPeriod, type DocRecipient } from "@/lib/documents";
 import { localPayRows, moneyWithKrw } from "@/lib/fees";
 import { composition, singleSupplement } from "@/lib/pricing";
 import { formatMoney } from "@/lib/currency";
@@ -124,16 +126,7 @@ function OneQuote({ recipient, isGroup, breakBefore, data }: { recipient: DocRec
         </DocSection>
 
         <DocSection title="취소 및 환불 규정" keep>
-          <table className="w-full border-collapse">
-            <tbody>
-              {CANCELLATION_TERMS.map((term) => (
-                <tr key={term.when} className="border-b border-slate-200">
-                  <td className="px-2 py-1">{term.when}</td>
-                  <td className="px-2 py-1">{term.fee}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <CancelPolicyTable policy={effectivePolicy(company, input)} departureDate={input.departureDate} currency={input.currency} />
           <p className="mt-1.5 text-[10px] leading-4 text-slate-500">
             본 견적은 발행일 기준이며, 항공·숙박 요금 변동과 잔여 좌석 상황에 따라 달라질 수 있습니다. 여행 조건의 상세 내용은 여행일정표와 국외여행 표준약관을 따릅니다.
           </p>

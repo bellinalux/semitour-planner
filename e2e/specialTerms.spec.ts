@@ -53,3 +53,41 @@ test("계약서 특약: 여행지(방콕)에 맞는 특약을 추천하고, 위�
   await expect(doc).toContainText("입국 요건 안내");
   await expect(doc).toContainText("④ 서명");
 });
+
+test("취소 규정: 상품만 대형사 특별약관형으로 바꾸면 실제 날짜·실제 마감·위험을 보여 주고, 계약서 특약에 들어간다", async ({ page }) => {
+  await mockAi(page);
+  const input = { ...seed.input, departureDate: "2027-01-04" };
+  await page.addInitScript(
+    (s) => {
+      (window as unknown as { print: () => void }).print = () => undefined;
+      if (sessionStorage.getItem("e2e-seeded")) return;
+      sessionStorage.setItem("e2e-seeded", "1");
+      localStorage.setItem("semitour-planner:input:v1", JSON.stringify(s.input));
+      localStorage.setItem("semitour-planner:work:v1", JSON.stringify(s.work));
+      localStorage.setItem("semitour-planner:company:v1", JSON.stringify(s.company));
+    },
+    { input, work: seed.work, company: seed.company },
+  );
+  await page.route("**/api/holidays**", (r) => r.fulfill({ json: { holidays: [] } }));
+  await page.goto("/");
+  await expect(page.locator("#day-1")).toBeVisible();
+  await page.getByRole("button", { name: /5\. 고객 · 문서/ }).click();
+  const panel = page.getByRole("region", { name: "취소 및 환불 규정" });
+  await expect(panel).toContainText("표준약관");
+  await panel.getByRole("checkbox", { name: "이 상품만 다르게" }).check();
+  await panel.getByLabel("취소 규정 기본 틀").selectOption("major");
+  await expect(panel).toContainText("2026.11.16(월) ~ 2026.11.25(수)");
+  await expect(panel).toContainText("실제 마감 2026.11.13(금) 18:00");
+  await expect(panel.getByRole("alert").first()).toContainText("50%를 넘는 구간");
+
+  await page.getByRole("button", { name: "여행계약서", exact: true }).click();
+  const confirm = page.getByRole("alertdialog", { name: "인쇄 전 확인" });
+  await expect(confirm).toContainText("취소 규정:");
+  for (const c of await confirm.getByRole("checkbox").all()) await c.check();
+  await confirm.getByRole("button", { name: "인쇄", exact: true }).click();
+  const doc = page.locator(".print-root");
+  await expect(doc).toContainText("취소 및 환불 규정 (특별약관");
+  await expect(doc).toContainText("여행요금의 70%");
+  await expect(doc).toContainText("산정 근거");
+  await expect(doc).toContainText("이에 동의합니다");
+});

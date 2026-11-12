@@ -77,6 +77,7 @@ export const DEFAULT_INPUT: TripInput = {
   vehicleTierRates: {},
   specialTermOverrides: {},
   customSpecialTerms: "",
+  cancelPolicy: null,
   otherFixedCost: 0,
   groundDaysOverride: 0,
 
