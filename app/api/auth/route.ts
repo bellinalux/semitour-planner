@@ -1,6 +1,7 @@
 import { accessRequired, getSession, loginCookie, logoutCookie, workspaceId } from "@/lib/server/access";
 import { getKv } from "@/lib/server/planStore";
 import { allowLoginAttempt } from "@/lib/server/rateLimit";
+import { AUTH_BLOCKED_MESSAGE, AUTH_RETRY_AFTER, authBlocked, authFailed } from "@/lib/server/authThrottle";
 import { audit } from "@/lib/server/audit";
 
 /**
@@ -36,8 +37,14 @@ export async function POST(request: Request) {
     return Response.json({ error: { code: "BAD_REQUEST", message: "요청 형식이 올바르지 않습니다." } }, { status: 400 });
   }
 
+  // 여러 서버 인스턴스가 함께 세는 제한 — 막힌 동안은 맞는 코드여도 확인하지 않는다
+  if (code.trim() && (await authBlocked(request))) {
+    return Response.json({ error: { code: "TOO_MANY_ATTEMPTS", message: AUTH_BLOCKED_MESSAGE } }, { status: 429, headers: { "Retry-After": AUTH_RETRY_AFTER } });
+  }
+
   const login = await loginCookie(request, code);
   if (!login) {
+    if (code.trim()) await authFailed(request);
     await audit(await workspaceId(), null, "로그인 실패", "틀린 코드");
     return Response.json({ error: { code: "WRONG_CODE", message: "접근 코드가 올바르지 않습니다." } }, { status: 401 });
   }

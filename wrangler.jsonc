@@ -23,6 +23,19 @@
       "name": "AI_RATE_LIMITER",
       "namespace_id": "20260921",
       "simple": { "limit": 10, "period": 60 }
+    },
+    // 접근 코드 확인(로그인·스튜디오 X-Studio-Code) 시도: IP마다 60초에 120회. 맞는 코드도 센다.
+    // 서버 메모리는 인스턴스마다 따로라 무차별 대입을 못 막으므로 Cloudflare 공용 카운터를 쓴다. (lib/server/authThrottle.ts)
+    {
+      "name": "AUTH_RATE_LIMITER",
+      "namespace_id": "20261112",
+      "simple": { "limit": 120, "period": 60 }
+    },
+    // 틀린 접근 코드: IP마다 60초에 10회를 넘으면 그 IP를 10분 잠근다(잠금 기록은 KV PLANS의 authlock: 키).
+    {
+      "name": "AUTH_FAIL_LIMITER",
+      "namespace_id": "20261113",
+      "simple": { "limit": 10, "period": 60 }
     }
   ],
   // 서버 저장(일정 보관함)용 KV. id를 적지 않으면 배포할 때 Cloudflare가 자동으로 만들어 연결한다.

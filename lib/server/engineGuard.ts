@@ -5,13 +5,14 @@
  */
 import { guardRequest } from "./guard";
 import { allowAiCall } from "./rateLimit";
-import { allowedOrigin, corsHeaders, studioAccess } from "./studio";
+import { allowedOrigin, corsHeaders, studioAccess, studioBlockedResponse } from "./studio";
 
 export async function engineGuard(request: Request, ai = true): Promise<{ headers: Record<string, string> } | Response> {
   const origin = allowedOrigin(request);
   if (origin && request.headers.has("x-studio-code")) {
     const cors = corsHeaders(origin);
     const access = await studioAccess(request);
+    if (access === "blocked") return studioBlockedResponse(cors);
     if (access !== "ok") {
       return Response.json({ error: { code: access === "off" ? "NO_ACCESS_CODE" : "UNAUTHORIZED", message: access === "off" ? "서버에 접근 코드(APP_ACCESS_CODE)가 설정되어 있지 않습니다." : "접근 코드가 올바르지 않습니다." } }, { status: access === "off" ? 403 : 401, headers: cors });
     }

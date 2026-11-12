@@ -8,7 +8,7 @@
  */
 import { workspaceId } from "@/lib/server/access";
 import { getKv } from "@/lib/server/planStore";
-import { allowedOrigin, corsHeaders, studioAccess } from "@/lib/server/studio";
+import { allowedOrigin, corsHeaders, studioAccess, studioBlockedResponse } from "@/lib/server/studio";
 
 const STORE_KEYS = ["settings", "snippets", "templates", "autosave", "board"] as const;   // board = 상품 등록 현황판 (2026-10-13)
 type StoreKey = (typeof STORE_KEYS)[number];
@@ -28,6 +28,7 @@ async function prepare(request: Request): Promise<Ctx | Response> {
   if (!origin) return Response.json({ error: { code: "ORIGIN", message: "허용되지 않은 사이트입니다." } }, { status: 403 });
   const cors = corsHeaders(origin);
   const access = await studioAccess(request);
+  if (access === "blocked") return studioBlockedResponse(cors);
   if (access === "off") return err("NO_ACCESS_CODE", "서버에 접근 코드(APP_ACCESS_CODE)를 설정해야 보관소를 쓸 수 있습니다.", 403, cors);
   if (access === "bad") return err("UNAUTHORIZED", "접근 코드가 올바르지 않습니다.", 401, cors);
   const ws = await workspaceId();

@@ -1,4 +1,4 @@
-import { accessRequired, getSession } from "@/lib/server/access";
+import { accessCodeWeak, accessRequired, getSession } from "@/lib/server/access";
 import { readSecret } from "@/lib/server/external";
 import { getKv } from "@/lib/server/planStore";
 import { APP_VERSION } from "@/lib/version";
@@ -42,6 +42,8 @@ export async function GET(request: Request) {
     ok: true,
     version: APP_VERSION,
     accessGate: accessRequired() ? "on" : "off",
+    // 관리자 코드가 권장 길이(12자)보다 짧으면 "weak" — 다른 사이트에서도 확인할 수 있는 코드라 길게 쓴다
+    accessCode: accessCodeWeak() ? "weak" : "ok",
     geminiKey: rawKey && rawKey.trim() ? "set" : "missing",
     keyLength: rawKey ? rawKey.trim().length : 0,
     // 시세 API 키 등록 여부 (없으면 해당 기능만 안내 문구로 대체된다)

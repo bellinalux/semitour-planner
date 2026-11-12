@@ -17,6 +17,18 @@ export function accessRequired(): boolean {
   return configuredCode() !== "";
 }
 
+/**
+ * 관리자 코드 권장 최소 길이. 이 코드는 다른 사이트(스튜디오)에서도 확인할 수 있어 짧으면 맞혀 보기 쉽다.
+ * 지금 쓰는 코드를 갑자기 막으면 모두 로그인하지 못하므로 막지는 않고, 관리자 화면·/api/health에서 경고한다.
+ */
+export const MIN_ACCESS_CODE_LENGTH = 12;
+
+/** 관리자 코드가 권장 길이보다 짧은가 (잠금이 꺼져 있으면 false) */
+export function accessCodeWeak(): boolean {
+  const code = configuredCode();
+  return code !== "" && code.length < MIN_ACCESS_CODE_LENGTH;
+}
+
 async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -41,9 +53,9 @@ function pinnedWorkspace(): string | null {
 }
 
 /** 관리자 화면용: 지금 작업공간 ID와 고정 여부 (관리자 코드 교체 안내에 쓴다) */
-export async function workspaceInfo(): Promise<{ id: string; pinned: boolean } | null> {
+export async function workspaceInfo(): Promise<{ id: string; pinned: boolean; weakCode: boolean } | null> {
   const id = await workspaceId();
-  return id ? { id, pinned: pinnedWorkspace() !== null } : null;
+  return id ? { id, pinned: pinnedWorkspace() !== null, weakCode: accessCodeWeak() } : null;
 }
 
 /** 입력한 코드가 서버의 접근 코드와 같은지 (스튜디오 AI 중계용 — 쿠키 대신 헤더로 받는다) */

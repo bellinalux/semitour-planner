@@ -26,7 +26,7 @@ async function call<T>(method: string, body?: unknown, query = ""): Promise<T> {
  */
 export function StaffManager({ openSignal, isMaster }: { openSignal: number; isMaster: boolean }) {
   const [staff, setStaff] = useState<StaffView[] | null>(null);
-  const [workspace, setWorkspace] = useState<{ id: string; pinned: boolean } | null>(null);
+  const [workspace, setWorkspace] = useState<{ id: string; pinned: boolean; weakCode?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [draft, setDraft] = useState({ name: "", role: "staff" as StaffView["role"], code: "" });
@@ -35,7 +35,7 @@ export function StaffManager({ openSignal, isMaster }: { openSignal: number; isM
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const refresh = async () => {
-    const data = await call<{ staff: StaffView[]; workspace?: { id: string; pinned: boolean } | null }>("GET");
+    const data = await call<{ staff: StaffView[]; workspace?: { id: string; pinned: boolean; weakCode?: boolean } | null }>("GET");
     setStaff(data.staff);
     setWorkspace(data.workspace ?? null);
   };
@@ -56,7 +56,7 @@ export function StaffManager({ openSignal, isMaster }: { openSignal: number; isM
   useEffect(() => {
     if (openSignal === 0) return;
     let cancelled = false;
-    call<{ staff: StaffView[]; workspace?: { id: string; pinned: boolean } | null }>("GET")
+    call<{ staff: StaffView[]; workspace?: { id: string; pinned: boolean; weakCode?: boolean } | null }>("GET")
       .then((data) => {
         if (cancelled) return;
         setStaff(data.staff);
@@ -236,6 +236,12 @@ export function StaffManager({ openSignal, isMaster }: { openSignal: number; isM
       {isMaster && workspace && (
         <section aria-label="관리자 코드 바꾸기" className="space-y-1.5 border-t border-slate-100 pt-3 text-[11px] leading-4 text-slate-600">
           <h3 className="text-xs font-semibold text-slate-700">관리자 코드 바꾸기</h3>
+          {workspace.weakCode && (
+            <p role="alert" className="rounded-md bg-amber-50 px-2 py-1.5 font-medium text-amber-800">
+              지금 관리자 코드가 12자보다 짧습니다. 이 코드는 상세페이지 스튜디오처럼 다른 사이트에서도 확인할 수 있어, 짧으면 맞혀 보기 쉽습니다. 영문·숫자를 섞은 12자 이상으로 바꾸길
+              권합니다.
+            </p>
+          )}
           {workspace.pinned ? (
             <p>
               작업공간이 고정되어 있어, 서버 설정에서 APP_ACCESS_CODE 값만 바꾸면 됩니다. 저장한 일정·예약·직원 계정은 그대로 남고, 모든 사람이 한 번 다시 로그인합니다(직원 개인
