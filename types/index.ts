@@ -276,6 +276,10 @@ export interface TripInput {
   groundScale: "auto" | "fixed";
   /** 가이드 1명이 맡는 최대 인원 (기본 45 — 버스 1대에 가이드 1명) */
   guideCapacity: number;
+  /** 계약서 특약 상품별 켜고 끄기 (특약 id → 넣음). 없으면 추천대로 (lib/specialTerms.ts) */
+  specialTermOverrides: Record<string, boolean>;
+  /** 이 상품만의 특약 (한 줄에 하나) */
+  customSpecialTerms: string;
   /** [전세버스·가이드 조회]로 받은 차종별 1대 1일 요금 — 다른 인원으로 바꿔 계산할 때 비율로 쓴다 */
   vehicleTierRates: Partial<Record<"car" | "suv" | "van" | "midbus" | "bus", number>>;
 
@@ -412,6 +416,20 @@ export interface TravelAlert {
  * 회사 정보. 고객 문서에 넣어야 하는 법정 표시 항목을 담는다.
  * (관광진흥법 시행규칙 §21: 등록번호·상호·소재지·등록관청, 보증보험 가입 내용 등)
  */
+/** 회사 설정 — 특약 금액·영업시간 */
+export interface SpecialTermSettings {
+  /** 항공권 발권 뒤 취소 시 표준 취소료와 별도로 받는 1인 항공 취소 수수료 (원, 0이면 "항공사 규정에 따른 실비") */
+  airCancelFee: number;
+  /** 출발 24시간 안 취소·무연락 불참 시 1인 노쇼 위약금 (원, 0이면 넣지 않음) */
+  noShowFee: number;
+  /** 취소 접수 영업시간 (예: "평일 09:00~18:00") — 비면 영업일 특약을 넣지 않음 */
+  businessHours: string;
+  /** 회사 고유 특약 (한 줄에 하나) */
+  custom: string;
+  /** 회사에서 쓰지 않기로 한 특약 id */
+  disabled: string[];
+}
+
 export interface CompanyProfile {
   /** 상호 */
   name: string;
@@ -452,6 +470,8 @@ export interface CompanyProfile {
   docColor: string;
   /** 고객 문서 로고 (작게 줄인 이미지 data URL). 비면 기본 로고 */
   logo: string;
+  /** 여행계약서 특약(표준약관 제6조) 금액·영업시간·회사 고유 특약 (lib/specialTerms.ts) */
+  specialTerms: SpecialTermSettings;
 }
 
 export type RequestStatus = "idle" | "loading" | "error" | "success";

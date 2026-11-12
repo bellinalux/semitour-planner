@@ -7,13 +7,14 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { TextField } from "@/components/ui/TextField";
 import { useRequest } from "@/hooks/useRequest";
 import { ALERT_LABELS, alertTone } from "@/lib/travelAlert";
-import type { TravelAlert } from "@/types";
+import type { CompanyProfile, TravelAlert } from "@/types";
+import { SpecialTermsPanel } from "./SpecialTermsPanel";
 import type { SectionProps } from "./types";
 
 /** 여행경보 직접 입력 선택지 */
 const LEVELS = [0, 1, 2, 3, 4];
 
-export function DocumentSection({ input, onChange, openSignal }: SectionProps) {
+export function DocumentSection({ input, onChange, openSignal, company }: SectionProps & { company?: CompanyProfile }) {
   const { state, run } = useRequest<{ destination: string }, { alert: TravelAlert }>("/api/travel-alert");
   const alert = input.travelAlert;
 
@@ -152,6 +153,8 @@ export function DocumentSection({ input, onChange, openSignal }: SectionProps) {
             최저 행사인원에 미달해 취소할 때는 출발 7일 전까지 통지해야 합니다. 늦으면 하루 전 통지 30%, 당일 통지 50%를 배상해야 합니다(국외여행 표준약관).
           </p>
         )}
+
+        {company && <SpecialTermsPanel input={input} onChange={onChange} company={company} />}
 
         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">

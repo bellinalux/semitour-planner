@@ -75,6 +75,7 @@ import { postJson } from "@/lib/api";
 import { DOC_LABELS, type DocKind } from "@/components/print/PrintDocuments";
 import { listenErrors } from "@/lib/errorReport";
 import { missingLegalFields } from "@/lib/company";
+import { contractTermRisks, contractTerms } from "@/lib/specialTerms";
 import { calculateQuote } from "@/lib/cost";
 import { rememberCosts } from "@/lib/costMemory";
 import { useAutoQuote } from "@/hooks/useAutoQuote";
@@ -669,6 +670,7 @@ export function PlannerApp() {
             courseFile={courseFile}
             onCourseFileChange={setCourseFile}
             onApplyFlight={handleApplyFlight}
+            company={company}
             stays={stays}
             focus={settingsFocus}
             onAutoBuild={() => void autoBuild.run()}
@@ -791,6 +793,7 @@ export function PlannerApp() {
               disabled: !quote?.ok,
               missingLegal: missingLegalFields(company),
               unconfirmed,
+              contractRisks: contractTermRisks(contractTerms(input, company.specialTerms), company.specialTerms),
               onPrint: printDocument,
             }}
           />
