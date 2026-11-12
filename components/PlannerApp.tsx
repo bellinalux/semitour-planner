@@ -11,7 +11,6 @@ import { OpsToggle } from "@/components/layout/OpsToggle";
 import { insertDays, placeNames, shiftOptions, shortenOne } from "@/lib/nightsChange";
 import { fitCourse } from "@/lib/courseFit";
 import { tidyDays } from "@/lib/dayTidy";
-import { Undo2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TripInputForm } from "@/components/form/TripInputForm";
@@ -44,6 +43,7 @@ import { formatMoney } from "@/lib/currency";
 import { useItinerary } from "@/hooks/useItinerary";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { usePrintDocument } from "@/hooks/usePrintDocument";
+import { useDocPrep } from "@/hooks/useDocPrep";
 import { usePlannerInput } from "@/hooks/usePlannerInput";
 import { useSegmentLibrary } from "@/hooks/useSegmentLibrary";
 import { useUsp } from "@/hooks/useUsp";
@@ -57,7 +57,6 @@ import { useStudioProductProvide } from "@/hooks/useStudioProductProvide";
 import { planToProduct } from "@/lib/planToProduct";
 import { buildSharedItinerary } from "@/lib/shareItinerary";
 import { loadPriceRules, ruleNotices } from "@/lib/seriesPricing";
-import { englishTexts } from "@/lib/englishDoc";
 import type { DocLang } from "@/lib/foreignDoc";
 import { departureNotice } from "@/lib/departureNotice";
 import { buildGuideSheet } from "@/lib/guideSheet";
@@ -67,8 +66,7 @@ import { usePreResearch } from "@/hooks/usePreResearch";
 import { KnowledgeMenu } from "@/components/layout/KnowledgeMenu";
 import { RateBookMenu } from "@/components/layout/RateBookMenu";
 import { GuideBookMenu } from "@/components/guidebook/GuideBookMenu";
-import { tripPlacesByCity, type GuideBasics, type GuideCityKit } from "@/lib/guideBook";
-import { fetchKits } from "@/lib/guideBookClient";
+import { tripPlacesByCity } from "@/lib/guideBook";
 import { addVersion, loadVersions, makeVersion, versionKey, type QuoteVersion } from "@/lib/quoteVersions";
 import { packingList, packingText } from "@/lib/packingList";
 import type { TravelInfo } from "@/lib/schemas/travelInfo";
@@ -112,13 +110,12 @@ import { bookingChecklist } from "@/lib/bookingChecklist";
 import { applyFxPatch } from "@/lib/fxDrift";
 import { addSupplierRecord, loadSupplierHistory, recordFromQuote } from "@/lib/supplierHistory";
 import { SUPPLIER_HISTORY_EVENT } from "@/components/dashboard/quote/SupplierHistoryPanel";
-import { TaskTray } from "@/components/layout/TaskTray";
+import { FloatingStatus } from "@/components/layout/FloatingStatus";
 import { CourseEngineContext, useCourseEngine } from "@/hooks/useCourseEngine";
 import { DayTimeCheckContext, useDayTimeCheck } from "@/hooks/useDayTimeCheck";
 import type { DayPlan, FlightOption, ItineraryItem, TourCandidate, TripInput } from "@/types";
 
 const NO_USPS: never[] = [];
-const NO_WORDS: Record<string, string> = {};
 
 export function PlannerApp() {
   const { input, update, reset, replace } = usePlannerInput();
@@ -167,20 +164,15 @@ export function PlannerApp() {
     () => (isReady ? calculateQuote(input, days, pmChoice) : null),
     [isReady, input, days, pmChoice],
   );
-  // 영문 일정표·견적서용 번역 (한글 글 → 영어, 이 화면에서 모아 둔다)
-  const [translationsByLang, setTranslationsByLang] = useState<Partial<Record<DocLang, Record<string, string>>>>({});
-  const translations = translationsByLang.en ?? NO_WORDS;
-  const [translating, setTranslating] = useState(false);
-  // 일정표 「여행 정보」 (시차·전압·통화·입국·긴급 연락처) — 일정표를 인쇄할 때 한 번 찾는다
-  const [travelInfo, setTravelInfo] = useState<{ key: string; info: TravelInfo } | null>(null);
+  // 문서 준비물 (번역표·여행 정보·가이드 해설집) — hooks/useDocPrep
+  const docPrep = useDocPrep(input);
+  const { translations, translationsByLang, translating, travelInfo, guideDocData } = docPrep;
   // 인쇄 문서는 견적이 준비된 뒤에만 만들 수 있다
-  // 가이드 해설집 인쇄용 — 이 일정 도시들의 원고·교육 자료 (인쇄 직전에 불러온다)
-  const [guideDocData, setGuideDocData] = useState<{ kits: GuideCityKit[]; basics: GuideBasics } | null>(null);
   const docData = useMemo(
     // 고객 문서는 선택한 판매 채널의 소비자가를 쓰고, 내부 검토서는 원래 견적(rawQuote)으로 모든 채널을 본다
     () =>
       quote?.ok
-        ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company, translations, translationsByLang, travelInfo: travelInfo?.key === input.destination.trim() ? travelInfo.info : null, shareUrl: shareUrlOf(suggestPlanName(input, meta)), guide: guideDocData }
+        ? { input, days, pmChoice, quote: documentQuote(quote, input), rawQuote: quote, meta, company, translations, translationsByLang, travelInfo, shareUrl: shareUrlOf(suggestPlanName(input, meta)), guide: guideDocData }
         : null,
     [quote, input, days, pmChoice, meta, company, translations, translationsByLang, travelInfo, guideDocData],
   );
@@ -530,50 +522,16 @@ export function PlannerApp() {
   const { exporter, printDocument: printPlain } = useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quoteLog, author: session.user?.name || quoteLog.author, print });
 
   /** 영문 문서·링크용 — 아직 번역하지 않은 한글 글을 번역해 번역표를 돌려준다 (실패하면 null) */
-  const ensureForeign = async (lang: DocLang, info?: TravelInfo | null): Promise<Record<string, string> | null> => {
-    if (!docData) return null;
-    const have = translationsByLang[lang] ?? {};
-    const texts = englishTexts({ ...docData, travelInfo: info ?? docData.travelInfo }).filter((t) => !(t in have));
-    if (texts.length === 0) return have;
-    setTranslating(true);
-    try {
-      const r = await postJson<{ translations: string[] }>("/api/translate-doc", { texts, lang });
-      const next = { ...have, ...Object.fromEntries(texts.map((t, i) => [t, r.translations[i] ?? t])) };
-      setTranslationsByLang((prev) => ({ ...prev, [lang]: next }));
-      return next;
-    } catch {
-      return null;
-    } finally {
-      setTranslating(false);
-    }
-  };
-
-  /** 일정표 여행 정보 — 같은 여행지는 한 번만 (서버가 30일 보관). 못 찾아도 인쇄는 한다 */
-  const ensureTravelInfo = async (): Promise<TravelInfo | null> => {
-    const dest = input.destination.trim();
-    if (!dest) return null;
-    if (travelInfo?.key === dest) return travelInfo.info;
-    setTranslating(true);
-    try {
-      const info = await postJson<TravelInfo>("/api/travel-info", { destination: dest, month: /^\d{4}-\d{2}/.test(input.departureDate) ? input.departureDate.slice(0, 7) : "" });
-      setTravelInfo({ key: dest, info });
-      return info;
-    } catch {
-      /* 여행 정보 없이 인쇄 */
-      return null;
-    } finally {
-      setTranslating(false);
-    }
-  };
+  const ensureForeign = (lang: DocLang, info?: TravelInfo | null) => docPrep.ensureForeign(docData, lang, info);
+  const { ensureTravelInfo } = docPrep;
 
   /** 문서 인쇄 — 영문 문서는 아직 번역하지 않은 글을 먼저 번역하고, 일정표는 여행 정보를 먼저 찾는다 */
   const printDocument = async (kind: DocKind) => {
     if (kind === "itinerary" || kind === "packing" || kind === "operation" || kind === "guidebook") await ensureTravelInfo();
     if (kind === "guidebook") {
-      try {
-        setGuideDocData(await fetchKits(Object.keys(tripPlacesByCity(days, pmChoice, input.destination))));
-      } catch (e) {
-        window.alert(e instanceof Error ? e.message : "가이드 해설집을 불러오지 못했습니다.");
+      const failed = await docPrep.loadGuideKits(days, pmChoice);
+      if (failed) {
+        window.alert(failed);
         return;
       }
     }
@@ -616,39 +574,8 @@ export function PlannerApp() {
   return (
     <>
     <PrintDocuments kind={printKind} data={docData ? { ...docData, season: season.result } : null} />
-    <div className="screen-only pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40 flex flex-col items-end gap-2 [&>*]:pointer-events-auto">
-    {history.blocked && (
-      <div role="alert" className="w-[min(26rem,calc(100vw-2rem))] rounded-xl border border-rose-300 bg-rose-50 p-3 text-[11px] leading-4 text-rose-900 shadow-md">
-        <p className="font-semibold">“{history.blocked.label}”을(를) 적용하지 않았습니다 — 할 수 없는 시간이 새로 생깁니다</p>
-        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-pretty">
-          {history.blocked.reasons.slice(0, 5).map((r) => (
-            <li key={r}>{r}</li>
-          ))}
-          {history.blocked.reasons.length > 5 && <li>그 밖에 {history.blocked.reasons.length - 5}건</li>}
-        </ul>
-        <div className="mt-2 flex gap-1.5">
-          <button type="button" onClick={history.applyBlocked} className="rounded-md border border-rose-300 bg-white px-2 py-0.5 font-semibold hover:bg-rose-100">
-            그래도 적용
-          </button>
-          <button type="button" onClick={history.dismissBlocked} className="rounded-md px-2 py-0.5 text-rose-700 hover:bg-rose-100">
-            닫기
-          </button>
-        </div>
-      </div>
-    )}
-    {history.last && (
-      <button
-        type="button"
-        onClick={history.undo}
-        title="Ctrl+Z로도 되돌릴 수 있습니다"
-        className="inline-flex max-w-[calc(100vw-2rem)] items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-md hover:bg-slate-50"
-      >
-        <Undo2 className="size-3.5" aria-hidden />
-        <span className="truncate">되돌리기 — {history.last}</span>
-        {history.count > 1 && <span className="font-normal text-slate-400">({history.count})</span>}
-      </button>
-    )}
-    <TaskTray
+    <FloatingStatus
+      history={history}
       tasks={[
         { key: "generate", label: "코스 만들기 / 업체 견적서 읽기", running: itinerary.state.status === "loading", typical: "30초~1분" },
         { key: "autobuild", label: "자동 구성", running: autoBuild.running, typical: "1~2분" },
@@ -663,7 +590,6 @@ export function PlannerApp() {
         { key: "itineraries", label: `타업체 일정 가져오기 (${competitorItineraries.pending}개 남음)`, running: competitorItineraries.running.length > 0, typical: "상품당 30초" },
       ]}
     />
-    </div>
     <div className="screen-only flex h-dvh flex-col">
       <Header
         actions={

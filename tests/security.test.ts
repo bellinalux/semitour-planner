@@ -75,3 +75,35 @@ describe("경쟁 상품 고르기", () => {
     expect(picked.map((x) => x.agency)).toEqual(["모두투어", "참좋은", "마리트"]);
   });
 });
+
+describe("로그인 쿠키 — 서버에서도 30일 지나면 만료", () => {
+  it("발급 시각이 없거나 30일이 지났거나 미래면 받지 않는다", async () => {
+    const { sessionFresh } = await import("@/lib/server/access");
+    const now = Date.UTC(2026, 10, 12);
+    const day = 86_400_000;
+    expect(sessionFresh(now - 29 * day, now)).toBe(true);
+    expect(sessionFresh(now - 31 * day, now)).toBe(false);
+    expect(sessionFresh(now + day, now)).toBe(false);
+    expect(sessionFresh(undefined, now)).toBe(false);
+    expect(sessionFresh("123", now)).toBe(false);
+  });
+});
+
+describe("/api/health — 로그인 없이는 살아 있는지만", () => {
+  it("관리자가 아니면 환경변수 이름·키 정보를 내보내지 않는다", async () => {
+    const prev = process.env.APP_ACCESS_CODE;
+    process.env.APP_ACCESS_CODE = "health-test-code";
+    try {
+      const { GET } = await import("@/app/api/health/route");
+      const anon = (await (await GET(new Request("http://localhost/api/health"))).json()) as Record<string, unknown>;
+      expect(Object.keys(anon).sort()).toEqual(["ok", "version"]);
+      const login = await loginCookie(new Request("http://localhost"), "health-test-code");
+      const cookie = login!.cookie.split(";")[0];
+      const admin = (await (await GET(new Request("http://localhost/api/health", { headers: { cookie } }))).json()) as Record<string, unknown>;
+      expect(admin).toHaveProperty("geminiKey");
+    } finally {
+      if (prev === undefined) delete process.env.APP_ACCESS_CODE;
+      else process.env.APP_ACCESS_CODE = prev;
+    }
+  });
+});

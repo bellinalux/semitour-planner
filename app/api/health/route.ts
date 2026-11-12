@@ -1,4 +1,4 @@
-import { accessRequired } from "@/lib/server/access";
+import { accessRequired, getSession } from "@/lib/server/access";
 import { readSecret } from "@/lib/server/external";
 import { getKv } from "@/lib/server/planStore";
 import { APP_VERSION } from "@/lib/version";
@@ -24,11 +24,16 @@ async function probeEgress(): Promise<{ colo: string | null; loc: string | null 
 }
 
 /**
- * 배포 상태 확인용. API 키 값은 절대 내보내지 않고, 등록 여부와 이름 형태만 알려준다.
- *  - /api/health          : 키 등록 여부, 버전
- *  - /api/health?probe=1  : 위에 더해 서버의 외부 접속 위치(colo, 국가)
+ * 배포 상태 확인용. API 키 값은 절대 내보내지 않는다.
+ *  - 누구나: { ok, version } 만 (살아 있는지 확인용)
+ *  - 관리자로 로그인했거나 잠금이 꺼진 로컬: 키 등록 여부, 비슷한 환경변수 이름, 저장소 상태 등 자세한 내용
+ *  - /api/health?probe=1 (관리자): 위에 더해 서버의 외부 접속 위치(colo, 국가)
+ * 자세한 내용은 공격자에게 설정 단서가 되므로 로그인 없이는 보여 주지 않는다.
  */
 export async function GET(request: Request) {
+  const session = await getSession(request);
+  if (session?.role !== "admin") return Response.json({ ok: true, version: APP_VERSION });
+
   const rawKey = process.env.GEMINI_API_KEY;
   const similarNames = Object.keys(process.env).filter((name) => /gemini|google|api_?key/i.test(name));
   const wantsProbe = new URL(request.url).searchParams.get("probe") === "1";

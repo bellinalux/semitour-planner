@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { inquirySchema, type Inquiry } from "@/lib/inquiry";
 import { isAuthed } from "@/lib/server/access";
-import { readInquiries, writeInquiries } from "@/lib/server/inquiryStore";
+import { addInquiry, readInquiries, writeInquiries } from "@/lib/server/inquiryStore";
 import { allowPublicWrite } from "@/lib/server/rateLimit";
 import { newShareId } from "@/lib/server/shareStore";
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   const { website: _honeypot, ...data } = parsed.data;
   void _honeypot;
   const item: Inquiry = { ...data, id: newShareId(), at: new Date().toISOString(), done: false };
-  if (!(await write([item, ...(await read())]))) return errorResponse("NO_STORE", "지금은 접수할 수 없습니다. 전화로 문의해 주세요.", 503);
+  if (!(await addInquiry(item))) return errorResponse("NO_STORE", "지금은 접수할 수 없습니다. 전화로 문의해 주세요.", 503);
   return Response.json({ ok: true });
 }
 

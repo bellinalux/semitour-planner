@@ -1,4 +1,4 @@
-# 푸시·PR마다 타입 검사 → 린트 → 자동 테스트 → 빌드를 돌린다.
+# 푸시·PR마다 타입 검사 → 린트 → 자동 테스트 → 빌드(next · vinext 배포용)를 돌린다.
 # (실서버 배포는 Cloudflare가 따로 한다. 여기서 실패하면 GitHub에 빨간 X로 보인다)
 name: CI
 
@@ -19,7 +19,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # 로컬·Cloudflare 빌드와 같은 버전(.node-version)을 쓴다
+          node-version-file: .node-version
           cache: npm
       - run: npm ci
       - name: 타입 검사
@@ -30,6 +31,9 @@ jobs:
         run: npm test
       - name: 빌드
         run: npm run build
+      - name: 배포용 빌드 (Cloudflare · vinext)
+        # 실제 배포는 vinext로 빌드한다 — next build만 통과하고 배포 빌드가 깨지는 일을 여기서 잡는다
+        run: npm run build:vinext
 
   e2e:
     # 실제 브라우저로 처음부터 끝까지 (AI 응답은 테스트 안의 가짜 응답)
@@ -39,7 +43,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # 로컬·Cloudflare 빌드와 같은 버전(.node-version)을 쓴다
+          node-version-file: .node-version
           cache: npm
       - run: npm ci
       - name: 브라우저 설치

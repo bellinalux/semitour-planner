@@ -84,6 +84,25 @@ describe("권한 — 예약·저장 일정 삭제는 만든 사람이나 관리�
     expect((await bookingDelete(req(a, "DELETE", undefined, "?id=b-perm-0001")))!.status).toBe(200);
   });
 
+  it("예약: 불러온 뒤 다른 직원이 먼저 고쳤으면 덮어쓰지 않고 409와 최신 내용을 돌려준다", async () => {
+    const a = cookieOf((await loginCookie(new Request("http://localhost"), "aaa-123456"))!.cookie);
+    const b = cookieOf((await loginCookie(new Request("http://localhost"), "bbb-123456"))!.cookie);
+    const first = ((await (await bookingPut(req(a, "PUT", { booking: { ...base(), id: "b-conf-0001" } })))!.json()) as { booking: Booking }).booking;
+    // 둘 다 first를 보고 있다가 B가 먼저 입금 금액을 바꾼다
+    await new Promise((r) => setTimeout(r, 5));
+    const byB = await bookingPut(req(b, "PUT", { booking: { ...first, paidAmount: 100_000 }, baseUpdatedAt: first.updatedAt }));
+    expect(byB!.status).toBe(200);
+    const stale = await bookingPut(req(a, "PUT", { booking: { ...first, memo: "A가 쓴 메모" }, baseUpdatedAt: first.updatedAt }));
+    expect(stale!.status).toBe(409);
+    const body = (await stale!.json()) as { booking: Booking; error: { code: string } };
+    expect(body.error.code).toBe("CONFLICT");
+    expect(body.booking.paidAmount).toBe(100_000);
+    // 최신 시각을 기준으로 다시 보내면 저장된다
+    const retry = await bookingPut(req(a, "PUT", { booking: { ...body.booking, memo: "A가 쓴 메모" }, baseUpdatedAt: body.booking.updatedAt }));
+    expect(retry!.status).toBe(200);
+    expect((await bookingDelete(req(a, "DELETE", undefined, "?id=b-conf-0001")))!.status).toBe(200);
+  });
+
   it("저장 일정: 작성자가 남고, 다른 직원에게는 삭제 불가로 보인다", async () => {
     const a = cookieOf((await loginCookie(new Request("http://localhost"), "aaa-123456"))!.cookie);
     const b = cookieOf((await loginCookie(new Request("http://localhost"), "bbb-123456"))!.cookie);

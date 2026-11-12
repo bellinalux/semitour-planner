@@ -49,8 +49,11 @@ export async function PUT(request: Request) {
   const text = await request.text();
   if (text.length > 64 * 1024) return errorResponse("TOO_LARGE", "내용이 너무 깁니다.", 413);
   let incoming: Booking | null = null;
+  let base = "";
   try {
-    incoming = parseBooking((JSON.parse(text) as { booking?: unknown })?.booking);
+    const body = JSON.parse(text) as { booking?: unknown; baseUpdatedAt?: unknown };
+    incoming = parseBooking(body?.booking);
+    base = typeof body?.baseUpdatedAt === "string" ? body.baseUpdatedAt : "";
   } catch {
     incoming = null;
   }
@@ -58,6 +61,16 @@ export async function PUT(request: Request) {
 
   const list = await readAll(ctx);
   const prev = list.find((b) => b.id === incoming.id) ?? null;
+  // 내가 불러온 뒤 다른 직원이 먼저 고쳤으면 덮어쓰지 않는다 — 최신 내용을 돌려주고 다시 확인하게 한다
+  if (prev && base && prev.updatedAt && prev.updatedAt !== base) {
+    return Response.json(
+      {
+        error: { code: "CONFLICT", message: `${prev.history[0]?.by || "다른 직원"}님이 먼저 이 예약을 수정해 저장하지 않았습니다. 목록을 최신 내용으로 바꿨으니 예약을 다시 열어 확인한 뒤 고쳐 주세요.` },
+        booking: { ...prev, canDelete: canDelete(ctx.session, prev) },
+      },
+      { status: 409 },
+    );
+  }
   if (!prev && list.length >= MAX_BOOKINGS) return errorResponse("LIMIT", `예약은 ${MAX_BOOKINGS}건까지 저장할 수 있습니다. 오래된 예약을 정리해 주세요.`, 409);
   const by = ctx.session.name || "이름 없음";
   // 이력·만든 사람은 클라이언트가 보낸 값이 아니라 서버가 정한다

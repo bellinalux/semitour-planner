@@ -1,5 +1,5 @@
 import { bookRequestSchema, type Inquiry } from "@/lib/inquiry";
-import { readInquiries, writeInquiries } from "@/lib/server/inquiryStore";
+import { addInquiry } from "@/lib/server/inquiryStore";
 import { allowPublicWrite } from "@/lib/server/rateLimit";
 import { getShared, newShareId } from "@/lib/server/shareStore";
 
@@ -38,6 +38,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     requests: [`[웹 일정표 예약 요청] ${it.title}`, options.length ? `선택관광: ${options.join(", ")}` : "", b.message].filter(Boolean).join(" · ").slice(0, 500),
     source: { kind: "share", shareId: id, title: it.title.slice(0, 120), period: it.period.slice(0, 80), options },
   };
-  if (!(await writeInquiries([item, ...(await readInquiries())]))) return errorResponse("NO_STORE", "지금은 접수할 수 없습니다. 전화로 문의해 주세요.", 503);
+  if (!(await addInquiry(item))) return errorResponse("NO_STORE", "지금은 접수할 수 없습니다. 전화로 문의해 주세요.", 503);
   return Response.json({ ok: true });
 }

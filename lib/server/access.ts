@@ -52,11 +52,6 @@ export async function codeMatches(code: string): Promise<boolean> {
   return safeEqual(await sha256Hex(configuredCode()), await sha256Hex(code.trim()));
 }
 
-/** 쿠키에 저장하는 값. 코드 자체가 아니라 코드로 만든 해시라서 쿠키가 노출돼도 코드를 알 수 없다. */
-async function expectedToken(): Promise<string> {
-  return sha256Hex(`semitour-access:${configuredCode()}`);
-}
-
 /** 길이가 같은 두 문자열을 시간 차이 없이 비교한다 */
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -100,6 +95,12 @@ async function sign(payload: string): Promise<string> {
 const b64url = (text: string) => btoa(String.fromCharCode(...new TextEncoder().encode(text))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const fromB64url = (text: string) => new TextDecoder().decode(Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)));
 
+/** 발급 시각이 유효 기간(30일) 안이고 미래가 아니면 true (서버 시계 차이 5분까지 허용) */
+export function sessionFresh(iat: unknown, now = Date.now()): boolean {
+  if (typeof iat !== "number" || !Number.isFinite(iat)) return false;
+  return iat <= now + 5 * 60_000 && now - iat < COOKIE_MAX_AGE_SECONDS * 1000;
+}
+
 /** 쿠키 값: "v2.<내용>.<서명>" — 내용은 직원 ID와 발급 시각뿐이고, 권한·이름은 매번 직원 목록에서 다시 읽는다 */
 async function sessionToken(staffId: string): Promise<string> {
   const payload = b64url(JSON.stringify({ sid: staffId, iat: Date.now() }));
@@ -111,13 +112,15 @@ export async function getSession(request: Request): Promise<Session | null> {
   if (!accessRequired()) return LOCAL;
   const token = readCookie(request, COOKIE_NAME);
   if (!token) return null;
-  // 예전 방식 쿠키(공용 코드 하나)는 관리자로 본다 — 이미 로그인한 사람이 다시 입력하지 않아도 되게
-  if (safeEqual(token, await expectedToken())) return MASTER;
+  // 예전 방식 쿠키(공용 코드 해시, 만료 없음)는 더 이상 받지 않는다 — 다시 로그인하면 v2 쿠키가 나온다
   const [version, payload, sig] = token.split(".");
   if (version !== "v2" || !payload || !sig || !safeEqual(sig, await sign(payload))) return null;
   let sid = "";
   try {
-    sid = String((JSON.parse(fromB64url(payload)) as { sid?: unknown }).sid ?? "");
+    const data = JSON.parse(fromB64url(payload)) as { sid?: unknown; iat?: unknown };
+    // 브라우저 쿠키 만료(Max-Age)와 별개로 서버에서도 발급 시각을 확인한다 — 쿠키가 새어 나가도 30일 뒤엔 못 쓴다
+    if (!sessionFresh(data.iat)) return null;
+    sid = String(data.sid ?? "");
   } catch {
     return null;
   }
