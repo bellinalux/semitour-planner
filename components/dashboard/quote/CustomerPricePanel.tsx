@@ -85,7 +85,10 @@ export function CustomerPricePanel({ input, days, pmChoice, quote, meta }: Props
       <p className="text-pretty text-[11px] text-slate-500">
         1인 요금은 2인 1실 기준이며 {grid.kind === "weekday" ? "업체 요일별 공급가로" : grid.kind === "plan" ? "안마다 숙박 요금을 바꿔" : "지금 견적으로"} 인원마다 다시 계산했습니다.
         {grid.minTravelers > 0 && ` 최소 출발 ${grid.minTravelers}명.`}
-        {vehicleRows.length > 0 && ` "차종 바뀜" 인원은 지금 차량비(${input.vehicleCostPerDay.toLocaleString()}/일)를 그대로 썼으니 그 차종 요금으로 확인하세요.`}
+        {vehicleRows.length > 0 &&
+          (input.groundScale === "fixed"
+            ? ` "차종 바뀜" 인원은 지금 차량비(${input.vehicleCostPerDay.toLocaleString()}/일)를 그대로 썼으니 그 차종 요금으로 확인하세요.`
+            : ` "차종 바뀜" 인원은 차종·대수·가이드 수에 맞춰 차량비·가이드비를 바꿔 계산했습니다${Object.keys(input.vehicleTierRates ?? {}).length ? "(조회한 차종별 요금 비율)" : "(차종 기본 비율 — [전세버스·가이드 조회]를 하면 더 정확)"}.`)}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <CopyButton label="표 복사 (엑셀)" variant="secondary" disabled={false} getText={() => priceGridTsv(grid)} />

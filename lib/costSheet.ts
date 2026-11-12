@@ -1,4 +1,4 @@
-import { vehicleClassFor } from "@/lib/autoBuild";
+import { scaledGround } from "@/lib/groundPlan";
 import { priceLabel } from "@/lib/channels";
 import { lodgingRoomsFor } from "@/lib/cost";
 import { costSourceLabel } from "@/lib/costSource";
@@ -80,9 +80,11 @@ export function buildCostSheet(input: TripInput, days: DayPlan[], pmChoice: PmCh
   if (tax) push(tax, "숙박", "숙박세", input.cityTaxPerPersonPerNight, `${n}명 × ${input.nights}박`);
 
   const vehicle = line("vehicle");
-  if (vehicle) push(vehicle, "지상", `차량 — ${vehicleClassFor(n)}`, input.vehicleCostPerDay, `${quote.groundDays}일 × 1대`);
+  const ground = scaledGround(input, n);
+  if (vehicle)
+    push(vehicle, "지상", `차량 — ${ground.plan.tierLabel}`, Math.round(ground.vehiclePerDay / ground.plan.count), `${quote.groundDays}일 × ${ground.plan.count}대`);
   const guide = line("guide");
-  if (guide) push(guide, "지상", "가이드", input.guideCostPerDay, `${quote.groundDays}일`);
+  if (guide) push(guide, "지상", "가이드", Math.round(ground.guidePerDay / ground.plan.guides), `${quote.groundDays}일 × ${ground.plan.guides}명`);
 
   // 입장료·식사는 일정 항목별로 (고객이 현지에서 내는 항목은 판매가에 들어가지 않으므로 뺀다)
   for (const day of days) {

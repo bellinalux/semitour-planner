@@ -1,3 +1,4 @@
+import { scaledGround } from "@/lib/groundPlan";
 import { buildChannelResults, consumerPrices, DIRECT_CHANNEL_ID, feeRows, priceParamsOf, type FeeRow, type PriceParams } from "@/lib/channels";
 import { formatMoney } from "@/lib/currency";
 import { dayItems, groundDays, overnightNights, type PmChoice } from "@/lib/itinerary";
@@ -109,18 +110,21 @@ function buildLines(n: number, ctx: Context): CostLine[] {
   // 랜드사 공급가로 시작하면 숙박·차량·가이드·입장료·식대가 공급가에 들어 있다고 보고 공급가 한 줄로 계산한다
   if (input.pricingMode === "supplier") return supplierLines(n, ctx, withStatus, money);
 
+  // 인원이 지금과 다르면(인원별 가격표 등) 차종·대수·가이드 수에 맞춰 바꾼 금액 (lib/groundPlan.ts)
+  const ground = scaledGround(input, n);
+  const planNote = ground.scaled ? ` (${ground.plan.label} 기준 환산)` : "";
   const lines: CostLine[] = [
     withStatus("vehicle", {
       key: "vehicle",
       label: "차량비",
-      amount: ctx.tourDays * input.vehicleCostPerDay,
-      note: `${ctx.tourDays}일 × ${money(input.vehicleCostPerDay)}`,
+      amount: ctx.tourDays * ground.vehiclePerDay,
+      note: `${ctx.tourDays}일 × ${money(ground.vehiclePerDay)}${planNote}`,
     }),
     withStatus("guide", {
       key: "guide",
       label: "가이드비",
-      amount: ctx.tourDays * input.guideCostPerDay,
-      note: `${ctx.tourDays}일 × ${money(input.guideCostPerDay)}`,
+      amount: ctx.tourDays * ground.guidePerDay,
+      note: `${ctx.tourDays}일 × ${money(ground.guidePerDay)}${planNote}`,
     }),
     withStatus("other", { key: "other", label: "기타 고정비", amount: input.otherFixedCost }),
   ];

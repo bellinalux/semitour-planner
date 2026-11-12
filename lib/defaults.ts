@@ -72,6 +72,9 @@ export const DEFAULT_INPUT: TripInput = {
 
   vehicleCostPerDay: 0,
   guideCostPerDay: 0,
+  groundScale: "auto",
+  guideCapacity: 45,
+  vehicleTierRates: {},
   otherFixedCost: 0,
   groundDaysOverride: 0,
 

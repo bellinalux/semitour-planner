@@ -3,6 +3,7 @@ import { NumberField } from "@/components/ui/NumberField";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { currencySymbol, formatMoney } from "@/lib/currency";
 import { CostField } from "./CostField";
+import { GroundLookupPanel } from "./GroundLookupPanel";
 import type { SectionProps } from "./types";
 
 export function CostSection({ input, onChange, openSignal }: SectionProps) {
@@ -46,6 +47,7 @@ export function CostSection({ input, onChange, openSignal }: SectionProps) {
             onChange={onChange}
           />
         </div>
+        <GroundLookupPanel input={input} onChange={onChange} />
         <NumberField
           id="groundDaysOverride"
           label="차량·가이드 적용 일수"

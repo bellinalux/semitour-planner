@@ -68,6 +68,14 @@ export function normalizeInput(saved: unknown): TripInput {
           }))
       : DEFAULT_INPUT.discounts,
     compareBasis: s.compareBasis === "land" ? "land" : "total",
+    groundScale: s.groundScale === "fixed" ? "fixed" : "auto",
+    guideCapacity: typeof s.guideCapacity === "number" && s.guideCapacity >= 1 && s.guideCapacity <= 200 ? Math.round(s.guideCapacity) : DEFAULT_INPUT.guideCapacity,
+    vehicleTierRates:
+      typeof s.vehicleTierRates === "object" && s.vehicleTierRates !== null && !Array.isArray(s.vehicleTierRates)
+        ? Object.fromEntries(
+            Object.entries(s.vehicleTierRates).filter(([k, v]) => ["car", "suv", "van", "midbus", "bus"].includes(k) && typeof v === "number" && Number.isFinite(v) && v > 0),
+          )
+        : {},
     flightDeals: Array.isArray(s.flightDeals) ? s.flightDeals : DEFAULT_INPUT.flightDeals,
     priceScenarios: Array.isArray(s.priceScenarios) ? s.priceScenarios : DEFAULT_INPUT.priceScenarios,
     regionPlan: typeof s.regionPlan === "string" ? s.regionPlan : DEFAULT_INPUT.regionPlan,
