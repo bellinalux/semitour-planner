@@ -4,6 +4,7 @@ import { GeminiError } from "@/lib/server/gemini";
 import { guardRequest } from "@/lib/server/guard";
 import { researchCity } from "@/lib/server/knowledgeResearch";
 import { bumpMetric, getCity, putCity } from "@/lib/server/knowledgeStore";
+import { withAiInfo } from "@/lib/server/aiProviders";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -19,7 +20,7 @@ const schema = z.object({
 });
 
 /** 도시 조사 → 지식 창고에 합치기 (AI·웹 검색). 30일 안에 조사했으면 저장된 것을 돌려준다 */
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const blocked = await guardRequest(request);
   if (blocked) return blocked;
   const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -39,3 +40,6 @@ export async function POST(request: Request) {
     return errorResponse("INTERNAL", "조사하지 못했습니다. 잠시 뒤 다시 시도해 주세요.", 500);
   }
 }
+
+/** 대체 AI(Groq·Cloudflare)가 답하면 응답 머리글로 화면에 알린다 */
+export const POST = withAiInfo(handlePost);

@@ -6,12 +6,13 @@ import { GeminiError } from "@/lib/server/gemini";
 import { estimateGroundCost } from "@/lib/server/groundCost";
 import { guardRequest } from "@/lib/server/guard";
 import { cached, DAY } from "@/lib/server/aiCache";
+import { withAiInfo } from "@/lib/server/aiProviders";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const blocked = await guardRequest(request);
   if (blocked) return blocked;
 
@@ -67,3 +68,6 @@ export async function POST(request: Request) {
     return errorResponse("INTERNAL", "차량·가이드 요금 추정 중 알 수 없는 오류가 발생했습니다.", 500);
   }
 }
+
+/** 대체 AI(Groq·Cloudflare)가 답하면 응답 머리글로 화면에 알린다 */
+export const POST = withAiInfo(handlePost);

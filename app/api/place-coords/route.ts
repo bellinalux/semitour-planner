@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { locatePlaces } from "@/lib/server/courseEngineServer";
 import { guardRequest } from "@/lib/server/guard";
+import { withAiInfo } from "@/lib/server/aiProviders";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -13,7 +14,7 @@ const schema = z.object({
 });
 
 /** 숙소 등 이름으로 좌표 찾기 (구글 지도, 한 번 찾은 곳은 저장) — 코스 지도의 동선 출발·도착점 */
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const blocked = await guardRequest(request);
   if (blocked) return blocked;
   const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -25,3 +26,6 @@ export async function POST(request: Request) {
     return errorResponse("INTERNAL", "위치를 찾지 못했습니다. 잠시 뒤 다시 시도해 주세요.", 500);
   }
 }
+
+/** 대체 AI(Groq·Cloudflare)가 답하면 응답 머리글로 화면에 알린다 */
+export const POST = withAiInfo(handlePost);

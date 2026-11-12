@@ -4,6 +4,7 @@ import { addHotel } from "@/lib/rateBook";
 import { GeminiError, generateGroundedText, generateJson } from "@/lib/server/gemini";
 import { guardRequest } from "@/lib/server/guard";
 import { updateRates } from "@/lib/server/rateStore";
+import { withAiInfo } from "@/lib/server/aiProviders";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -36,7 +37,7 @@ const resultSchema = z.object({
 /**
  * 업체 견적서의 호텔 확인 — 실제로 있는지·정식 이름·등급·위치·한국인 이용·국내 여행사 패키지 사용을 웹에서 확인해 회사 요금표에 남긴다.
  */
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const blocked = await guardRequest(request);
   if (blocked) return blocked;
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));
@@ -101,3 +102,6 @@ export async function POST(request: Request) {
     return errorResponse("INTERNAL", "호텔을 확인하지 못했습니다. 잠시 뒤 다시 시도해 주세요.", 500);
   }
 }
+
+/** 대체 AI(Groq·Cloudflare)가 답하면 응답 머리글로 화면에 알린다 */
+export const POST = withAiInfo(handlePost);
