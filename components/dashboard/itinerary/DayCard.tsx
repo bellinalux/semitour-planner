@@ -36,6 +36,7 @@ const addClock = (hhmm: string, add: number) => {
   return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
 };
 import { TimelineItem, type ItemPatch } from "./TimelineItem";
+import { departureGap } from "@/lib/flightPlan";
 
 const SCORE_TONE: Record<string, string> = {
   A: "bg-emerald-50 text-emerald-800 ring-emerald-200",
@@ -128,6 +129,8 @@ export function DayCard({
   const timings = computeItemTimings(dayItems(plan, pmChoiceForDay), tourStart);
   const isLastDay = days.length > 0 && plan.day === Math.max(...days.map((d) => d.day));
   const gap = calcDayGap(plan, pmChoiceForDay, isLastDay);
+  // 출국일: 관광을 끝내고 공항 갈 때까지(출발 3시간 전) 남는 시간 — 공항 대기를 줄이게 채우기를 권한다
+  const depGap = isLastDay ? departureGap(plan) : null;
   // 상품 규칙 (운영 방식·등급·고객·지역) — 종료 기준과 그날 점검
   const rules = useContext(PackageRulesContext);
   const dayEnd = rules ? ruleDayEnd(plan, pmChoiceForDay, rules) : calcDayEnd(plan, pmChoiceForDay);
@@ -450,6 +453,19 @@ export function DayCard({
       <div className="space-y-5 p-4">
         {plan.kind === "linear" ? (
           <div>
+            {depGap && (
+              <DayFillPanel
+                dayNo={plan.day}
+                gap={{ freeMinutes: depGap.freeMinutes, fromTime: depGap.fromTime }}
+                message={`출국일: ${depGap.fromTime}~${depGap.untilTime} 약 ${formatDuration(depGap.freeMinutes)}이 비어 공항에서 오래 기다리게 됩니다. 공항 가는 길의 관광·쇼핑·식사로 채우세요(귀국편 시각은 그대로).`}
+                destination={destination}
+                city={city}
+                currency={currency}
+                tripScope={tripScope}
+                existingNames={plan.items.map((i) => i.name)}
+                onApply={onInsertItems}
+              />
+            )}
             {gap && (
               <DayFillPanel
                 dayNo={plan.day}

@@ -12,6 +12,7 @@ import { ModeSwitch } from "./ModeSwitch";
 import { TripScopeSwitch } from "./TripScopeSwitch";
 import { PackageKindFields } from "./PackageKindFields";
 import type { SectionProps } from "./types";
+import { isShortHaul } from "@/lib/flightPlan";
 
 interface Props extends SectionProps {
   courseFile: CourseFile | null;
@@ -33,6 +34,20 @@ export function TripBasicsSection({ input, onChange, courseFile, onCourseFileCha
 
   // 박수가 "일수 − 1"(당일 귀국)이던 상태에서 일수를 바꾸면 박수도 함께 따라간다
   const changeDays = (days: number) => onChange({ days, nights: input.nights === input.days - 1 ? Math.max(0, days - 1) : input.nights });
+  // 숙박을 바꾸면 총 일수도 따라간다 — 기본 숙박+1일, 장거리 심야 귀국편(숙박+2일)이던 상품만 숙박+2일 유지
+  // (예전엔 숙박만 바뀌어 3박4일 → 2박4일처럼 맞지 않는 기간이 생겼다)
+  const shortHaul = input.tripScope === "overseas" && isShortHaul(input);
+  const changeNights = (nights: number) => {
+    const overnight = input.days === input.nights + 2 && !shortHaul;
+    onChange({ nights, days: Math.min(14, Math.max(1, nights + (overnight ? 2 : 1))) });
+  };
+  const span = input.days - input.nights;
+  const periodWarning =
+    input.tripScope === "overseas" && input.includesFlights && shortHaul && span === 2
+      ? `가까운 노선(비행 5시간 이하)은 귀국편에서 기내 1박이 생기지 않습니다. ${input.nights}박 ${input.days}일이면 하루가 남아 빈 날이 생깁니다.`
+      : span > 2 || span < 1
+        ? `숙박 ${input.nights}박과 총 ${input.days}일이 맞지 않습니다 (보통 숙박+1일, 심야 귀국편이면 숙박+2일).`
+        : "";
 
   const summary = [
     input.destination.trim() || "여행지 미정",
@@ -71,7 +86,7 @@ export function TripBasicsSection({ input, onChange, courseFile, onCourseFileCha
         />
 
         <div className="grid grid-cols-3 gap-3">
-          <NumberField id="nights" label="숙박" value={input.nights} min={0} max={30} step={1} suffix="박" onChange={(nights) => onChange({ nights })} />
+          <NumberField id="nights" label="숙박" value={input.nights} min={0} max={30} step={1} suffix="박" onChange={changeNights} />
           <NumberField id="days" label="총 일수" value={input.days} min={1} max={14} step={1} suffix="일" onChange={changeDays} />
           <NumberField
             id="travelers"
@@ -85,8 +100,20 @@ export function TripBasicsSection({ input, onChange, courseFile, onCourseFileCha
           />
         </div>
         <p className="-mt-2 text-pretty text-[11px] leading-4 text-slate-500">
-          {input.nights}박 {input.days}일 · 귀국 항공이 밤 비행기라 기내에서 하루를 보내면 숙박이 일수 − 2가 됩니다.
+          {input.nights}박 {input.days}일 · 숙박을 바꾸면 일수도 따라 바뀝니다. 장거리 심야 귀국편(기내 1박)만 숙박이 일수 − 2입니다.
         </p>
+        {periodWarning && (
+          <div role="alert" className="-mt-1 flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-2.5 py-2 text-[11px] leading-4 text-amber-800">
+            <span className="min-w-0 flex-1">{periodWarning}</span>
+            <button
+              type="button"
+              onClick={() => onChange({ days: Math.min(14, input.nights + 1) })}
+              className="shrink-0 rounded-md border border-amber-300 bg-white px-2 py-1 font-semibold text-amber-800 hover:bg-amber-100"
+            >
+              {input.nights}박 {input.nights + 1}일로 맞추기
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <Field htmlFor="departureDate" label="출발일" hint="비우면 문서에 '미정'으로 표시됩니다">

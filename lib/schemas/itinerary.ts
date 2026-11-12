@@ -26,6 +26,23 @@ export const itineraryRequestSchema = z.object({
   companions: z.array(z.enum(["senior", "kids", "infant", "couple", "friends", "group"])).max(6).default([]),
   mustHave: z.string().max(300).default(""),
   avoid: z.string().max(300).default(""),
+  /** 숙박 수 (알면) */
+  nights: z.number().int().min(0).max(30).optional(),
+  /**
+   * 항공 포함 해외여행 — 도착일·출국일에 관광할 수 있는 시간 (lib/flightPlan.ts).
+   * 있으면 AI가 1일차(도착일)와 departureDay(출국일)도 시간 안에서 짠다. 항공·공항·체크인/아웃은 앱이 넣는다.
+   */
+  flightDays: z
+    .object({
+      arrive: z.string().max(5),
+      arrivalStart: z.string().max(5),
+      returnDepart: z.string().max(5),
+      departureEnd: z.string().max(5),
+      departureDay: z.number().int().min(1).max(14),
+      assumed: z.boolean(),
+      overnightReturn: z.boolean(),
+    })
+    .optional(),
 });
 
 export type ItineraryRequest = z.infer<typeof itineraryRequestSchema>;
