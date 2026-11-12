@@ -148,3 +148,42 @@ describe("대체 업체가 없을 때", () => {
     expect(await generateJson({ system: "s", user: "u", schema })).toEqual({ city: "f", days: 1 });
   });
 });
+
+describe("Gemini 붐빔(503)", () => {
+  it("한 번 기다렸다 다시 보내 성공하면 대체 AI로 넘기지 않는다", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    let n = 0;
+    mockFetch((url) => {
+      if (!url.includes("googleapis")) return groqOk('{"city":"x","days":9}');
+      n++;
+      return n === 1
+        ? json({ error: { message: "This model is currently experiencing high demand." } }, 503)
+        : json({ candidates: [{ content: { parts: [{ text: '{"city":"g","days":2}' }] } }] });
+    });
+    const p = generateJson({ system: "s", user: "u", schema });
+    await vi.runAllTimersAsync();
+    expect(await p).toEqual({ city: "g", days: 2 });
+    expect(calls.some((c) => c.url.includes("groq"))).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it("다시 보내도 503이면 Groq가 이어 받는다", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    mockFetch((url) => (url.includes("googleapis") ? json({ error: { message: "high demand" } }, 503) : groqOk('{"city":"h","days":3}')));
+    const p = generateJson({ system: "s", user: "u", schema });
+    await vi.runAllTimersAsync();
+    expect(await p).toEqual({ city: "h", days: 3 });
+    expect(calls.filter((c) => c.url.includes("googleapis"))).toHaveLength(2);
+    vi.useRealTimers();
+  });
+
+  it("Groq도 없으면 알아보기 쉬운 문장으로 알린다", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    delete process.env.GROQ_API_KEY;
+    mockFetch(() => json({ error: { message: "high demand" } }, 503));
+    const p = generateJson({ system: "s", user: "u", schema }).catch((e: unknown) => e);
+    await vi.runAllTimersAsync();
+    expect(((await p) as GeminiError).message).toContain("붐벼");
+    vi.useRealTimers();
+  });
+});

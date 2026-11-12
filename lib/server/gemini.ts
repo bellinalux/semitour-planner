@@ -133,7 +133,20 @@ export function resolveKey(): string {
   return apiKey;
 }
 
+/**
+ * Gemini가 붐빔(503 "high demand")·일시 오류(500)를 내면 잠깐 기다렸다 한 번 더 보낸다.
+ * 대개 몇 초 안에 풀리므로, 대체 AI로 넘기거나 오류를 보이기 전에 한 번은 다시 시도한다.
+ */
+export const GEMINI_BUSY_RETRY_MS = 2_000;
 async function callGemini(body: Record<string, unknown>, timeoutMs: number): Promise<CallResult> {
+  const first = await callGeminiOnce(body, timeoutMs);
+  if (first.ok || (first.status !== 503 && first.status !== 500)) return first;
+  console.error(`[gemini] ${first.status} — ${GEMINI_BUSY_RETRY_MS}ms 뒤 한 번 더: ${first.message.slice(0, 100)}`);
+  await new Promise((r) => setTimeout(r, GEMINI_BUSY_RETRY_MS));
+  return callGeminiOnce(body, timeoutMs);
+}
+
+async function callGeminiOnce(body: Record<string, unknown>, timeoutMs: number): Promise<CallResult> {
   const apiKey = resolveKey();
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
 
@@ -191,6 +204,8 @@ function genericUpstreamError(failure: { status: number; message: string }): Gem
     ? "Gemini 선불 크레딧이 소진되었습니다. AI Studio에서 충전하거나 무료 키로 바꿔 주세요."
     : failure.status === 429
       ? "Gemini 사용량 한도를 초과했습니다."
+      : failure.status === 503
+        ? "Gemini 서버가 붐벼 응답하지 못했습니다(일시적). 잠시 뒤 다시 시도해 주세요."
       : `Gemini 서버 오류 (${failure.status}). ${failure.message.slice(0, 120)}`;
   return new GeminiError("UPSTREAM", hint, failure.status === 429 ? 429 : 502, credits ? 402 : failure.status);
 }
