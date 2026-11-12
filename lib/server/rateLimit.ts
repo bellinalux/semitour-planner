@@ -18,7 +18,7 @@ export const LOGIN_ATTEMPTS_PER_MINUTE = 6;
 
 const memory = new Map<string, number[]>();
 
-function memoryAllow(key: string, limit: number, windowMs = 60_000): boolean {
+export function memoryAllow(key: string, limit: number, windowMs = 60_000): boolean {
   const now = Date.now();
   const recent = (memory.get(key) ?? []).filter((t) => now - t < windowMs);
   if (recent.length >= limit) {

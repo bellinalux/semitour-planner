@@ -8,7 +8,7 @@ import { isRunaway } from "@/lib/aiRepeat";
 import { resolveKey } from "@/lib/server/gemini";
 import { allowAiCall } from "@/lib/server/rateLimit";
 import {
-  aiCache, allowedOrigin, CACHE_TTL_SECONDS, cacheKey, corsHeaders, MAX_BODY_BYTES, MODEL_PATH, studioAccess,
+  aiCache, allowedOrigin, CACHE_TTL_SECONDS, cacheKey, corsHeaders, MAX_BODY_BYTES, MODEL_PATH, studioAccess, studioBlockedResponse,
 } from "@/lib/server/studio";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
@@ -42,6 +42,8 @@ export async function GET(request: Request) {
   // 연결 확인은 허용 목록 밖의 사이트에도 '허용 여부'만 알려 준다(키·데이터는 없음) → 화면이 원인을 정확히 안내할 수 있게
   const headers = origin ? corsHeaders(origin) : { "Access-Control-Allow-Origin": "*" };
   const access = await studioAccess(request);
+  // 코드가 맞는지 알려 주는 주소라 무차별 대입에 쓰일 수 있다 — 막힌 동안은 맞는지 알려 주지 않는다
+  if (access === "blocked") return studioBlockedResponse(headers);
   let keyOk = true;
   try { resolveKey(); } catch { keyOk = false; }
   return json({ ok: access === "ok" && keyOk && !!origin, codeRequired: access !== "off", codeOk: access === "ok", keyOk, originOk: !!origin, origin: request.headers.get("origin") ?? "" }, 200, headers);
@@ -53,6 +55,7 @@ export async function POST(request: Request) {
   const cors = corsHeaders(origin);
 
   const access = await studioAccess(request);
+  if (access === "blocked") return studioBlockedResponse(cors);
   if (access === "off") return err("NO_ACCESS_CODE", "서버에 접근 코드(APP_ACCESS_CODE)를 설정해야 스튜디오 AI 중계를 쓸 수 있습니다.", 403, cors);
   if (access === "bad") return err("UNAUTHORIZED", "접근 코드가 올바르지 않습니다. 상세페이지 스튜디오 설정에서 AI 서버 접근 코드를 확인해 주세요.", 401, cors);
   if (!(await allowAiCall(request))) return err("RATE_LIMITED", "요청이 너무 많습니다. 1분쯤 뒤에 다시 시도해 주세요.", 429, { ...cors, "Retry-After": "60" });

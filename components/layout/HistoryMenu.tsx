@@ -63,6 +63,11 @@ export function HistoryMenu({ log, teamSync }: Props) {
   const confirmRestore = () => {
     if (!pendingRestore || typeof pendingRestore === "string") return;
     const n = restoreBackup(pendingRestore);
+    if (typeof n === "string") {
+      setPendingRestore(null);
+      setNotice({ kind: "error", text: n });
+      return;
+    }
     setNotice({ kind: "ok", text: `${n}개 항목을 되살렸습니다. 화면을 다시 불러옵니다.` });
     window.setTimeout(() => window.location.reload(), 800);
   };

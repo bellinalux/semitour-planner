@@ -7,6 +7,7 @@
  * ⚠ 접근 코드(APP_ACCESS_CODE)가 설정되지 않은 서버에서는 중계를 열지 않는다(아무나 키를 쓰게 되므로).
  */
 import { accessRequired, codeMatches } from "./access";
+import { AUTH_BLOCKED_MESSAGE, AUTH_RETRY_AFTER, authBlocked, authFailed } from "./authThrottle";
 import { workerEnv } from "./cfEnv";
 
 /** 환경변수 STUDIO_ORIGINS(쉼표 구분) — 넣으면 그 사이트들만 허용하는 엄격 모드 */
@@ -37,11 +38,28 @@ export function corsHeaders(origin: string): Record<string, string> {
   };
 }
 
-/** 접근 코드 확인. 서버에 코드가 없으면(잠금 꺼짐) 중계 자체를 막는다 → "off" */
-export async function studioAccess(request: Request): Promise<"ok" | "bad" | "off"> {
+/**
+ * 접근 코드 확인. 서버에 코드가 없으면(잠금 꺼짐) 중계 자체를 막는다 → "off"
+ * 틀린 코드가 잦거나 시도가 너무 많으면 코드를 확인하지 않고 "blocked" (호출한 곳은 429로 돌려준다)
+ * — 다른 사이트에서도 부를 수 있는 주소라 무차별 대입을 여기서 막는다.
+ */
+export async function studioAccess(request: Request): Promise<"ok" | "bad" | "off" | "blocked"> {
   if (!accessRequired()) return "off";
-  const code = request.headers.get("x-studio-code") ?? "";
-  return (await codeMatches(code)) ? "ok" : "bad";
+  const code = (request.headers.get("x-studio-code") ?? "").trim();
+  // 코드 없이 온 요청(연결 확인 등)은 맞혀 보는 시도가 아니므로 세지 않는다
+  if (!code) return "bad";
+  if (await authBlocked(request)) return "blocked";
+  if (await codeMatches(code)) return "ok";
+  await authFailed(request);
+  return "bad";
+}
+
+/** studioAccess가 "blocked"일 때 돌려줄 응답 */
+export function studioBlockedResponse(headers: Record<string, string>): Response {
+  return Response.json(
+    { error: { code: "TOO_MANY_ATTEMPTS", message: AUTH_BLOCKED_MESSAGE } },
+    { status: 429, headers: { ...headers, "Retry-After": AUTH_RETRY_AFTER } },
+  );
 }
 
 /** Gemini 경로: models/모델이름:generateContent | streamGenerateContent 만 허용 */

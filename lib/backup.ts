@@ -44,16 +44,40 @@ export function parseBackup(text: string): BackupFile | string {
   return { app: APP, version: 1, exportedAt: typeof o.exportedAt === "string" ? o.exportedAt : "", data };
 }
 
-/** 백업으로 되살린다 — 지금 브라우저의 세미투어 데이터는 백업 내용으로 바뀐다. 되살린 항목 수 */
-export function restoreBackup(backup: BackupFile): number {
-  const remove: string[] = [];
+/**
+ * 백업으로 되살린다 — 지금 브라우저의 세미투어 데이터는 백업 내용으로 바뀐다.
+ * 저장 공간이 모자라 중간에 실패하면 지금 데이터로 되돌린다(반쯤 지워진 상태로 남지 않게).
+ * 되살린 항목 수, 실패하면 오류 문장.
+ */
+export function restoreBackup(backup: BackupFile): number | string {
+  const before: Record<string, string> = {};
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key?.startsWith(PREFIX) && !(key in backup.data)) remove.push(key);
+    if (!key?.startsWith(PREFIX)) continue;
+    const value = localStorage.getItem(key);
+    if (value !== null) before[key] = value;
   }
-  remove.forEach((k) => localStorage.removeItem(k));
-  for (const [key, value] of Object.entries(backup.data)) localStorage.setItem(key, value);
-  return Object.keys(backup.data).length;
+  try {
+    // 먼저 지우고 쓴다 — 지우는 만큼 공간이 생겨 큰 백업도 들어갈 수 있다
+    for (const key of Object.keys(before)) localStorage.removeItem(key);
+    for (const [key, value] of Object.entries(backup.data)) localStorage.setItem(key, value);
+    return Object.keys(backup.data).length;
+  } catch {
+    rollback(before);
+    return "브라우저 저장 공간이 부족해 백업을 되살리지 못했습니다. 지금 데이터는 그대로 두었습니다.";
+  }
+}
+
+function rollback(before: Record<string, string>) {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(PREFIX)) localStorage.removeItem(key);
+    }
+    for (const [key, value] of Object.entries(before)) localStorage.setItem(key, value);
+  } catch {
+    // 되돌리기도 실패하면 더 할 수 있는 것이 없다 — 원래 내용은 원래 공간에 들어 있었으므로 보통은 일어나지 않는다
+  }
 }
 
 export function backupFileName(): string {

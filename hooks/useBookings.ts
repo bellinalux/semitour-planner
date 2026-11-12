@@ -52,8 +52,15 @@ export function useBookings(author: string) {
     setError(null);
     if (cloud) {
       try {
-        const res = await fetch("/api/bookings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ booking }) });
+        // 이 화면이 마지막으로 본 수정 시각 — 그사이 다른 직원이 고쳤으면 서버가 409로 알려 준다
+        const baseUpdatedAt = list?.find((b) => b.id === booking.id)?.updatedAt ?? "";
+        const res = await fetch("/api/bookings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ booking, baseUpdatedAt }) });
         const data = (await res.json().catch(() => null)) as { booking?: BookingView; error?: { message?: string } } | null;
+        if (res.status === 409 && data?.booking) {
+          const latest = data.booking;
+          setList((prev) => prev?.map((b) => (b.id === latest.id ? latest : b)) ?? prev);
+          return data.error?.message ?? "다른 직원이 먼저 수정했습니다. 최신 내용을 확인해 주세요.";
+        }
         if (!res.ok || !data?.booking) return data?.error?.message ?? "저장하지 못했습니다.";
         const saved = data.booking;
         setList((prev) => (prev?.some((b) => b.id === saved.id) ? prev.map((b) => (b.id === saved.id ? saved : b)) : [saved, ...(prev ?? [])]));
