@@ -5,7 +5,7 @@ import { z } from "zod";
 const cf: { ai: { run: (model: string, input: Record<string, unknown>) => Promise<unknown> } | null } = { ai: null };
 vi.mock("@/lib/server/cfEnv", () => ({ workerEnv: async (name: string) => (name === "AI" ? cf.ai : null) }));
 
-import { providerStatus, resetProviderStates, withAiInfo } from "@/lib/server/aiProviders";
+import { providerStatus, resetModelCaches, resetProviderStates, withAiInfo } from "@/lib/server/aiProviders";
 import { generateGroundedText, generateJson, GeminiError } from "@/lib/server/gemini";
 
 const schema = z.object({ city: z.string(), days: z.number() });
@@ -18,10 +18,13 @@ const gemini402 = () => json({ error: { message: "Your prepayment credits are de
 const groqOk = (content: string, extra: Record<string, unknown> = {}) => json({ choices: [{ message: { content, ...extra }, finish_reason: "stop" }] });
 
 let calls: { url: string; body: Record<string, unknown> }[] = [];
+/** Groq 계정의 모델 목록 (앱이 쓸 수 있는 모델을 조회해 고른다) */
+let groqModelIds = ["openai/gpt-oss-120b", "groq/compound", "meta-llama/llama-4-scout-17b-16e-instruct"];
 function mockFetch(handler: (url: string, body: Record<string, unknown>) => Response) {
   calls = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
+    if (url.endsWith("/openai/v1/models")) return json({ data: groqModelIds.map((id) => ({ id, active: true })) });
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
     calls.push({ url, body });
     return handler(url, body);
@@ -30,6 +33,8 @@ function mockFetch(handler: (url: string, body: Record<string, unknown>) => Resp
 
 beforeEach(() => {
   resetProviderStates();
+  resetModelCaches();
+  groqModelIds = ["openai/gpt-oss-120b", "groq/compound", "meta-llama/llama-4-scout-17b-16e-instruct"];
   cf.ai = null;
   process.env.GEMINI_API_KEY = "g-key";
   process.env.GROQ_API_KEY = "groq-key";
@@ -186,7 +191,7 @@ describe("Gemini 붐빔(503)", () => {
     mockFetch(() => json({ error: { message: "high demand" } }, 503));
     const p = generateJson({ system: "s", user: "u", schema }).catch((e: unknown) => e);
     await vi.runAllTimersAsync();
-    expect(((await p) as GeminiError).message).toContain("붐벼");
+    expect(((await p) as GeminiError).message).toContain("서버 붐빔");
     vi.useRealTimers();
   });
 });
@@ -202,5 +207,75 @@ describe("Gemini 다른 모델로 한 번 더", () => {
     await vi.runAllTimersAsync();
     expect(await p).toEqual({ city: "i", days: 4 });
     vi.useRealTimers();
+  });
+});
+
+describe("Groq 모델 자동 선택 (무료 등급 모델이 바뀜)", () => {
+  it("검색 모델(compound)이 계정에 없으면 일반 모델로 답하고 웹 근거 없음으로 표시", async () => {
+    groqModelIds = ["openai/gpt-oss-20b"];
+    mockFetch((url) => (url.includes("googleapis") ? gemini402() : groqOk("아마 5만원 (추정)")));
+    const r = await generateGroundedText({ user: "입장료 조사" });
+    expect(r.searched).toBe(false);
+    const groqCall = calls.find((c) => c.url.includes("chat/completions"))!;
+    expect(groqCall.body.model).toBe("openai/gpt-oss-20b");
+  });
+
+  it("모델이 없어졌다는 404가 나면 목록을 새로 받아 다른 모델로 한 번 더", async () => {
+    let n = 0;
+    mockFetch((url, body) => {
+      if (url.includes("googleapis")) return gemini402();
+      if (body.model === "openai/gpt-oss-120b") {
+        n++;
+        groqModelIds = ["qwen/qwen3-32b"];
+        return json({ error: { message: "The model `openai/gpt-oss-120b` does not exist or you do not have access to it." } }, 404);
+      }
+      return groqOk('{"city":"q","days":1}');
+    });
+    expect(await generateJson({ system: "s", user: "u", schema })).toEqual({ city: "q", days: 1 });
+    expect(n).toBe(1);
+  });
+
+  it("검색 모델이 없어도 Tavily 키가 있으면 검색 결과를 근거로 조사 (출처 포함)", async () => {
+    groqModelIds = ["openai/gpt-oss-120b"];
+    process.env.TAVILY_API_KEY = "tvly-test-key";
+    mockFetch((url) => {
+      if (url.includes("googleapis")) return gemini402();
+      if (url.includes("tavily")) return json({ results: [{ title: "오사카성 공식", url: "https://osaka.example", content: "입장료 600엔" }] });
+      return groqOk("입장료 600엔");
+    });
+    const r = await generateGroundedText({ user: "Google 검색 도구를 여러 번 사용해서, 오사카성 입장료를 조사해 주세요." });
+    expect(r).toMatchObject({ searched: true, sources: [{ title: "오사카성 공식", url: "https://osaka.example" }] });
+    const tav = calls.find((c) => c.url.includes("tavily"))!;
+    expect(String(tav.body.query)).toBe("오사카성 입장료를");
+    expect(JSON.stringify(calls.find((c) => c.url.includes("chat/completions"))!.body)).toContain("search_results");
+  });
+});
+
+describe("OpenRouter 무료 모델", () => {
+  it("Gemini·Groq가 안 되면 OpenRouter 무료 모델이 이어 받는다", async () => {
+    delete process.env.GROQ_API_KEY;
+    process.env.OPENROUTER_API_KEY = "sk-or-test-key";
+    mockFetch((url) => {
+      if (url.includes("googleapis")) return gemini402();
+      if (url.endsWith("openrouter.ai/api/v1/models")) return json({ data: [{ id: "paid/model", context_length: 128000, pricing: { prompt: "0.1", completion: "0.1" } }, { id: "qwen/qwen3-235b-a22b:free", context_length: 40000, pricing: { prompt: "0", completion: "0" } }] });
+      return groqOk('{"city":"or","days":2}');
+    });
+    const res = await withAiInfo(async () => Response.json(await generateJson({ system: "s", user: "u", schema })))();
+    expect(await res.json()).toEqual({ city: "or", days: 2 });
+    expect(res.headers.get("x-ai-provider")).toBe("openrouter");
+    expect(calls.find((c) => c.url.includes("openrouter.ai/api/v1/chat"))!.body.model).toBe("qwen/qwen3-235b-a22b:free");
+  });
+});
+
+describe("Cloudflare 문맥 한도", () => {
+  it("긴 입력이면 답 길이를 줄이고, 그래도 넘치면 입력 가운데를 줄인다", async () => {
+    const { fitToContext } = await import("@/lib/server/aiProviders");
+    const short = fitToContext([{ role: "user", content: "가".repeat(1000) }], 24_000);
+    expect(short.maxTokens).toBe(8192);
+    const long = fitToContext([{ role: "system", content: "규칙" }, { role: "user", content: "가".repeat(40_000) }], 24_000);
+    const total = long.messages.reduce((s, m) => s + m.content.length, 0);
+    expect(total).toBeLessThan(40_000);
+    expect(long.messages[1].content).toContain("길어서 줄임");
+    expect(long.maxTokens).toBeGreaterThanOrEqual(1024);
   });
 });

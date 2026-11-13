@@ -10,9 +10,9 @@ import { readSecret } from "./external";
 import { getKv } from "./planStore";
 import { workspaceId } from "./access";
 
-export type AiSettingName = "GEMINI_API_KEY" | "GROQ_API_KEY" | "GEMINI_MODEL" | "AI_PROVIDERS";
-const SECRET_NAMES = new Set<AiSettingName>(["GEMINI_API_KEY", "GROQ_API_KEY"]);
-export const AI_SETTING_NAMES: AiSettingName[] = ["GEMINI_API_KEY", "GROQ_API_KEY", "GEMINI_MODEL", "AI_PROVIDERS"];
+export type AiSettingName = "GEMINI_API_KEY" | "GROQ_API_KEY" | "OPENROUTER_API_KEY" | "TAVILY_API_KEY" | "GEMINI_MODEL" | "AI_PROVIDERS";
+const SECRET_NAMES = new Set<AiSettingName>(["GEMINI_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY", "TAVILY_API_KEY"]);
+export const AI_SETTING_NAMES: AiSettingName[] = ["GEMINI_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY", "TAVILY_API_KEY", "GEMINI_MODEL", "AI_PROVIDERS"];
 
 interface Sealed {
   iv: string;

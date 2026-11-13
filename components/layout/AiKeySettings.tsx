@@ -5,8 +5,10 @@ import { useRef, useState } from "react";
 import { useSession } from "@/components/SessionContext";
 import { buttonClass, fieldClass, when } from "./account/shared";
 
-type Provider = "gemini" | "groq" | "cloudflare";
-type SettingName = "GEMINI_API_KEY" | "GROQ_API_KEY" | "GEMINI_MODEL" | "AI_PROVIDERS";
+type Provider = "gemini" | "groq" | "openrouter" | "cloudflare" | "tavily";
+type KeyProvider = "gemini" | "groq" | "openrouter" | "tavily";
+type SettingName = "GEMINI_API_KEY" | "GROQ_API_KEY" | "OPENROUTER_API_KEY" | "TAVILY_API_KEY" | "GEMINI_MODEL" | "AI_PROVIDERS";
+type KeyName = "GEMINI_API_KEY" | "GROQ_API_KEY" | "OPENROUTER_API_KEY" | "TAVILY_API_KEY";
 
 interface SettingView {
   app: boolean;
@@ -32,7 +34,9 @@ interface View {
     order: Provider[];
     gemini: ProviderState & { key: boolean };
     groq: ProviderState & { key: boolean; model: string; searchModel: string };
+    openrouter?: ProviderState & { key: boolean; model: string };
     cloudflare: ProviderState & { binding: boolean; model: string };
+    tavily?: { key: boolean };
   };
 }
 interface TestResult {
@@ -47,12 +51,14 @@ const MODELS = [
   { id: "gemini-flash-latest", label: "Flash 최신 (품질 ↑ · 무료 한도 적음)" },
 ];
 const ORDERS = [
-  { id: "gemini,groq,cloudflare", label: "Gemini → Groq → Cloudflare AI (권장)" },
-  { id: "groq,gemini,cloudflare", label: "Groq → Gemini → Cloudflare AI" },
-  { id: "gemini,cloudflare", label: "Gemini → Cloudflare AI (Groq 안 씀)" },
+  { id: "gemini,groq,openrouter,cloudflare", label: "Gemini → Groq → OpenRouter → Cloudflare AI (권장)" },
+  { id: "groq,gemini,openrouter,cloudflare", label: "Groq → Gemini → OpenRouter → Cloudflare AI" },
+  { id: "groq,openrouter,cloudflare,gemini", label: "무료 먼저: Groq → OpenRouter → Cloudflare → Gemini" },
+  { id: "gemini,cloudflare", label: "Gemini → Cloudflare AI" },
   { id: "gemini", label: "Gemini만" },
 ];
-const LABEL: Record<Provider, string> = { gemini: "Gemini", groq: "Groq", cloudflare: "Cloudflare AI" };
+const LABEL: Record<Provider, string> = { gemini: "Gemini", groq: "Groq", openrouter: "OpenRouter", cloudflare: "Cloudflare AI", tavily: "Tavily 검색" };
+const EMPTY_DRAFT: Record<KeyProvider, string> = { gemini: "", groq: "", openrouter: "", tavily: "" };
 
 async function call<T>(method: string, body?: unknown): Promise<T> {
   const res = await fetch("/api/ai-settings", { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -90,7 +96,7 @@ export function AiKeySettings() {
   const session = useSession();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [view, setView] = useState<View | null>(null);
-  const [draft, setDraft] = useState<{ gemini: string; groq: string }>({ gemini: "", groq: "" });
+  const [draft, setDraft] = useState<Record<KeyProvider, string>>(EMPTY_DRAFT);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [tests, setTests] = useState<Partial<Record<Provider, TestResult>>>({});
@@ -107,7 +113,7 @@ export function AiKeySettings() {
   const open = () => {
     setMessage(null);
     setTests({});
-    setDraft({ gemini: "", groq: "" });
+    setDraft(EMPTY_DRAFT);
     dialogRef.current?.showModal();
     void load();
   };
@@ -118,7 +124,7 @@ export function AiKeySettings() {
     try {
       setView(await call<View>("PUT", patch));
       setMessage({ kind: "ok", text: done });
-      setDraft({ gemini: "", groq: "" });
+      setDraft(EMPTY_DRAFT);
     } catch (e) {
       setMessage({ kind: "error", text: e instanceof Error ? e.message : "저장하지 못했습니다." });
     } finally {
@@ -161,7 +167,7 @@ export function AiKeySettings() {
     );
   };
 
-  const keyBlock = (p: "gemini" | "groq", name: "GEMINI_API_KEY" | "GROQ_API_KEY", link: string, linkText: string) => {
+  const keyBlock = (p: KeyProvider, name: KeyName, link: string, linkText: string) => {
     const s = view?.settings[name];
     return (
       <div className="flex flex-wrap items-center gap-1.5">
@@ -198,7 +204,7 @@ export function AiKeySettings() {
   };
 
   const modelSetting = view?.settings.GEMINI_MODEL;
-  const orderNow = view?.status.order.join(",") ?? "gemini,groq,cloudflare";
+  const orderNow = view?.status.order.join(",") ?? "gemini,groq,openrouter,cloudflare";
 
   return (
     <>
@@ -303,9 +309,25 @@ export function AiKeySettings() {
                   {testLine("groq")}
                 </section>
 
+                <section aria-label="OpenRouter" className="space-y-1.5 rounded-lg border border-slate-200 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-xs font-semibold text-slate-900">③ OpenRouter 무료 모델 (대체)</h3>
+                    <div className="flex items-center gap-1.5">
+                      <Source s={view.settings.OPENROUTER_API_KEY} />
+                      {testButton("openrouter")}
+                    </div>
+                  </div>
+                  {keyBlock("openrouter", "OPENROUTER_API_KEY", "https://openrouter.ai/settings/keys", "무료 키 받기")}
+                  <p className="text-[10.5px] leading-4 text-slate-500">
+                    무료(:free) 모델 중 쓸 수 있는 것을 자동으로 고릅니다{view.status.openrouter?.model ? ` (지금 ${view.status.openrouter.model})` : ""}. 무료는 하루 50회, $10 한 번 충전하면 하루 1,000회.
+                  </p>
+                  {view.status.openrouter && <StateLine st={view.status.openrouter} />}
+                  {testLine("openrouter")}
+                </section>
+
                 <section aria-label="Cloudflare AI" className="space-y-1.5 rounded-lg border border-slate-200 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-xs font-semibold text-slate-900">③ Cloudflare AI (마지막 대체)</h3>
+                    <h3 className="text-xs font-semibold text-slate-900">④ Cloudflare AI (마지막 대체)</h3>
                     <div className="flex items-center gap-1.5">
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${view.status.cloudflare.binding ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                         {view.status.cloudflare.binding ? "연결됨 (키 불필요)" : "연결 없음"}
@@ -318,6 +340,21 @@ export function AiKeySettings() {
                   </p>
                   <StateLine st={view.status.cloudflare} />
                   {testLine("cloudflare")}
+                </section>
+
+                <section aria-label="Tavily 검색" className="space-y-1.5 rounded-lg border border-slate-200 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-xs font-semibold text-slate-900">웹 검색 (Tavily) — Gemini 없이 시세·입장료 조사</h3>
+                    <div className="flex items-center gap-1.5">
+                      <Source s={view.settings.TAVILY_API_KEY} />
+                      {testButton("tavily")}
+                    </div>
+                  </div>
+                  {keyBlock("tavily", "TAVILY_API_KEY", "https://app.tavily.com/home", "무료 키 받기")}
+                  <p className="text-[10.5px] leading-4 text-slate-500">
+                    Gemini를 못 쓸 때 Groq·OpenRouter·Cloudflare가 이 검색 결과를 근거로 조사합니다(출처 표시). 없으면 대체 AI는 &quot;웹 근거 없음(추정)&quot;으로 답합니다. 무료 월 사용량이 있습니다.
+                  </p>
+                  {testLine("tavily")}
                 </section>
 
                 <section aria-label="사용 순서" className="space-y-1.5">
