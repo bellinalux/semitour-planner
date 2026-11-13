@@ -198,6 +198,9 @@ const base = (id: string, type: ItineraryItem["type"], name: string, description
 const ROUTINE = /체크\s*인|체크\s*아웃|check[- ]?(in|out)|공항|airport|출국|입국|탑승/i;
 function contentItems(day: DayPlan | undefined): ItineraryItem[] {
   if (!day) return [];
+  // AI가 도착일·출국일을 비워 보내면 "전일 자유일정"(8시간)으로 바뀌어 오는데, 항공일에는 넣지 않는다
+  // (넣으면 일정이 없는 것처럼 보이고 빈 시간 채우기도 감지하지 못한다)
+  if (day.rest === "free") return [];
   const all = day.kind === "linear" ? day.items : [...day.amGuided, ...(day.pmFreeOptions[0]?.items ?? [])];
   return all.filter((i) => i.type !== "flight" && !(["hotel", "transfer"].includes(i.type ?? "") && ROUTINE.test(i.name)) && !(i.type === "free_time" && ROUTINE.test(i.name)));
 }
@@ -389,4 +392,33 @@ export function pickFlightForCourse(flights: FlightOption[], input: Pick<TripInp
     return (f.stops > 0 ? 120 : 0) + (f.returnStops > 0 ? 120 : 0) + Math.abs(arrive - 10.5 * 60) / 2 + backDist / 2 + pricePenalty;
   };
   return [...usable].sort((a, b) => score(a) - score(b))[0];
+}
+
+// ── 코스를 만든 뒤 도착일·출국일 빈 시간 자동 채우기 ─────────────────────
+
+export interface FlightDayGap {
+  /** 0부터 */
+  index: number;
+  kind: "arrival" | "departure";
+  freeMinutes: number;
+  fromTime: string;
+}
+
+/**
+ * 항공 포함 일정에서 도착일 오후·출국일 공항 가기 전의 빈 시간 (2시간 30분 이상).
+ * AI가 지시대로 채우지 않았을 때 코스를 만든 직후 자동으로 채우는 데 쓴다.
+ */
+export function flightDayGaps(days: DayPlan[], arrivalGap: (d: DayPlan) => { freeMinutes: number; fromTime: string } | null): FlightDayGap[] {
+  const out: FlightDayGap[] = [];
+  const first = days[0];
+  if (first && first.kind === "linear" && first.items[0]?.type === "flight") {
+    const g = arrivalGap(first);
+    if (g) out.push({ index: 0, kind: "arrival", ...g });
+  }
+  const lastIdx = days.length - 1;
+  if (lastIdx > 0) {
+    const g = departureGap(days[lastIdx]);
+    if (g) out.push({ index: lastIdx, kind: "departure", freeMinutes: g.freeMinutes, fromTime: g.fromTime });
+  }
+  return out;
 }

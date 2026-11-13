@@ -96,6 +96,8 @@ interface GeminiResponse {
       webSearchQueries?: string[];
       groundingChunks?: { web?: { uri?: string; title?: string } }[];
     };
+    /** URL 읽기(urlContext) 결과 */
+    urlContextMetadata?: { urlMetadata?: { retrievedUrl?: string; urlRetrievalStatus?: string }[] };
   }[];
   promptFeedback?: { blockReason?: string };
   error?: { message?: string };
@@ -242,7 +244,8 @@ function readCandidate(data: GeminiResponse): { text: string; truncated: boolean
 /** 모델이 실제로 웹 검색을 실행했는지 (검색 도구를 켜도 모델이 검색하지 않고 기억으로 답할 수 있다) */
 function didSearch(data: GeminiResponse): boolean {
   const gm = data.candidates?.[0]?.groundingMetadata;
-  return (gm?.webSearchQueries?.length ?? 0) > 0 || (gm?.groundingChunks?.length ?? 0) > 0;
+  const urls = data.candidates?.[0]?.urlContextMetadata?.urlMetadata ?? [];
+  return (gm?.webSearchQueries?.length ?? 0) > 0 || (gm?.groundingChunks?.length ?? 0) > 0 || urls.some((u) => /SUCCESS/i.test(u.urlRetrievalStatus ?? ""));
 }
 
 /** 검색 근거 응답에서 출처(제목, 링크)를 뽑는다. 같은 사이트는 한 번만 담는다. */
@@ -355,8 +358,11 @@ async function geminiGrounded({
   temperature = 0.2,
   timeoutMs = 100_000,
   fast = false,
+  urls = [],
 }: {
   user: string;
+  /** 직접 읽을 링크 (Gemini URL 읽기 도구) */
+  urls?: string[];
   temperature?: number;
   timeoutMs?: number;
   /** 빠른 모드: 생각 단계 low + 짧은 메모 (시세·요금 조회용) */
@@ -374,7 +380,7 @@ async function geminiGrounded({
     const result = await callWithThinkingFallback(
       {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        tools: [{ googleSearch: {} }],
+        tools: urls.length > 0 ? [{ googleSearch: {} }, { urlContext: {} }] : [{ googleSearch: {} }],
         generationConfig: withThinking({ temperature, maxOutputTokens: 32768 }, fast),
       },
       timeoutMs,
@@ -545,8 +551,10 @@ export async function generateGroundedText(o: {
   timeoutMs?: number;
   /** 빠른 모드: 생각 단계 low + 짧은 메모 (시세·요금 조회용) */
   fast?: boolean;
+  /** 직접 읽을 링크 — Gemini는 URL 읽기 도구로, 대체 AI는 프롬프트의 링크로 */
+  urls?: string[];
 }): Promise<{ text: string; sources: GroundingSource[]; searched: boolean }> {
-  const opts = { user: o.user, temperature: o.temperature ?? 0.2, timeoutMs: o.timeoutMs ?? 100_000, fast: o.fast ?? false };
+  const opts = { user: o.user, temperature: o.temperature ?? 0.2, timeoutMs: o.timeoutMs ?? 100_000, fast: o.fast ?? false, urls: o.urls ?? [] };
   return withProviders((p) => (p === "gemini" ? geminiGrounded(opts) : chatGrounded(p, opts)));
 }
 

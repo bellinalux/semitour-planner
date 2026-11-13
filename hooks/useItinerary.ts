@@ -5,9 +5,11 @@ import { useCallback, useRef, useState } from "react";
 import { postJson } from "@/lib/api";
 import { itineraryBudgetNote } from "@/lib/autoBuild";
 import { appendDay, defaultPmChoice, mapDayItems, moveItem, relocateItem, reorderItems, type PmChoice } from "@/lib/itinerary";
-import { flightDaysRequest, flightTimesFor, insertBeforeAirport, returnBlockStart, withFlightDays } from "@/lib/flightPlan";
+import { flightDayGaps, flightDaysRequest, flightTimesFor, insertBeforeAirport, returnBlockStart, withFlightDays } from "@/lib/flightPlan";
+import { calcDayGap } from "@/lib/dayLoad";
+import type { DayFillResponse } from "@/lib/schemas/dayFill";
 import { applyFlightWithMeals } from "@/lib/flightApply";
-import { insertItem, insertItems } from "@/lib/tourItem";
+import { dayFillToItem, insertItem, insertItems } from "@/lib/tourItem";
 import type { CourseFile } from "@/lib/courseFile";
 import type { ParsedSupplierQuote } from "@/lib/schemas/course";
 import { tidyDay, tidyDays } from "@/lib/dayTidy";
@@ -58,6 +60,40 @@ export interface GeneratedItinerary {
   knowledge?: KnowledgeUse[];
   /** 붙여넣은 업체 견적서에서 읽은 금액 (원문 통화). 요금이 없으면 null */
   supplierQuote: ParsedSupplierQuote | null;
+}
+
+/** 도착일·출국일 빈 시간을 웹 추천 일정(/api/suggest-day-fill)으로 채운다. 실패하면 그대로 (일정 카드의 채우기 버튼이 남는다) */
+async function fillFlightDayGaps(days: DayPlan[], input: TripInput, signal: AbortSignal): Promise<DayPlan[]> {
+  const gaps = flightDayGaps(days, (d) => calcDayGap(d, {}, false));
+  if (gaps.length === 0) return days;
+  const results = await Promise.all(
+    gaps.map(async (g) => {
+      const day = days[g.index];
+      try {
+        const r = await postJson<DayFillResponse>(
+          "/api/suggest-day-fill",
+          {
+            destination: input.destination.trim(),
+            city: day.overnightCity?.trim() || days[Math.max(0, g.index - 1)]?.overnightCity?.trim() || undefined,
+            currency: input.currency,
+            tripScope: input.tripScope,
+            existingNames: days.flatMap((d) => d.items.map((i) => i.name)).slice(0, 30),
+            freeMinutes: Math.min(720, Math.max(60, g.freeMinutes - (g.kind === "departure" ? 30 : 0))),
+            fromTime: g.fromTime,
+          },
+          signal,
+        );
+        return { g, items: r.suggestions.map((s, k) => dayFillToItem(s, k === r.suggestions.length - 1)) };
+      } catch {
+        return { g, items: [] as ItineraryItem[] };
+      }
+    }),
+  );
+  return days.map((d, i) => {
+    const hit = results.find((x) => x.g.index === i && x.items.length > 0);
+    if (!hit) return d;
+    return hit.g.kind === "departure" ? insertBeforeAirport(d, hit.items) : insertItems(d, "day", hit.items);
+  });
 }
 
 /** AI 일정에 항공·공항·체크인/아웃을 붙이고, 고른 항공편이 있으면 편명·실제 시각까지 반영한다 */
@@ -157,7 +193,12 @@ export function useItinerary() {
       const raw = await requestItinerary(input, courseFile, controller.signal);
       // 늦은 식사·같은 식사 두 줄·업체 코스의 지나치게 긴 도보 구역을 바로 다듬는다 (되돌리기는 일정 카드의 경고에서 다시 맞추기)
       // AI 일정은 패키지 규칙의 미팅 시각으로 (프리미엄·시니어 09:00 등) — 그 시각으로 식사 시간대도 맞춘다
-      const finished = finishCourse(raw.days, input);
+      let finished = finishCourse(raw.days, input);
+      // 항공 포함 AI 코스: 도착일 오후·출국일 공항 대기가 비어 있으면(AI가 비워 보냄) 추천 일정으로 바로 채운다
+      if (input.mode === "ai" && flightTimesFor(input)) {
+        const filled = await fillFlightDayGaps(finished.days, input, controller.signal);
+        if (filled !== finished.days) finished = { ...finished, days: tidyDays(filled) };
+      }
       const fit = { changes: finished.changes };
       const result = { ...raw, days: finished.days };
       const choice = defaultPmChoice(result.days);
