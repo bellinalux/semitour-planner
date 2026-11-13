@@ -1,6 +1,7 @@
 import { researchSchema, type ResearchResult } from "@/lib/knowledge";
 import type { Companion, TravelType, TripScope } from "@/types";
 import { generateGroundedText, generateJson, type GroundingSource } from "./gemini";
+import { wikiNearby } from "./freeData";
 
 const SEGMENT_KO: Record<Companion, string> = { senior: "부모님·시니어", kids: "아이 동반 가족", infant: "영유아 동반", couple: "커플·신혼", friends: "친구", group: "단체" };
 
@@ -11,6 +12,8 @@ const SEGMENT_KO: Record<Companion, string> = { senior: "부모님·시니어", 
 export async function researchCity(o: { city: string; travelType: TravelType; tripScope: TripScope; companions: Companion[] }): Promise<{ result: ResearchResult; sources: GroundingSource[]; searched: boolean }> {
   const who = o.tripScope === "domestic" ? "한국을 찾는 외국인 관광객" : "한국인 여행자";
   const segs = o.companions.length > 0 ? o.companions.map((c) => SEGMENT_KO[c]).join(", ") : "가족·커플·시니어";
+  // 무료 위키백과 주변 명소 목록 — 웹 검색이 없는 대체 AI도 실제 이름을 근거로 정리하게 참고로 붙인다
+  const wiki = await wikiNearby(o.city).catch(() => [] as string[]);
   const memo = await generateGroundedText({
     user: [
       `Google 검색 도구를 여러 번 사용해서 ${o.city} 여행을 조사해 주세요. 대상: ${who}.`,
@@ -20,6 +23,7 @@ export async function researchCity(o: { city: string; travelType: TravelType; tr
         : "2. 국내 여행사(하나투어·모두투어·노랑풍선·참좋은여행·인터파크·마이리얼트립 등) 상품 일정에 공통으로 들어가는 장소와 인기 하루 코스, 각 코스를 파는 여행사 이름.",
       `3. 여행자 유형별(${segs}, 그리고 공통) 좋아하는 것·피하고 싶어하는 것·일정 짤 때 챙길 것.`,
       `여행 유형 참고: ${o.travelType}. 후기 원문을 길게 옮기지 말고 짧게 요약하세요. 확인하지 못한 것은 쓰지 마세요.`,
+      ...(wiki.length ? [`참고 — 위키백과에 등록된 ${o.city} 주변 문서(관광지가 아닌 것도 섞여 있음): ${wiki.join(", ")}`] : []),
     ].join("\n"),
     timeoutMs: 110_000,
   });

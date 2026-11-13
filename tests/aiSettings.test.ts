@@ -73,7 +73,7 @@ describe("AI 키 설정 (앱 안)", () => {
       status: { order: string[] };
     };
     expect(ok.effectiveModel).toBe("gemini-flash-latest");
-    expect(ok.status.order).toEqual(["groq", "gemini", "cloudflare"]);
+    expect(ok.status.order).toEqual(["groq", "gemini", "openrouter", "cloudflare"]);
     expect((await PUT(req(cookie, "PUT", { AI_PROVIDERS: "openai,gemini" }))).status).toBe(400);
     expect((await PUT(req(cookie, "PUT", { GEMINI_API_KEY: "short" }))).status).toBe(400);
     expect((await PUT(req(cookie, "PUT", { GEMINI_MODEL: "../../x" }))).status).toBe(400);

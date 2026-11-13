@@ -219,13 +219,14 @@ export function PlannerApp() {
     webChecks.clear();
     usp.reset();
     // 코스를 만드는 동안 비어 있는 차량·가이드·숙박·항공 시세를 미리 조회해 둔다 (자동 견적이 캐시에서 바로 받는다)
-    prewarmEstimates(input);
+    const saver = company.aiSaver;
+    if (!saver) prewarmEstimates(input);
     const result = await timed("generate", input.destination.trim(), () => itinerary.generate(input, courseFile));
     if (!result) return null;
     // 업체 견적서는 아래에서 견적서 내용을 넣은 다음에 자동 견적을 건다 (호텔 이름별 시세를 찾도록)
-    if (autoQuote.afterGenerate && !options.fromAutoBuild && !result.supplierQuote) autoQuote.armAfterGenerate();
+    if (!saver && autoQuote.afterGenerate && !options.fromAutoBuild && !result.supplierQuote) autoQuote.armAfterGenerate();
     // 업체 견적서는 아래 '한 번에 검증'에서 시간 검증·코스 점검까지 하므로 따로 걸지 않는다
-    if (courseEngine.autoCheck && !result.supplierQuote) courseEngine.armAfterGenerate();
+    if (!saver && courseEngine.autoCheck && !result.supplierQuote) courseEngine.armAfterGenerate();
 
     // 붙여넣은 코스에서 읽은 기간/도시를 입력 폼에 반영한다 (박수는 코스 원문이 기준이다)
     let nextInput: TripInput = input;
@@ -274,11 +275,11 @@ export function PlannerApp() {
 
     // 타업체 상품을 자동으로 찾아 비교한다 — 자동 견적이 돌면 그쪽에서 찾으므로 그때는 건너뛴다
     const autoQuoteRuns = !options.fromAutoBuild && (autoQuote.afterGenerate || !!result.supplierQuote);
-    if (!options.fromAutoBuild && !autoQuoteRuns) competitorFind.run(nextInput, knownFlight(result.days, nextInput, result.meta));
+    if (!saver && !options.fromAutoBuild && !autoQuoteRuns) competitorFind.run(nextInput, knownFlight(result.days, nextInput, result.meta));
 
     // 일정이 만들어지면 세일즈 포인트도 이어서 생성한다 (실패해도 일정/견적에는 영향 없음)
     const firstQuote = calculateQuote(nextInput, result.days, result.pmChoice);
-    if (firstQuote.ok) {
+    if (firstQuote.ok && !saver) {
       void usp.generate(buildUspRequest(nextInput, result.days, result.pmChoice, firstQuote, result.meta));
     }
     return result.days;
@@ -418,7 +419,7 @@ export function PlannerApp() {
   // 지식 창고 미리 조사 — 여행지를 적으면 그 도시를, 하루 한 번 최근 견적 여행지를 (오래된 것만 실제로 조사)
   usePreResearch({
     destination: input.destination,
-    enabled: input.mode === "ai",
+    enabled: input.mode === "ai" && !company.aiSaver,
     travelType: input.travelType,
     tripScope: input.tripScope,
     companions: input.companions,
@@ -455,7 +456,7 @@ export function PlannerApp() {
 
   // 경쟁 상품 가격 정기 확인 (마지막 확인 7일 뒤 화면을 열면 백그라운드로)
   const competitorWatch = useCompetitorRefresh(input, update);
-  useCompetitorWatch(input, competitorWatch, isReady);
+  useCompetitorWatch(input, competitorWatch, isReady && !company.aiSaver);
 
   // 출발 준비·명단·정산 (상품 이름별 저장)
   const planKey = suggestPlanName(input, meta);

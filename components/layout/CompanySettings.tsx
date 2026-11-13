@@ -14,7 +14,7 @@ const EMPTY_HOLIDAYS: ReadonlySet<string> = new Set();
 
 type FieldKey = Exclude<
   keyof CompanyProfile,
-  "depositRate" | "balanceDueDaysBeforeDeparture" | "useInterimPayment" | "interimPaymentRate" | "interimPaymentDaysBeforeDeparture" | "docColor" | "logo" | "specialTerms" | "cancelPolicy"
+  "depositRate" | "balanceDueDaysBeforeDeparture" | "useInterimPayment" | "interimPaymentRate" | "interimPaymentDaysBeforeDeparture" | "docColor" | "logo" | "specialTerms" | "cancelPolicy" | "aiSaver"
 >;
 
 const DOC_COLORS = [
@@ -393,6 +393,19 @@ export function CompanySettings({ company, storage, save }: Props) {
                   표준약관(계약금 10%이하·잔금 출발 7일전)과 다른 조건이라, 여행계약서에 특약(제6조) 고지 문구가 자동으로 추가됩니다.
                 </p>
               )}
+            </section>
+
+            <section aria-label="AI 절약 모드" className="space-y-1">
+              <label className="flex items-start gap-2 text-xs text-slate-700">
+                <input type="checkbox" checked={draft.aiSaver} onChange={(e) => setDraft((prev) => ({ ...prev, aiSaver: e.target.checked }))} className="mt-0.5" />
+                <span>
+                  <span className="font-semibold text-slate-800">AI 절약 모드</span> — 무료 AI 한도를 아낍니다
+                  <span className="block text-[11px] leading-4 text-slate-500">
+                    코스를 만들 때 함께 돌던 자동 AI 호출(시세 미리 조회, 경쟁 상품 자동 찾기, 코스 점검 자동 실행, 세일즈 포인트 자동 생성, 지식 창고 미리 조사, 경쟁 상품 가격 정기 확인, 생성 후 자동 견적)을 끄고
+                    버튼을 누를 때만 부릅니다. 코스 1개당 AI 호출이 10번 넘게에서 2~3번으로 줄어듭니다. 좌표·날씨·사진은 무료 공개 데이터를 먼저 씁니다.
+                  </span>
+                </span>
+              </label>
             </section>
 
             <section aria-label="취소 및 환불 규정 (회사 기본)" className="space-y-1.5">

@@ -13,6 +13,7 @@ import {
 import { endpoint, modelName, resolveKey } from "./gemini";
 import { cached, DAY } from "./aiCache";
 import { getKv } from "./planStore";
+import { geocodeMany } from "./freeData";
 
 /* ── 요청 형식 ── */
 const openSchema = z.object({ mon: z.string(), tue: z.string(), wed: z.string(), thu: z.string(), fri: z.string(), sat: z.string(), sun: z.string() }).partial();
@@ -60,7 +61,7 @@ export type PlanRequest = z.infer<typeof planRequestSchema>;
 export interface PlaceKnowledge {
   name: string; city: string; mapName?: string; address?: string; lat?: number; lng?: number;
   open?: Partial<Record<DayKey, string>>; lastEntry?: string; typicalStayMin?: number; best?: EnginePlace["best"];
-  reservation?: string; tips?: string[]; uri?: string; source: "gmaps" | "manual"; updatedAt: string;
+  reservation?: string; tips?: string[]; uri?: string; source: "gmaps" | "manual" | "osm"; updatedAt: string;
 }
 const KNOW_TTL = 60 * 60 * 24 * 30;
 const norm = (s: string) => s.toLowerCase().replace(/[\s()[\]·,.'"\-–_/]/g, "");
@@ -145,7 +146,14 @@ export async function locatePlaces(names: string[], city: string, country = ""):
   const list = [...new Set(names.map((n) => n.trim()).filter(Boolean))].slice(0, 10);
   if (!list.length) return [];
   const know = await getKnowledge(list, city);
-  const need = list.filter((n) => know[n]?.lat == null);
+  let need = list.filter((n) => know[n]?.lat == null);
+  // 좌표만 필요하므로 무료 OpenStreetMap을 먼저, 못 찾은 곳만 구글 지도(Gemini)로 — AI 한도를 아낀다
+  if (need.length) {
+    const osm = await geocodeMany(need, [city, country].filter(Boolean).join(", "));
+    const now = new Date().toISOString();
+    await Promise.all([...osm].map(([name, h]) => { know[name] = { name, city, mapName: h.name, lat: h.lat, lng: h.lng, source: "osm", updatedAt: now }; return putKnowledge(know[name]); }));
+    need = need.filter((n) => know[n]?.lat == null);
+  }
   if (need.length) {
     const found = await lookupPlaces(need.map((name) => ({ name })), city, country).catch(() => []);
     await Promise.all(found.map((k) => { know[k.name] = k; return putKnowledge(k); }));
@@ -156,6 +164,12 @@ export async function locatePlaces(names: string[], city: string, country = ""):
 /* ── 공휴일 ── */
 export async function holidays(country: string, year: number): Promise<{ date: string; name: string }[]> {
   const iso = isoForCountry(country); if (!iso) return [];
+  return holidaysByIso(iso, year);
+}
+
+/** 나라 코드(ISO 2자리)로 공휴일 (공개 데이터 Nager.Date, 30일 보관) */
+export async function holidaysByIso(iso: string, year: number): Promise<{ date: string; name: string }[]> {
+  if (!/^[A-Z]{2}$/.test(iso)) return [];
   const store = await kv(); const key = `hol:${iso}:${year}`;
   const cached = store ? await store.get(key) : null;
   if (cached) try { return JSON.parse(cached); } catch { /* 다시 받기 */ }
@@ -238,6 +252,13 @@ export async function planCourse(req: PlanRequest): Promise<PlanResponse> {
     const found = await lookupPlaces(need, req.city, req.country, anchor).catch(() => []);
     looked = found.length;
     await Promise.all(found.map(k => { know[k.name] = k; return putKnowledge(k); }));
+    // 구글 지도(Gemini)로 못 찾은 곳(AI를 못 쓸 때 등)은 무료 OpenStreetMap으로 좌표만이라도
+    const still = need.filter(p => know[p.name]?.lat == null && p.lat == null).map(p => p.name);
+    if (still.length) {
+      const osm = await geocodeMany(still, [req.city, req.country].filter(Boolean).join(", "));
+      const now = new Date().toISOString();
+      await Promise.all([...osm].map(([name, h]) => { know[name] = { ...(know[name] ?? {}), name, city: req.city, mapName: h.name, lat: h.lat, lng: h.lng, source: "osm", updatedAt: now }; return putKnowledge(know[name]); }));
+    }
   }
   const places = req.places.map(p => {
     const k = know[p.name];

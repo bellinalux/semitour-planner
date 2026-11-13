@@ -25,6 +25,7 @@ export const DEFAULT_COMPANY: CompanyProfile = {
   logo: "",
   specialTerms: DEFAULT_SPECIAL_TERM_SETTINGS,
   cancelPolicy: STANDARD_POLICY,
+  aiSaver: false,
 };
 
 /** 저장된 값을 현재 형태로 맞춘다. 없는 키는 기본값으로 채운다. */
@@ -62,6 +63,7 @@ export function normalizeCompany(saved: unknown): CompanyProfile {
     logo: isPhotoData(s.logo, 40_000) ? s.logo : "",
     specialTerms: normalizeSpecialTermSettings(s.specialTerms),
     cancelPolicy: normalizeCancelPolicy(s.cancelPolicy),
+    aiSaver: s.aiSaver === true,
   };
 }
 

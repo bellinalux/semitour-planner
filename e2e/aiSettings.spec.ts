@@ -11,7 +11,9 @@ test("더보기 → AI 키 설정: 업체별 상태와 연결 시험", async ({ 
   await expect(dialog.getByRole("region", { name: "Gemini" })).toBeVisible();
   await expect(dialog.getByRole("region", { name: "Groq" })).toBeVisible();
   await expect(dialog.getByLabel("Gemini 모델")).toHaveValue("gemini-flash-lite-latest");
-  await expect(dialog.getByLabel("AI 사용 순서")).toHaveValue("gemini,groq,cloudflare");
+  await expect(dialog.getByLabel("AI 사용 순서")).toHaveValue("gemini,groq,openrouter,cloudflare");
+  await expect(dialog.getByRole("region", { name: "OpenRouter" })).toBeVisible();
+  await expect(dialog.getByRole("region", { name: "Tavily 검색" })).toBeVisible();
   // 로컬(접속 코드 없음)에서는 앱에 저장할 수 없다고 알린다
   await expect(dialog.getByText("앱에서 키를 저장할 수 없습니다")).toBeVisible();
   // Cloudflare AI는 로컬에 연결이 없다 — 연결 시험 결과가 그렇게 나온다

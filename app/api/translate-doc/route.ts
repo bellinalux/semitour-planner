@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { cached, DAY } from "@/lib/server/aiCache";
 import { GeminiError, generateJson } from "@/lib/server/gemini";
+import { m2mTranslate } from "@/lib/server/freeData";
 import { guardRequest } from "@/lib/server/guard";
 import { withAiInfo } from "@/lib/server/aiProviders";
 
@@ -59,10 +60,18 @@ async function handlePost(request: Request) {
       },
       (r) => r !== null,
     );
-    if (!result) return errorResponse("BAD_OUTPUT", "번역 결과 개수가 맞지 않습니다. 다시 시도해 주세요.", 502);
+    if (!result) {
+      const m2m = await m2mTranslate(texts, lang);
+      return m2m ? Response.json({ translations: m2m, engine: "m2m100" }) : errorResponse("BAD_OUTPUT", "번역 결과 개수가 맞지 않습니다. 다시 시도해 주세요.", 502);
+    }
     return Response.json({ translations: result });
   } catch (err) {
-    if (err instanceof GeminiError) return errorResponse(err.code, err.message, err.status);
+    // AI를 모두 못 쓰면 Cloudflare 번역 전용 모델(무료 사용량 안)로 — 품질은 낮을 수 있다
+    if (err instanceof GeminiError) {
+      const m2m = await m2mTranslate(texts, lang);
+      if (m2m) return Response.json({ translations: m2m, engine: "m2m100" }, { headers: { "X-AI-Provider": "cloudflare", "X-AI-Fallback": encodeURIComponent("AI를 쓸 수 없어 번역 전용 모델로 번역했습니다") } });
+      return errorResponse(err.code, err.message, err.status);
+    }
     console.error("[translate-doc]", err);
     return errorResponse("INTERNAL", "번역 중 오류가 발생했습니다.", 500);
   }

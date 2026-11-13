@@ -477,6 +477,11 @@ export interface CompanyProfile {
   specialTerms: SpecialTermSettings;
   /** 취소 및 환불 규정 기본값 (표준약관 또는 특별약관 구간, lib/cancelPolicy.ts) */
   cancelPolicy: CancelPolicy;
+  /**
+   * AI 절약 모드 — 자동으로 도는 AI 호출(미리 조회·경쟁 상품 자동 찾기·코스 점검 자동·세일즈 포인트 자동·
+   * 지식 창고 미리 조사·경쟁 상품 정기 확인·생성 후 자동 견적)을 끄고 버튼을 누를 때만 부른다. 무료 한도를 아낀다.
+   */
+  aiSaver: boolean;
 }
 
 export type RequestStatus = "idle" | "loading" | "error" | "success";
