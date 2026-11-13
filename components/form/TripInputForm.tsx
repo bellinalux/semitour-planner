@@ -12,12 +12,13 @@ import { PriceSection } from "./PriceSection";
 import { SalesSetupSection } from "./SalesSetupSection";
 import type { SettingsFocus } from "./settingsFocus";
 import { TripBasicsSection } from "./TripBasicsSection";
+import { ProductLinkImport } from "./ProductLinkImport";
 
 interface Props {
   input: TripInput;
   onChange: (patch: Partial<TripInput>) => void;
   onReset: () => void;
-  onGenerate: () => void;
+  onGenerate: (options?: { override?: Partial<TripInput> }) => void;
   /** 자동 구성 (코스·숙소·차량·견적·투어 한 번에) */
   onAutoBuild: () => void;
   autoBuilding: boolean;
@@ -62,7 +63,7 @@ export function TripInputForm({
   const isPaste = input.mode === "paste";
   const canGenerate = isPaste
     ? input.courseText.trim().length >= 20 || courseFile !== null
-    : input.destination.trim().length > 0 && input.days >= (input.includesFlights ? 3 : 1) && input.travelers >= 1;
+    : input.destination.trim().length > 0 && input.days >= (input.includesFlights ? 2 : 1) && input.travelers >= 1;
   const signal = (s: SettingsFocus["section"]) => (focus?.section === s ? focus.n : undefined);
   // 초기화는 입력값을 모두 지워 되돌릴 수 없으므로 한 번 더 확인한다
   const [confirmReset, setConfirmReset] = useState(false);
@@ -91,6 +92,14 @@ export function TripInputForm({
       }}
     >
       <div className="flex-1 space-y-3 p-4">
+        <ProductLinkImport
+          input={input}
+          onApply={(patch, generate) => {
+            onChange(patch);
+            // 화면 상태가 바뀌기 전이라 바뀐 값을 함께 넘겨 바로 만든다
+            if (generate && !busy) onGenerate({ override: patch });
+          }}
+        />
         {!isPaste && <OneLineRequest input={input} onChange={onChange} />}
         <div className="flex items-center justify-end gap-1 text-[11px]">
           <span className="mr-auto px-1 font-semibold text-slate-500">입력 폴더</span>
