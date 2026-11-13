@@ -11,6 +11,7 @@ test("더보기 → AI 키 설정: 업체별 상태와 연결 시험", async ({ 
   await expect(dialog.getByRole("region", { name: "Gemini" })).toBeVisible();
   await expect(dialog.getByRole("region", { name: "Groq" })).toBeVisible();
   await expect(dialog.getByLabel("Gemini 모델")).toHaveValue("gemini-flash-lite-latest");
+  await expect(dialog.getByLabel("Gemini 예비 API 키")).toBeVisible();
   await expect(dialog.getByLabel("AI 사용 순서")).toHaveValue("gemini,groq,openrouter,cloudflare");
   await expect(dialog.getByRole("region", { name: "OpenRouter" })).toBeVisible();
   await expect(dialog.getByRole("region", { name: "Tavily 검색" })).toBeVisible();

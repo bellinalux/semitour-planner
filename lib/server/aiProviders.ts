@@ -77,7 +77,7 @@ export async function providerStatus() {
   };
   return {
     order: providerOrder(),
-    gemini: { key: !!aiSetting("GEMINI_API_KEY"), ...view("gemini") },
+    gemini: { key: !!aiSetting("GEMINI_API_KEY"), backupKey: !!aiSetting("GEMINI_BACKUP_API_KEY"), ...view("gemini") },
     groq: { key: !!groqKey(), model: (groqKey() ? await groqPick("general") : null) ?? groqModel(), searchModel: groqKey() ? ((await groqPick("search")) ?? "없음 — Tavily 또는 웹 근거 없이") : groqSearchModel(), ...view("groq") },
     openrouter: { key: !!openRouterKey(), model: (openRouterKey() ? await openRouterPick() : null) ?? openRouterModel(), ...view("openrouter") },
     cloudflare: { binding: (await cfAi()) !== null, model: cfModel(), ...view("cloudflare") },

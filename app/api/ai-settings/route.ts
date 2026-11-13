@@ -1,7 +1,7 @@
 /**
  * 앱 안 "AI 키 설정" (관리자만)
  *  GET  /api/ai-settings                         지금 설정 (키는 끝 4자리만) + 업체별 상태
- *  PUT  /api/ai-settings { GEMINI_API_KEY?, GROQ_API_KEY?, GEMINI_MODEL?, AI_PROVIDERS? }
+ *  PUT  /api/ai-settings { GEMINI_API_KEY?, GEMINI_BACKUP_API_KEY?, GROQ_API_KEY?, GEMINI_MODEL?, AI_PROVIDERS? }
  *       글자: 바꿈 · null 또는 "": 지움(Cloudflare 변수로 돌아감) · 없음: 그대로
  *  POST /api/ai-settings { action: "test", provider: "gemini" | "groq" | "cloudflare" }  연결 시험
  */
@@ -11,7 +11,7 @@ import { providerStatus, resetModelCaches, resetProviderStates, tavilySearch } f
 import { aiSettingsView, saveAiSettings, type AiSettingName } from "@/lib/server/aiSettings";
 import { audit } from "@/lib/server/audit";
 import { errorResponse } from "@/lib/server/external";
-import { modelName, testProvider } from "@/lib/server/gemini";
+import { modelName, resetGeminiKeyRest, testProvider } from "@/lib/server/gemini";
 import { allowAiCall } from "@/lib/server/rateLimit";
 
 const key = z
@@ -31,6 +31,7 @@ const order = z
 
 const putSchema = z.object({
   GEMINI_API_KEY: key.nullable().optional(),
+  GEMINI_BACKUP_API_KEY: key.nullable().optional(),
   GROQ_API_KEY: key.nullable().optional(),
   OPENROUTER_API_KEY: key.nullable().optional(),
   TAVILY_API_KEY: key.nullable().optional(),
@@ -70,6 +71,7 @@ export async function PUT(request: Request) {
   if (changed.length) {
     resetProviderStates();
     resetModelCaches();
+    resetGeminiKeyRest();
   }
   await audit(await workspaceId(), session, "AI 설정 변경", changed.join(", "));
   return Response.json(await view());
