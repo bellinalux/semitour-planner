@@ -7,8 +7,10 @@ import { buttonClass, fieldClass, when } from "./account/shared";
 
 type Provider = "gemini" | "groq" | "openrouter" | "cloudflare" | "tavily";
 type KeyProvider = "gemini" | "groq" | "openrouter" | "tavily";
-type SettingName = "GEMINI_API_KEY" | "GROQ_API_KEY" | "OPENROUTER_API_KEY" | "TAVILY_API_KEY" | "GEMINI_MODEL" | "AI_PROVIDERS";
-type KeyName = "GEMINI_API_KEY" | "GROQ_API_KEY" | "OPENROUTER_API_KEY" | "TAVILY_API_KEY";
+/** 키 입력 칸 — 업체 + Gemini 예비 키 */
+type KeySlot = KeyProvider | "geminiBackup";
+type SettingName = "GEMINI_API_KEY" | "GEMINI_BACKUP_API_KEY" | "GROQ_API_KEY" | "OPENROUTER_API_KEY" | "TAVILY_API_KEY" | "GEMINI_MODEL" | "AI_PROVIDERS";
+type KeyName = "GEMINI_API_KEY" | "GEMINI_BACKUP_API_KEY" | "GROQ_API_KEY" | "OPENROUTER_API_KEY" | "TAVILY_API_KEY";
 
 interface SettingView {
   app: boolean;
@@ -32,7 +34,7 @@ interface View {
   settings: Record<SettingName, SettingView>;
   status: {
     order: Provider[];
-    gemini: ProviderState & { key: boolean };
+    gemini: ProviderState & { key: boolean; backupKey?: boolean };
     groq: ProviderState & { key: boolean; model: string; searchModel: string };
     openrouter?: ProviderState & { key: boolean; model: string };
     cloudflare: ProviderState & { binding: boolean; model: string };
@@ -58,7 +60,8 @@ const ORDERS = [
   { id: "gemini", label: "Gemini만" },
 ];
 const LABEL: Record<Provider, string> = { gemini: "Gemini", groq: "Groq", openrouter: "OpenRouter", cloudflare: "Cloudflare AI", tavily: "Tavily 검색" };
-const EMPTY_DRAFT: Record<KeyProvider, string> = { gemini: "", groq: "", openrouter: "", tavily: "" };
+const SLOT_LABEL: Record<KeySlot, string> = { ...LABEL, geminiBackup: "Gemini 예비" };
+const EMPTY_DRAFT: Record<KeySlot, string> = { gemini: "", geminiBackup: "", groq: "", openrouter: "", tavily: "" };
 
 async function call<T>(method: string, body?: unknown): Promise<T> {
   const res = await fetch("/api/ai-settings", { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -96,7 +99,7 @@ export function AiKeySettings() {
   const session = useSession();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [view, setView] = useState<View | null>(null);
-  const [draft, setDraft] = useState<Record<KeyProvider, string>>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<Record<KeySlot, string>>(EMPTY_DRAFT);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [tests, setTests] = useState<Partial<Record<Provider, TestResult>>>({});
@@ -167,7 +170,7 @@ export function AiKeySettings() {
     );
   };
 
-  const keyBlock = (p: KeyProvider, name: KeyName, link: string, linkText: string) => {
+  const keyBlock = (p: KeySlot, name: KeyName, link: string, linkText: string) => {
     const s = view?.settings[name];
     return (
       <div className="flex flex-wrap items-center gap-1.5">
@@ -175,7 +178,7 @@ export function AiKeySettings() {
           type="password"
           autoComplete="off"
           spellCheck={false}
-          aria-label={`${LABEL[p]} API 키`}
+          aria-label={`${SLOT_LABEL[p]} API 키`}
           placeholder={s?.source ? "새 키로 바꾸려면 입력" : "API 키 붙여넣기"}
           value={draft[p]}
           disabled={!view?.available}
@@ -185,13 +188,13 @@ export function AiKeySettings() {
         <button
           type="button"
           disabled={busy !== null || !draft[p].trim() || !view?.available}
-          onClick={() => void save({ [name]: draft[p] }, `${LABEL[p]} 키를 저장했습니다. [연결 시험]으로 확인해 보세요.`)}
+          onClick={() => void save({ [name]: draft[p] }, `${SLOT_LABEL[p]} 키를 저장했습니다. [연결 시험]으로 확인해 보세요.`)}
           className="rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:bg-slate-300"
         >
           저장
         </button>
         {s?.app && (
-          <button type="button" disabled={busy !== null} onClick={() => void save({ [name]: null }, `앱에 저장한 ${LABEL[p]} 키를 지웠습니다.`)} className={buttonClass}>
+          <button type="button" disabled={busy !== null} onClick={() => void save({ [name]: null }, `앱에 저장한 ${SLOT_LABEL[p]} 키를 지웠습니다.`)} className={buttonClass}>
             지우기
           </button>
         )}
@@ -265,6 +268,17 @@ export function AiKeySettings() {
                   </div>
                   {keyBlock("gemini", "GEMINI_API_KEY", "https://aistudio.google.com/apikey", "무료 키 받기")}
                   <p className="text-[10.5px] leading-4 text-slate-500">무료 키는 결제를 연결하지 않은 AI Studio 프로젝트에서 만듭니다(선불 크레딧 프로젝트의 키는 크레딧이 떨어지면 멈춥니다).</p>
+                  <div className="space-y-1 rounded-md bg-slate-50 p-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold text-slate-700">예비 키 (선택)</span>
+                      <Source s={view.settings.GEMINI_BACKUP_API_KEY} />
+                    </div>
+                    {keyBlock("geminiBackup", "GEMINI_BACKUP_API_KEY", "https://aistudio.google.com/apikey", "키 만들기")}
+                    <p className="text-[10.5px] leading-4 text-slate-500">
+                      주 키가 크레딧 소진·사용량 한도·키 오류로 막히면 같은 요청을 예비 키로 다시 보냅니다(막힌 키는 한도 1분, 크레딧·키 오류 1시간 쉼). 예: 평소엔 무료 키, 한도가 차면
+                      결제를 연결한 키. 무료 한도를 늘리려고 무료 키를 여러 개 돌려 쓰는 것은 Google 약관(사용량 제한 우회 금지)에 걸릴 수 있어 권하지 않습니다.
+                    </p>
+                  </div>
                   <label className="flex flex-wrap items-center gap-1.5">
                     <span className="text-[11px] text-slate-600">모델</span>
                     <select

@@ -50,6 +50,7 @@ export async function GET(request: Request) {
     accessCode: accessCodeWeak() ? "weak" : "ok",
     geminiKey: rawKey && rawKey.trim() ? "set" : "missing",
     keyLength: rawKey ? rawKey.trim().length : 0,
+    geminiBackupKey: aiSetting("GEMINI_BACKUP_API_KEY") ? "set" : "missing",
     geminiModel: modelName(),
     // AI 업체 순서·키 등록·최근 한도 걸림 (쿨다운은 이 서버 인스턴스 기준)
     aiProviders: await providerStatus(),

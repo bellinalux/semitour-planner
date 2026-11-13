@@ -124,19 +124,71 @@ function toResponseSchema(schema: z.ZodType) {
   return stripUnsupported(z.toJSONSchema(schema));
 }
 
-/**
- * Gemini API 키 — 앱 "AI 키 설정"에 넣은 값 > Cloudflare 변수(GEMINI_API_KEY).
- * 붙여넣다가 딸려 오기 쉬운 따옴표, 공백, 줄바꿈, "GEMINI_API_KEY=" 글자는 걷어낸다. (앱 값을 쓰려면 먼저 refreshAiSettings)
- */
-export function resolveKey(): string {
-  const apiKey = aiSetting("GEMINI_API_KEY")
-    ?.replace(/^GEMINI_API_KEY\s*=\s*/, "")
+/** 붙여넣다가 딸려 오기 쉬운 따옴표, 공백, 줄바꿈, "GEMINI_API_KEY=" 글자를 걷어낸다 */
+function cleanKey(raw: string | null): string | null {
+  const k = raw
+    ?.replace(/^GEMINI_(?:BACKUP_)?API_KEY\s*=\s*/, "")
     .replace(/^["']+|["']+$/g, "")
     .trim();
+  return k || null;
+}
+
+/**
+ * Gemini API 키 — 앱 "AI 키 설정"에 넣은 값 > Cloudflare 변수(GEMINI_API_KEY). (앱 값을 쓰려면 먼저 refreshAiSettings)
+ * 주 키가 없고 예비 키만 있으면 예비 키를 쓴다.
+ */
+export function resolveKey(): string {
+  const apiKey = geminiKeys()[0]?.key;
   if (!apiKey) {
     throw new GeminiError("NO_KEY", "Gemini API 키가 없습니다. 더보기 → AI 키 설정(관리자)에서 넣어 주세요.", 500);
   }
   return apiKey;
+}
+
+/**
+ * Gemini 예비 키 — 주 키가 크레딧 소진(402)·사용량 한도(429)·키 오류면 예비 키로 같은 요청을 다시 보낸다.
+ * 예: 평소엔 무료 키, 한도가 차면 결제 연결 키. 한 번 막힌 키는 잠시 쉬게 해서(한도 1분, 크레딧·키 오류 1시간)
+ * 그동안은 예비 키부터 쓴다. 키가 모두 막히면 다음 AI 업체(Groq…)로 넘어간다.
+ */
+export type GeminiKeySlot = "primary" | "backup";
+export const GEMINI_KEY_REST_MS = { limit: 60_000, credits: 60 * 60_000 } as const;
+
+function keyRest(): Map<string, number> {
+  const g = globalThis as unknown as { __semitourGeminiKeyRest?: Map<string, number> };
+  return (g.__semitourGeminiKeyRest ??= new Map());
+}
+
+/** 테스트용 — 쉬는 키 기록을 지운다 */
+export function resetGeminiKeyRest(): void {
+  keyRest().clear();
+}
+
+function geminiKeys(): { slot: GeminiKeySlot; key: string }[] {
+  const out: { slot: GeminiKeySlot; key: string }[] = [];
+  const primary = cleanKey(aiSetting("GEMINI_API_KEY"));
+  const backup = cleanKey(aiSetting("GEMINI_BACKUP_API_KEY"));
+  if (primary) out.push({ slot: "primary", key: primary });
+  if (backup && backup !== primary) out.push({ slot: "backup", key: backup });
+  return out;
+}
+
+/** 쉬는 중이 아닌 키를 앞으로 (모두 쉬는 중이면 원래 순서 그대로 — 그래도 한 번은 보내 본다) */
+function keysInOrder(): { slot: GeminiKeySlot; key: string }[] {
+  const keys = geminiKeys();
+  const now = Date.now();
+  const rest = keyRest();
+  const ready = keys.filter((k) => (rest.get(k.key) ?? 0) <= now);
+  const resting = keys.filter((k) => (rest.get(k.key) ?? 0) > now);
+  return ready.length ? [...ready, ...resting] : keys;
+}
+
+/** 다른 키로 바꾸면 풀릴 수 있는 실패인가 (크레딧·한도·키 권한) — 붐빔(503)은 키와 상관없다 */
+function keyProblem(r: CallResult): "limit" | "credits" | null {
+  if (r.ok) return null;
+  if (r.status === 402 || /prepayment|credits? (are )?depleted|billing/i.test(r.message)) return "credits";
+  if (r.status === 429) return "limit";
+  if (r.status === 401 || r.status === 403 || (r.status === 400 && /API key/i.test(r.message))) return "credits";
+  return null;
 }
 
 /**
@@ -168,8 +220,23 @@ async function callGemini(body: Record<string, unknown>, timeoutMs: number): Pro
   return callGeminiOnce(body, timeoutMs, alt);
 }
 
+/** 키를 돌려 가며 한 번 — 주 키가 크레딧·한도·키 문제면 예비 키로 같은 요청을 다시 보낸다 */
 async function callGeminiOnce(body: Record<string, unknown>, timeoutMs: number, modelOverride?: string): Promise<CallResult> {
-  const apiKey = resolveKey();
+  const keys = keysInOrder();
+  if (!keys.length) resolveKey(); // NO_KEY 오류
+  let last: CallResult | null = null;
+  for (const [i, k] of keys.entries()) {
+    const r = await callGeminiWithKey(body, timeoutMs, k.key, modelOverride);
+    const problem = keyProblem(r);
+    if (!problem) return r;
+    keyRest().set(k.key, Date.now() + GEMINI_KEY_REST_MS[problem]);
+    if (i < keys.length - 1) console.error(`[gemini] ${k.slot === "primary" ? "주" : "예비"} 키 ${problem === "limit" ? "사용량 한도" : "크레딧·권한 문제"} → ${keys[i + 1].slot === "primary" ? "주" : "예비"} 키로`);
+    last = r;
+  }
+  return last as CallResult;
+}
+
+async function callGeminiWithKey(body: Record<string, unknown>, timeoutMs: number, apiKey: string, modelOverride?: string): Promise<CallResult> {
   const model = modelOverride || modelName();
 
   let res: Response;
@@ -415,7 +482,7 @@ function switchable(err: unknown, provider: ProviderId): err is GeminiError {
 }
 
 async function available(p: ProviderId): Promise<boolean> {
-  if (p === "gemini") return !!aiSetting("GEMINI_API_KEY");
+  if (p === "gemini") return geminiKeys().length > 0;
   if (p === "groq") return !!groqKey();
   if (p === "openrouter") return !!openRouterKey();
   return (await cfAi()) !== null;
@@ -594,13 +661,21 @@ export async function testProvider(p: ProviderId): Promise<{ ok: boolean; ms: nu
   const t0 = Date.now();
   const done = (ok: boolean, message: string, model: string) => ({ ok, ms: Date.now() - t0, message: message.slice(0, 200), model });
   if (p === "gemini") {
-    if (!aiSetting("GEMINI_API_KEY")) return done(false, "키가 없습니다.", modelName());
-    const r = await callGeminiOnce({ contents: [{ role: "user", parts: [{ text: "Reply with the single word OK." }] }], generationConfig: { maxOutputTokens: 20, temperature: 0 } }, 20_000).catch(
-      (e: unknown) => ({ ok: false as const, status: 0, message: e instanceof Error ? e.message : "연결 실패" }),
+    const keys = geminiKeys();
+    if (!keys.length) return done(false, "키가 없습니다.", modelName());
+    // 주 키·예비 키를 따로 시험해 각각 결과를 보인다
+    const results = await Promise.all(
+      keys.map(async (k) => {
+        const r = await callGeminiWithKey({ contents: [{ role: "user", parts: [{ text: "Reply with the single word OK." }] }], generationConfig: { maxOutputTokens: 20, temperature: 0 } }, 20_000, k.key).catch(
+          (e: unknown) => ({ ok: false as const, status: 0, message: e instanceof Error ? e.message : "연결 실패" }),
+        );
+        if (r.ok) keyRest().delete(k.key);
+        return { slot: k.slot, ok: r.ok, message: r.ok ? "연결됨" : (upstreamError(r) ?? genericUpstreamError(r)).message };
+      }),
     );
-    if (r.ok) return done(true, "연결됨", modelName());
-    const friendly = upstreamError(r) ?? genericUpstreamError(r);
-    return done(false, friendly.message, modelName());
+    if (results.length === 1 && results[0].slot === "primary") return done(results[0].ok, results[0].message, modelName());
+    const label = (slot: GeminiKeySlot) => (slot === "primary" ? "주 키" : "예비 키");
+    return done(results.some((r) => r.ok), results.map((r) => `${label(r.slot)}: ${r.message}`).join(" · "), modelName());
   }
   const call = CHAT[p];
   if (p === "groq" && !groqKey()) return done(false, "키가 없습니다.", "");
