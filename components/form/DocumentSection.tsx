@@ -11,6 +11,7 @@ import type { CompanyProfile, TravelAlert } from "@/types";
 import { SpecialTermsPanel } from "./SpecialTermsPanel";
 import { CancelPolicyPanel } from "./CancelPolicyPanel";
 import type { SectionProps } from "./types";
+import { fastPaste } from "@/lib/fastPaste";
 
 /** 여행경보 직접 입력 선택지 */
 const LEVELS = [0, 1, 2, 3, 4];
@@ -92,6 +93,7 @@ export function DocumentSection({ input, onChange, openSignal, company }: Sectio
                 value={input.travelerNames.join("\n")}
                 placeholder={"예)\n김○○\n이○○\n박○○"}
                 onChange={(e) => onChange({ travelerNames: e.target.value.split("\n") })}
+                onPaste={fastPaste((v) => onChange({ travelerNames: v.split("\n") }))}
                 className={`${inputClass} resize-y font-normal`}
               />
               <p className="text-[11px] text-slate-400">

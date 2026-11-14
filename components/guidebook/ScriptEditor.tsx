@@ -3,6 +3,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { TIER, type GuideScript, type GuideStop, type GuideTier } from "@/lib/guideBook";
+import { fastPaste } from "@/lib/fastPaste";
 
 const input = "w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none";
 const lines = (v: string[]) => v.join("\n");
@@ -63,7 +64,7 @@ export function ScriptEditor({ script, onSave, onCancel, busy, english = false }
       </div>
       <label className="block space-y-0.5">
         <span className="font-semibold text-slate-600">버스 안 소개 (도착 전 1분)</span>
-        <textarea value={s.intro} onChange={(e) => set({ intro: e.target.value })} rows={3} className={input} />
+        <textarea value={s.intro} onChange={(e) => set({ intro: e.target.value })} onPaste={fastPaste((intro) => set({ intro }))} rows={3} className={input} />
       </label>
 
       <fieldset className="space-y-2">
@@ -83,7 +84,7 @@ export function ScriptEditor({ script, onSave, onCancel, busy, english = false }
                   <span className="text-[10.5px] text-slate-500" title={f.hint}>
                     {f.label}
                   </span>
-                  <textarea value={p[f.key]} aria-label={`지점 ${i + 1} ${f.label}`} onChange={(e) => setStop(i, { [f.key]: e.target.value })} rows={f.rows} className={input} placeholder={f.hint} />
+                  <textarea value={p[f.key]} aria-label={`지점 ${i + 1} ${f.label}`} onChange={(e) => setStop(i, { [f.key]: e.target.value })} onPaste={fastPaste((v) => setStop(i, { [f.key]: v }))} rows={f.rows} className={input} placeholder={f.hint} />
                 </label>
               ))}
             </div>
@@ -105,7 +106,7 @@ export function ScriptEditor({ script, onSave, onCancel, busy, english = false }
           </label>
           <label className="space-y-0.5">
             <span className="font-semibold text-slate-600">🧓 베테랑 가이드 메모 (내 멘트·현장 팁 — 다음 원고에 반영)</span>
-            <textarea value={s.veteran} onChange={(e) => set({ veteran: e.target.value.slice(0, 3000) })} rows={5} className={input} />
+            <textarea value={s.veteran} onChange={(e) => set({ veteran: e.target.value.slice(0, 3000) })} onPaste={fastPaste((v) => set({ veteran: v.slice(0, 3000) }))} rows={5} className={input} />
           </label>
         </div>
       )}

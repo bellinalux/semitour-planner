@@ -1,4 +1,5 @@
 import { Field, inputClass } from "./Field";
+import { fastPaste } from "@/lib/fastPaste";
 
 interface Props {
   id: string;
@@ -20,6 +21,7 @@ export function TextField({ id, label, value, onChange, placeholder, hint, multi
           value={value}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
+          onPaste={fastPaste(onChange)}
           className={`${inputClass} resize-y`}
         />
       ) : (

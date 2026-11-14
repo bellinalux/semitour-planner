@@ -7,6 +7,7 @@ import { downloadKit, draftGuide, fetchGuideIndex, fetchKit, patchGuide, scriptA
 import type { PlaceCard } from "@/lib/knowledge";
 import { ScriptEditor } from "./ScriptEditor";
 import { ScriptView } from "./ScriptView";
+import { fastPaste } from "@/lib/fastPaste";
 
 interface Props {
   /** 지금 일정의 도시 (처음 열 때 고른다) */
@@ -713,6 +714,7 @@ function BasicsPanel({ basics, busy, onSave }: { basics: GuideBasics; busy: bool
                       value={s.lines.join("\n")}
                       rows={Math.max(3, s.lines.length + 1)}
                       onChange={(e) => setDraft(sections.map((x) => (x.id === s.id ? { ...x, lines: e.target.value.split("\n").slice(0, 20) } : x)))}
+                      onPaste={fastPaste((v) => setDraft(sections.map((x) => (x.id === s.id ? { ...x, lines: v.split("\n").slice(0, 20) } : x))))}
                       className="w-full rounded-md border border-slate-300 px-2 py-1"
                     />
                   ) : (
@@ -770,7 +772,7 @@ function PhrasesPanel({ city, phrases, busy, onDraft, onSave }: { city: string; 
         </div>
       </div>
       {text !== null ? (
-        <textarea aria-label="현지 회화 (한국어 | 현지어 | 발음)" value={text} onChange={(e) => setText(e.target.value)} rows={20} className="w-full rounded-md border border-slate-300 px-2 py-1 font-mono" />
+        <textarea aria-label="현지 회화 (한국어 | 현지어 | 발음)" value={text} onChange={(e) => setText(e.target.value)} onPaste={fastPaste(setText)} spellCheck={false} rows={20} className="w-full rounded-md border border-slate-300 px-2 py-1 font-mono" />
       ) : phrases.length === 0 ? (
         <p className="py-10 text-center text-slate-400">아직 없습니다. AI로 만들기를 누르세요.</p>
       ) : (
