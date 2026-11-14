@@ -58,6 +58,7 @@ interface ExportView {
   getCustomerText: () => string;
   getEmojiText: () => string;
   getListingText?: () => string;
+  getPackageText?: () => string;
   getListingCsv?: () => string;
 }
 

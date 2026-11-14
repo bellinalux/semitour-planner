@@ -12,9 +12,11 @@ interface Props {
   /** 판매 채널 등록용 상품 정보 (항목별 글, CSV) */
   getListingText?: () => string;
   getListingCsv?: () => string;
+  /** 대형사 일정표 형식 (날짜 요약 + 번호 세부) */
+  getPackageText?: () => string;
 }
 
-export function ExportBar({ disabled, getInternalText, getCustomerText, getEmojiText, getListingText, getListingCsv }: Props) {
+export function ExportBar({ disabled, getInternalText, getCustomerText, getEmojiText, getListingText, getListingCsv, getPackageText }: Props) {
   const hideCosts = useHideCosts();
   const downloadCsv = () => {
     if (!getListingCsv) return;
@@ -37,6 +39,7 @@ export function ExportBar({ disabled, getInternalText, getCustomerText, getEmoji
       <div className="flex flex-wrap gap-2">
         {!hideCosts && <CopyButton label="내부용 복사" variant="secondary" disabled={disabled} getText={getInternalText} />}
         <CopyButton label="이모지 고객용 복사" variant="secondary" disabled={disabled} getText={getEmojiText} />
+        {getPackageText && <CopyButton label="대형사 일정표 형식 복사" variant="secondary" disabled={disabled} getText={getPackageText} />}
         <CopyButton label="고객용 복사" variant="primary" disabled={disabled} getText={getCustomerText} />
       </div>
       {getListingText && (

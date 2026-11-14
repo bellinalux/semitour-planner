@@ -63,6 +63,8 @@ export interface EngineOptions {
   sunset?: string;
   /** 이동 사이 여유(분) */
   bufferMin?: number;
+  /** 교통을 반영하지 않은 이동 시간표(거리 어림·무료 경로)면 true — 출퇴근 시간(07:30~09:30, 17:00~19:30) 차량 이동을 1.3배로 */
+  rushHour?: boolean;
 }
 
 export interface TimelineStop {

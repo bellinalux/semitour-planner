@@ -261,9 +261,10 @@ export function ItineraryPanel({
             <div role="note" aria-label="시간 다듬기" className="rounded-md bg-emerald-50 px-3 py-2 text-[11px] leading-4 text-emerald-900">
               <b>시간을 다듬었습니다</b> (업계 기준: 점심 11:30~13:30, 저녁 18:00~19:30 → 야경·공연)
               <ul className="mt-0.5 space-y-0.5">
-                {(researchInfo.fits ?? []).map((f) => (
-                  <li key={f.day}>
-                    DAY {f.day}: {f.note}
+                {(researchInfo.fits ?? []).map((f, k) => (
+                  <li key={`${f.day}-${k}`}>
+                    {f.day > 0 ? `DAY ${f.day}: ` : ""}
+                    {f.note}
                   </li>
                 ))}
               </ul>

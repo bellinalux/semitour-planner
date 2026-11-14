@@ -52,7 +52,20 @@ export interface CompetitorIncludes {
 /** 쇼핑·선택관광 정책: none 없음(노쇼핑/노옵션) / some 있음 / unknown 확인 안 됨 */
 export type TourPolicy = "none" | "some" | "unknown";
 
+/** 상품 구성 숫자 (lib/courseStandards.ts의 courseStructure·textStructure) — 타사와 우리 코스를 나란히 비교 */
+export interface CourseStructure {
+  /** 관광일 하루 평균 관광지 수 */
+  placesPerDay: number;
+  /** 하루 평균 차량 이동 (분, 비행 제외) — 모르면 0 */
+  ridePerDay: number;
+  specialMeals: number;
+  /** 쇼핑센터 방문 (모르면 -1) */
+  shopping: number;
+}
+
 export interface Competitor {
+  /** 링크·붙여넣기로 가져온 상품의 구성 숫자 */
+  structure?: CourseStructure;
   id: string;
   name: string;
   /** 1인 판매가 (견적 통화 기준) */
@@ -469,6 +482,8 @@ export interface CompanyProfile {
   bankAccount: string;
   /** 현지 인솔자·긴급 비상연락처 */
   emergencyContact: string;
+  /** 공항 미팅 안내 (일정표 첫 줄) — 예) "출발 2시간 20분 전, 인천공항 제1터미널 3층 A카운터 회사 피켓 앞". 비면 "출발 3시간 전" */
+  airportMeeting?: string;
   /** 고객 문서 강조색 (#rrggbb). 비면 기본 초록 */
   docColor: string;
   /** 고객 문서 로고 (작게 줄인 이미지 data URL). 비면 기본 로고 */
@@ -584,6 +599,13 @@ export interface ItineraryItem {
   };
   /** 체류 시간을 사람이 직접 고쳤으면 true — 웹 시간 확인이 덮어쓰지 않는다 */
   stayEdited?: boolean;
+  /**
+   * 체류 시간 근거 (lib/courseStandards.ts) — competitor: 업체·타사 원문 표기("약 30분 소요") / standard: 장소 종류별 표준표로 맞춤 /
+   * knowledge: 지식 창고(현장 실측·타사 표기 모음). 없으면 AI 추정 (timeCheck가 있으면 웹 확인, stayEdited면 직접 입력)
+   */
+  staySource?: "competitor" | "standard" | "knowledge";
+  /** 단체 여유 시간(승하차·인원 확인·화장실)으로 다음 이동에 더한 분 — 다시 더하지 않으려고 표시 */
+  groupBuffer?: number;
 }
 
 /** 코스별로 추천된 선택 옵션 (대형 여행사·현지 판매처 웹 조사 결과) */

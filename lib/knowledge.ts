@@ -35,6 +35,8 @@ export interface PlaceCard {
   stayWeb: number;
   /** 우리 현장에서 잰 체류 (가이드 체크) */
   stayField?: { avg: number; n: number };
+  /** 업체·타사 일정표에 적힌 소요 시간 ("약 30분 소요") 모음 */
+  stayAgency?: { avg: number; n: number };
   /** 우리 고객 평가 — 좋았던 곳(best)·아쉬운 곳(worst)으로 고른 수 */
   votes?: { best: number; worst: number };
   sales?: { won: number; lost: number };
@@ -265,14 +267,17 @@ export function reasonFor(p: PlaceCard, rank?: number): string {
     p.votes && p.votes.best > 0 ? `우리 고객 추천 ${p.votes.best}` : "",
     p.sales && p.sales.won > 0 ? `성약 ${p.sales.won}건` : "",
     p.stayField ? `현장 실측 ${p.stayField.avg}분` : "",
+    !p.stayField && p.stayAgency ? `업체 표기 ${p.stayAgency.avg}분(${p.stayAgency.n}건)` : "",
     p.verified ? "직원 확인" : "",
   ].filter(Boolean);
   return parts.join(" · ");
 }
 
-/** 지금 쓸 체류 시간 — 현장 실측(3번 이상)이 있으면 그것, 아니면 웹 값 */
+/** 지금 쓸 체류 시간 — 현장 실측(3번 이상) > 업체·타사 표기(2건 이상) > 웹 값 (웹 값이 없으면 업체 표기 1건도) */
 export function bestStay(p: PlaceCard): number {
-  return p.stayField && p.stayField.n >= 3 ? p.stayField.avg : p.stayWeb;
+  if (p.stayField && p.stayField.n >= 3) return p.stayField.avg;
+  if (p.stayAgency && (p.stayAgency.n >= 2 || !p.stayWeb)) return p.stayAgency.avg;
+  return p.stayWeb;
 }
 
 /** 두 글자씩 끊은 조각이 얼마나 겹치는지 (0~1) — "썬월드 바나힐 케이블카 & 골든 브릿지" ↔ "바나힐 & 골든브릿지" */
@@ -318,7 +323,7 @@ export function knowledgeMemo(docs: CityKnowledge[], companions: Companion[], ma
     for (const p of fitFirst.slice(0, maxPlaces)) {
       const stay = bestStay(p);
       lines.push(
-        `- ${p.name}${p.area ? ` (${p.area})` : ""} · 점수 ${placeScore(p)}${stay ? ` · 체류 ${stay}분${p.stayField && p.stayField.n >= 3 ? "(현장 실측)" : ""}` : ""}${p.fits.length ? ` · 잘 맞음: ${p.fits.join(",")}` : ""}${p.likes[0] ? ` · 좋은 점: ${p.likes.slice(0, 2).join("/")}` : ""}${p.dislikes[0] ? ` · 주의: ${p.dislikes.slice(0, 2).join("/")}` : ""}${p.fieldNotes[0] ? ` · 현장: ${p.fieldNotes[0]}` : ""}`,
+        `- ${p.name}${p.area ? ` (${p.area})` : ""} · 점수 ${placeScore(p)}${stay ? ` · 체류 ${stay}분${p.stayField && p.stayField.n >= 3 ? "(현장 실측)" : p.stayAgency && stay === p.stayAgency.avg ? `(업체 표기 ${p.stayAgency.n}건)` : ""}` : ""}${p.fits.length ? ` · 잘 맞음: ${p.fits.join(",")}` : ""}${p.likes[0] ? ` · 좋은 점: ${p.likes.slice(0, 2).join("/")}` : ""}${p.dislikes[0] ? ` · 주의: ${p.dislikes.slice(0, 2).join("/")}` : ""}${p.fieldNotes[0] ? ` · 현장: ${p.fieldNotes[0]}` : ""}`,
       );
     }
     const avoid = doc.places.filter((p) => placeScore(p) < 0).map((p) => p.name);
@@ -377,6 +382,21 @@ export function learnStays(doc: CityKnowledge, stays: { name: string; minutes: n
       const n = (p.stayField?.n ?? 0) + 1;
       const avg = Math.round(((p.stayField?.avg ?? 0) * (n - 1) + s.minutes) / n);
       return { ...p, stayField: { avg, n } };
+    }, now);
+  }
+  return d === doc ? doc : touch(d, now);
+}
+
+/** 업체·타사 일정표에 적힌 소요 시간 — 붙여넣기·상품 링크로 가져온 코스의 "약 30분 소요" */
+export function learnAgencyStays(doc: CityKnowledge, stays: { name: string; minutes: number }[], agency = "", now = new Date()): CityKnowledge {
+  let d = doc;
+  for (const s of stays) {
+    if (!(s.minutes >= 10 && s.minutes <= 600)) continue;
+    d = upsert(d, s.name, (p) => {
+      const n = (p.stayAgency?.n ?? 0) + 1;
+      const avg = Math.round(((p.stayAgency?.avg ?? 0) * (n - 1) + s.minutes) / n);
+      const agencies = agency && !p.agencies.includes(agency) ? [...p.agencies, agency].slice(-10) : p.agencies;
+      return { ...p, stayAgency: { avg, n }, agencies };
     }, now);
   }
   return d === doc ? doc : touch(d, now);

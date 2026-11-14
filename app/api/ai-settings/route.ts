@@ -35,6 +35,7 @@ const putSchema = z.object({
   GROQ_API_KEY: key.nullable().optional(),
   OPENROUTER_API_KEY: key.nullable().optional(),
   TAVILY_API_KEY: key.nullable().optional(),
+  ORS_API_KEY: key.nullable().optional(),
   GEMINI_MODEL: model.nullable().optional(),
   AI_PROVIDERS: order.nullable().optional(),
 });

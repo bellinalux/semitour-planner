@@ -8,9 +8,9 @@ import { buttonClass, fieldClass, when } from "./account/shared";
 type Provider = "gemini" | "groq" | "openrouter" | "cloudflare" | "tavily";
 type KeyProvider = "gemini" | "groq" | "openrouter" | "tavily";
 /** 키 입력 칸 — 업체 + Gemini 예비 키 */
-type KeySlot = KeyProvider | "geminiBackup";
-type SettingName = "GEMINI_API_KEY" | "GEMINI_BACKUP_API_KEY" | "GROQ_API_KEY" | "OPENROUTER_API_KEY" | "TAVILY_API_KEY" | "GEMINI_MODEL" | "AI_PROVIDERS";
-type KeyName = "GEMINI_API_KEY" | "GEMINI_BACKUP_API_KEY" | "GROQ_API_KEY" | "OPENROUTER_API_KEY" | "TAVILY_API_KEY";
+type KeySlot = KeyProvider | "geminiBackup" | "ors";
+type SettingName = "GEMINI_API_KEY" | "GEMINI_BACKUP_API_KEY" | "GROQ_API_KEY" | "OPENROUTER_API_KEY" | "TAVILY_API_KEY" | "ORS_API_KEY" | "GEMINI_MODEL" | "AI_PROVIDERS";
+type KeyName = "GEMINI_API_KEY" | "GEMINI_BACKUP_API_KEY" | "GROQ_API_KEY" | "OPENROUTER_API_KEY" | "TAVILY_API_KEY" | "ORS_API_KEY";
 
 interface SettingView {
   app: boolean;
@@ -60,8 +60,8 @@ const ORDERS = [
   { id: "gemini", label: "Gemini만" },
 ];
 const LABEL: Record<Provider, string> = { gemini: "Gemini", groq: "Groq", openrouter: "OpenRouter", cloudflare: "Cloudflare AI", tavily: "Tavily 검색" };
-const SLOT_LABEL: Record<KeySlot, string> = { ...LABEL, geminiBackup: "Gemini 예비" };
-const EMPTY_DRAFT: Record<KeySlot, string> = { gemini: "", geminiBackup: "", groq: "", openrouter: "", tavily: "" };
+const SLOT_LABEL: Record<KeySlot, string> = { ...LABEL, geminiBackup: "Gemini 예비", ors: "도로 경로" };
+const EMPTY_DRAFT: Record<KeySlot, string> = { gemini: "", geminiBackup: "", groq: "", openrouter: "", tavily: "", ors: "" };
 
 async function call<T>(method: string, body?: unknown): Promise<T> {
   const res = await fetch("/api/ai-settings", { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -370,6 +370,19 @@ export function AiKeySettings() {
                   </p>
                   {testLine("tavily")}
                 </section>
+
+                {view.settings.ORS_API_KEY && (
+                  <section aria-label="도로 경로" className="space-y-1.5 rounded-lg border border-slate-200 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-xs font-semibold text-slate-900">도로 경로 (OpenRouteService) — 구글 지도 없이 실제 도로 이동 시간</h3>
+                      <Source s={view.settings.ORS_API_KEY} />
+                    </div>
+                    {keyBlock("ors", "ORS_API_KEY", "https://openrouteservice.org/dev/#/signup", "무료 키 받기")}
+                    <p className="text-[10.5px] leading-4 text-slate-500">
+                      코스 엔진이 장소 사이 이동 시간을 직선거리 어림 대신 실제 도로로 계산합니다(대형버스는 승용차 × 1.15). 교통은 반영하지 않아 출퇴근 시간은 1.3배로 잡습니다. 하루 500회 무료, 같은 구간은 30일 다시 씁니다. 구글 지도 키가 있으면 구글을 먼저 씁니다.
+                    </p>
+                  </section>
+                )}
 
                 <section aria-label="사용 순서" className="space-y-1.5">
                   <label className="flex flex-wrap items-center gap-1.5">

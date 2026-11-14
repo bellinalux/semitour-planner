@@ -100,6 +100,7 @@ import { useSavedPlans } from "@/hooks/useSavedPlans";
 import type { CourseFile } from "@/lib/courseFile";
 import { supplierQuotePatch } from "@/lib/supplierQuote";
 import { knownFlight, repairFlightTimes } from "@/lib/flightRepair";
+import { applyCourseFix } from "@/lib/courseStandards";
 import { useCompetitorAutoFind } from "@/hooks/useCompetitorAutoFind";
 import { CompetitorItinerariesContext, useCompetitorItineraries } from "@/hooks/useCompetitorItineraries";
 import { useVerifyPipeline, VerifyPipelineContext } from "@/hooks/useVerifyPipeline";
@@ -521,6 +522,7 @@ export function PlannerApp() {
         const fixed = repairFlightTimes(days, input, meta);
         if (fixed) history.labeled("항공 시각 맞추기")(fixed);
       }}
+      onCourseFix={(fix, label) => history.labeled(label)(applyCourseFix(fix, days, pmChoice))}
     />
   );
 
@@ -675,6 +677,12 @@ export function PlannerApp() {
             courseFile={courseFile}
             onCourseFileChange={setCourseFile}
             onApplyFlight={handleApplyFlight}
+            onApplyDays={(next) => {
+              // 일정이 있으면 되돌리기 기록에 남기고 바꾼다, 없으면 새 일정으로
+              if (itinerary.days.length > 0) history.labeled("장소 담기 자동 배치")(next);
+              else itinerary.restore({ days: next, pmChoice: {}, meta: null, generatedCurrency: input.currency });
+              setTab("result");
+            }}
             company={company}
             stays={stays}
             focus={settingsFocus}

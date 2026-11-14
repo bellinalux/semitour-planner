@@ -88,7 +88,7 @@ interface Dict {
   emergency: string;
   meals: { hotel: string; local: string; special: string; korean: string; own: string; inflight: string; paidLocal: string };
   duration: (h: number, m: number) => string;
-  tags: { noShop: string; shop: (n: string) => string; noOpt: string; opt: (n: string) => string; tipsIn: string; tipsLocal: string; meals: (n: string) => string; vehicle: string; resort: string; star: (a: string, b?: string) => string };
+  tags: { noShop: string; shop: (n: string) => string; noOpt: string; opt: (n: string) => string; tipsIn: string; tipsLocal: string; meals: (n: string) => string; special: (n: string) => string; vehicle: string; resort: string; star: (a: string, b?: string) => string };
 }
 
 export const DICT: Record<DocLang, Dict> = {
@@ -168,7 +168,7 @@ export const DICT: Record<DocLang, Dict> = {
     emergency: "Emergency",
     meals: { hotel: "Hotel", local: "Local", special: "Special", korean: "Korean", own: "Own expense", inflight: "In-flight or own expense", paidLocal: "paid locally" },
     duration: (h, m) => (h > 0 ? `${h} hr${m ? ` ${m} min` : ""}` : `${m} min`),
-    tags: { noShop: "No shopping stops", shop: (n) => `Shopping stops: ${n}`, noOpt: "No optional tours", opt: (n) => `Optional tours: ${n} (free choice)`, tipsIn: "Guide & driver tips included", tipsLocal: "Guide tips paid locally", meals: (n) => `${n} meals included`, vehicle: "Private vehicle", resort: "Resort", star: (a, b) => (b ? `${a}–${b} star hotel` : `${a}-star hotel`) },
+    tags: { noShop: "No shopping stops", shop: (n) => `Shopping stops: ${n}`, noOpt: "No optional tours", opt: (n) => `Optional tours: ${n} (free choice)`, tipsIn: "Guide & driver tips included", tipsLocal: "Guide tips paid locally", meals: (n) => `${n} meals included`, special: (n) => `${n} specialty meals`, vehicle: "Private vehicle", resort: "Resort", star: (a, b) => (b ? `${a}–${b} star hotel` : `${a}-star hotel`) },
   },
   ja: {
     docTitle: "旅行日程表・お見積り",
@@ -246,7 +246,7 @@ export const DICT: Record<DocLang, Dict> = {
     emergency: "緊急",
     meals: { hotel: "ホテル", local: "現地料理", special: "特別料理", korean: "韓国料理", own: "各自", inflight: "機内食または各自", paidLocal: "現地払い" },
     duration: (h, m) => (h > 0 ? `${h}時間${m ? `${m}分` : ""}` : `${m}分`),
-    tags: { noShop: "ショッピングなし", shop: (n) => `ショッピング${n}回`, noOpt: "オプションなし", opt: (n) => `オプション${n}件（自由選択）`, tipsIn: "ガイドチップ込み", tipsLocal: "ガイドチップ現地払い", meals: (n) => `食事${n}回付き`, vehicle: "専用車", resort: "リゾート", star: (a, b) => (b ? `${a}〜${b}つ星ホテル` : `${a}つ星ホテル`) },
+    tags: { noShop: "ショッピングなし", shop: (n) => `ショッピング${n}回`, noOpt: "オプションなし", opt: (n) => `オプション${n}件（自由選択）`, tipsIn: "ガイドチップ込み", tipsLocal: "ガイドチップ現地払い", meals: (n) => `食事${n}回付き`, special: (n) => `名物料理${n}回`, vehicle: "専用車", resort: "リゾート", star: (a, b) => (b ? `${a}〜${b}つ星ホテル` : `${a}つ星ホテル`) },
   },
   zh: {
     docTitle: "行程表及报价",
@@ -324,7 +324,7 @@ export const DICT: Record<DocLang, Dict> = {
     emergency: "紧急",
     meals: { hotel: "酒店", local: "当地餐", special: "特色餐", korean: "韩餐", own: "自理", inflight: "飞机餐或自理", paidLocal: "当地支付" },
     duration: (h, m) => (h > 0 ? `${h}小时${m ? `${m}分钟` : ""}` : `${m}分钟`),
-    tags: { noShop: "无购物", shop: (n) => `购物${n}处`, noOpt: "无自费", opt: (n) => `自费项目${n}个（自愿）`, tipsIn: "含导游小费", tipsLocal: "导游小费当地付", meals: (n) => `含${n}餐`, vehicle: "专车", resort: "度假村", star: (a, b) => (b ? `${a}–${b}星级酒店` : `${a}星级酒店`) },
+    tags: { noShop: "无购物", shop: (n) => `购物${n}处`, noOpt: "无自费", opt: (n) => `自费项目${n}个（自愿）`, tipsIn: "含导游小费", tipsLocal: "导游小费当地付", meals: (n) => `含${n}餐`, special: (n) => `特色餐${n}次`, vehicle: "专车", resort: "度假村", star: (a, b) => (b ? `${a}–${b}星级酒店` : `${a}星级酒店`) },
   },
 };
 
@@ -381,6 +381,7 @@ export function foreignTags(lang: DocLang, d: { input: TripInput; days: DayPlan[
     if (tag.startsWith("가이드 경비 포함")) return T.tipsIn;
     if (tag.startsWith("가이드 경비 현지")) return T.tipsLocal;
     if (tag.startsWith("식사")) return T.meals(num(tag));
+    if (tag.startsWith("특식")) return T.special(num(tag));
     if (tag === "전용차량") return T.vehicle;
     if (tag === "리조트") return T.resort;
     const star = /^(\d)(?:~(\d))?성급$/.exec(tag);

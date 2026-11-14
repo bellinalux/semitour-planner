@@ -23,6 +23,7 @@ import { AccessibilityBox, FeeCheckBadges, RelocateControls, SuggestedOptions, s
 
 export type { ItemPatch };
 import { useFx } from "./FxContext";
+import { staySourceLabel } from "@/lib/courseStandards";
 
 interface Props {
   item: ItineraryItem;
@@ -121,6 +122,7 @@ export function TimelineItem({
   const canFold = !editing && view === "compact";
   const cost = (fee ? item.entryFee : 0) + (meal ? item.mealCost : 0);
   const showStay = item.stayMinutes > 0 && item.type !== "flight" && item.type !== "transfer";
+  const staySource = staySourceLabel(item);
   // 가이드 원고를 붙일 항목 (장소만 — 항공·이동·숙소·자유시간·식사 제외)
   const guideless = notPlace || ["flight", "transfer", "hotel", "free_time", "meal"].includes(item.type ?? "sightseeing");
   const estimated = item.isEstimated && !notPlace && (fee || meal || showStay) && !["flight", "transfer", "hotel"].includes(item.type ?? "");
@@ -301,6 +303,19 @@ export function TimelineItem({
                   <Clock className="size-3 text-slate-400" aria-hidden />
                   {formatDuration(item.stayMinutes)}
                 </span>
+              )}
+              {showStay && (
+                <>
+                  {staySource && (
+                    <span
+                      title="체류 시간 근거"
+                      className={`rounded px-1 text-[10px] font-medium ${staySource.tone === "ok" ? "bg-emerald-50 text-emerald-700" : staySource.tone === "info" ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-500"}`}
+                    >
+                      {staySource.label}
+                    </span>
+                  )}
+                  {item.groupBuffer ? <span className="text-[10px] text-slate-400" title="단체 승하차·인원 확인 여유 (다음 이동에 포함)">+단체 {item.groupBuffer}분</span> : null}
+                </>
               )}
               {item.type === "hotel" && item.stayMinutes === 0 && <span className="text-slate-500">투숙</span>}
               {item.timeNote && <span className="text-slate-500">{item.timeNote}</span>}

@@ -8,6 +8,7 @@ import { dayItems, type PmChoice } from "@/lib/itinerary";
 import { isMealFiller } from "@/lib/mealTiming";
 import { untimedIds } from "@/lib/feasibility";
 import { mealSlotOf } from "@/lib/mealSlot";
+import { isSpecialMeal } from "@/lib/packageRules";
 import type { CourseMeta, DayPlan, ItineraryItem, QuoteData, TourOption, TripInput } from "@/types";
 
 /**
@@ -32,6 +33,9 @@ export function conditionTags(input: TripInput, days: DayPlan[], pmChoice: PmCho
   tags.push(input.options.length === 0 ? "노옵션" : `선택관광 ${input.options.length}개 (자유 선택)`);
   tags.push(input.tipPerPerson > 0 ? "가이드 경비 포함 (노팁)" : "가이드 경비 현지 지불");
   if (mealCount > 0) tags.push(`식사 ${mealCount}회 포함`);
+  // 특식 — 대형사 일정표처럼 횟수를 상품 장점으로 드러낸다
+  const special = days.reduce((n, d) => n + dayItems(d, pmChoice).filter(isSpecialMeal).length, 0);
+  if (special > 0) tags.push(`특식 ${special}회`);
   if (input.packageType !== "land" && quote.lodgingUnits > 0) {
     const grade = input.lodgingType === "resort" ? "리조트" : gradeText(input.hotelGrade);
     if (grade) tags.push(grade);
@@ -268,6 +272,15 @@ export function restAfter(days: DayPlan[], index: number, pmChoice: PmChoice, ti
 const GENERIC_HOTEL = /^(?:\[?숙박\]?\s*[-:]?\s*)?(?:호텔|숙소|리조트)?\s*(?:투숙|체크인|휴식|숙박|복귀|이동|으로 이동|로 이동)?(?:\s*(?:및|·)\s*(?:휴식|투숙))?$|호텔로 이동|호텔 복귀|호텔 투숙|호텔 휴식|체크인 및|석식 및/;
 
 /** 그날 숙박 줄에 적힌 실제 호텔 이름 ("호텔 투숙"처럼 이름이 없으면 null) */
+/** 저비용 항공은 기내식이 없다 (유료 구매) — 대형사 일정표처럼 "기내식 미제공"을 적는다 */
+const LCC_NAME = /제주항공|티웨이|진에어|에어부산|이스타|에어서울|에어로케이|에어프레미아|피치|Peach|에어아시아|AirAsia|비엣젯|VietJet|세부퍼시픽|Cebu Pacific|스쿠트|Scoot/i;
+/** 편명 앞 두 글자 (7C1405 등) */
+const LCC_CODE = /^(7C|TW|LJ|BX|ZE|RS|RF|YP|MM|VJ|5J|TR|Z2|FD|AK)\d{2,4}$/i;
+export function lccMealNote(airline: string, flightNumber = ""): string {
+  const lcc = LCC_NAME.test(airline) || LCC_CODE.test(flightNumber.replace(/\s/g, ""));
+  return lcc ? " · 기내식 미제공 (저비용 항공)" : "";
+}
+
 export function courseHotelName(items: ItineraryItem[]): string | null {
   const stay = [...items].reverse().find((i) => i.type === "hotel" && !/체크아웃|조식|로비|미팅|출발/.test(i.name));
   const name = stay?.name.replace(/^\[?숙박\]?\s*[-:]\s*/, "").trim() ?? "";
@@ -279,7 +292,7 @@ export function dayTable(
   days: DayPlan[],
   index: number,
   pmChoice: PmChoice,
-  opts: { vehicle: boolean; flight: { out: string; back: string }; selectedHotels: Record<string, { name: string }> },
+  opts: { vehicle: boolean; flight: { out: string; back: string }; selectedHotels: Record<string, { name: string }>; airportMeeting?: string; airline?: string; flightNumber?: string },
   timings: Map<string, { start: string; end: string }>,
 ): DayTable {
   const day = days[index];
@@ -300,7 +313,7 @@ export function dayTable(
   // 항공 시각을 모르는 날은 항공·공항 쪽 줄에 시각을 쓰지 않는다 (지어내지 않는다)
   const untimed = untimedIds(day, pmChoice);
   // 가는 편: 출발 3시간 전 공항 집결 (업계 일정표 첫 줄)
-  if (index === 0 && flat.find((i) => !isBreakfastItem(i))?.type === "flight") rows.push({ key: "airport-meet", kind: "label", label: "공항 집결·탑승 수속 (출발 3시간 전)", ...blank });
+  if (index === 0 && flat.find((i) => !isBreakfastItem(i))?.type === "flight") rows.push({ key: "airport-meet", kind: "label", label: `${opts.airportMeeting?.trim() ? `공항 미팅: ${opts.airportMeeting.trim()}` : "공항 집결·탑승 수속 (출발 3시간 전)"}${lccMealNote(opts.airline ?? "", opts.flightNumber ?? "")}`, ...blank });
   // 호텔에서 미팅하고 첫 장소로 이동하는 날: 미팅 줄 + 이동 줄을 먼저 (첫 장소 시각 = 미팅 + 이동)
   const lead = hotelLeadMinutes(day);
   // 오전 자유(조식 뒤 자유시간 → 미팅)인 날은 미팅 시각을 앱이 정한다 (자유시간 뒤, 점심이면 11:30 도착)

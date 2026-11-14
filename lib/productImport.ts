@@ -5,6 +5,7 @@
  * 두 경우 모두 판매가를 "판매가에서 시작"(fixed_price)으로 넣어 원가 예산을 역계산하고, 경쟁 상품으로도 등록한다.
  */
 import type { ProductImportResponse } from "@/lib/schemas/productImport";
+import { textStructure } from "@/lib/courseStandards";
 import type { Competitor, FlightOption, TripInput } from "@/types";
 
 /**
@@ -104,6 +105,7 @@ export function competitorFromImport(r: ProductImportResponse): Competitor {
     note: [r.priceNote, r.guideFee].filter(Boolean).join(" · ").slice(0, 200),
     source: { agency: r.agency, url: r.url, sourceName: r.agency || "상품 링크", basis: "searched", foundAt: new Date().toISOString() },
     places: r.mustSee,
+    structure: textStructure(r.courseText, { days: r.days, mustSee: r.mustSee.length, shopping: r.shopping >= 0 ? r.shopping : undefined }),
     nights: r.nights,
     days: r.days,
     ...(r.hotel ? { hotelGrade: r.hotel.slice(0, 40) } : {}),
