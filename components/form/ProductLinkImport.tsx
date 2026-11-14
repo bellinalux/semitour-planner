@@ -4,7 +4,7 @@ import { Link2, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { postJson } from "@/lib/api";
 import { formatMoney } from "@/lib/currency";
-import { flightFromImport, importPatch, reverseBudget } from "@/lib/productImport";
+import { courseDayCounts, flightFromImport, importPatch, reverseBudget } from "@/lib/productImport";
 import type { ProductImportResponse } from "@/lib/schemas/productImport";
 import type { TripInput } from "@/types";
 
@@ -29,6 +29,8 @@ export function ProductLinkImport({ input, onApply }: { input: TripInput; onAppl
     }
   };
   const flight = r ? flightFromImport(r) : null;
+  const counts = r ? courseDayCounts(r.courseText) : [];
+  const thin = counts.filter((c) => c.lines < 2);
 
   return (
     <section aria-label="상품 링크로 만들기" className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 text-xs">
@@ -98,6 +100,25 @@ export function ProductLinkImport({ input, onApply }: { input: TripInput; onAppl
               {r.guideFee}
             </p>
           )}
+          {!r.readDirect && (
+            <p role="alert" className="rounded-md bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-900">
+              페이지를 직접 읽지 못해 AI가 링크·검색으로 정리했습니다. 항목이 빠지거나 요약됐을 수 있으니, &quot;그대로 가져오기&quot; 전에 아래 날짜별 줄 수를 확인하세요.
+            </p>
+          )}
+          {r.dateMismatch && (
+            <p role="alert" className="rounded-md bg-rose-50 px-2 py-1.5 text-[11px] leading-4 text-rose-800">
+              AI가 읽은 출발일이 링크의 출발일({r.departureDate})과 달랐습니다. 다른 날짜 상품의 항공·가격이 섞였을 수 있어 출발일은 링크 기준으로 넣습니다.
+            </p>
+          )}
+          {counts.length > 0 ? (
+            <p aria-label="날짜별 줄 수" className={`text-[11px] ${thin.length > 0 || (r.days > 0 && counts.length !== r.days) ? "text-amber-800" : "text-slate-500"}`}>
+              일정 원문: {counts.map((c) => `${c.day}일 ${c.lines}줄`).join(" · ")}
+              {r.days > 0 && counts.length !== r.days ? ` — 상품은 ${r.days}일인데 원문은 ${counts.length}일치입니다` : ""}
+              {thin.length > 0 ? ` — ${thin.map((c) => `${c.day}일`).join("·")} 내용이 거의 없습니다 (빠졌을 수 있음)` : ""}
+            </p>
+          ) : (
+            r.courseText.trim().length >= 20 && <p className="text-[11px] text-amber-800">일정 원문에서 날짜 구분(제1일·DAY 1)을 찾지 못했습니다. 그대로 가져오면 날짜가 틀어질 수 있습니다.</p>
+          )}
           <div className="flex flex-wrap gap-1.5 pt-1">
             <button
               type="button"
@@ -116,7 +137,7 @@ export function ProductLinkImport({ input, onApply }: { input: TripInput; onAppl
             </button>
           </div>
           <p className="text-[11px] text-slate-500">
-            둘 다 판매가를 &quot;판매가에서 시작&quot;으로 넣어 원가 예산을 역계산하고, 이 상품을 경쟁 상품으로 등록합니다. {r.readDirect ? "" : "(페이지를 직접 읽지 못해 AI가 링크·검색으로 읽었습니다 — 내용을 한 번 확인하세요.)"}
+            둘 다 판매가를 &quot;판매가에서 시작&quot;으로 넣어 원가 예산을 역계산하고, 이 상품을 경쟁 상품으로 등록합니다.{flight ? " 그대로 가져와도 위 항공 시각으로 첫날·마지막 날을 맞춥니다." : ""}
           </p>
         </div>
       )}

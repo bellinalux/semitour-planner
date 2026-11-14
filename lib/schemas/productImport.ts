@@ -53,5 +53,9 @@ export interface ProductImportResponse extends ProductImportResult {
   url: string;
   /** 서버가 페이지를 직접 읽었는지 (못 읽으면 AI가 링크·검색으로 읽음) */
   readDirect: boolean;
+  /** 출발일을 링크 주소에서 읽었는지 */
+  dateFromLink?: boolean;
+  /** AI가 읽은 출발일이 링크 주소의 출발일과 달랐는지 (다른 날짜 상품이 섞였을 수 있음) */
+  dateMismatch?: boolean;
   sources: { title: string; url: string }[];
 }
