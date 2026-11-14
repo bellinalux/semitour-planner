@@ -59,6 +59,9 @@ export function courseTextWithFlight(text: string, f: FlightOption | null): stri
 
 const clock = (s: string) => /(\d{1,2}):(\d{2})/.exec(s)?.[0]?.padStart(5, "0") ?? "";
 
+/** 가는 편·오는 편 편명이 같은가 (왕복 편명은 보통 다르다 — 같으면 확인 필요) */
+export const sameFlightNo = (a: string, b: string) => !!a.trim() && a.replace(/\s/g, "").toUpperCase() === b.replace(/\s/g, "").toUpperCase();
+
 /** 가는 편·오는 편 시각이 다 있으면 고른 항공편으로 */
 export function flightFromImport(r: ProductImportResponse): FlightOption | null {
   const o = r.outbound;
@@ -78,7 +81,8 @@ export function flightFromImport(r: ProductImportResponse): FlightOption | null 
     basis: "searched",
     sourceName: r.agency || "상품 페이지",
     link: r.url,
-    returnFlightNumber: b.flightNumber,
+    // 오는 편 편명이 가는 편과 같으면 AI가 채운 값이라 비워 둔다 (확인 필요)
+    returnFlightNumber: sameFlightNo(o.flightNumber, b.flightNumber) ? "" : b.flightNumber,
     returnDepartDate: b.date,
     returnDepartAirport: b.departAirport,
     returnDepartTime: clock(b.departTime),
@@ -124,6 +128,8 @@ export function importPatch(r: ProductImportResponse, input: TripInput, how: "co
     ...(flight ? { includesFlights: true, selectedFlight: flight, packageType: "full" as const } : {}),
     ...(r.pricePerPerson > 0 ? { pricingMode: "fixed_price" as const, fixedPricePerPerson: r.pricePerPerson } : {}),
     competitors: [...input.competitors.filter((c) => c.source?.url !== r.url), competitorFromImport(r)],
+    // 예전 상품에서 고른 호텔이 남아 일정표에 다른 호텔이 나오지 않게 비운다 (코스의 숙박 호텔 이름을 쓴다)
+    selectedHotels: {},
   };
   if (how === "copy") return { ...common, mode: "paste", courseText: courseTextWithFlight(r.courseText, flight).slice(0, 20_000) };
   const must = r.mustSee.join(", ").slice(0, 300);

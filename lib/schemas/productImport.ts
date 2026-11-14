@@ -43,9 +43,12 @@ export const productImportResultSchema = z.object({
   optionTours: z.array(z.string()).describe("선택관광 이름(가격) 목록"),
   guideFee: z.string().describe("가이드·기사 경비 조건 (예: 1인 $50 현지 지불). 없으면 빈 문자열"),
   cancelPolicy: z.string().describe("취소 규정 요약 한두 줄. 없으면 빈 문자열"),
+  courseDetail: z
+    .boolean()
+    .describe("날짜별 세부 일정(1. 2. 3.처럼 순서대로 적힌 이동·관광·식사 줄)을 읽어 courseText를 만들었으면 true. 날짜 요약(식사·호텔·교통·관광지 목록)만 읽었으면 false"),
   courseText: z
     .string()
-    .describe("날짜별 일정표 원문을 옮긴 글 — '제1일 (날짜)' 머리, 항공편·시각, 방문지, 식사(조·중·석), 호텔을 일정표에 적힌 순서 그대로. 확인하지 못하면 빈 문자열"),
+    .describe("날짜별 세부 일정 원문을 옮긴 글 — '제N일 (날짜)' 머리 뒤에 세부 일정(1. 2. 3.) 순서 그대로: 항공편·시각, 이동, 방문지, 식사, 호텔. 날짜 요약 목록(식사·호텔·관광지 나열)의 순서를 쓰지 않음. 확인하지 못하면 빈 문자열"),
 });
 export type ProductImportResult = z.infer<typeof productImportResultSchema>;
 

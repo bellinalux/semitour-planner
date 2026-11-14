@@ -30,7 +30,7 @@ const imported: ProductImportResponse = {
   pricePerPerson: 899000, priceNote: "유류할증료 포함", hotel: "호텔 A 4성",
   outbound: { airline: "대한항공", flightNumber: "KE723", date: "2027-01-04", departAirport: "인천(ICN)", departTime: "09:50", arriveAirport: "간사이(KIX)", arriveTime: "11:45" },
   inbound: { airline: "대한항공", flightNumber: "KE724", date: "2027-01-06", departAirport: "간사이(KIX)", departTime: "20:30", arriveAirport: "인천(ICN)", arriveTime: "22:25" },
-  mustSee: ["오사카성", "도톤보리", "기요미즈데라"], included: [], excluded: [], shopping: 0, optionTours: [], guideFee: "", cancelPolicy: "",
+  mustSee: ["오사카성", "도톤보리", "기요미즈데라"], included: [], excluded: [], shopping: 0, optionTours: [], guideFee: "", cancelPolicy: "", courseDetail: true,
   courseText: "제1일 인천 출발 KE723 09:50 → 간사이 11:45 / 오사카성 / 석식 / 호텔 A\n제2일 교토 기요미즈데라 ...\n제3일 KE724 20:30",
   url: "https://pkgtour.naver.com/products/ybtour/X", readDirect: false, sources: [],
 };

@@ -80,7 +80,7 @@ describe("상품 링크 주소·원문", () => {
       found: true, productName: "후쿠오카 2박3일", agency: "노랑풍선", destination: "후쿠오카", departureDate: "2026-12-16", nights: 2, days: 3, pricePerPerson: 599000, priceNote: "", hotel: "",
       outbound: { airline: "티웨이항공", flightNumber: "TW291", date: "", departAirport: "인천", departTime: "10:30", arriveAirport: "후쿠오카", arriveTime: "11:55" },
       inbound: { airline: "티웨이항공", flightNumber: "TW292", date: "", departAirport: "후쿠오카", departTime: "13:00", arriveAirport: "인천", arriveTime: "14:30" },
-      mustSee: [], included: [], excluded: [], shopping: 0, optionTours: [], guideFee: "", cancelPolicy: "",
+      mustSee: [], included: [], excluded: [], shopping: 0, optionTours: [], guideFee: "", cancelPolicy: "", courseDetail: true,
       courseText: "제1일 인천 출발 / 다자이후\n제2일 유후인\n제3일 귀국", url: "https://pkgtour.naver.com/products/ybtour/JKP14657C00-20261209", readDirect: false, sources: [],
     };
     expect(flightFromImport(r)).not.toBeNull();
