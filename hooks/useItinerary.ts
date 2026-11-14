@@ -10,6 +10,7 @@ import { calcDayGap } from "@/lib/dayLoad";
 import type { DayFillResponse } from "@/lib/schemas/dayFill";
 import { applyFlightWithMeals } from "@/lib/flightApply";
 import { flightHasTimes, lunchAfterArrival, withPastedFlight } from "@/lib/pasteFlight";
+import { fixCourseOrder } from "@/lib/courseOrder";
 import { dayFillToItem, insertItem, insertItems } from "@/lib/tourItem";
 import type { CourseFile } from "@/lib/courseFile";
 import type { ParsedSupplierQuote } from "@/lib/schemas/course";
@@ -121,7 +122,7 @@ async function requestItinerary(
   input: TripInput,
   courseFile: CourseFile | null,
   signal: AbortSignal,
-): Promise<Omit<GeneratedItinerary, "pmChoice">> {
+): Promise<Omit<GeneratedItinerary, "pmChoice"> & { orderFixes?: FitChange[] }> {
   if (input.mode === "paste") {
     const result = await postJson<{ days: DayPlan[]; meta: CourseMeta; nights: number; totalDays: number; quote?: ParsedSupplierQuote | null }>(
       "/api/parse-course",
@@ -131,8 +132,11 @@ async function requestItinerary(
     // 확인된 항공편(직접 고른 편·상품 링크에서 읽은 편 > 원문 시각)으로 첫날·마지막 날 시각을 맞춘다
     // (원문에 항공 시각이 없으면 첫날이 08:00 출발, 귀국편이 오전으로 찍히던 문제)
     const flight = pastedCourseFlight(input, result.meta);
+    // 상품 페이지의 날짜 요약 순서를 읽어 "호텔 → 관광", "귀국편 → 관광"처럼 꼬인 날을 먼저 바로잡는다 (항공 시각은 그 뒤에)
+    const ordered = fixCourseOrder(result.days);
     return {
-      days: flight ? withPastedFlight(result.days, flight) : result.days,
+      days: flight ? withPastedFlight(ordered.days, flight) : ordered.days,
+      orderFixes: ordered.fixes,
       meta: result.meta,
       detected: { days: result.totalDays, nights: result.nights, cities: result.meta.cities, origin: originOfCourse(result.days) },
       sources: [],
@@ -215,8 +219,8 @@ export function useItinerary() {
         const filled = await fillFlightDayGaps(finished.days, input, controller.signal);
         if (filled !== finished.days) finished = { ...finished, days: tidyDays(filled) };
       }
-      const fit = { changes: finished.changes };
-      const result = { ...raw, days: finished.days };
+      const fit = { changes: [...(raw.orderFixes ?? []), ...finished.changes] };
+      const result = { ...raw, days: finished.days, orderFixes: undefined };
       const choice = defaultPmChoice(result.days);
       setDays(result.days);
       setPmChoice(choice);

@@ -4,7 +4,7 @@ import { Link2, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { postJson } from "@/lib/api";
 import { formatMoney } from "@/lib/currency";
-import { courseDayCounts, flightFromImport, importPatch, reverseBudget } from "@/lib/productImport";
+import { courseDayCounts, flightFromImport, importPatch, reverseBudget, sameFlightNo } from "@/lib/productImport";
 import type { ProductImportResponse } from "@/lib/schemas/productImport";
 import type { TripInput } from "@/types";
 
@@ -88,6 +88,7 @@ export function ProductLinkImport({ input, onApply }: { input: TripInput; onAppl
           {flight ? (
             <p className="text-slate-600">
               항공 {flight.airline} {flight.flightNumber} {flight.departTime}→{flight.arriveTime} / {flight.returnFlightNumber} {flight.returnDepartTime}→{flight.returnArriveTime}
+              {sameFlightNo(r.outbound.flightNumber, r.inbound.flightNumber) && <span className="block text-amber-800">오는 편 편명이 가는 편과 같게 읽혀 비워 두었습니다 (확인 필요).</span>}
             </p>
           ) : (
             <p className="text-slate-500">항공 시각을 읽지 못했습니다 (노선 기준 예상 시각으로 만듭니다).</p>
@@ -98,6 +99,11 @@ export function ProductLinkImport({ input, onApply }: { input: TripInput; onAppl
               {r.shopping > 0 ? `쇼핑 ${r.shopping}회 · ` : ""}
               {r.optionTours.length > 0 ? `선택관광 ${r.optionTours.length}개 · ` : ""}
               {r.guideFee}
+            </p>
+          )}
+          {r.courseDetail === false && (
+            <p role="alert" className="rounded-md bg-rose-50 px-2 py-1.5 text-[11px] leading-4 text-rose-800">
+              날짜별 세부 일정(1. 2. 3. 순서)을 읽지 못하고 요약(식사·호텔·관광지 목록)만 읽었습니다. 이대로 가져오면 순서·시각이 틀어집니다. 상품 페이지의 일정 글을 복사해 &quot;업체 코스 붙여넣기&quot;에 넣어 주세요.
             </p>
           )}
           {!r.readDirect && (
@@ -129,7 +135,7 @@ export function ProductLinkImport({ input, onApply }: { input: TripInput; onAppl
             </button>
             <button
               type="button"
-              disabled={r.courseText.trim().length < 20}
+              disabled={r.courseText.trim().length < 20 || r.courseDetail === false}
               onClick={() => onApply(importPatch(r, input, "copy"), true)}
               className="rounded-md border border-indigo-300 bg-white px-2.5 py-1.5 font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
             >

@@ -236,6 +236,9 @@ export const REST_CHECKIN_NAME = "호텔 체크인 및 휴식 (자유시간)";
  * 마지막 날·전일 자유·이미 오후 자유로 둔 날·마지막 항목이 자유시간인 날은 빼고, 관광이 15:00 전에 끝나면 18:00까지.
  * 항공으로 도착한 날은 "호텔 체크인 및 휴식"으로 적는다. 관광을 채우면 끝 시각이 늦어져 저절로 사라진다.
  */
+/** 이보다 일찍 끝나는 날은 남은 오후를 자유시간으로 붙이지 않는다 (시각이 꼬였을 가능성이 크다) */
+const REST_EARLIEST_END = 6 * 60;
+
 export function restAfter(days: DayPlan[], index: number, pmChoice: PmChoice, timings: Map<string, { start: string; end: string }>): ItineraryItem | null {
   const day = days[index];
   if (index === days.length - 1 || day.rest === "free" || day.rest === "pmfree" || day.kind !== "linear") return null;
@@ -243,7 +246,10 @@ export function restAfter(days: DayPlan[], index: number, pmChoice: PmChoice, ti
   const last = items.at(-1);
   if (!last || last.type === "free_time") return null;
   const end = parseClock(timings.get(last.id)?.end ?? "");
+  const lastStart = parseClock(timings.get(last.id)?.start ?? "");
   if (end === null || end >= REST_PM_BEFORE) return null;
+  // 자정을 넘겨 끝난 날(끝 시각이 시작보다 이름)·새벽에 끝난 날은 "오후 자유시간 18시간"처럼 엉터리가 되므로 붙이지 않는다
+  if ((lastStart !== null && end < lastStart) || end < REST_EARLIEST_END) return null;
   const arrival = items.some((i) => i.type === "flight");
   return {
     id: arrival ? "rest-checkin" : "rest-pm",
@@ -259,6 +265,16 @@ export function restAfter(days: DayPlan[], index: number, pmChoice: PmChoice, ti
   };
 }
 
+const GENERIC_HOTEL = /^(?:\[?숙박\]?\s*[-:]?\s*)?(?:호텔|숙소|리조트)?\s*(?:투숙|체크인|휴식|숙박|복귀|이동|으로 이동|로 이동)?(?:\s*(?:및|·)\s*(?:휴식|투숙))?$|호텔로 이동|호텔 복귀|호텔 투숙|호텔 휴식|체크인 및|석식 및/;
+
+/** 그날 숙박 줄에 적힌 실제 호텔 이름 ("호텔 투숙"처럼 이름이 없으면 null) */
+export function courseHotelName(items: ItineraryItem[]): string | null {
+  const stay = [...items].reverse().find((i) => i.type === "hotel" && !/체크아웃|조식|로비|미팅|출발/.test(i.name));
+  const name = stay?.name.replace(/^\[?숙박\]?\s*[-:]\s*/, "").trim() ?? "";
+  if (name.length < 3 || GENERIC_HOTEL.test(name)) return null;
+  return name.slice(0, 60);
+}
+
 export function dayTable(
   days: DayPlan[],
   index: number,
@@ -272,7 +288,8 @@ export function dayTable(
   const flightDay = flat.some((i) => i.type === "flight");
   const lastDay = index === days.length - 1;
   const city = (day.overnightCity ?? "").trim();
-  const overnight = city ? { city, hotel: opts.selectedHotels[city]?.name ?? null } : null;
+  // 고른 호텔이 없으면 코스에 적힌 숙박 호텔 이름 (업체 코스·상품 링크의 "힐튼 후쿠오카 시 호크" 등)
+  const overnight = city ? { city, hotel: opts.selectedHotels[city]?.name ?? courseHotelName(flat) } : null;
   const blank = { transport: "", start: "", end: "", keyTime: false, afterBreakfast: false, returnFlight: false };
   if (isFreeDay(day, pmChoice)) {
     const tips = flat.filter((i) => i.type === "free_time").map((i) => shortDescription(i.description)).filter(Boolean);

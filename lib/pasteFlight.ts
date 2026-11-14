@@ -87,9 +87,26 @@ export function lunchAfterArrival(day: DayPlan): DayPlan {
   return { ...day, items: rest };
 }
 
+const TOUR_TYPES = new Set(["sightseeing", "experience", "shopping", "massage", "meal"]);
+
+/**
+ * 출국일에 관광이 있으면 귀국편 시각에서 거꾸로 계산하지 않는다 (예전: 13:20 로비 미팅 → 16:50 점심).
+ * 조식 후 09:00에 출발하고, 귀국편 출발 시각은 표와 같게 고정한다 — 남는 시간은 공항 가기 전 빈 시간 채우기로.
+ */
+function morningDeparture(days: DayPlan[], f: FlightOption): DayPlan[] {
+  const li = days.length - 1;
+  const last = days[li];
+  const time = (/(\d{1,2}):(\d{2})/.exec(f.returnDepartTime)?.[0] ?? "").padStart(5, "0");
+  if (li < 1 || last.kind !== "linear" || !hasClock(time)) return days;
+  const fi = last.items.findIndex(looksLikeFlightItem);
+  if (fi < 0 || !last.items.slice(0, fi).some((i) => TOUR_TYPES.has(i.type ?? ""))) return days;
+  const items = last.items.map((it, k) => (k === fi ? { ...it, fixedTime: time } : it));
+  return [...days.slice(0, li), { ...last, items, meetingTime: "09:00" }];
+}
+
 /** 확인된 항공편을 업체 코스에 맞춘다 (비행 항목이 없으면 만들고, 시각·식사 시간대·도착일 점심까지) */
 export function withPastedFlight(days: DayPlan[], f: FlightOption): DayPlan[] {
   if (days.length === 0 || !flightHasTimes(f)) return days;
-  const applied = applyFlightWithMeals(ensureFlightItems(days, f), f);
+  const applied = applyFlightWithMeals(morningDeparture(ensureFlightItems(days, f), f), f);
   return applied.length === 0 ? applied : [lunchAfterArrival(applied[0]), ...applied.slice(1)];
 }
