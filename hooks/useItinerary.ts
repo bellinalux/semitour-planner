@@ -9,6 +9,7 @@ import { flightDayGaps, flightDaysRequest, flightTimesFor, insertBeforeAirport, 
 import { calcDayGap } from "@/lib/dayLoad";
 import type { DayFillResponse } from "@/lib/schemas/dayFill";
 import { applyFlightWithMeals } from "@/lib/flightApply";
+import { flightHasTimes, lunchAfterArrival, withPastedFlight } from "@/lib/pasteFlight";
 import { dayFillToItem, insertItem, insertItems } from "@/lib/tourItem";
 import type { CourseFile } from "@/lib/courseFile";
 import type { ParsedSupplierQuote } from "@/lib/schemas/course";
@@ -20,6 +21,7 @@ import type {
   CourseMeta,
   CurrencyCode,
   DayPlan,
+  FlightOption,
   ItineraryItem,
   PmFreeOption,
   SearchSource,
@@ -96,12 +98,22 @@ async function fillFlightDayGaps(days: DayPlan[], input: TripInput, signal: Abor
   });
 }
 
+/** 업체 코스에 맞출 항공편 — 항공 포함이면 고른 편(상품 링크에서 읽은 편 포함), 아니면 원문에서 읽은 편. 시각을 모르면 null */
+function pastedCourseFlight(input: TripInput, meta: CourseMeta | null): FlightOption | null {
+  const picked = input.includesFlights ? input.selectedFlight : null;
+  if (flightHasTimes(picked)) return picked;
+  const fromText = meta?.flight;
+  return flightHasTimes(fromText) ? fromText : null;
+}
+
 /** AI 일정에 항공·공항·체크인/아웃을 붙이고, 고른 항공편이 있으면 편명·실제 시각까지 반영한다 */
 function flightWrapped(days: DayPlan[], input: TripInput): DayPlan[] {
   const times = flightTimesFor(input);
   if (!times) return days;
   const wrapped = withFlightDays(days, input, times);
-  return !times.assumed && input.selectedFlight ? applyFlightWithMeals(wrapped, input.selectedFlight) : wrapped;
+  const applied = !times.assumed && input.selectedFlight ? applyFlightWithMeals(wrapped, input.selectedFlight) : wrapped;
+  // 점심 무렵 도착이면 점심을 도착 바로 뒤로 (관광 먼저 하느라 14시 넘어 점심이 되지 않게)
+  return applied.length ? [lunchAfterArrival(applied[0]), ...applied.slice(1)] : applied;
 }
 
 /** 입력 모드에 따라 AI가 세미투어를 만들거나, 붙여넣은(또는 사진·PDF로 올린) 업체 코스를 구조화한다. */
@@ -116,8 +128,11 @@ async function requestItinerary(
       { text: input.courseText, currency: input.currency, ...(courseFile ? { file: { name: courseFile.name, mimeType: courseFile.mimeType, data: courseFile.data } } : {}) },
       signal,
     );
+    // 확인된 항공편(직접 고른 편·상품 링크에서 읽은 편 > 원문 시각)으로 첫날·마지막 날 시각을 맞춘다
+    // (원문에 항공 시각이 없으면 첫날이 08:00 출발, 귀국편이 오전으로 찍히던 문제)
+    const flight = pastedCourseFlight(input, result.meta);
     return {
-      days: result.days,
+      days: flight ? withPastedFlight(result.days, flight) : result.days,
       meta: result.meta,
       detected: { days: result.totalDays, nights: result.nights, cities: result.meta.cities, origin: originOfCourse(result.days) },
       sources: [],
@@ -195,7 +210,8 @@ export function useItinerary() {
       // AI 일정은 패키지 규칙의 미팅 시각으로 (프리미엄·시니어 09:00 등) — 그 시각으로 식사 시간대도 맞춘다
       let finished = finishCourse(raw.days, input);
       // 항공 포함 AI 코스: 도착일 오후·출국일 공항 대기가 비어 있으면(AI가 비워 보냄) 추천 일정으로 바로 채운다
-      if (input.mode === "ai" && flightTimesFor(input)) {
+      // 업체 코스(붙여넣기·상품 링크)도 확인된 항공편이 있으면 같은 방식으로 빈 시간만 채운다 (원문 항목은 그대로)
+      if ((input.mode === "ai" && flightTimesFor(input)) || (input.mode === "paste" && pastedCourseFlight(input, raw.meta))) {
         const filled = await fillFlightDayGaps(finished.days, input, controller.signal);
         if (filled !== finished.days) finished = { ...finished, days: tidyDays(filled) };
       }
