@@ -68,6 +68,13 @@ const SECTIONS: { title: string; description: string; fields: FieldSpec[] }[] = 
       { key: "bankAccount", label: "입금 계좌", wide: true, placeholder: "예) 국민은행 123-456-789012 (예금주: ○○○)" },
       { key: "emergencyContact", label: "현지·긴급 비상연락처", wide: true, placeholder: "예) 현지 인솔자 010-0000-0000 / 24시간 +66-0-000-0000" },
       {
+        key: "airportMeeting",
+        label: "공항 미팅 안내",
+        wide: true,
+        placeholder: "예) 출발 2시간 20분 전, 인천공항 제1터미널 3층 A카운터 회사 피켓 앞",
+        hint: "일정표 첫날 첫 줄에 나옵니다. 비우면 \"공항 집결·탑승 수속 (출발 3시간 전)\"",
+      },
+      {
         key: "travelerInsurance",
         label: "여행자보험 안내",
         wide: true,

@@ -32,6 +32,15 @@ const returnOk = (p: EnginePlace) => p.kind === "end" || p.kind === "transfer" |
 const flowKey = (p: EnginePlace): string | null =>
   p.region || p.area || (p.kind === "sight" || !p.kind ? `#${p.id}` : null);
 
+/** 출퇴근 시간대 — 교통을 모르는 이동 시간표일 때 차량 이동을 늘려 잡는다 */
+export const RUSH_WINDOWS: [number, number][] = [[450, 570], [1020, 1170]];
+export const RUSH_FACTOR = 1.3;
+export function rushAdjusted(minutes: number, departAt: number, o: Pick<EngineOptions, "rushHour" | "mode">): number {
+  if (!o.rushHour || o.mode !== "car" || minutes <= 0) return minutes;
+  const t = ((departAt % 1440) + 1440) % 1440;
+  return RUSH_WINDOWS.some(([a, b]) => t >= a && t < b) ? Math.round(minutes * RUSH_FACTOR) : minutes;
+}
+
 /** 정해진 순서(인덱스)로 하루를 흘려 보고 비용을 계산한다 */
 export function simulate(order: number[], places: EnginePlace[], M: Matrix, o: EngineOptions): Sim {
   const day = dayKey(o.weekday);
@@ -54,7 +63,7 @@ export function simulate(order: number[], places: EnginePlace[], M: Matrix, o: E
   let homeFirst = false;
   order.forEach((pi, k) => {
     const p = places[pi], issues: string[] = [];
-    const tr = k === 0 ? 0 : M[order[k - 1]][pi];
+    const tr = k === 0 ? 0 : rushAdjusted(M[order[k - 1]][pi], t, o);
     // 앱 일정표에서 확인된 구간은 그 시간 그대로 (여유를 따로 더하면 일정표보다 길어진다)
     const known = k > 0 && exact.has(`${places[order[k - 1]].id}>${p.id}`);
     const arrive = t + tr + (k > 0 && tr > 0 && !known ? buf : 0);

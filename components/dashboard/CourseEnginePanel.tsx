@@ -143,8 +143,8 @@ export function CourseEnginePanel({ days, departureDate, onDepartureDate }: Prop
                   <span className="text-slate-400">
                     {c.weekday != null && `${DAY_KO[c.weekday]}요일`}
                     {c.holiday && ` · 공휴일(${c.holiday})`}
-                    {c.sunset && ` · 일몰 ${c.sunset}`} · 이동 {c.matrix === "google" ? "구글 지도" : "거리 어림"}
-                    {c.matrix !== "google" && c.matrixNote ? ` (${c.matrixNote})` : ""} · 장소 정보 {c.known}곳
+                    {c.sunset && ` · 일몰 ${c.sunset}`} · 이동 {c.matrix === "google" ? "구글 지도" : c.matrix === "ors" ? "무료 도로 경로(출퇴근 1.3배)" : "거리 어림(출퇴근 1.3배)"}
+                    {c.matrix === "estimate" && c.matrixNote ? ` (${c.matrixNote})` : ""} · 장소 정보 {c.known}곳
                   </span>
                 </div>
                 <ul className="mt-2 grid gap-1 sm:grid-cols-2">

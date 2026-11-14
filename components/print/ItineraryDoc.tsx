@@ -202,7 +202,7 @@ export function ItineraryDoc({ input, days, pmChoice, quote, meta, company, trav
             const date = dayDate(input, day.day);
             const flat = documentItems(day, pmChoice).flatMap((b) => b.items);
             const timings = computeItemTimings(flat, dayTourStart(day));
-            const table = dayTable(days, index, pmChoice, { vehicle, flight: flightNos, selectedHotels: input.selectedHotels }, timings);
+            const table = dayTable(days, index, pmChoice, { vehicle, flight: flightNos, selectedHotels: input.selectedHotels, airportMeeting: company?.airportMeeting, airline: input.selectedFlight?.airline ?? "", flightNumber: input.selectedFlight?.flightNumber ?? "" }, timings);
             const flightDay = table.flightDay;
             const hotelName = table.overnight?.hotel ?? undefined;
             const summary = daySummary(day, pmChoice, timings);

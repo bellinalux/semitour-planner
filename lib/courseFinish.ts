@@ -1,3 +1,4 @@
+import { applyGroupBuffer, groupBufferMinutes } from "@/lib/courseStandards";
 import { fitCourse, type FitChange } from "@/lib/courseFit";
 import { refitDay } from "@/lib/dayBalance";
 import { tidyDays } from "@/lib/dayTidy";
@@ -19,8 +20,12 @@ export function finishCourse(raw: DayPlan[], input: TripInput): { days: DayPlan[
     input.mode === "ai" && !input.includesFlights && tidied[0] && tidied[0].hotelLeadMinutes === undefined && !tidied[0].items.some((i) => i.type === "flight")
       ? [{ ...tidied[0], hotelLeadMinutes: 30 }, ...tidied.slice(1)]
       : tidied;
-  const base = input.mode === "ai" ? withRuleMeetings(fromHotel, rules) : fromHotel;
+  const ruled = input.mode === "ai" ? withRuleMeetings(fromHotel, rules) : fromHotel;
+  // AI 코스는 개인 기준 시간이라 단체(15명 이상)면 장소마다 승하차·인원 확인 여유를 더한다 (업체 코스는 원문 시간 그대로 — 점검에서 안내)
+  const buffered = input.mode === "ai" ? applyGroupBuffer(ruled, groupBufferMinutes(input.travelers)) : { days: ruled, count: 0 };
+  const base = buffered.days;
   const fit = fitCourse(base, { walk: input.mode === "paste" });
   const fitted = tidyDays(fit.days);
-  return { days: input.mode === "ai" ? fixImpossible(fitted, {}, refitDay, rules.dayEnd).days : fitted, changes: fit.changes };
+  const bufferNote = buffered.count > 0 ? [{ day: 0, note: `${input.travelers}명 단체 — 장소 ${buffered.count}곳에 승하차·인원 확인 여유 ${groupBufferMinutes(input.travelers)}분씩` }] : [];
+  return { days: input.mode === "ai" ? fixImpossible(fitted, {}, refitDay, rules.dayEnd).days : fitted, changes: [...bufferNote, ...fit.changes] };
 }

@@ -14,6 +14,7 @@ import { endpoint, modelName, resolveKey } from "./gemini";
 import { cached, DAY } from "./aiCache";
 import { getKv } from "./planStore";
 import { geocodeMany } from "./freeData";
+import { aiSetting, refreshAiSettings } from "./aiSettings";
 
 /* ── 요청 형식 ── */
 const openSchema = z.object({ mon: z.string(), tue: z.string(), wed: z.string(), thu: z.string(), fri: z.string(), sat: z.string(), sun: z.string() }).partial();
@@ -193,17 +194,58 @@ export function mapsKey(): string {
 }
 
 /** 구글 지도를 못 쓴 이유 (화면에 "거리 어림 — 이유"로 보여 준다). 구글 지도를 썼으면 빈 문자열 */
-type MatrixResult = { M: number[][]; source: "google" | "estimate"; note: string };
+type MatrixResult = { M: number[][]; source: "google" | "ors" | "estimate"; note: string };
+
+/** 무료 도로 경로(OpenRouteService) 키 — 앱 "AI 키 설정" 또는 Cloudflare 변수 ORS_API_KEY */
+export function orsKey(): string {
+  return (aiSetting("ORS_API_KEY") ?? "").replace(/^ORS_API_KEY\s*=\s*/, "").replace(/^["']+|["']+$/g, "").trim();
+}
+
+/** 대형버스는 승용차보다 느리다 (경로 서비스의 승용차 시간 × 1.15) */
+export const BUS_FACTOR = 1.15;
+
+/** 무료 도로 경로 — OpenRouteService 행렬 (하루 500회 무료). 교통은 반영하지 않는다 → 출퇴근 보정은 일정 배치에서 */
+async function orsMatrix(key: string, pts: ({ lat: number; lng: number } | null)[], est: number[][], mode: MoveMode): Promise<MatrixResult> {
+  if (mode === "public") return { M: est, source: "estimate", note: "대중교통은 무료 경로 계산이 없어 거리로 어림" };
+  try {
+    const ok = pts.map((p, i) => (p ? i : -1)).filter(i => i >= 0);
+    const r = await fetch(`https://api.openrouteservice.org/v2/matrix/${mode === "walk" ? "foot-walking" : "driving-car"}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: key },
+      body: JSON.stringify({ locations: ok.map(i => [pts[i]!.lng, pts[i]!.lat]), metrics: ["duration"] }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!r.ok) return { M: est, source: "estimate", note: `무료 경로(OpenRouteService) 오류 ${r.status}` };
+    const body = (await r.json()) as { durations?: (number | null)[][] };
+    const M = est.map(row => row.slice());
+    const factor = mode === "car" ? BUS_FACTOR : 1;
+    body.durations?.forEach((row, a) => row.forEach((sec, b) => {
+      if (sec == null || a === b) return;
+      // 타고 내리는 시간 5분은 거리 어림과 같게 더한다
+      M[ok[a]][ok[b]] = Math.round((sec / 60) * factor + (mode === "car" ? 5 : 0));
+    }));
+    return { M, source: "ors", note: "" };
+  } catch { return { M: est, source: "estimate", note: "무료 경로(OpenRouteService)에 연결하지 못했습니다" }; }
+}
 
 export async function travelMatrix(places: EnginePlace[], mode: MoveMode): Promise<MatrixResult> {
   const est = estimateMatrix(places, mode);
   const key = mapsKey();
   const pts = places.map(p => (p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : null));
-  if (!key) return { M: est, source: "estimate", note: "서버에 GOOGLE_MAPS_API_KEY가 없습니다" };
   if (pts.filter(Boolean).length < 2) return { M: est, source: "estimate", note: "좌표를 찾은 장소가 2곳 미만입니다" };
   // Google Routes는 호출마다 요금이 나가므로, 같은 좌표·이동수단 조합은 7일 동안 다시 쓴다(성공한 결과만)
   const rounded = pts.map(p => (p ? [Math.round(p.lat * 1e5) / 1e5, Math.round(p.lng * 1e5) / 1e5] : null));
-  return cached("routes", { rounded, mode }, 7 * DAY, () => googleMatrix(key, pts, est, mode), r => r.source === "google");
+  await refreshAiSettings();
+  const ors = orsKey();
+  // 구글 키가 없으면(또는 구글이 거절하면) 무료 도로 경로로 — 같은 조합은 30일 다시 쓴다
+  const free = async (why: string): Promise<MatrixResult> => {
+    if (!ors) return { M: est, source: "estimate", note: why };
+    const r = await cached("routes-ors", { rounded, mode }, 30 * DAY, () => orsMatrix(ors, pts, est, mode), x => x.source === "ors");
+    return r.source === "ors" ? r : { ...r, note: `${why} · ${r.note}` };
+  };
+  if (!key) return free("서버에 GOOGLE_MAPS_API_KEY가 없습니다");
+  const g = await cached("routes", { rounded, mode }, 7 * DAY, () => googleMatrix(key, pts, est, mode), r => r.source === "google");
+  return g.source === "google" ? g : free(g.note);
 }
 
 async function googleMatrix(key: string, pts: ({ lat: number; lng: number } | null)[], est: number[][], mode: MoveMode): Promise<MatrixResult> {
@@ -236,7 +278,7 @@ async function googleMatrix(key: string, pts: ({ lat: number; lng: number } | nu
 /* ── 전체 ── */
 export interface PlanResponse extends PlanResult {
   places: (EnginePlace & { knowledge?: PlaceKnowledge })[];
-  context: { weekday: number | null; holiday: string | null; sunset: string | null; sunrise: string | null; matrix: "google" | "estimate"; matrixNote?: string; looked: number; known: number };
+  context: { weekday: number | null; holiday: string | null; sunset: string | null; sunrise: string | null; matrix: "google" | "ors" | "estimate"; matrixNote?: string; looked: number; known: number };
 }
 
 export async function planCourse(req: PlanRequest): Promise<PlanResponse> {
@@ -305,6 +347,8 @@ export async function planCourse(req: PlanRequest): Promise<PlanResponse> {
     start: req.start, weekday: weekday ?? undefined, maxEnd: req.maxEnd, mode: req.mode, audience: req.audience as Audience,
     lunch: { from: "11:30", to: lunchEnd }, dinner: { from: "18:00", to: "20:30" }, sunset: sun?.sunset, bufferMin: 5,
     exactLegs, fixedStart: req.fixedStart, ...(req.homeRegion ? { homeRegion: req.homeRegion } : {}),
+    // 교통을 반영한 구글 경로가 아니면 출퇴근 시간 차량 이동을 1.3배로
+    rushHour: source !== "google",
   };
   const r = planDay(places, M, o, req.reorder);
   // 공휴일은 감점하지 않고 안내만 한다(화면 머리줄에 표시) — 실제 휴관은 영업시간으로 잡힌다

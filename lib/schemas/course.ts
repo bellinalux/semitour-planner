@@ -205,6 +205,8 @@ function toItem(raw: ParsedCourse["days"][number]["items"][number], id: string):
     type: itemType(raw),
     admission: raw.admission,
     timeNote: raw.timeNote.trim() || undefined,
+    // 원문에 소요 시간이 적혀 있으면("약 30분 소요") 체류 근거는 업체 표기 — 표준표로 덮지 않는다
+    ...(/\d/.test(raw.timeNote) && raw.type !== "flight" ? { staySource: "competitor" as const } : {}),
     ...(/^\d{1,2}:\d{2}$/.test((raw.fixedTime ?? "").trim()) && raw.type !== "flight" ? { fixedTime: raw.fixedTime.trim().padStart(5, "0") } : {}),
     name: raw.name.trim(),
     description: raw.description.trim(),

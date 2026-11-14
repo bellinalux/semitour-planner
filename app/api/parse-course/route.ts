@@ -7,6 +7,8 @@ import { buildCourseUserPrompt, COURSE_SYSTEM_PROMPT } from "@/lib/server/course
 import { GeminiError, generateJson } from "@/lib/server/gemini";
 import { guardRequest } from "@/lib/server/guard";
 import { withAiInfo } from "@/lib/server/aiProviders";
+import { learnAgencyStays } from "@/lib/knowledge";
+import { updateCity } from "@/lib/server/knowledgeStore";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -79,12 +81,28 @@ async function handlePost(request: Request) {
           return ground.reduce((x, g) => addGround(x, g.kind, g.label, g.obs), doc);
         });
     }
+    // 원문에 소요 시간이 적힌 관광("약 30분 소요")은 지식 창고에 업체 표기로 쌓는다 — 다음 코스의 체류 시간 근거
+    await learnFromSupplier(plan).catch(() => undefined);
     return Response.json(plan);
   } catch (err) {
     if (err instanceof GeminiError) return errorResponse(err.code, err.message, err.status);
     console.error("[parse-course]", err);
     return errorResponse("INTERNAL", "코스 분석 중 알 수 없는 오류가 발생했습니다.", 500);
   }
+}
+
+async function learnFromSupplier(plan: ReturnType<typeof toCoursePlan>) {
+  const byCity = new Map<string, { name: string; minutes: number }[]>();
+  const fallback = plan.meta.cities?.[0] ?? "";
+  for (const d of plan.days) {
+    const city = (d.overnightCity ?? "").trim() || fallback;
+    if (!city) continue;
+    for (const i of d.items)
+      if (i.staySource === "competitor" && ["sightseeing", "experience", "shopping", "massage"].includes(i.type ?? "sightseeing") && i.stayMinutes > 0)
+        byCity.set(city, [...(byCity.get(city) ?? []), { name: i.name, minutes: i.stayMinutes }]);
+  }
+  // 여행사 이름은 알 수 없어 "포함한 여행사" 점수에는 넣지 않는다 (체류 시간만)
+  await Promise.all([...byCity].map(([city, stays]) => updateCity(city, (doc) => learnAgencyStays(doc, stays.slice(0, 20)))));
 }
 
 /** 대체 AI(Groq·Cloudflare)가 답하면 응답 머리글로 화면에 알린다 */

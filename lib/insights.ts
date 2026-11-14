@@ -4,6 +4,8 @@ import { ourPolicy } from "@/lib/competitorDiff";
 import { lastPriceChange } from "@/lib/competitors";
 import type { DayMove } from "@/lib/dayBalance";
 import { calcDayLoad } from "@/lib/dayLoad";
+import { courseChecks, courseStructure, structureCompare, type CourseFix } from "@/lib/courseStandards";
+import { packageRules } from "@/lib/packageRules";
 import { formatDuration } from "@/lib/format";
 import { FX_ALERT_PCT, type FxDrift } from "@/lib/fxDrift";
 import type { SeasonResponse } from "@/lib/schemas/season";
@@ -46,7 +48,8 @@ export type InsightAction =
   | { kind: "group-areas"; day: number; label: string }
   | { kind: "find-competitors"; label: string }
   | { kind: "confirm-costs"; keys: CostKey[]; label: string }
-  | { kind: "apply-fx"; label: string };
+  | { kind: "apply-fx"; label: string }
+  | { kind: "course-fix"; fix: CourseFix; label: string };
 
 export interface Insight {
   id: string;
@@ -274,6 +277,16 @@ export function buildInsights({ input, days, pmChoice, meta, quote, budgetFit, m
           ? { kind: "scroll", target: `day-${day.day}`, label: "일정 보기" }
           : { kind: "fix-day-time", days: [day.day], label: "일정 시간 검증으로 맞추기" },
     });
+  }
+
+  // ④-0 코스 시간·구성 기준 (표준 체류·단체 여유·기사 구속·여유·한 방향 동선·료칸)
+  {
+    const region = packageRules(input, days.map((d) => d.overnightCity ?? "")).region;
+    for (const c of courseChecks(input, days, pmChoice, { region }))
+      out.push({ id: c.id, tone: c.tone, title: c.title, detail: c.detail, ...(c.fix ? { action: { kind: "course-fix" as const, fix: c.fix.fix, label: c.fix.label } } : {}) });
+    // ⑮ 타사 상품 구성과 비교 (링크·붙여넣기로 가져온 상품)
+    const cmp = structureCompare(courseStructure(days, pmChoice), input.competitors.flatMap((c) => (c.structure ? [c.structure] : [])));
+    if (cmp && days.length > 0) out.push({ id: "structure-compare", tone: "info", title: "타사 상품 구성과 비교", detail: `${cmp.line} / ${cmp.ours}` });
   }
 
   // ④-1 지그재그 동선 — 떠났던 구역으로 되돌아오는 날 (복귀 이동·식사·밤 일정은 제외)

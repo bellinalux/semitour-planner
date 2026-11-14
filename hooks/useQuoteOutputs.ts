@@ -2,6 +2,7 @@
 
 import { DOC_LABELS, type DocKind } from "@/components/print/PrintDocuments";
 import { buildEmojiCustomerText } from "@/lib/exportEmoji";
+import { buildPackageFormatText } from "@/lib/exportPackage";
 import { buildCustomerText, buildInternalText } from "@/lib/exportText";
 import { buildListing, listingCsv, listingText } from "@/lib/channelExport";
 import type { PmChoice } from "@/lib/itinerary";
@@ -55,6 +56,12 @@ export function useQuoteOutputs({ input, days, pmChoice, meta, quote, usps, quot
     getCustomerText: () => {
       const text = buildCustomerText(customerExportData());
       logIssued("copy", "고객용 문구");
+      return text;
+    },
+    /** 대형사 일정표 형식 (날짜 요약 + 번호 세부) — 채널 등록 글 */
+    getPackageText: () => {
+      const text = buildPackageFormatText({ input, days, pmChoice });
+      logIssued("copy", "대형사 형식 일정표");
       return text;
     },
     getEmojiText: () => {

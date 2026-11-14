@@ -261,7 +261,7 @@ const placeCount = (items: ItineraryItem[]) => items.filter((i) => !NOT_PLACE.ha
 const MARKET = /시장|마켓|market|몰|mall|거리|스트리트|street|아울렛|outlet|백화점|플라자|야시장|아시아티크|터미널\s*21|로드|올드타운/i;
 export const isShoppingCenter = (it: ItineraryItem) => it.type === "shopping" && !MARKET.test(it.name);
 const SPECIAL = /특식|씨푸드|해산물|랍스터|스테이크|코스|뷔페|BBQ|바비큐|샤브|수끼|훠궈|미쉐린|파인\s*다이닝|선상\s*디너|디너\s*크루즈|가이세키|와규|킹크랩|대게|무제한|정식/i;
-const isSpecialMeal = (it: ItineraryItem) => (it.type === "meal" || /디너|dinner/i.test(it.name)) && SPECIAL.test(`${it.name} ${it.cuisine ?? ""} ${it.description ?? ""}`);
+export const isSpecialMeal = (it: ItineraryItem) => (it.type === "meal" || /디너|dinner/i.test(it.name)) && SPECIAL.test(`${it.name} ${it.cuisine ?? ""} ${it.description ?? ""}`);
 const isFlightDay = (d: DayPlan) => d.items.some((i) => i.type === "flight");
 /** 항공으로 시작하는 날 (도착일) — 미팅 시각이 항공에 달려 있다 */
 const startsWithFlight = (d: DayPlan) => (d.kind === "semi" ? d.amGuided : d.items).find((i) => !/조식/.test(i.name))?.type === "flight";

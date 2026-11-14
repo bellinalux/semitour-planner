@@ -45,7 +45,7 @@ export function normalizeSpecialTermSettings(v: unknown): SpecialTermSettings {
 }
 
 interface TermContext {
-  input: Pick<TripInput, "includesFlights" | "tripScope" | "currency" | "packageType">;
+  input: Pick<TripInput, "includesFlights" | "tripScope" | "currency" | "packageType"> & Partial<Pick<TripInput, "productTier">>;
   settings: SpecialTermSettings;
 }
 
@@ -135,6 +135,15 @@ export const SPECIAL_TERMS: SpecialTerm[] = [
       "선택관광은 현지에서 신청·결제하며, 참여하지 않는 여행자는 인솔자가 안내하는 장소에서 자유시간을 보내거나 대기합니다. 선택관광·쇼핑에 참여하지 않는다는 이유로 추가 요금 등 불이익을 주지 않습니다.",
     differs: "운영 방식을 적은 것입니다(불참 불이익 금지 포함).",
     recommended: (c) => c.input.tripScope === "overseas",
+  },
+  {
+    id: "no-hidden-cost",
+    region: null,
+    title: "일정표 밖 비용 보상",
+    text: () =>
+      "여행 일정표에 적지 않은 선택관광·쇼핑센터 방문·가이드·기사 경비를 현지에서 요구받아 여행자가 지불한 경우, 여행사는 그 금액을 전액 보상합니다. 천재지변 등으로 일정을 대체한 경우와 여행자가 스스로 요청한 선택관광·개인 쇼핑은 제외합니다.",
+    differs: "표준약관보다 여행자에게 유리한 약속입니다(대형사 노팁·노옵션·노쇼핑 상품의 개런티 방식).",
+    recommended: (c) => c.input.productTier === "premium" || c.input.productTier === "signature",
   },
   {
     id: "documents",

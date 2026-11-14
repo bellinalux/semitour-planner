@@ -3,7 +3,7 @@
 import { Loader2, RotateCcw, Sparkles, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CourseFile } from "@/lib/courseFile";
-import type { CompanyProfile, FlightOption, TripInput } from "@/types";
+import type { CompanyProfile, DayPlan, FlightOption, TripInput } from "@/types";
 import { AdvancedFolder } from "./AdvancedFolder";
 import { CostFolder } from "./CostFolder";
 import { DocumentSection } from "./DocumentSection";
@@ -13,6 +13,7 @@ import { SalesSetupSection } from "./SalesSetupSection";
 import type { SettingsFocus } from "./settingsFocus";
 import { TripBasicsSection } from "./TripBasicsSection";
 import { ProductLinkImport } from "./ProductLinkImport";
+import { PlaceCart } from "./PlaceCart";
 
 interface Props {
   input: TripInput;
@@ -36,6 +37,8 @@ interface Props {
   focus: SettingsFocus | null;
   /** 회사 설정 (계약서 특약 금액 등) */
   company?: CompanyProfile;
+  /** 장소 담기 → 자동 배치로 만든 일정을 넣는다 */
+  onApplyDays?: (days: DayPlan[]) => void;
 }
 
 /**
@@ -59,6 +62,7 @@ export function TripInputForm({
   stays,
   focus,
   company,
+  onApplyDays,
 }: Props) {
   const isPaste = input.mode === "paste";
   const canGenerate = isPaste
@@ -100,6 +104,7 @@ export function TripInputForm({
             if (generate && !busy) onGenerate({ override: patch });
           }}
         />
+        {onApplyDays && <PlaceCart input={input} onApplyDays={onApplyDays} />}
         {!isPaste && <OneLineRequest input={input} onChange={onChange} />}
         <div className="flex items-center justify-end gap-1 text-[11px]">
           <span className="mr-auto px-1 font-semibold text-slate-500">입력 폴더</span>
