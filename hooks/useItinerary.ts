@@ -11,6 +11,7 @@ import type { DayFillResponse } from "@/lib/schemas/dayFill";
 import { applyFlightWithMeals } from "@/lib/flightApply";
 import { flightHasTimes, lunchAfterArrival, withPastedFlight } from "@/lib/pasteFlight";
 import { fixCourseOrder } from "@/lib/courseOrder";
+import { spillAllLate } from "@/lib/courseStandards";
 import { dayFillToItem, insertItem, insertItems } from "@/lib/tourItem";
 import type { CourseFile } from "@/lib/courseFile";
 import type { ParsedSupplierQuote } from "@/lib/schemas/course";
@@ -66,8 +67,10 @@ export interface GeneratedItinerary {
 }
 
 /** 도착일·출국일 빈 시간을 웹 추천 일정(/api/suggest-day-fill)으로 채운다. 실패하면 그대로 (일정 카드의 채우기 버튼이 남는다) */
-async function fillFlightDayGaps(days: DayPlan[], input: TripInput, signal: AbortSignal): Promise<DayPlan[]> {
-  const gaps = flightDayGaps(days, (d) => calcDayGap(d, {}, false));
+async function fillFlightDayGaps(days: DayPlan[], input: TripInput, signal: AbortSignal, opts: { onlyEmpty?: boolean } = {}): Promise<DayPlan[]> {
+  // 업체 코스는 원문을 존중한다 — 그날 원문에 관광·식사가 하나라도 있으면 채우지 않는다 (남는 시간은 일정 카드의 채우기 버튼으로)
+  const hasOwn = (d: DayPlan) => d.items.some((i) => ["sightseeing", "experience", "shopping", "massage", "meal"].includes(i.type ?? "sightseeing") && !/조식/.test(i.name));
+  const gaps = flightDayGaps(days, (d) => calcDayGap(d, {}, false)).filter((g) => !opts.onlyEmpty || !hasOwn(days[g.index]));
   if (gaps.length === 0) return days;
   const results = await Promise.all(
     gaps.map(async (g) => {
@@ -133,10 +136,14 @@ async function requestItinerary(
     // (원문에 항공 시각이 없으면 첫날이 08:00 출발, 귀국편이 오전으로 찍히던 문제)
     const flight = pastedCourseFlight(input, result.meta);
     // 상품 페이지의 날짜 요약 순서를 읽어 "호텔 → 관광", "귀국편 → 관광"처럼 꼬인 날을 먼저 바로잡는다 (항공 시각은 그 뒤에)
-    const ordered = fixCourseOrder(result.days);
+    // 원문의 날짜별 글로 다른 날짜에 들어간 장소도 원래 날짜로 돌려놓는다
+    const ordered = fixCourseOrder(result.days, { sourceText: input.courseText });
+    const timed = flight ? withPastedFlight(ordered.days, flight) : ordered.days;
+    // 항공 시각을 맞춘 뒤에도 저녁에 조식 줄·21:30 넘어 시작하는 낮 관광이 남으면 다음 날 아침으로 (마지막 안전장치)
+    const spilled = spillAllLate(timed);
     return {
-      days: flight ? withPastedFlight(ordered.days, flight) : ordered.days,
-      orderFixes: ordered.fixes,
+      days: spilled.days,
+      orderFixes: [...ordered.fixes, ...spilled.moved.map((d) => ({ day: d, note: "날짜 경계 바로잡음: 밤늦게 놓인 다음 날 일정을 다음 날 아침으로" }))],
       meta: result.meta,
       detected: { days: result.totalDays, nights: result.nights, cities: result.meta.cities, origin: originOfCourse(result.days) },
       sources: [],
@@ -216,7 +223,7 @@ export function useItinerary() {
       // 항공 포함 AI 코스: 도착일 오후·출국일 공항 대기가 비어 있으면(AI가 비워 보냄) 추천 일정으로 바로 채운다
       // 업체 코스(붙여넣기·상품 링크)도 확인된 항공편이 있으면 같은 방식으로 빈 시간만 채운다 (원문 항목은 그대로)
       if ((input.mode === "ai" && flightTimesFor(input)) || (input.mode === "paste" && pastedCourseFlight(input, raw.meta))) {
-        const filled = await fillFlightDayGaps(finished.days, input, controller.signal);
+        const filled = await fillFlightDayGaps(finished.days, input, controller.signal, { onlyEmpty: input.mode === "paste" });
         if (filled !== finished.days) finished = { ...finished, days: tidyDays(filled) };
       }
       const fit = { changes: [...(raw.orderFixes ?? []), ...finished.changes] };
