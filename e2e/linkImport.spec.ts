@@ -154,3 +154,45 @@ test("상품 링크: 날짜 요약 순서로 읽힌 코스(호텔→관광, 귀�
   await expect(page.locator("#day-3")).toContainText("17:50");
   await expect(page.getByText(/순서 바로잡음/).first()).toBeVisible();
 });
+
+test("상품 링크: 2일차 아침이 1일차 숙박 뒤로 들어와도 다음 날로 돌려 첫날 체크인이 밤늦게 되지 않는다", async ({ page }) => {
+  await mockAi(page);
+  const fuk = {
+    ...imported, productName: "후쿠오카 3일 힐튼1박+히젠야료칸1박", destination: "후쿠오카", departureDate: "2026-12-09", courseDetail: true,
+    outbound: { airline: "제주항공", flightNumber: "7C1405", date: "2026-12-09", departAirport: "인천", departTime: "15:20", arriveAirport: "후쿠오카", arriveTime: "16:50" },
+    inbound: { airline: "제주항공", flightNumber: "7C1406", date: "2026-12-11", departAirport: "후쿠오카", departTime: "17:50", arriveAirport: "인천", arriveTime: "19:30" },
+    courseText: "1일차2026.12.09.(수)\n라라포트 후쿠오카\n시사이드 모모치\n2일차2026.12.10.(목)\n야나가와 뱃놀이\n가마도 지옥\n유후인 민예촌\n3일차2026.12.11.(금)\n다자이후 텐만구",
+    url: "https://pkgtour.naver.com/products/ybtour/JKP14657C00-20261209",
+  };
+  await page.route("**/api/import-product", (r) => r.fulfill({ json: fuk }));
+  const it = (id: string, name: string, type: string, stay = 60, travel = 30) => ({ ...item(id, name, stay, type), travelMinutesToNext: travel });
+  const d = (n: number, items: ReturnType<typeof it>[], city: string) => ({ ...day(n, items), overnightCity: city });
+  await page.route("**/api/parse-course", (r) =>
+    r.fulfill({
+      json: {
+        days: [
+          d(1, [it("a1", "인천 출발", "flight", 0, 85), it("a2", "후쿠오카 공항 도착", "flight", 0, 15), it("a3", "라라포트 후쿠오카", "shopping", 60, 20), it("a4", "시사이드 모모치", "sightseeing", 40, 20), it("a5", "힐튼 후쿠오카 시 호크", "hotel", 0, 0), it("a6", "호텔 조식 후", "hotel", 0, 90), it("a7", "야나가와 뱃놀이", "experience", 30, 90), it("a8", "가마도 지옥", "sightseeing", 40, 30)], "후쿠오카"),
+          d(2, [it("b1", "유후인 민예촌", "sightseeing", 60, 60), it("b2", "츠에타테 히젠야", "hotel", 0, 0)], "구마모토"),
+          d(3, [it("c1", "호텔 조식 후", "hotel", 0, 60), it("c2", "다자이후 텐만구", "sightseeing", 60, 40), it("c3", "후쿠오카 공항 출발", "flight", 0, 90), it("c4", "인천 도착", "flight", 0, 0)], ""),
+        ],
+        meta: { packageName: "후쿠오카 3일", cities: ["후쿠오카", "구마모토"], noShopping: false, noOption: false, hotelGrade: "", highlights: [], flight: null },
+        nights: 2,
+        totalDays: 3,
+        quote: null,
+      },
+    }),
+  );
+  await page.route("**/api/suggest-day-fill", (r) => r.fulfill({ json: { suggestions: [], sources: [], searched: false } }));
+  await page.goto("/");
+  const box = page.getByRole("region", { name: "상품 링크로 만들기" });
+  await box.getByLabel("상품 링크").fill(fuk.url);
+  await box.getByRole("button", { name: "읽기" }).click();
+  await box.getByRole("button", { name: "이 상품 코스 그대로 가져오기" }).click();
+
+  const d1 = page.locator("#day-1");
+  await expect(d1).toContainText("시사이드 모모치", { timeout: 30_000 });
+  await expect(d1).not.toContainText("야나가와 뱃놀이");
+  await expect(d1).not.toContainText("호텔 조식 후");
+  await expect(page.locator("#day-2")).toContainText("야나가와 뱃놀이");
+  await expect(page.getByText(/날짜 경계 바로잡음/).first()).toBeVisible();
+});

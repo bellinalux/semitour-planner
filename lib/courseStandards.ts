@@ -262,16 +262,68 @@ export function toursAfterRyokan(day: DayPlan): ItineraryItem[] {
   return day.items.slice(k + 1).filter((i) => ["sightseeing", "experience", "shopping"].includes(i.type ?? "sightseeing") && !/온천|족욕|노천/.test(i.name));
 }
 
+// ── 하루 끝 상한 · 저녁에 놓인 조식 줄 ─────────────────────────────
+
+export const LATE_TOUR_START = 21 * 60 + 30;
+export const DAY_HARD_END = 22 * 60;
+const BREAKFAST_MARK = /조식|체크\s*아웃/;
+
+/** 다음 날로 넘겨야 할 첫 줄 — 낮 12시 뒤 조식·체크아웃 줄, 또는 21:30 뒤에 시작하는 낮 관광 (숙박·석식·야경은 제외) */
+function spillStart(day: DayPlan): { index: number; reason: string; at: number } | null {
+  if (day.kind !== "linear") return null;
+  const slots = walkTimeline(day.items, dayTourStart(day));
+  for (const s of slots) {
+    const t = s.start;
+    if (BREAKFAST_MARK.test(s.item.name) && s.item.type !== "flight" && t % 1440 >= 12 * 60) return { index: day.items.indexOf(s.item), reason: `${s.item.name}이 ${formatClock(t)}`, at: t };
+    const night = /야경|분수|쇼|나이트|야시장|불꽃|밤|night|라이트업|온천/i.test(s.item.name);
+    if (["sightseeing", "experience", "shopping"].includes(s.item.type ?? "sightseeing") && !night && t >= LATE_TOUR_START) return { index: day.items.indexOf(s.item), reason: `${s.item.name} ${formatClock(t)} 시작`, at: t };
+  }
+  return null;
+}
+
+/** 늦게 놓인 줄부터 끝까지를 다음 날 맨 앞으로 (숙박 줄은 이 날 끝에 남긴다) */
+export function spillToNextDay(days: DayPlan[], dayNo: number): DayPlan[] {
+  const i = days.findIndex((d) => d.day === dayNo);
+  if (i < 0 || i >= days.length - 1) return days;
+  const s = spillStart(days[i]);
+  if (!s) return days;
+  const d = days[i];
+  const tail = d.items.slice(s.index);
+  const stays = tail.filter((x) => x.type === "hotel" && !BREAKFAST_MARK.test(x.name));
+  const moved = tail.filter((x) => !stays.includes(x));
+  const next = days[i + 1];
+  const dup = moved.length > 0 && BREAKFAST_MARK.test(moved[0].name) && next.items.length > 0 && BREAKFAST_MARK.test(next.items[0].name);
+  const out = days.slice();
+  out[i] = { ...d, items: [...d.items.slice(0, s.index), ...stays.map((x) => ({ ...x, travelMinutesToNext: 0 }))] };
+  out[i + 1] = { ...next, items: [...moved, ...(dup ? next.items.slice(1) : next.items)] };
+  return out;
+}
+
+/** 늦은 줄이 있는 날 모두 (업체 코스를 넣을 때 자동으로) */
+export function spillAllLate(days: DayPlan[]): { days: DayPlan[]; moved: number[] } {
+  let out = days;
+  const moved: number[] = [];
+  for (const d of days.slice(0, -1)) {
+    const cur = out.find((x) => x.day === d.day)!;
+    if (!spillStart(cur)) continue;
+    out = spillToNextDay(out, d.day);
+    moved.push(d.day);
+  }
+  return { days: out, moved };
+}
+
 // ── 고치기 ─────────────────────────────
 
 export type CourseFix =
   | { kind: "stay-standard" }
   | { kind: "group-buffer"; minutes: number }
-  | { kind: "meeting"; days: number[]; time: string };
+  | { kind: "meeting"; days: number[]; time: string }
+  | { kind: "spill"; day: number };
 
 export function applyCourseFix(fix: CourseFix, days: DayPlan[], pmChoice: PmChoice): DayPlan[] {
   if (fix.kind === "stay-standard") return fitStayStandard(days, pmChoice);
   if (fix.kind === "group-buffer") return applyGroupBuffer(days, fix.minutes).days;
+  if (fix.kind === "spill") return spillToNextDay(days, fix.day);
   return days.map((d) => (fix.days.includes(d.day) ? { ...d, meetingTime: fix.time } : d));
 }
 
@@ -287,6 +339,28 @@ export interface CourseCheck {
 export function courseChecks(input: Pick<TripInput, "travelers" | "selectedFlight" | "selectedHotels" | "destination">, days: DayPlan[], pmChoice: PmChoice, opts: { region?: string } = {}): CourseCheck[] {
   const out: CourseCheck[] = [];
   if (days.length === 0) return out;
+
+  // 하루 끝 상한 — 저녁에 놓인 조식 줄·21:30 넘어 시작하는 낮 관광은 다음 날 일정이 이 날에 들어간 것
+  for (const d of days.slice(0, -1)) {
+    const sp = spillStart(d);
+    if (sp)
+      out.push({
+        id: `spill-${d.day}`,
+        tone: "warn",
+        title: `DAY ${d.day} ${sp.reason} — 다음 날 일정이 이 날에 들어간 것 같습니다`,
+        detail: "숙박 체크인이 한밤중이 됩니다. 그 줄부터 끝까지를 다음 날 아침으로 옮깁니다 (숙박은 이 날 끝에 남김)",
+        fix: { fix: { kind: "spill", day: d.day }, label: `DAY ${d.day + 1} 아침으로 옮기기` },
+      });
+    else {
+      const items = dayItems(d, pmChoice);
+      const slots = walkTimeline(items, dayTourStart(d));
+      const lastNonHotel = [...slots].reverse().find((x) => x.item.type !== "hotel");
+      const hotel = slots.find((x) => x.item.type === "hotel" && !BREAKFAST_MARK.test(x.item.name) && x === slots[slots.length - 1]);
+      const end = hotel?.start ?? lastNonHotel?.end;
+      if (end !== undefined && end > DAY_HARD_END)
+        out.push({ id: `late-${d.day}`, tone: "warn", title: `DAY ${d.day} ${hotel ? "호텔 도착" : "일정 끝"} ${formatClock(end)}`, detail: "22시를 넘깁니다. 단체 일정은 21시 전후 호텔 도착이 기준입니다 — 관광을 다음 날로 옮기거나 선택관광으로 빼세요" });
+    }
+  }
 
   // ① 표준 체류
   const stays = stayIssues(days, pmChoice);

@@ -30,9 +30,24 @@ export function linkFacts(raw: string): { departureDate: string; productCode: st
 }
 
 /** 일정 원문을 날짜(제1일·DAY 1·1일차)로 나눠 날짜별 줄 수 — 빠진 날을 화면에서 바로 보이게 */
+/** 날짜 머리 줄 ("제1일", "DAY 1", "1일차2026.12.09.(수)", "1일 (12/09)") */
+const DAY_HEAD = /^\s*(?:\[?\s*)?(?:제\s*(\d{1,2})\s*일|DAY\s*(\d{1,2})|(\d{1,2})\s*일\s*차|(\d{1,2})일\s*(?=[(\s:]))/i;
+
+/** 일정 원문을 날짜별 글로 나눈다 (날짜 머리 줄이 없으면 빈 Map) — 장소가 원래 어느 날짜였는지 확인할 때 쓴다 */
+export function courseTextByDay(text: string): Map<number, string> {
+  const out = new Map<number, string>();
+  let cur = 0;
+  for (const line of text.split(/\r?\n/)) {
+    const m = DAY_HEAD.exec(line);
+    if (m) cur = Number(m[1] ?? m[2] ?? m[3] ?? m[4]);
+    if (cur > 0) out.set(cur, `${out.get(cur) ?? ""}\n${line}`);
+  }
+  return out;
+}
+
 export function courseDayCounts(text: string): { day: number; lines: number }[] {
   const out: { day: number; lines: number }[] = [];
-  const head = /^\s*(?:\[?\s*)?(?:제\s*(\d{1,2})\s*일|DAY\s*(\d{1,2})|(\d{1,2})\s*일\s*차|(\d{1,2})일\s*(?=[(\s:]))/i;
+  const head = DAY_HEAD;
   for (const line of text.split(/\r?\n/)) {
     const m = head.exec(line);
     if (m) {
