@@ -4,6 +4,7 @@ import { AlertTriangle, FileSignature } from "lucide-react";
 import { inputClass } from "@/components/ui/Field";
 import { contractTermRisks, contractTerms, entryNotes, REGION_LABEL, termChoices, termRegions } from "@/lib/specialTerms";
 import type { CompanyProfile, TripInput } from "@/types";
+import { fastPaste } from "@/lib/fastPaste";
 
 /**
  * 이 상품의 여행계약서 특약 — 여행지에 맞춰 추천한 특약을 켜고 끄고, 이 상품만의 특약을 더한다.
@@ -55,6 +56,7 @@ export function SpecialTermsPanel({ input, onChange, company }: { input: TripInp
           rows={2}
           value={input.customSpecialTerms}
           onChange={(e) => onChange({ customSpecialTerms: e.target.value })}
+          onPaste={fastPaste((customSpecialTerms) => onChange({ customSpecialTerms }))}
           placeholder="예) 크루즈 일정은 선사 규정에 따라 출발 60일 전부터 취소료가 발생합니다."
           className={`${inputClass} mt-1 resize-y`}
         />

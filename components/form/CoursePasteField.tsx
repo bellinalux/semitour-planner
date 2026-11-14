@@ -9,6 +9,7 @@ import {
   mimeTypeForCourseFile,
   type CourseFile,
 } from "@/lib/courseFile";
+import { fastPaste } from "@/lib/fastPaste";
 
 interface Props {
   value: string;
@@ -79,6 +80,9 @@ export function CoursePasteField({ value, onChange, file, onFileChange }: Props)
             : "예)\nDAY 1\n✈️ 인천 출발\n↓\n방콕 도착\n↓\n🏨 파타야 5성급 리조트 체크인\n\nDAY 2\n🏝️ ① 산호섬\n↓\n🛕 ② 진리의 성전"
         }
         onChange={(e) => onChange(e.target.value)}
+        // 긴 원문은 붙여넣기를 직접 받아 한 번에 넣는다 (브라우저 기본 붙여넣기는 1만 자에 수 초 멈춤) · 원문이라 맞춤법 검사 끔
+        onPaste={fastPaste(onChange, { maxLength: MAX_LENGTH })}
+        spellCheck={false}
         className={`${inputClass} resize-y font-mono text-xs leading-5`}
       />
       <p className="mt-1 text-right text-[11px] tabular-nums text-slate-400">
