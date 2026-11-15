@@ -1,5 +1,6 @@
 "use client";
 
+import { SERVICE_LABEL, STYLES, styleToTripPatch } from "@/lib/publicPlan";
 import { Inbox } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CopyButton } from "@/components/dashboard/CopyButton";
@@ -98,6 +99,19 @@ export function InquiryInbox({ openSignal, companyName, onMakeBooking, onFillInp
                       </a>
                     )}
                   </p>
+                  {q.planStyle && (
+                    <p className="flex flex-wrap gap-1 text-[11px]">
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 font-semibold text-sky-800">
+                        {STYLES[q.planStyle].label}
+                        {(q.planTourDays ?? []).length > 0 ? ` · 투어 ${q.planTourDays!.length}일` : ""}
+                      </span>
+                      {(q.planServices ?? []).map((x) => (
+                        <span key={x} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+                          {SERVICE_LABEL[x]}
+                        </span>
+                      ))}
+                    </p>
+                  )}
                   {(q.planDays ?? []).slice(0, 6).map((d) => (
                     <p key={d.day} className="text-[11px] text-slate-600">
                       DAY {d.day} {d.items.filter((i) => !["flight", "hotel", "transfer"].includes(i.type ?? "")).map((i) => i.name).join(" → ")}
@@ -134,6 +148,7 @@ export function InquiryInbox({ openSignal, companyName, onMakeBooking, onFillInp
                         days: q.planDays!.length,
                         ...(q.nights > 0 ? { nights: q.nights } : {}),
                         ...(inquiryDate(q.departure) ? { departureDate: inquiryDate(q.departure) } : {}),
+                        ...styleToTripPatch(q.planStyle, q.planServices),
                         ...((q.planCities ?? []).length > 1 ? { regionPlan: q.planCities!.map((c) => `${c.name} ${c.nights}박`).join(", ") } : {}),
                       })
                     }

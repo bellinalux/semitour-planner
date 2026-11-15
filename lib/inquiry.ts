@@ -1,3 +1,4 @@
+import { SERVICE_IDS, STYLE_IDS, type ServiceId, type TravelStyle } from "@/lib/publicPlan";
 import { z } from "zod";
 import type { DayPlan } from "@/types";
 
@@ -24,6 +25,10 @@ export const inquirySchema = z.object({
       planId: z.string().max(40).optional(),
       days: z.array(z.any()).min(1).max(15),
       cities: z.array(z.object({ name: z.string().max(40), nights: z.number().int().min(0).max(14) })).max(8).default([]),
+      /** 고객이 고른 여행 방식 · 맡길 것 · 가이드 투어로 바꾼 날 */
+      style: z.enum(STYLE_IDS).optional(),
+      services: z.array(z.enum(SERVICE_IDS)).max(SERVICE_IDS.length).default([]),
+      tourDays: z.array(z.number().int().min(1).max(30)).max(30).default([]),
     })
     .optional(),
   /** 개인정보 수집·이용 동의 (코스 만들기 화면에서 받음) */
@@ -35,6 +40,9 @@ export interface Inquiry extends Omit<InquiryInput, "website" | "plan"> {
   /** 고객이 만든 코스 (날짜별 일정) */
   planDays?: DayPlan[];
   planCities?: { name: string; nights: number }[];
+  planStyle?: TravelStyle;
+  planServices?: ServiceId[];
+  planTourDays?: number[];
   id: string;
   at: string;
   done: boolean;

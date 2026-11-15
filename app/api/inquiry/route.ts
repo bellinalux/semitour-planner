@@ -1,4 +1,4 @@
-import { compactDays } from "@/lib/publicPlan";
+import { compactDays, SERVICE_LABEL, STYLES } from "@/lib/publicPlan";
 import { getPublicSettings, notifyInquiry, recordStats } from "@/lib/server/publicPlan";
 import type { DayPlan } from "@/types";
 import { z } from "zod";
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     id: newShareId(),
     at: new Date().toISOString(),
     done: false,
-    ...(plan ? { source: { kind: "plan" as const, title: plan.title, ...(plan.planId ? { planId: plan.planId } : {}) }, planDays: compactDays(plan.days as DayPlan[]), planCities: plan.cities } : {}),
+    ...(plan ? { source: { kind: "plan" as const, title: plan.title, ...(plan.planId ? { planId: plan.planId } : {}) }, planDays: compactDays(plan.days as DayPlan[]), planCities: plan.cities, ...(plan.style ? { planStyle: plan.style } : {}), planServices: plan.services, planTourDays: plan.tourDays } : {}),
   };
   if (!(await addInquiry(item))) return errorResponse("NO_STORE", "지금은 접수할 수 없습니다. 전화로 문의해 주세요.", 503);
   // 고객 코스 통계·새 요청 알림 (실패해도 접수는 그대로)
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     await notifyInquiry(
       settings.notifyEmail,
       `[견적 요청] ${item.name} · ${item.destination} ${item.travelers}명${plan ? " (고객 코스)" : ""}`,
-      [`이름: ${item.name}`, `연락처: ${item.contact}`, `여행지: ${item.destination}`, `출발: ${item.departure || "미정"} · ${item.nights}박 · ${item.travelers}명`, item.requests ? `요청: ${item.requests}` : "", course ? `\n고객이 만든 코스:\n${course}` : "", "\n예약 관리 → 웹 견적 요청에서 확인하세요."].filter(Boolean).join("\n"),
+      [`이름: ${item.name}`, `연락처: ${item.contact}`, `여행지: ${item.destination}`, `출발: ${item.departure || "미정"} · ${item.nights}박 · ${item.travelers}명`, item.planStyle ? `여행 방식: ${STYLES[item.planStyle].label}${item.planServices?.length ? ` · 맡길 것: ${item.planServices.map((x) => SERVICE_LABEL[x]).join(", ")}` : ""}` : "", item.requests ? `요청: ${item.requests}` : "", course ? `\n고객이 만든 코스:\n${course}` : "", "\n예약 관리 → 웹 견적 요청에서 확인하세요."].filter(Boolean).join("\n"),
     ).catch(() => false);
   }
   return Response.json({ ok: true });
