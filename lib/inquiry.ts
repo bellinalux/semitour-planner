@@ -1,3 +1,4 @@
+import { serviceRequestSchema, type ServiceRequest } from "@/lib/serviceRequest";
 import { SERVICE_IDS, STYLE_IDS, type ServiceId, type TravelStyle } from "@/lib/publicPlan";
 import { z } from "zod";
 import type { DayPlan } from "@/types";
@@ -31,6 +32,8 @@ export const inquirySchema = z.object({
       tourDays: z.array(z.number().int().min(1).max(30)).max(30).default([]),
     })
     .optional(),
+  /** "우리에게 요청하기" — 항공권·호텔·유심 등 항목별 견적/예약 요청 */
+  asks: serviceRequestSchema.optional(),
   /** 개인정보 수집·이용 동의 (코스 만들기 화면에서 받음) */
   consent: z.boolean().optional(),
 });
@@ -43,6 +46,8 @@ export interface Inquiry extends Omit<InquiryInput, "website" | "plan"> {
   planStyle?: TravelStyle;
   planServices?: ServiceId[];
   planTourDays?: number[];
+  /** 항공권·호텔·유심 등 항목별 요청 (견적/예약) */
+  asks?: ServiceRequest;
   id: string;
   at: string;
   done: boolean;

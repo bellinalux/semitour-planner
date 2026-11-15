@@ -216,3 +216,25 @@ export function compactDays(days: DayPlan[]): DayPlan[] {
     pmFreeOptions: [],
   }));
 }
+
+/** "○○ 꼭 가볼 곳" 한 곳 — 어느 여행 방식이든 보여 준다 */
+export interface MustSpot {
+  name: string;
+  area: string;
+  kind: "sight" | "meal" | "activity" | "shopping" | "night";
+  /** 왜 가는지 한 줄 */
+  why: string;
+  tips: string[];
+  stayMin: number;
+  /** 한국 여행사 일정에 자주 들어가거나 우리 고객이 좋아한 곳 */
+  korean: boolean;
+  lat?: number;
+  lng?: number;
+}
+export interface MustSpots {
+  city: string;
+  /** 도심(가는 방법 기준점) */
+  center: { lat: number; lng: number } | null;
+  spots: MustSpot[];
+  source: "knowledge" | "wiki" | "none";
+}

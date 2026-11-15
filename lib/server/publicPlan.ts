@@ -4,7 +4,7 @@
  */
 import { finishCourse } from "@/lib/courseFinish";
 import { flightDaysRequest, flightTimesFor, withFlightDays } from "@/lib/flightPlan";
-import { placeScore, type PlaceCard } from "@/lib/knowledge";
+import { bestStay, placeScore, type PlaceCard } from "@/lib/knowledge";
 import { splitIntoDays, timelineToDay, type CartPlace } from "@/lib/placeCart";
 import {
   cacheKeyOf,
@@ -13,6 +13,8 @@ import {
   normalizePublicSettings,
   STYLES,
   toTripInput,
+  type MustSpot,
+  type MustSpots,
   type PublicPlanRequest,
   type PublicPlanResult,
   type PublicPlanSettings,
@@ -22,7 +24,7 @@ import type { DayPlan } from "@/types";
 import { workspaceId } from "./access";
 import { cached, DAY } from "./aiCache";
 import { getKnowledge, planCourse } from "./courseEngineServer";
-import { geocodeMany, wikiNearbyPlaces } from "./freeData";
+import { geocode, geocodeMany, wikiNearbyPlaces } from "./freeData";
 import { recordServerEvent } from "./errorLog";
 import { generateItineraryDays } from "./itineraryGenerate";
 import { getCity } from "./knowledgeStore";
@@ -347,6 +349,66 @@ export async function popularPlaces(destination: string, limit = 8): Promise<{ n
     .sort((a, b) => placeScore(b) - placeScore(a))
     .map((p) => ({ name: p.name, count: 0 }));
   return [...fromCustomers.sort((a, b) => b.count - a.count), ...extra].slice(0, limit);
+}
+
+const KIND_WORD: Record<MustSpot["kind"], string> = { sight: "명소", meal: "맛집", activity: "체험", shopping: "쇼핑", night: "야경·밤" };
+
+/** 한국인이 좋아하는 곳 — 한국 여행사 일정에 들어 있거나(2곳 이상) 우리 고객이 좋았다고 한 곳 */
+export const isKoreanFavorite = (p: PlaceCard) => p.agencies.length >= 2 || (p.votes?.best ?? 0) >= 2 || (p.sales?.won ?? 0) >= 2;
+
+/** 장소 카드 → 꼭 가볼 곳 한 줄 */
+export function spotOf(p: PlaceCard, rank: number): MustSpot {
+  const korean = isKoreanFavorite(p);
+  const why = [p.likes[0], korean ? `한국 여행사 일정 ${p.agencies.length}곳에 포함` : "", rank < 3 ? `인기 ${rank + 1}위` : ""].filter(Boolean).join(" · ") || `${p.area ? `${p.area} ` : ""}대표 ${KIND_WORD[p.kind]}`;
+  return { name: p.name, area: p.area, kind: p.kind, why, tips: p.tips.slice(0, 2), stayMin: bestStay(p) || 60, korean };
+}
+
+/** 꼭 가볼 곳 고르기 — 한국인 인기 먼저, 그다음 점수 순 (고객 평이 나쁜 곳은 뺀다) */
+export function rankSpots(places: PlaceCard[], limit = 10): MustSpot[] {
+  return places
+    .filter((p) => p.kind !== "meal" && (p.votes?.worst ?? 0) <= (p.votes?.best ?? 0) + 2)
+    .map((p) => ({ p, s: placeScore(p) + (isKoreanFavorite(p) ? 25 : 0) }))
+    .sort((a, b) => b.s - a.s)
+    .slice(0, limit)
+    .map((x, i) => spotOf(x.p, i));
+}
+
+/**
+ * "○○ 꼭 가볼 곳" — 지식 창고(한국 여행사·후기·우리 고객) → 없으면 위키백과 근처 명소. 좌표는 장소 지식·OpenStreetMap.
+ * 7일 저장해 두고 다시 쓴다 (AI 없음).
+ */
+export async function mustSeeSpots(destination: string, limit = 10): Promise<MustSpots> {
+  const city = destination.split(/[,/]/)[0].trim();
+  if (!city) return { city, center: null, spots: [], source: "none" };
+  return cached(
+    "public-spots-v1",
+    { city, limit },
+    7 * DAY,
+    async () => {
+      const doc = await getCity(city).catch(() => null);
+      let spots = rankSpots(doc?.places ?? [], limit);
+      let source: MustSpots["source"] = spots.length ? "knowledge" : "none";
+      const center = await geocode(city).catch(() => null);
+      if (spots.length < 4) {
+        const wiki = await wikiNearbyPlaces(city).catch(() => []);
+        const extra = wiki.filter((w) => !spots.some((s) => s.name === w.name)).slice(0, Math.min(8, limit) - spots.length);
+        if (extra.length) source = spots.length ? source : "wiki";
+        spots = [...spots, ...extra.map((w) => ({ name: w.name, area: "", kind: "sight" as const, why: "현지 대표 명소 (공개 자료)", tips: [], stayMin: 60, korean: false, lat: w.lat, lng: w.lng }))];
+      }
+      const names = spots.filter((s) => s.lat == null).map((s) => s.name);
+      if (names.length) {
+        const known = await getKnowledge(names, city).catch(() => ({}) as Awaited<ReturnType<typeof getKnowledge>>);
+        spots = spots.map((s) => (s.lat == null && known[s.name]?.lat != null ? { ...s, lat: known[s.name].lat!, lng: known[s.name].lng! } : s));
+        const still = spots.filter((s) => s.lat == null).map((s) => s.name);
+        if (still.length) {
+          const osm = await geocodeMany(still, city, 6).catch(() => new Map());
+          spots = spots.map((s) => (s.lat == null && osm.get(s.name) ? { ...s, lat: osm.get(s.name)!.lat, lng: osm.get(s.name)!.lng } : s));
+        }
+      }
+      return { city, center: center ? { lat: center.lat, lng: center.lng } : null, spots, source };
+    },
+    (v) => v.spots.length > 0,
+  );
 }
 
 /** 기간별 추천 코스 — 지식 창고의 인기 코스 묶음 (다른 여행사·후기에서 함께 도는 곳) */

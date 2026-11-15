@@ -1,5 +1,6 @@
 "use client";
 
+import { ASK_ICON, ASK_KIND_LABEL, askLine, askToTripPatch } from "@/lib/serviceRequest";
 import { SERVICE_LABEL, STYLES, styleToTripPatch } from "@/lib/publicPlan";
 import { Inbox } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -88,6 +89,25 @@ export function InquiryInbox({ openSignal, companyName, onMakeBooking, onFillInp
                   {q.source.options.length > 0 && <span className="text-slate-600">· 선택관광 {q.source.options.join(", ")}</span>}
                 </p>
               )}
+              {q.asks && (
+                <div aria-label="요청 항목" className="space-y-0.5 rounded-md bg-amber-50 px-2 py-1.5">
+                  <p className="flex flex-wrap items-center gap-1.5">
+                    <span className={`rounded px-1.5 py-0.5 text-[10.5px] font-semibold text-white ${q.asks.kind === "booking" ? "bg-rose-600" : "bg-amber-600"}`}>{ASK_KIND_LABEL[q.asks.kind]}</span>
+                    <b className="text-slate-800">{q.asks.items.map((x) => SERVICE_LABEL[x.id]).join(" · ")}</b>
+                    {q.asks.contactHow && (
+                      <span className="text-slate-500">
+                        연락: {q.asks.contactHow}
+                        {q.asks.contactWhen ? ` (${q.asks.contactWhen})` : ""}
+                      </span>
+                    )}
+                  </p>
+                  {q.asks.items.map((x) => (
+                    <p key={x.id} className="text-[11px] text-slate-700">
+                      {ASK_ICON[x.id]} {askLine(x)}
+                    </p>
+                  ))}
+                </div>
+              )}
               {q.source?.kind === "plan" && (
                 <div className="space-y-0.5 rounded-md bg-sky-50 px-2 py-1.5">
                   <p className="flex flex-wrap items-center gap-1.5">
@@ -130,6 +150,7 @@ export function InquiryInbox({ openSignal, companyName, onMakeBooking, onFillInp
                       customerName: q.name,
                       ...(inquiryDate(q.departure) ? { departureDate: inquiryDate(q.departure) } : {}),
                       ...(q.nights > 0 ? { nights: q.nights, days: q.nights + 1 } : {}),
+                      ...(q.asks ? askToTripPatch(q.asks) : {}),
                     });
                   }}
                   className="rounded-md bg-indigo-600 px-2.5 py-1 font-semibold text-white hover:bg-indigo-700"
