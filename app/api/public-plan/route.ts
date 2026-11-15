@@ -4,7 +4,7 @@
  */
 import { publicPlanRequestSchema } from "@/lib/publicPlan";
 import { GeminiError } from "@/lib/server/gemini";
-import { cachedPublicPlan, checkQuota, countUse, getPublicSettings, recordStats, verifyHuman } from "@/lib/server/publicPlan";
+import { cachedPublicPlan, checkQuota, countUse, getPublicSettings, QuotaError, recordStats, verifyHuman } from "@/lib/server/publicPlan";
 import { allowPublicWrite } from "@/lib/server/rateLimit";
 
 function errorResponse(code: string, message: string, status: number) {
@@ -19,16 +19,19 @@ export async function POST(request: Request) {
   const settings = await getPublicSettings();
   if (!settings.enabled) return errorResponse("DISABLED", "지금은 코스 만들기를 쉬고 있습니다. 견적 요청을 남겨 주세요.", 503);
   if (!(await verifyHuman(req.token, request))) return errorResponse("NOT_HUMAN", "사람 확인을 다시 해 주세요.", 403);
-  const quota = await checkQuota(request, settings);
-  if (quota) return errorResponse("QUOTA", quota, 429);
   try {
-    const result = await cachedPublicPlan(req, settings);
-    await countUse(request);
+    // 하루 상한은 새로 만들 때만 확인·계산한다 (같은 조건 재사용은 세지 않음)
+    const result = await cachedPublicPlan(req, settings, async () => {
+      const quota = await checkQuota(request, settings);
+      if (quota) throw new QuotaError(quota);
+    });
+    if (result.fresh) await countUse(request);
     if (result.fresh) await recordStats(req.cities[0]?.name ?? req.destination, result.days, "made").catch(() => undefined);
     const { fresh: _fresh, ...body } = result;
     void _fresh;
     return Response.json(body);
   } catch (err) {
+    if (err instanceof QuotaError) return errorResponse("QUOTA", err.message, 429);
     if (err instanceof Error && err.message === "NO_KNOWLEDGE") return errorResponse("NO_KNOWLEDGE", "이 여행지는 아직 추천 코스를 준비 중입니다. 견적 요청을 남겨 주시면 맞춤 코스를 보내 드립니다.", 404);
     if (err instanceof GeminiError) return errorResponse("AI", "코스를 만드는 중 잠시 문제가 생겼습니다. 조금 뒤에 다시 시도해 주세요.", 502);
     console.error("[public-plan]", err);

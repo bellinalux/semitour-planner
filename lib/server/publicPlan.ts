@@ -185,10 +185,16 @@ export async function buildPublicPlan(req: PublicPlanRequest, settings: PublicPl
   };
 }
 
-/** 같은 조건이면 7일 동안 같은 결과 */
-export async function cachedPublicPlan(req: PublicPlanRequest, settings: PublicPlanSettings): Promise<PublicPlanResult & { fresh: boolean }> {
+export class QuotaError extends Error {}
+
+/**
+ * 같은 조건이면 7일 동안 같은 결과 — 새로 만들 때만 beforeBuild(하루 상한 확인)를 부른다.
+ * 그래서 같은 조건 재사용은 하루 횟수에 세지 않는다.
+ */
+export async function cachedPublicPlan(req: PublicPlanRequest, settings: PublicPlanSettings, beforeBuild: () => Promise<void> = async () => undefined): Promise<PublicPlanResult & { fresh: boolean }> {
   let fresh = false;
   const r = await cached("public-plan-v1", cacheKeyOf(req), 7 * DAY, async () => {
+    await beforeBuild();
     fresh = true;
     return buildPublicPlan(req, settings);
   }, (x) => x.days.length > 0);

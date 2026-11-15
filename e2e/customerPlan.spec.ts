@@ -14,24 +14,33 @@ const DAYS = [
 test("고객 코스 만들기: 3단계 입력 → 코스 → 빼기·다른 날로 → 견적 요청이 직원 견적 요청함에 코스와 함께 들어오고, 이 코스로 견적을 시작한다", async ({ page, context }) => {
   const customer = await context.newPage();
   await customer.route("**/api/public-plan/recommend**", (r) => r.fulfill({ json: { courses: [{ title: "후쿠오카 핵심 1일", places: ["다자이후 텐만구", "후쿠오카 타워"], note: "" }], popular: [{ name: "오호리 공원", count: 3 }] } }));
-  let sent: Record<string, unknown> | null = null;
+  const sent: Record<string, unknown>[] = [];
   await customer.route("**/api/public-plan", async (r) => {
     if (r.request().method() !== "POST") return r.continue();
-    sent = r.request().postDataJSON() as Record<string, unknown>;
+    sent.push(r.request().postDataJSON() as Record<string, unknown>);
     await r.fulfill({ json: { days: DAYS, source: "knowledge", note: "우리 여행사 지식 창고의 인기 장소로 만든 코스입니다" } });
   });
   await customer.goto("/plan");
+  // 한 화면: 여행지·기간만 넣고 버튼 한 번
   await customer.getByLabel("여행지").fill("후쿠오카");
   await customer.getByLabel("기간").selectOption("1");
-  await customer.getByRole("button", { name: "다음" }).click();
-  await customer.getByRole("button", { name: "부모님" }).click();
-  await customer.getByRole("button", { name: "여유롭게" }).click();
-  await customer.getByRole("button", { name: "먹방" }).click();
-  await customer.getByRole("button", { name: "다음" }).click();
-  await customer.getByRole("button", { name: /후쿠오카 핵심 1일/ }).click();
-  await customer.getByRole("button", { name: /\+ 오호리 공원/ }).click();
-  await customer.getByRole("button", { name: "내 코스 만들기" }).click();
-  expect(sent).toMatchObject({ destination: "후쿠오카", nights: 1, days: 2, companions: ["senior"], pace: "relaxed", themes: ["food"], mustSee: ["다자이후 텐만구", "후쿠오카 타워", "오호리 공원"] });
+  await customer.getByRole("button", { name: "바로 코스 만들기" }).click();
+  await expect(customer.getByRole("region", { name: "내 코스" })).toContainText("다자이후 텐만구");
+  expect(sent[0]).toMatchObject({ destination: "후쿠오카", nights: 1, days: 2, companions: [], pace: "normal", themes: [], mustSee: [] });
+
+  // 더 맞추기(선택) → 추천 코스로 바로 만들기
+  await customer.getByText(/더 맞추고 싶으면/).click();
+  await customer.getByRole("region", { name: "코스 조건" }).getByRole("button", { name: "부모님" }).click();
+  await customer.getByRole("region", { name: "코스 조건" }).getByRole("button", { name: "여유롭게" }).click();
+  await customer.getByRole("region", { name: "코스 조건" }).getByRole("button", { name: "먹방" }).click();
+  await customer.getByRole("button", { name: /추천 코스로 바로 만들기 · 후쿠오카 핵심 1일/ }).click();
+  await expect.poll(() => sent.length).toBe(2);
+  expect(sent[1]).toMatchObject({ companions: ["senior"], pace: "relaxed", themes: ["food"], mustSee: ["다자이후 텐만구", "후쿠오카 타워"] });
+
+  // 결과 화면의 칩 — 누르면 그 조건으로 바로 다시
+  await customer.getByRole("region", { name: "내 코스" }).getByRole("button", { name: "친구" }).click();
+  await expect.poll(() => sent.length).toBe(3);
+  expect(sent[2]).toMatchObject({ companions: ["senior", "friends"] });
 
   const result = customer.getByRole("region", { name: "내 코스" });
   await expect(result).toContainText("다자이후 텐만구");
