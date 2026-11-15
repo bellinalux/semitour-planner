@@ -144,7 +144,7 @@ const TIER: Record<ProductTier, Pick<PackageRules, "shoppingMax" | "options" | "
 const DRIVING: Record<Region, PackageRules["driving"]> = {
   europe: { continuous: 270, rest: 45, daily: 540, basis: "EU 운전시간 규정 561/2006 — 4시간 30분 운전 후 45분 휴식, 하루 9시간" },
   japan: { continuous: 240, rest: 30, daily: 540, basis: "일본 버스 운전자 기준 — 연속 4시간 안에 30분 휴식, 하루 운전 9시간" },
-  korea: { continuous: 240, rest: 30, daily: null, basis: "국내 전세버스 — 4시간 연속 운전 후 30분 휴게" },
+  korea: { continuous: 240, rest: 30, daily: null, basis: "국내 전세버스 — 4시간 연속 운전 후 30분 휴게 (2016년 국토부 입법예고 기준, 현행 조문은 업체·법령정보센터 확인 필요)" },
   sea: { continuous: 240, rest: 30, daily: null, basis: "현지 규정은 업체 확인 (기본: 4시간 운전 후 30분 휴식)" },
   other: { continuous: 240, rest: 30, daily: null, basis: "현지 규정은 업체 확인 (기본: 4시간 운전 후 30분 휴식)" },
 };

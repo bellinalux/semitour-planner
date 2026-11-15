@@ -4,7 +4,7 @@ import { Inbox } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CopyButton } from "@/components/dashboard/CopyButton";
 import { inquiryDate, STYLE_LABEL, type Inquiry } from "@/lib/inquiry";
-import type { TripInput } from "@/types";
+import type { DayPlan, TripInput } from "@/types";
 
 interface Props {
   /** 대화상자를 열 때마다 바뀌는 값 (다시 불러오기) */
@@ -12,12 +12,14 @@ interface Props {
   companyName: string;
   onMakeBooking: (q: Inquiry) => Promise<string | null>;
   onFillInput: (patch: Partial<TripInput>) => void;
+  /** 고객이 만든 코스로 일정까지 채워 견적 시작 */
+  onUseCourse?: (days: DayPlan[], patch: Partial<TripInput>) => void;
 }
 
 /**
  * 웹 견적 요청함 — 고객이 견적 요청 페이지(/q)로 남긴 문의를 보고, 예약(문의)으로 만들거나 이 조건으로 입력을 채워 바로 견적을 만든다.
  */
-export function InquiryInbox({ openSignal, companyName, onMakeBooking, onFillInput }: Props) {
+export function InquiryInbox({ openSignal, companyName, onMakeBooking, onFillInput, onUseCourse }: Props) {
   const [list, setList] = useState<Inquiry[] | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [message, setMessage] = useState("");
@@ -85,6 +87,24 @@ export function InquiryInbox({ openSignal, companyName, onMakeBooking, onFillInp
                   {q.source.options.length > 0 && <span className="text-slate-600">· 선택관광 {q.source.options.join(", ")}</span>}
                 </p>
               )}
+              {q.source?.kind === "plan" && (
+                <div className="space-y-0.5 rounded-md bg-sky-50 px-2 py-1.5">
+                  <p className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded bg-sky-600 px-1.5 py-0.5 text-[10.5px] font-semibold text-white">고객 코스</span>
+                    <b className="text-slate-800">{q.source.title}</b>
+                    {q.source.planId && (
+                      <a href={`/plan/${q.source.planId}`} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline underline-offset-2">
+                        고객 화면으로 보기
+                      </a>
+                    )}
+                  </p>
+                  {(q.planDays ?? []).slice(0, 6).map((d) => (
+                    <p key={d.day} className="text-[11px] text-slate-600">
+                      DAY {d.day} {d.items.filter((i) => !["flight", "hotel", "transfer"].includes(i.type ?? "")).map((i) => i.name).join(" → ")}
+                    </p>
+                  ))}
+                </div>
+              )}
               {q.requests && <p className="text-pretty text-slate-500">“{q.requests}”</p>}
               <div className="flex flex-wrap gap-1.5">
                 <button
@@ -102,6 +122,26 @@ export function InquiryInbox({ openSignal, companyName, onMakeBooking, onFillInp
                 >
                   입력에 채우기
                 </button>
+                {q.source?.kind === "plan" && (q.planDays ?? []).length > 0 && onUseCourse && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUseCourse(q.planDays!, {
+                        mode: "ai",
+                        destination: q.destination,
+                        travelers: q.travelers,
+                        customerName: q.name,
+                        days: q.planDays!.length,
+                        ...(q.nights > 0 ? { nights: q.nights } : {}),
+                        ...(inquiryDate(q.departure) ? { departureDate: inquiryDate(q.departure) } : {}),
+                        ...((q.planCities ?? []).length > 1 ? { regionPlan: q.planCities!.map((c) => `${c.name} ${c.nights}박`).join(", ") } : {}),
+                      })
+                    }
+                    className="rounded-md bg-sky-600 px-2.5 py-1 font-semibold text-white hover:bg-sky-700"
+                  >
+                    이 코스로 견적 시작
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={async () => {
