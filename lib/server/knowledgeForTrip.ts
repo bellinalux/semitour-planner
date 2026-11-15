@@ -24,7 +24,7 @@ export function tripCities(destination: string, regionPlan: string): string[] {
  * 코스를 만들기 전에 지식 창고를 본다 — 도시마다 저장된 지식을 읽고, 없거나 30일 지났으면(앞의 2개 도시만) 웹에서 조사해 쌓는다.
  * 조사가 실패해도 코스 만들기는 계속한다 (지식 없이).
  */
-export async function knowledgeForTrip(o: { destination: string; regionPlan: string; travelType: TravelType; tripScope: TripScope; companions: Companion[] }): Promise<{ docs: CityKnowledge[]; memo: string; info: TripKnowledgeInfo[] }> {
+export async function knowledgeForTrip(o: { destination: string; regionPlan: string; travelType: TravelType; tripScope: TripScope; companions: Companion[] }, opts: { research?: boolean } = {}): Promise<{ docs: CityKnowledge[]; memo: string; info: TripKnowledgeInfo[] }> {
   const cities = tripCities(o.destination, o.regionPlan);
   const docs: CityKnowledge[] = [];
   const info: TripKnowledgeInfo[] = [];
@@ -32,7 +32,8 @@ export async function knowledgeForTrip(o: { destination: string; regionPlan: str
     let doc = await getCity(city).catch(() => null);
     if (!doc) continue;
     let researched = false;
-    if (isStale(doc) && i < 2) {
+    // 고객 화면(빠르게)은 웹 조사를 건너뛰고 쌓인 지식만 쓴다
+    if (opts.research !== false && isStale(doc) && i < 2) {
       try {
         const r = await researchCity({ city, travelType: o.travelType, tripScope: o.tripScope, companions: o.companions });
         doc = mergeResearch(doc, r.result, r.sources);

@@ -34,8 +34,13 @@ const chip = (on: boolean) =>
   `rounded-full border px-3 py-1.5 text-xs font-medium ${on ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-indigo-400"}`;
 const field = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none";
 
-async function post<T>(url: string, body: unknown): Promise<T> {
-  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+async function post<T>(url: string, body: unknown, timeoutMs = 30_000): Promise<T> {
+  let r: Response;
+  try {
+    r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) });
+  } catch (e) {
+    throw new Error(e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError") ? "시간이 오래 걸려 멈췄습니다. 조금 뒤 다시 시도하시거나 견적 요청을 남겨 주세요." : "인터넷 연결을 확인해 주세요.");
+  }
   const j = (await r.json().catch(() => null)) as (T & { error?: { message?: string } }) | null;
   if (!r.ok || !j) throw new Error(j?.error?.message ?? `요청에 실패했습니다 (${r.status})`);
   return j;
@@ -163,7 +168,7 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
   const make = async (override: Partial<Pick<PublicPlanRequest, "companions" | "pace" | "themes" | "mustSee">> = {}) => {
     setState({ status: "loading" });
     try {
-      const r = await post<PublicPlanResult>("/api/public-plan", { ...request(), ...override });
+      const r = await post<PublicPlanResult>("/api/public-plan", { ...request(), ...override }, 90_000);
       setResult(r);
       setDays(r.days);
       setMapDay(1);
@@ -298,7 +303,10 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
         </button>
         {state.status === "error" && (
           <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">
-            {state.message}
+            {state.message}{" "}
+            <a href={`/q${config?.company.name ? `?c=${encodeURIComponent(config.company.name)}` : ""}`} className="font-semibold underline">
+              견적 요청 남기기
+            </a>
           </p>
         )}
 

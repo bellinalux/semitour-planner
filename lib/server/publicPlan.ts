@@ -20,7 +20,8 @@ import type { DayPlan } from "@/types";
 import { workspaceId } from "./access";
 import { cached, DAY } from "./aiCache";
 import { getKnowledge, planCourse } from "./courseEngineServer";
-import { geocodeMany } from "./freeData";
+import { geocodeMany, wikiNearbyPlaces } from "./freeData";
+import { recordServerEvent } from "./errorLog";
 import { generateItineraryDays } from "./itineraryGenerate";
 import { getCity } from "./knowledgeStore";
 import { getKv } from "./planStore";
@@ -125,24 +126,8 @@ export function pickPlaces(places: PlaceCard[], req: Pick<PublicPlanRequest, "th
   return [...new Set([...req.mustSee, ...scored])].slice(0, count);
 }
 
-/** 지식 창고 + 코스 엔진 — 장소가 충분하면 AI 없이 만든다 (좌표는 장소 지식, 없으면 무료 OpenStreetMap) */
-async function fromKnowledge(req: PublicPlanRequest, tourDays: number): Promise<DayPlan[] | null> {
-  const city = (req.cities[0]?.name ?? req.destination).split(/[,/]/)[0].trim();
-  const doc = await getCity(city).catch(() => null);
-  if (!doc) return null;
-  const need = Math.max(2, tourDays * PER_DAY[req.pace]);
-  const names = pickPlaces(doc.places, req, need);
-  if (names.length < Math.ceil(need * 0.7)) return null;
-  const known = await getKnowledge(names, city);
-  const missing = names.filter((n) => known[n]?.lat == null);
-  const osm = missing.length ? await geocodeMany(missing, city, 10) : new Map();
-  const cards = new Map(doc.places.map((p) => [p.name, p]));
-  const cart: CartPlace[] = names.map((name, i) => {
-    const k = known[name];
-    const o = osm.get(name);
-    const stay = k?.typicalStayMin || cards.get(name)?.stayWeb || 60;
-    return { id: `k${i}`, name, stayMin: stay, ...(k?.lat != null && k.lng != null ? { lat: k.lat, lng: k.lng } : o ? { lat: o.lat, lng: o.lng } : {}) };
-  });
+/** 담은 장소를 날짜별로 나누고, 날마다 점심을 넣어 코스 엔진이 순서·시각을 정한다 (AI 없음) */
+async function scheduleCart(cart: CartPlace[], city: string, tourDays: number): Promise<DayPlan[]> {
   const groups = splitIntoDays(cart, tourDays);
   return Promise.all(
     groups.map(async (g, k) => {
@@ -157,23 +142,84 @@ async function fromKnowledge(req: PublicPlanRequest, tourDays: number): Promise<
   );
 }
 
-/** 코스 만들기 — 직원 화면과 같은 규칙(항공 시각·미팅·식사 시간대·단체 여유·불가능 시간)으로 마무리 */
-export async function buildPublicPlan(req: PublicPlanRequest, settings: PublicPlanSettings): Promise<PublicPlanResult> {
+const cityOf = (req: PublicPlanRequest) => (req.cities[0]?.name ?? req.destination).split(/[,/]/)[0].trim();
+
+/**
+ * AI 없이 만들 장소 — 지식 창고 인기 장소(좌표는 장소 지식·OpenStreetMap) + 모자라면(useFree) 위키백과 근처 장소로 채운다.
+ * 장소가 need의 70%가 안 되면 null.
+ */
+async function cartFor(req: PublicPlanRequest, tourDays: number, useFree: boolean): Promise<{ cart: CartPlace[]; free: boolean } | null> {
+  const city = cityOf(req);
+  const need = Math.max(2, tourDays * PER_DAY[req.pace]);
+  const doc = await getCity(city).catch(() => null);
+  const names = doc ? pickPlaces(doc.places, req, need) : [...req.mustSee];
+  const known = names.length ? await getKnowledge(names, city).catch(() => ({}) as Awaited<ReturnType<typeof getKnowledge>>) : {};
+  const cards = new Map((doc?.places ?? []).map((p) => [p.name, p]));
+  let cart: CartPlace[] = names.map((name, i) => {
+    const k = known[name];
+    return { id: `k${i}`, name, stayMin: k?.typicalStayMin || cards.get(name)?.stayWeb || 60, ...(k?.lat != null && k.lng != null ? { lat: k.lat, lng: k.lng } : {}) };
+  });
+  let free = false;
+  if (cart.length < need && useFree) {
+    const wiki = await wikiNearbyPlaces(city).catch(() => []);
+    const extra = wiki.filter((w) => !cart.some((c) => c.name === w.name)).slice(0, need - cart.length);
+    cart = [...cart, ...extra.map((w, i) => ({ id: `w${i}`, name: w.name, stayMin: 60, lat: w.lat, lng: w.lng }))];
+    free = extra.length > 0;
+  }
+  if (cart.length < Math.ceil(need * 0.7)) return null;
+  // 좌표 없는 곳은 무료 OpenStreetMap으로 (1초에 1번이라 많으면 6곳까지만)
+  const missing = cart.filter((c) => c.lat == null).map((c) => c.name);
+  if (missing.length) {
+    const osm = await geocodeMany(missing, city, 6).catch(() => new Map());
+    cart = cart.map((c) => (c.lat == null && osm.get(c.name) ? { ...c, lat: osm.get(c.name)!.lat, lng: osm.get(c.name)!.lng } : c));
+  }
+  return { cart, free };
+}
+
+/** AI는 40초까지만 기다린다 — 넘기면 무료 공개 데이터 코스로 */
+export const AI_BUDGET_MS = 40_000;
+function withinBudget<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error("AI_TIMEOUT")), ms))]);
+}
+
+/**
+ * 코스 만들기 — 빠르고 비용이 적은 순서: 지식 창고(AI 없음) → AI(웹 조사 없이, 40초까지) → 무료 공개 데이터(위키백과 근처 장소, AI 없음).
+ * 마무리는 직원 화면과 같은 규칙(항공 시각·미팅·식사 시간대·단체 여유·불가능 시간).
+ */
+export async function buildPublicPlan(req: PublicPlanRequest, settings: PublicPlanSettings, opts: { aiBudgetMs?: number } = {}): Promise<PublicPlanResult> {
   const input = toTripInput(req);
   const flight = flightDaysRequest(input);
   const tourDays = flight ? flight.aiDays : req.days;
+  const city = cityOf(req);
   let source: PublicPlanResult["source"] = "knowledge";
-  let days = req.cities.length > 1 ? null : await fromKnowledge(req, tourDays).catch(() => null);
+  let days: DayPlan[] | null = null;
+  // ① 지식 창고만으로 충분하면 AI 없이 (여러 도시 여행은 AI가 도시를 나눈다)
+  if (req.cities.length <= 1) {
+    const c = await cartFor(req, tourDays, false).catch(() => null);
+    if (c) days = await scheduleCart(c.cart, city, tourDays).catch(() => null);
+  }
+  // ② AI — 고객 화면은 웹 조사를 건너뛰고, 40초 안에 못 만들면 ③으로
+  if (!days && settings.aiFallback) {
+    try {
+      const ai = itineraryRequestSchema.parse({
+        destination: input.destination, days: tourDays, nights: req.nights, travelers: req.travelers, currency: "KRW", themes: req.themes, notes: "",
+        travelType: req.companions.includes("senior") ? "senior" : "semi", operatingModel: "private", productTier: "standard", tripScope: "overseas",
+        regionPlan: input.regionPlan, pace: req.pace, companions: req.companions, mustHave: input.mustHave, avoid: "",
+        ...(flight ? { flightDays: flight.flightDays } : {}),
+      });
+      days = (await withinBudget(generateItineraryDays(ai, { research: false }), opts.aiBudgetMs ?? AI_BUDGET_MS)).days;
+      source = "ai";
+    } catch (err) {
+      // 원인을 관리자 오류 기록에 남긴다 (고객 화면에는 기본 코스로 대신)
+      await recordServerEvent("ai", `고객 코스 AI 실패 (${city})`, err instanceof Error ? err.message : String(err)).catch(() => undefined);
+    }
+  }
+  // ③ 무료 공개 데이터 — 지식 창고 + 위키백과 근처 장소
   if (!days) {
-    if (!settings.aiFallback) throw new Error("NO_KNOWLEDGE");
-    source = "ai";
-    const ai = itineraryRequestSchema.parse({
-      destination: input.destination, days: tourDays, nights: req.nights, travelers: req.travelers, currency: "KRW", themes: req.themes, notes: "",
-      travelType: req.companions.includes("senior") ? "senior" : "semi", operatingModel: "private", productTier: "standard", tripScope: "overseas",
-      regionPlan: input.regionPlan, pace: req.pace, companions: req.companions, mustHave: input.mustHave, avoid: "",
-      ...(flight ? { flightDays: flight.flightDays } : {}),
-    });
-    days = (await generateItineraryDays(ai)).days;
+    const c = await cartFor({ ...req, cities: [] }, tourDays, true).catch(() => null);
+    if (!c) throw new Error("NO_KNOWLEDGE");
+    days = await scheduleCart(c.cart, city, tourDays);
+    source = c.free ? "free" : "knowledge";
   }
   const times = flightTimesFor(input);
   const wrapped = times ? withFlightDays(days, input, times) : days;
@@ -181,7 +227,12 @@ export async function buildPublicPlan(req: PublicPlanRequest, settings: PublicPl
   return {
     days: compactDays(finished),
     source,
-    note: source === "knowledge" ? "우리 여행사 지식 창고의 인기 장소로 만든 코스입니다" : "AI가 만든 추천 코스입니다 — 상담 때 실제 운영 시간·이동을 확인해 드립니다",
+    note:
+      source === "knowledge"
+        ? "우리 여행사 지식 창고의 인기 장소로 만든 코스입니다"
+        : source === "ai"
+          ? "AI가 만든 추천 코스입니다 — 상담 때 실제 운영 시간·이동을 확인해 드립니다"
+          : "주변 명소로 만든 기본 코스입니다 — 견적을 요청하시면 담당자가 맞춤 코스로 다듬어 드립니다",
   };
 }
 

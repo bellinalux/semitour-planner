@@ -178,3 +178,37 @@ export async function wikiNearby(city: string, limit = 40): Promise<string[]> {
   if (store && out.length) await store.kv.put(key, JSON.stringify(out), { expirationTtl: 60 * 60 * 24 * 90 }).catch(() => undefined);
   return out;
 }
+
+/** 도시 중심 반경 안 위키백과 장소와 좌표 (무료) — 고객 코스 만들기의 AI 없는 기본 코스용 */
+export async function wikiNearbyPlaces(city: string, limit = 40): Promise<{ name: string; lat: number; lng: number }[]> {
+  const g = await geocode(city);
+  if (!g) return [];
+  const store = await getKv();
+  const key = `wikiplaces:${norm(city)}`.slice(0, 480);
+  const cached = store ? await store.kv.get(key).catch(() => null) : null;
+  if (cached) {
+    try {
+      return JSON.parse(cached) as { name: string; lat: number; lng: number }[];
+    } catch {
+      /* 다시 */
+    }
+  }
+  const out: { name: string; lat: number; lng: number }[] = [];
+  for (const lang of ["ko", "en"]) {
+    try {
+      const url = `https://${lang}.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${g.lat}|${g.lng}&gsradius=10000&gslimit=${limit}&format=json&origin=*`;
+      const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+      const list = ((await res.json()) as { query?: { geosearch?: { title: string; lat: number; lon: number }[] } }).query?.geosearch ?? [];
+      for (const x of list)
+        if (!/역$|station|학교|school|대학|university|병원|hospital|구청|시청|아파트|주식회사|\(동\)|동$|구$|정$|초$|선$|line|ward|district|호텔|hotel|빌딩|building/i.test(x.title) && !out.some((o) => o.name === x.title))
+          out.push({ name: x.title, lat: x.lat, lng: x.lon });
+      if (out.length >= 15) break;
+    } catch {
+      /* 다음 언어 */
+    }
+  }
+  const top = out.slice(0, limit);
+  if (store && top.length) await store.kv.put(key, JSON.stringify(top), { expirationTtl: 60 * 60 * 24 * 90 }).catch(() => undefined);
+  return top;
+}
