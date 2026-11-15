@@ -1,11 +1,12 @@
 "use client";
 
 import { ArrowDown, ArrowUp, Loader2, MapPin, Plus, Sparkles, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { PlaybackMap, type PlaybackPoint } from "@/components/plan/PlaybackMap";
 import { parseClock } from "@/lib/dayLoad";
 import { dayTimes, isTourItem, lightenDay, moveItem, planSummary, removeItem, swapItem, transitLink, transportOptions } from "@/lib/planEdit";
-import { COMPANION_LABEL, PACE_LABEL, priceNoteFor, THEME_IDS, THEME_LABEL, type PublicPlanRequest, type PublicPlanResult } from "@/lib/publicPlan";
+import { COMPANION_LABEL, DEFAULT_STYLE, isSelfGuided, PACE_LABEL, priceNoteFor, SERVICE_IDS, SERVICE_LABEL, STYLE_IDS, STYLES, THEME_IDS, THEME_LABEL, type PublicPlanRequest, type PublicPlanResult, type ServiceId, type TravelStyle } from "@/lib/publicPlan";
+import { dayLegs, hotelAreas, passAdvice } from "@/lib/selfGuide";
 import type { DayPlan } from "@/types";
 
 interface Config {
@@ -64,6 +65,16 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
   const [travelers, setTravelers] = useState(saved?.request.travelers ?? 2);
   const [companions, setCompanions] = useState<PublicPlanRequest["companions"]>(saved?.request.companions ?? []);
   const [pace, setPace] = useState<PublicPlanRequest["pace"]>(saved?.request.pace ?? "normal");
+  const [style, setStyleRaw] = useState<TravelStyle>(saved?.request.style ?? DEFAULT_STYLE);
+  const [services, setServices] = useState<ServiceId[]>(saved?.request.services ?? STYLES[saved?.request.style ?? DEFAULT_STYLE].services);
+  /** 자유여행 + 투어: 가이드 투어로 바꾼 날 */
+  const [tourDays, setTourDays] = useState<number[]>([]);
+  const [contact, setContact] = useState({ how: "카카오톡", when: "" });
+  /** 여행 방식을 바꾸면 우리가 해 드릴 것을 그 방식의 기본으로 */
+  const setStyle = (s2: TravelStyle) => {
+    setStyleRaw(s2);
+    setServices(STYLES[s2].services);
+  };
   const [themes, setThemes] = useState<PublicPlanRequest["themes"]>(saved?.request.themes ?? []);
   const [mustSee, setMustSee] = useState<string[]>(saved?.request.mustSee ?? []);
   const [mustDraft, setMustDraft] = useState("");
@@ -160,12 +171,14 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
     pace,
     themes,
     mustSee,
+    style,
+    services,
     ...(arrive && returnDepart ? { arrive, returnDepart } : {}),
     ...(token ? { token } : {}),
   });
 
   /** 코스 만들기 — 결과 화면의 칩·추천 코스는 바뀐 조건(override)으로 바로 다시 만든다 */
-  const make = async (override: Partial<Pick<PublicPlanRequest, "companions" | "pace" | "themes" | "mustSee">> = {}) => {
+  const make = async (override: Partial<Pick<PublicPlanRequest, "companions" | "pace" | "themes" | "mustSee" | "style" | "services">> = {}) => {
     setState({ status: "loading" });
     try {
       const r = await post<PublicPlanResult>("/api/public-plan", { ...request(), ...override }, 90_000);
@@ -173,6 +186,7 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
       setDays(r.days);
       setMapDay(1);
       setShareId("");
+      setTourDays([]);
       setState({ status: "idle" });
       window.setTimeout(() => document.getElementById("plan-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     } catch (e) {
@@ -206,11 +220,11 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
         nights: totalNights,
         travelers,
         budget: 0,
-        style: "unsure",
-        requests: [quote.requests, companions.length ? `동반: ${companions.map((c) => COMPANION_LABEL[c]).join(", ")}` : "", themes.length ? `관심: ${themes.map((t) => THEME_LABEL[t]).join(", ")}` : ""].filter(Boolean).join(" / ").slice(0, 500),
+        style: style === "package" ? "package" : style === "semi" ? "semi" : "free",
+        requests: [quote.requests, `여행 방식: ${STYLES[style].label}`, services.length ? `맡길 것: ${services.map((x) => SERVICE_LABEL[x]).join(", ")}` : "", tourDays.length ? `가이드 투어 날: ${tourDays.map((d) => `DAY ${d}`).join(", ")}` : "", `연락: ${contact.how}${contact.when ? ` (${contact.when})` : ""}`, companions.length ? `동반: ${companions.map((c) => COMPANION_LABEL[c]).join(", ")}` : "", themes.length ? `관심: ${themes.map((t) => THEME_LABEL[t]).join(", ")}` : ""].filter(Boolean).join(" / ").slice(0, 500),
         website: "",
         consent: quote.consent,
-        plan: { title: `${destination} ${totalNights}박${totalNights + 1}일`, ...(id ? { planId: id } : {}), days, cities: multi ? cities.map((c) => ({ name: c.name, nights: c.nights })) : [] },
+        plan: { title: `${destination} ${totalNights}박${totalNights + 1}일 · ${STYLES[style].label}`, ...(id ? { planId: id } : {}), days, cities: multi ? cities.map((c) => ({ name: c.name, nights: c.nights })) : [], style, services, tourDays },
       });
       setQuote((q) => ({ ...q, sent: true }));
     } catch (e) {
@@ -219,7 +233,8 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
   };
 
   const summary = useMemo(() => planSummary(days), [days]);
-  const price = config ? priceNoteFor(config, destination) : "";
+  const price = config ? priceNoteFor(config, destination, style) : "";
+  const selfGuided = isSelfGuided(style);
   const popularLeft = rec.popular.map((p) => p.name).filter((n) => !days.some((d) => d.items.some((i) => i.name === n)));
   const cur = days.find((d) => d.day === mapDay) ?? days[0];
   const playback: PlaybackPoint[] = useMemo(() => {
@@ -256,7 +271,18 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
       )}
       {config?.notice && <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-900">{config.notice}</p>}
 
-      <section aria-label="코스 조건" className="space-y-3 rounded-xl border border-slate-200 p-3">
+      <section aria-label="코스 조건" className="space-y-3 rounded-xl border border-slate-200 p-3 print:hidden">
+        <fieldset aria-label="여행 방식" className="space-y-1">
+          <legend className="text-xs font-semibold text-slate-600">어떻게 여행하세요?</legend>
+          <div className="flex flex-wrap gap-1.5">
+            {STYLE_IDS.map((id) => (
+              <button key={id} type="button" aria-pressed={style === id} onClick={() => setStyle(id)} className={chip(style === id)}>
+                {STYLES[id].icon} {STYLES[id].label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-500">{STYLES[style].desc}</p>
+        </fieldset>
         <div className="flex flex-wrap items-end gap-2">
           {!multi ? (
             <label className="min-w-0 flex-[2] space-y-1">
@@ -311,7 +337,7 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
         )}
 
         <details className="text-xs" open={moreOpen} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>
-          <summary className="cursor-pointer font-semibold text-indigo-700">더 맞추고 싶으면 (선택) — 누구와 · 속도 · 관심 · 꼭 갈 곳 · 항공 시각 · 여러 도시</summary>
+          <summary className="cursor-pointer font-semibold text-indigo-700">더 맞추고 싶으면 (선택) — 맡길 것(항공·호텔·유심·보험 등) · 누구와 · 속도 · 관심 · 꼭 갈 곳 · 항공 시각 · 여러 도시</summary>
           <div className="mt-3 space-y-3">
             <button
               type="button"
@@ -323,6 +349,18 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
             >
               {multi ? "도시 하나만 갈래요" : "여러 도시를 돌아요 (도시 루트 짜기)"}
             </button>
+            <fieldset aria-label="우리가 해 드릴 것" className="space-y-1">
+              <legend className="font-semibold text-slate-600">우리가 해 드릴 것 (견적 범위)</legend>
+              <div className="flex flex-wrap gap-1.5">
+                {SERVICE_IDS.map((x) => (
+                  <label key={x} className={`${chip(services.includes(x))} cursor-pointer`}>
+                    <input type="checkbox" className="sr-only" checked={services.includes(x)} onChange={() => setServices((cur) => (cur.includes(x) ? cur.filter((y) => y !== x) : [...cur, x]))} />
+                    {services.includes(x) ? "✓ " : ""}
+                    {SERVICE_LABEL[x]}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <div className="grid grid-cols-2 gap-2">
               <label className="space-y-1">
                 <span className="font-semibold text-slate-600">출발일</span>
@@ -440,6 +478,35 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
             </p>
           </div>
           {result.note && <p className="text-[11px] text-slate-500">{result.note}</p>}
+          <p className="flex flex-wrap items-center gap-1 text-[11px]">
+            <span className="rounded-full px-2 py-0.5 font-semibold text-white" style={{ background: color }}>
+              {STYLES[style].icon} {STYLES[style].label}
+            </span>
+            {services.map((x) => (
+              <span key={x} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+                {SERVICE_LABEL[x]}
+              </span>
+            ))}
+            {tourDays.length > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">가이드 투어 {tourDays.length}일</span>}
+          </p>
+          {travelers >= 8 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{travelers}명이면 단체 견적으로 더 저렴할 수 있어요 — 견적을 요청하시면 단체 요금으로 안내해 드립니다.</p>}
+          {selfGuided && (
+            <section aria-label="자유여행 준비" className="space-y-1 rounded-xl bg-sky-50 p-3 text-xs text-slate-700">
+              <b className="text-slate-900">자유여행 안내</b>
+              <p>🚇 교통: {passAdvice(destination)}</p>
+              {hotelAreas(days).map((h) => (
+                <p key={h.city}>
+                  🏨 {h.city} 숙소는 <b>{h.near}</b> 주변이 이동이 가장 짧습니다
+                </p>
+              ))}
+              {services.includes("esim") && <p>📶 eSIM·유심: 휴대폰이 eSIM을 지원하는지 먼저 확인하세요 (안 되면 유심·포켓와이파이로 준비해 드립니다)</p>}
+              {services.includes("insurance") && <p>🛡 여행자보험: 출발 전까지 가입을 도와 드립니다</p>}
+              <p className="text-[11px] text-slate-500">이동 시간·요금은 어림값이에요. 장소마다 [길찾기]로 실제 노선을 확인하세요.</p>
+              <button type="button" onClick={() => window.print()} className="mt-1 rounded-md border border-sky-300 bg-white px-2.5 py-1 font-semibold text-sky-800">
+                안내서 인쇄·PDF 저장
+              </button>
+            </section>
+          )}
 
           {days.some((d) => d.items.some((i) => typeof i.lat === "number")) && (
             <div className="space-y-1.5 rounded-xl border border-slate-200 p-3">
@@ -463,13 +530,44 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
                 <header className="flex items-center gap-2">
                   <b className="text-slate-900">DAY {d.day}</b>
                   <span className="text-xs text-slate-500">{d.overnightCity}</span>
-                  <button type="button" onClick={() => setDays((cur) => lightenDay(cur, d.day))} className="ml-auto text-[11px] font-semibold text-indigo-700 underline underline-offset-2">
-                    이 날 가볍게
-                  </button>
+                  {tourDays.includes(d.day) && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800">가이드 투어</span>}
+                  <span className="ml-auto flex items-center gap-2">
+                    {style === "free_tour" && (
+                      <button type="button" aria-pressed={tourDays.includes(d.day)} onClick={() => setTourDays((cur) => (cur.includes(d.day) ? cur.filter((x) => x !== d.day) : [...cur, d.day].sort((a, b) => a - b)))} className="text-[11px] font-semibold text-amber-700 underline underline-offset-2">
+                        {tourDays.includes(d.day) ? "셀프로 되돌리기" : "이 날 가이드 투어로"}
+                      </button>
+                    )}
+                    {style === "free_tour" && !d.items.some((i) => /야경 투어/.test(i.name)) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDays((cur) =>
+                            cur.map((x) => {
+                              if (x.day !== d.day) return x;
+                              let at = x.items.length;
+                              while (at > 0 && ["hotel", "flight", "transfer"].includes(x.items[at - 1].type ?? "")) at--;
+                              const items = x.items.slice();
+                              items.splice(at, 0, { id: `night-${d.day}`, type: "experience", name: "야경 투어 (선택 · 약 2시간)", description: "", stayMinutes: 120, travelMinutesToNext: 20, entryFee: 0, mealCost: 0, isEstimated: true });
+                              return { ...x, items };
+                            }),
+                          )
+                        }
+                        className="text-[11px] font-semibold text-indigo-700 underline underline-offset-2"
+                      >
+                        + 야경 투어
+                      </button>
+                    )}
+                    <button type="button" onClick={() => setDays((cur) => lightenDay(cur, d.day))} className="text-[11px] font-semibold text-indigo-700 underline underline-offset-2">
+                      이 날 가볍게
+                    </button>
+                  </span>
                 </header>
                 <ul className="space-y-1">
-                  {d.items.map((i) => (
-                    <li key={i.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-1 py-1 hover:bg-slate-50">
+                  {d.items.map((i) => {
+                    const leg = selfGuided && !tourDays.includes(d.day) ? dayLegs(d).find((l) => l.from.id === i.id) : undefined;
+                    return (
+                    <Fragment key={i.id}>
+                    <li className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-1 py-1 hover:bg-slate-50">
                       <span className="w-11 shrink-0 tabular-nums text-xs text-slate-500">{times.get(i.id) ?? ""}</span>
                       <span className={`flex-1 ${isTourItem(i) ? "font-medium text-slate-900" : "text-slate-600"}`}>
                         {i.name}
@@ -503,7 +601,17 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
                         </span>
                       )}
                     </li>
-                  ))}
+                    {leg && (
+                      <li className="pl-12 text-[11px] text-sky-800">
+                        ↓ {leg.hint.text}{" "}
+                        <a href={leg.hint.link} target="_blank" rel="noopener noreferrer" className="underline">
+                          길찾기
+                        </a>
+                      </li>
+                    )}
+                    </Fragment>
+                    );
+                  })}
                 </ul>
               </article>
             );
@@ -551,6 +659,14 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
                   <b className="text-slate-900">이 코스로 견적 받기</b>
                   <input value={quote.name} onChange={(e) => setQuote((q) => ({ ...q, name: e.target.value }))} placeholder="이름" className={field} aria-label="이름" />
                   <input value={quote.contact} onChange={(e) => setQuote((q) => ({ ...q, contact: e.target.value }))} placeholder="연락처 (휴대폰·카톡 ID·이메일)" className={field} aria-label="연락처" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <select value={contact.how} onChange={(e) => setContact((c) => ({ ...c, how: e.target.value }))} className={field} aria-label="연락 방법">
+                      {["카카오톡", "전화", "문자", "이메일"].map((x) => (
+                        <option key={x}>{x}</option>
+                      ))}
+                    </select>
+                    <input value={contact.when} onChange={(e) => setContact((c) => ({ ...c, when: e.target.value }))} placeholder="연락 가능 시간 (예: 평일 저녁)" className={field} aria-label="연락 가능 시간" />
+                  </div>
                   <textarea value={quote.requests} onChange={(e) => setQuote((q) => ({ ...q, requests: e.target.value }))} rows={2} placeholder="요청 사항 (선택)" className={field} aria-label="요청 사항" />
                   <label className="flex items-start gap-1.5 text-[11px] text-slate-600">
                     <input type="checkbox" checked={quote.consent} onChange={(e) => setQuote((q) => ({ ...q, consent: e.target.checked }))} className="mt-0.5" />

@@ -14,6 +14,40 @@ export const THEME_LABEL: Record<(typeof THEME_IDS)[number], string> = {
 export const COMPANION_LABEL = { senior: "부모님", kids: "아이", infant: "영유아", couple: "커플", friends: "친구", group: "단체" } as const;
 export const PACE_LABEL = { relaxed: "여유롭게", normal: "보통", packed: "알차게" } as const;
 
+// ── 여행 방식 5가지 · 우리가 해 드릴 것 ──
+
+export const STYLE_IDS = ["package", "semi", "free_tour", "airtel", "backpack"] as const;
+export type TravelStyle = (typeof STYLE_IDS)[number];
+export const SERVICE_IDS = ["flight", "hotel", "transfer", "tour", "guide", "meals", "pass", "esim", "insurance"] as const;
+export type ServiceId = (typeof SERVICE_IDS)[number];
+
+export const SERVICE_LABEL: Record<ServiceId, string> = {
+  flight: "항공권", hotel: "호텔", transfer: "공항 픽업·샌딩", tour: "현지 투어", guide: "전용차량·가이드", meals: "식사", pass: "교통패스", esim: "eSIM·유심", insurance: "여행자보험",
+};
+
+export const STYLES: Record<TravelStyle, { label: string; icon: string; desc: string; services: ServiceId[]; guided: boolean; model: "full" | "semi" | "airtel" | "backpack" }> = {
+  package: { label: "패키지", icon: "🚌", desc: "항공·호텔·가이드·전용차량·식사까지 모두", services: ["flight", "hotel", "transfer", "guide", "meals", "insurance"], guided: true, model: "full" },
+  semi: { label: "세미패키지", icon: "🧭", desc: "핵심 관광일은 가이드, 나머지는 자유", services: ["flight", "hotel", "transfer", "guide", "insurance"], guided: true, model: "semi" },
+  free_tour: { label: "자유여행 + 투어 추가", icon: "✈", desc: "항공·호텔 + 고른 날만 현지 투어, 나머지는 셀프 코스", services: ["flight", "hotel", "tour", "esim", "insurance"], guided: false, model: "airtel" },
+  airtel: { label: "항공+호텔만", icon: "🏨", desc: "항공·호텔 예약 + 이동 안내서 (투어 없음)", services: ["flight", "hotel", "esim"], guided: false, model: "airtel" },
+  backpack: { label: "배낭여행", icon: "🎒", desc: "대중교통·도보 중심, 필요한 것만", services: ["esim", "pass"], guided: false, model: "backpack" },
+};
+/** 기본: 요즘 수요가 가장 많이 늘고 있는 "자유여행 + 투어 추가" (에어텔 + 고른 날 현지 투어) */
+export const DEFAULT_STYLE: TravelStyle = "free_tour";
+/** 가이드 없이 고객이 직접 다니는 코스 (교통편 설명을 붙인다) */
+export const isSelfGuided = (style: TravelStyle) => !STYLES[style].guided;
+
+/** 직원 화면 [이 코스로 견적 시작] — 고객이 고른 방식·맡길 것을 견적 입력으로 */
+export function styleToTripPatch(style: TravelStyle | undefined, services: ServiceId[] | undefined): Partial<TripInput> {
+  if (!style) return {};
+  const sv = services ?? STYLES[style].services;
+  return {
+    operatingModel: STYLES[style].model,
+    includesFlights: sv.includes("flight"),
+    packageType: sv.includes("flight") ? "full" : sv.includes("hotel") ? "land_hotel" : "land",
+  };
+}
+
 const clock = z.string().regex(/^\d{1,2}:\d{2}$/);
 
 export const publicPlanRequestSchema = z.object({
@@ -31,6 +65,10 @@ export const publicPlanRequestSchema = z.object({
   /** 현지 도착·귀국편 출발 시각 (알면) */
   arrive: clock.optional(),
   returnDepart: clock.optional(),
+  /** 여행 방식 — 패키지 / 세미 / 자유여행+투어 / 항공+호텔만 / 배낭 */
+  style: z.enum(STYLE_IDS).default(DEFAULT_STYLE),
+  /** 우리가 해 드릴 것 (견적 범위) */
+  services: z.array(z.enum(SERVICE_IDS)).max(SERVICE_IDS.length).default([]),
   /** 사람 확인(Turnstile) 토큰 */
   token: z.string().max(4000).optional(),
 });
@@ -55,7 +93,7 @@ export interface PublicPlanSettings {
   /** 예상 경비 범위 표시 */
   showPrice: boolean;
   /** 여행지 글자가 들어 있으면 그 경비 안내 (예: { match: "후쿠오카", text: "1인 69만~89만 원 (2박3일, 항공 포함)" }) */
-  priceTable: { match: string; text: string }[];
+  priceTable: { match: string; text: string; style?: TravelStyle }[];
   /** 화면 맨 위 안내 문구 */
   notice: string;
   /** 새 견적 요청 알림 이메일 (RESEND_API_KEY가 있어야 보냄) */
@@ -85,18 +123,28 @@ export function normalizePublicSettings(raw: unknown): PublicPlanSettings {
     priceTable: Array.isArray(s.priceTable)
       ? s.priceTable
           .filter((x) => x && typeof x.match === "string" && typeof x.text === "string" && x.match.trim())
-          .slice(0, 50)
-          .map((x) => ({ match: x.match.trim().slice(0, 40), text: x.text.trim().slice(0, 120) }))
+          .slice(0, 80)
+          .map((x) => ({ match: x.match.trim().slice(0, 40), text: x.text.trim().slice(0, 120), ...(x.style && (STYLE_IDS as readonly string[]).includes(x.style) ? { style: x.style } : {}) }))
       : [],
     notice: typeof s.notice === "string" ? s.notice.slice(0, 300) : "",
     notifyEmail: typeof s.notifyEmail === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.notifyEmail.trim()) ? s.notifyEmail.trim().slice(0, 120) : "",
   };
 }
 
-/** 여행지에 맞는 경비 안내 (표시 설정이 켜져 있을 때만) */
-export function priceNoteFor(settings: Pick<PublicPlanSettings, "showPrice" | "priceTable">, destination: string): string {
+/** 여행지(와 여행 방식)에 맞는 경비 안내 — 방식이 적힌 줄이 먼저, 없으면 방식 없는 줄 (표시 설정이 켜져 있을 때만) */
+export function priceNoteFor(settings: Pick<PublicPlanSettings, "showPrice" | "priceTable">, destination: string, style?: TravelStyle): string {
   if (!settings.showPrice) return "";
-  return settings.priceTable.find((p) => destination.includes(p.match))?.text ?? "";
+  const hits = settings.priceTable.filter((p) => destination.includes(p.match));
+  return (style ? hits.find((p) => p.style === style) : undefined)?.text ?? hits.find((p) => !p.style)?.text ?? "";
+}
+
+/** 관리자 경비 표 한 줄 "후쿠오카 | 항공+호텔만 | 1인 35만~" 또는 "후쿠오카 | 1인 69만~" */
+export function parsePriceLine(line: string): { match: string; text: string; style?: TravelStyle } | null {
+  const parts = line.split("|").map((x) => x.trim());
+  if (parts.length < 2 || !parts[0]) return null;
+  const style = STYLE_IDS.find((id) => STYLES[id].label === parts[1] || id === parts[1]);
+  if (style && parts.length >= 3) return { match: parts[0], style, text: parts.slice(2).join(" | ") };
+  return { match: parts[0], text: parts.slice(1).join(" | ") };
 }
 
 /** 도시 루트 → 여행지 글·도시 순서 글 ("후쿠오카 1박, 유후인 1박") */
@@ -122,10 +170,12 @@ export function toTripInput(req: PublicPlanRequest): TripInput {
     departureDate: req.departureDate ?? "",
     tripScope: "overseas",
     includesFlights: req.days >= 2,
-    operatingModel: "private",
+    operatingModel: STYLES[req.style].model,
     productTier: "standard",
     selectedFlight: null,
   } as TripInput;
+  // 항공을 맡기지 않으면(배낭 등) 항공 시각 규칙을 쓰지 않는다 — 단, 고객이 항공 시각을 적었으면 그 시각으로
+  if (!req.services.includes("flight") && !(req.arrive && req.returnDepart)) base.includesFlights = req.style !== "backpack" && req.days >= 2;
   if (req.arrive && req.returnDepart) base.selectedFlight = customerFlight(base, req.arrive, req.returnDepart);
   return base;
 }
@@ -149,7 +199,7 @@ export function customerFlight(input: Pick<TripInput, "originCity" | "destinatio
 export function cacheKeyOf(req: PublicPlanRequest): Omit<PublicPlanRequest, "token"> {
   const { token: _token, ...rest } = req;
   void _token;
-  return { ...rest, mustSee: [...rest.mustSee].sort(), themes: [...rest.themes].sort(), companions: [...rest.companions].sort() };
+  return { ...rest, mustSee: [...rest.mustSee].sort(), themes: [...rest.themes].sort(), companions: [...rest.companions].sort(), services: [...rest.services].sort() };
 }
 
 /** 저장·견적 요청에 담는 코스 (사진·확인 기록 등 큰 값은 뺀다) */

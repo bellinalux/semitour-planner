@@ -9,7 +9,9 @@ import { splitIntoDays, timelineToDay, type CartPlace } from "@/lib/placeCart";
 import {
   cacheKeyOf,
   compactDays,
+  isSelfGuided,
   normalizePublicSettings,
+  STYLES,
   toTripInput,
   type PublicPlanRequest,
   type PublicPlanResult,
@@ -127,14 +129,15 @@ export function pickPlaces(places: PlaceCard[], req: Pick<PublicPlanRequest, "th
 }
 
 /** 담은 장소를 날짜별로 나누고, 날마다 점심을 넣어 코스 엔진이 순서·시각을 정한다 (AI 없음) */
-async function scheduleCart(cart: CartPlace[], city: string, tourDays: number): Promise<DayPlan[]> {
+async function scheduleCart(cart: CartPlace[], city: string, tourDays: number, selfGuided = false): Promise<DayPlan[]> {
   const groups = splitIntoDays(cart, tourDays);
   return Promise.all(
     groups.map(async (g, k) => {
-      const lunch = { id: `lunch${k}`, name: "점심 식사 (현지식)", stayMin: 60, kind: "meal" as const, meal: "lunch" as const };
+      const lunch = { id: `lunch${k}`, name: selfGuided ? "점심 (자유식 · 근처 맛집)" : "점심 식사 (현지식)", stayMin: 60, kind: "meal" as const, meal: "lunch" as const };
       const plan = await planCourse({
         places: [...g.map((p) => ({ id: p.id, name: p.name, stayMin: p.stayMin, ...(p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : {}) })), lunch],
-        city, country: "", start: "09:00", mode: "car", audience: "group", reorder: true, lookup: false,
+        // 셀프 코스는 대중교통·도보 시간으로, 가이드 코스는 전용차량 시간으로
+        city, country: "", start: "09:00", mode: selfGuided ? "public" : "car", audience: selfGuided ? "any" : "group", reorder: true, lookup: false,
       });
       const byId = new Map<string, CartPlace & { meal?: boolean }>([...g.map((p) => [p.id, p] as const), [lunch.id, { ...lunch, meal: true }]]);
       return timelineToDay(k + 1, city, "09:00", plan.best.timeline, byId);
@@ -191,19 +194,21 @@ export async function buildPublicPlan(req: PublicPlanRequest, settings: PublicPl
   const flight = flightDaysRequest(input);
   const tourDays = flight ? flight.aiDays : req.days;
   const city = cityOf(req);
+  const selfGuided = isSelfGuided(req.style);
   let source: PublicPlanResult["source"] = "knowledge";
   let days: DayPlan[] | null = null;
   // ① 지식 창고만으로 충분하면 AI 없이 (여러 도시 여행은 AI가 도시를 나눈다)
   if (req.cities.length <= 1) {
     const c = await cartFor(req, tourDays, false).catch(() => null);
-    if (c) days = await scheduleCart(c.cart, city, tourDays).catch(() => null);
+    if (c) days = await scheduleCart(c.cart, city, tourDays, selfGuided).catch(() => null);
   }
   // ② AI — 고객 화면은 웹 조사를 건너뛰고, 40초 안에 못 만들면 ③으로
   if (!days && settings.aiFallback) {
     try {
       const ai = itineraryRequestSchema.parse({
-        destination: input.destination, days: tourDays, nights: req.nights, travelers: req.travelers, currency: "KRW", themes: req.themes, notes: "",
-        travelType: req.companions.includes("senior") ? "senior" : "semi", operatingModel: "private", productTier: "standard", tripScope: "overseas",
+        destination: input.destination, days: tourDays, nights: req.nights, travelers: req.travelers, currency: "KRW", themes: req.themes,
+        notes: selfGuided ? "자유여행 셀프 코스입니다. 가이드·전용차량 없이 대중교통·도보로 다니는 순서로 짜고, 식사는 자유식(근처 맛집 추천)으로 합니다." : "",
+        travelType: req.companions.includes("senior") ? "senior" : "semi", operatingModel: selfGuided ? "backpack" : STYLES[req.style].model, productTier: "standard", tripScope: "overseas",
         regionPlan: input.regionPlan, pace: req.pace, companions: req.companions, mustHave: input.mustHave, avoid: "",
         ...(flight ? { flightDays: flight.flightDays } : {}),
       });
@@ -218,7 +223,7 @@ export async function buildPublicPlan(req: PublicPlanRequest, settings: PublicPl
   if (!days) {
     const c = await cartFor({ ...req, cities: [] }, tourDays, true).catch(() => null);
     if (!c) throw new Error("NO_KNOWLEDGE");
-    days = await scheduleCart(c.cart, city, tourDays);
+    days = await scheduleCart(c.cart, city, tourDays, selfGuided);
     source = c.free ? "free" : "knowledge";
   }
   const times = flightTimesFor(input);

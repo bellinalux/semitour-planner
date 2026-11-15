@@ -4,7 +4,7 @@ import { Globe, Loader2, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { CopyButton } from "@/components/dashboard/CopyButton";
 import { useSession } from "@/components/SessionContext";
-import type { PublicPlanSettings as Settings } from "@/lib/publicPlan";
+import { parsePriceLine, STYLE_IDS, STYLES, type PublicPlanSettings as Settings } from "@/lib/publicPlan";
 import { buttonClass, fieldClass } from "./account/shared";
 
 interface View {
@@ -22,6 +22,8 @@ export function PublicPlanSettings() {
   const [draft, setDraft] = useState<Settings | null>(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  /** 경비 표 입력 중인 글 (줄바꿈·덜 쓴 줄이 지워지지 않게) */
+  const [priceText, setPriceText] = useState<string | null>(null);
   if (!session.isAdmin) return null;
 
   const open = async () => {
@@ -109,12 +111,16 @@ export function PublicPlanSettings() {
                     <b>예상 경비 범위 보여 주기</b>
                   </label>
                   <p className="text-[11px] text-slate-500">여행지에 아래 글자가 들어 있으면 그 안내를 보여 줍니다 (한 줄에 &quot;여행지 | 안내&quot;).</p>
+                  <p className="text-[11px] text-slate-500">여행 방식별로 다르면 가운데에 방식을 적으세요: {STYLE_IDS.map((id) => STYLES[id].label).join(" · ")} (없으면 모든 방식에 공통)</p>
                   <textarea
-                    rows={4}
-                    value={draft.priceTable.map((p) => `${p.match} | ${p.text}`).join("\n")}
-                    onChange={(e) => set({ priceTable: e.target.value.split("\n").map((l) => l.split("|")).filter((x) => x.length >= 2).map(([m, ...t]) => ({ match: m.trim(), text: t.join("|").trim() })) })}
+                    rows={5}
+                    value={priceText ?? draft.priceTable.map((p) => [p.match, p.style ? STYLES[p.style].label : "", p.text].filter(Boolean).join(" | ")).join("\n")}
+                    onChange={(e) => {
+                      setPriceText(e.target.value);
+                      set({ priceTable: e.target.value.split("\n").flatMap((l) => parsePriceLine(l) ?? []) });
+                    }}
                     className={`${fieldClass} font-mono`}
-                    placeholder={"후쿠오카 | 1인 69만~89만 원 (2박3일, 항공 포함)\n다낭 | 1인 79만~119만 원 (3박5일, 항공 포함)"}
+                    placeholder={"후쿠오카 | 1인 69만~89만 원 (2박3일, 항공 포함)\n후쿠오카 | 항공+호텔만 | 1인 35만~ (2박3일)\n다낭 | 패키지 | 1인 79만~119만 원 (3박5일)"}
                     aria-label="예상 경비 표"
                   />
                 </section>
