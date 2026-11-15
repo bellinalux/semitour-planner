@@ -37,13 +37,13 @@ function clearUnverifiedAccessibility(days: DayPlan[]): DayPlan[] {
   );
 }
 
-export async function generateItineraryDays(req: ItineraryRequest): Promise<{ days: DayPlan[]; sources: SearchSource[]; researched: boolean; knowledge: Awaited<ReturnType<typeof knowledgeForTrip>>["info"] }> {
+export async function generateItineraryDays(req: ItineraryRequest, opts: { research?: boolean } = {}): Promise<{ days: DayPlan[]; sources: SearchSource[]; researched: boolean; knowledge: Awaited<ReturnType<typeof knowledgeForTrip>>["info"] }> {
   // 세미투어(기본)이면서 해외여행이면 조사 없이 바로 만들고, 그 외(다른 여행 유형이거나 국내=외국인 대상 투어)는
   // 일정을 짜기 전에 여행 유형별 특징(또는 외국인에게 인기 있는 명소)을 먼저 웹에서 조사한다
   // 지식 창고(여행자 인기·다른 여행사·우리 현장·고객·판매 결과)를 먼저 보고, 없거나 오래됐으면 웹에서 조사해 쌓는다
   const [research, knowledge] = await Promise.all([
-    needsItineraryResearch(req) ? generateGroundedText({ user: buildItineraryResearchPrompt(req) }) : Promise.resolve(null),
-    knowledgeForTrip(req).catch(() => ({ docs: [], memo: "", info: [] })),
+    opts.research !== false && needsItineraryResearch(req) ? generateGroundedText({ user: buildItineraryResearchPrompt(req) }) : Promise.resolve(null),
+    knowledgeForTrip(req, { research: opts.research !== false }).catch(() => ({ docs: [], memo: "", info: [] })),
   ]);
   const result = await generateJson({
     system: itineraryStructureSystemPrompt(req.travelType, req.tripScope),

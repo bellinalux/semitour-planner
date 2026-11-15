@@ -6,6 +6,7 @@ import { publicPlanRequestSchema } from "@/lib/publicPlan";
 import { GeminiError } from "@/lib/server/gemini";
 import { cachedPublicPlan, checkQuota, countUse, getPublicSettings, QuotaError, recordStats, verifyHuman } from "@/lib/server/publicPlan";
 import { allowPublicWrite } from "@/lib/server/rateLimit";
+import { recordServerEvent } from "@/lib/server/errorLog";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -33,8 +34,12 @@ export async function POST(request: Request) {
   } catch (err) {
     if (err instanceof QuotaError) return errorResponse("QUOTA", err.message, 429);
     if (err instanceof Error && err.message === "NO_KNOWLEDGE") return errorResponse("NO_KNOWLEDGE", "이 여행지는 아직 추천 코스를 준비 중입니다. 견적 요청을 남겨 주시면 맞춤 코스를 보내 드립니다.", 404);
-    if (err instanceof GeminiError) return errorResponse("AI", "코스를 만드는 중 잠시 문제가 생겼습니다. 조금 뒤에 다시 시도해 주세요.", 502);
+    if (err instanceof GeminiError) {
+      await recordServerEvent("ai", "고객 코스 AI 실패", err.message).catch(() => undefined);
+      return errorResponse("AI", "코스를 만드는 중 잠시 문제가 생겼습니다. 조금 뒤에 다시 시도하시거나 견적 요청을 남겨 주세요.", 502);
+    }
     console.error("[public-plan]", err);
+    await recordServerEvent("server", "고객 코스 만들기 실패", err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err)).catch(() => undefined);
     return errorResponse("INTERNAL", "코스를 만들지 못했습니다. 견적 요청을 남겨 주세요.", 500);
   }
 }

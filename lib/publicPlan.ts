@@ -38,8 +38,8 @@ export type PublicPlanRequest = z.infer<typeof publicPlanRequestSchema>;
 
 export interface PublicPlanResult {
   days: DayPlan[];
-  /** knowledge: 지식 창고 인기 장소 + 코스 엔진 (AI 없음) / ai: AI 생성 / cache: 같은 조건 결과 */
-  source: "knowledge" | "ai" | "cache";
+  /** knowledge: 지식 창고 인기 장소 + 코스 엔진 (AI 없음) / ai: AI 생성 / free: 위키백과 근처 장소 + 코스 엔진 (AI 없음) / cache: 같은 조건 결과 */
+  source: "knowledge" | "ai" | "free" | "cache";
   note: string;
 }
 
