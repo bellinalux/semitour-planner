@@ -1,3 +1,4 @@
+import { ASK_KIND_LABEL, askLine } from "@/lib/serviceRequest";
 import { compactDays, SERVICE_LABEL, STYLES } from "@/lib/publicPlan";
 import { getPublicSettings, notifyInquiry, recordStats } from "@/lib/server/publicPlan";
 import type { DayPlan } from "@/types";
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return errorResponse("BAD_REQUEST", parsed.error.issues[0]?.message ?? "입력을 확인해 주세요.", 400);
   const { website: _honeypot, plan, ...data } = parsed.data;
   void _honeypot;
-  if (plan && data.consent !== true) return errorResponse("BAD_REQUEST", "개인정보 수집·이용에 동의해 주세요.", 400);
+  if ((plan || data.asks) && data.consent !== true) return errorResponse("BAD_REQUEST", "개인정보 수집·이용에 동의해 주세요.", 400);
   const item: Inquiry = {
     ...data,
     id: newShareId(),
@@ -44,8 +45,8 @@ export async function POST(request: Request) {
     const course = (item.planDays ?? []).map((d) => `DAY ${d.day} ${d.items.filter((i) => !["flight", "hotel", "transfer"].includes(i.type ?? "")).map((i) => i.name).join(" → ")}`).join("\n");
     await notifyInquiry(
       settings.notifyEmail,
-      `[견적 요청] ${item.name} · ${item.destination} ${item.travelers}명${plan ? " (고객 코스)" : ""}`,
-      [`이름: ${item.name}`, `연락처: ${item.contact}`, `여행지: ${item.destination}`, `출발: ${item.departure || "미정"} · ${item.nights}박 · ${item.travelers}명`, item.planStyle ? `여행 방식: ${STYLES[item.planStyle].label}${item.planServices?.length ? ` · 맡길 것: ${item.planServices.map((x) => SERVICE_LABEL[x]).join(", ")}` : ""}` : "", item.requests ? `요청: ${item.requests}` : "", course ? `\n고객이 만든 코스:\n${course}` : "", "\n예약 관리 → 웹 견적 요청에서 확인하세요."].filter(Boolean).join("\n"),
+      `[${item.asks ? ASK_KIND_LABEL[item.asks.kind] : "견적 요청"}] ${item.name} · ${item.destination} ${item.travelers}명${plan ? " (고객 코스)" : ""}${item.asks ? ` · ${item.asks.items.map((x) => SERVICE_LABEL[x.id]).join("·")}` : ""}`,
+      [`이름: ${item.name}`, `연락처: ${item.contact}`, `여행지: ${item.destination}`, `출발: ${item.departure || "미정"} · ${item.nights}박 · ${item.travelers}명`, item.planStyle ? `여행 방식: ${STYLES[item.planStyle].label}${item.planServices?.length ? ` · 맡길 것: ${item.planServices.map((x) => SERVICE_LABEL[x]).join(", ")}` : ""}` : "", item.asks ? `\n${ASK_KIND_LABEL[item.asks.kind]}:\n${item.asks.items.map((x) => `- ${askLine(x)}`).join("\n")}${item.asks.contactHow ? `\n연락: ${item.asks.contactHow}${item.asks.contactWhen ? ` (${item.asks.contactWhen})` : ""}` : ""}` : "", item.requests ? `요청: ${item.requests}` : "", course ? `\n고객이 만든 코스:\n${course}` : "", "\n예약 관리 → 웹 견적 요청에서 확인하세요."].filter(Boolean).join("\n"),
     ).catch(() => false);
   }
   return Response.json({ ok: true });

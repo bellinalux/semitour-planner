@@ -99,6 +99,86 @@ test("고객 코스 만들기: 3단계 입력 → 코스 → 빼기·다른 날�
   expect(saved).toMatchObject({ destination: "후쿠오카", customerName: name, mode: "ai", operatingModel: "airtel", includesFlights: false, packageType: "land_hotel" });
 });
 
+test("꼭 가볼 곳(한국인 인기·가는 방법·코스에 넣기) + 우리에게 요청하기(항공권·호텔·유심 → 예약 요청)가 직원 견적 요청함에 항목별로 들어온다", async ({ page, context }) => {
+  const customer = await context.newPage();
+  await customer.route("**/api/public-plan/recommend**", (r) => r.fulfill({ json: { courses: [], popular: [] } }));
+  await customer.route("**/api/public-plan/spots**", (r) =>
+    r.fulfill({
+      json: {
+        city: "후쿠오카",
+        center: { lat: 33.5902, lng: 130.4207 },
+        source: "knowledge",
+        spots: [
+          { name: "다자이후 텐만구", area: "다자이후", kind: "sight", why: "학문의 신 신사 · 한국 여행사 일정 3곳에 포함", tips: ["오전이 한산"], stayMin: 90, korean: true, lat: 33.519, lng: 130.535 },
+          { name: "오호리 공원", area: "주오구", kind: "sight", why: "호수 산책", tips: [], stayMin: 60, korean: false, lat: 33.586, lng: 130.376 },
+        ],
+      },
+    }),
+  );
+  const sent: Record<string, unknown>[] = [];
+  await customer.route("**/api/public-plan", async (r) => {
+    if (r.request().method() !== "POST") return r.continue();
+    sent.push(r.request().postDataJSON() as Record<string, unknown>);
+    await r.fulfill({ json: { days: DAYS, source: "knowledge", note: "" } });
+  });
+  await customer.goto("/plan");
+  await customer.getByLabel("여행지").fill("후쿠오카");
+  await customer.getByLabel("기간").selectOption("1");
+
+  // 꼭 가볼 곳 — 방식과 상관없이 (패키지로 바꿔도)
+  await customer.getByRole("group", { name: "여행 방식" }).getByRole("button", { name: /패키지$/ }).first().click();
+  const spots = customer.getByRole("region", { name: "꼭 가볼 곳" });
+  await expect(spots).toContainText("후쿠오카 꼭 가볼 곳");
+  await expect(spots).toContainText("한국인 인기");
+  await expect(spots).toContainText("오전이 한산");
+  await spots.getByRole("button", { name: "가는 방법" }).first().click();
+  await expect(spots).toContainText("도심에서 전용차량 약");
+  await expect(spots.getByRole("link", { name: "공항에서 길찾기" })).toHaveAttribute("href", /google\.com\/maps\/dir/);
+  await spots.getByRole("button", { name: "오호리 공원 코스에 넣기" }).click();
+  await expect(spots).toContainText("✓ 코스에 있음");
+  await customer.getByRole("button", { name: "바로 코스 만들기" }).click();
+  await expect(customer.getByRole("region", { name: "내 코스" })).toContainText("다자이후 텐만구");
+  expect(sent[0]).toMatchObject({ style: "package", mustSee: ["오호리 공원"] });
+  // 패키지도 장소 사이 이동(전용차량) 표시
+  await expect(customer.locator("#plan-day-1")).toContainText("전용차량 약");
+
+  // 우리에게 요청하기 — 바로가기 → 항공권·호텔·유심
+  await customer.getByRole("link", { name: /우리에게 요청하기/ }).click();
+  const ask = customer.getByRole("region", { name: "우리에게 요청하기" });
+  await ask.getByRole("button", { name: /항공권/ }).click();
+  await ask.getByRole("button", { name: /호텔/ }).click();
+  await ask.getByRole("button", { name: /eSIM·유심/ }).click();
+  await expect(ask.getByLabel("호텔 지역·구역")).toHaveValue(/주변/);
+  await expect(ask.getByLabel("항공권 출발 공항")).toHaveValue("인천");
+  await ask.getByLabel("호텔 박수").fill("2");
+  await ask.getByLabel("eSIM·유심 휴대폰").selectOption("갤럭시");
+  const name = `요청 고객 ${Date.now() % 100000}`;
+  await ask.getByLabel("요청 이름").fill(name);
+  await ask.getByLabel("요청 연락처").fill("010-4444-5555");
+  await expect(ask.getByRole("button", { name: /예약 요청/ })).toBeDisabled();
+  await ask.getByLabel("요청 개인정보 동의").check();
+  await ask.getByRole("button", { name: /예약 요청/ }).click();
+  await expect(ask.getByRole("status")).toContainText("예약 요청을 보냈습니다 — 항공권 · 호텔 · eSIM·유심");
+
+  // 직원 화면 — 예약 요청 배지·항목별 내용, [입력에 채우기]로 항공 포함·상품 구성
+  await mockAi(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "예약 관리" }).click();
+  const dlg = page.getByRole("dialog", { name: "예약 관리" });
+  const row = dlg.getByRole("region", { name: "웹 견적 요청" }).getByRole("listitem").filter({ hasText: name });
+  const asks = row.getByLabel("요청 항목");
+  await expect(asks).toContainText("예약 요청");
+  await expect(asks).toContainText("항공권 · 호텔 · eSIM·유심");
+  await expect(asks).toContainText("호텔 — 지역·구역");
+  await expect(asks).toContainText("박수 2");
+  await expect(asks).toContainText("휴대폰 갤럭시");
+  await expect(row).toContainText("고객 코스");
+  await row.getByRole("button", { name: "입력에 채우기" }).click();
+  await expect
+    .poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem("semitour-planner:input:v1") ?? "{}")))
+    .toMatchObject({ destination: "후쿠오카", includesFlights: true, packageType: "full" });
+});
+
 test("쇼핑몰 안 표시 허용: 고객 화면만 skcbook.com에 허용, 직원 화면은 막는다 · embed.js 버튼", async ({ page, request }) => {
   const plan = await request.get("/plan");
   expect(plan.headers()["content-security-policy"]).toContain("https://skcbook.com");

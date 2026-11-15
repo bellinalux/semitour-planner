@@ -8,19 +8,26 @@ import type { DayPlan, ItineraryItem } from "@/types";
 const hasXY = (i: Pick<ItineraryItem, "lat" | "lng">) => typeof i.lat === "number" && typeof i.lng === "number";
 
 export interface LegHint {
-  mode: "walk" | "transit";
+  mode: "walk" | "transit" | "car";
   text: string;
   link: string;
 }
 
 /** 구글 지도 길찾기 (대중교통·도보) — 좌표가 있으면 좌표로 */
-export function directionsLink(a: Pick<ItineraryItem, "name" | "lat" | "lng">, b: Pick<ItineraryItem, "name" | "lat" | "lng">, mode: "transit" | "walking"): string {
+export function directionsLink(a: Pick<ItineraryItem, "name" | "lat" | "lng">, b: Pick<ItineraryItem, "name" | "lat" | "lng">, mode: "transit" | "walking" | "driving"): string {
   const at = (x: typeof a) => (hasXY(x) ? `${x.lat},${x.lng}` : x.name);
   return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(at(a))}&destination=${encodeURIComponent(at(b))}&travelmode=${mode}`;
 }
 
-/** 다음 장소까지 — 1.2km 안이면 도보(4.5km/h), 아니면 대중교통(지하철·버스, 평균 18km/h + 대기 8분) */
-export function legHint(a: ItineraryItem, b: ItineraryItem): LegHint {
+/**
+ * 다음 장소까지 — 1.2km 안이면 도보(4.5km/h), 아니면 대중교통(지하철·버스, 평균 18km/h + 대기 8분).
+ * guided(패키지·세미·가이드 투어 날)면 전용차량 시간(코스 엔진 값)으로.
+ */
+export function legHint(a: ItineraryItem, b: ItineraryItem, guided = false): LegHint {
+  if (guided) {
+    const m = a.travelMinutesToNext ?? (hasXY(a) && hasXY(b) ? Math.round((km({ lat: a.lat!, lng: a.lng! }, { lat: b.lat!, lng: b.lng! }) * 1.3 / 30) * 60 + 5) : 0);
+    return { mode: "car", text: m <= 5 ? "바로 옆 (도보)" : `전용차량 약 ${m}분`, link: directionsLink(a, b, "driving") };
+  }
   if (hasXY(a) && hasXY(b)) {
     const d = km({ lat: a.lat!, lng: a.lng! }, { lat: b.lat!, lng: b.lng! }) * 1.3;
     if (d < 1.2) return { mode: "walk", text: `도보 약 ${Math.max(3, Math.round((d / 4.5) * 60))}분`, link: directionsLink(a, b, "walking") };
@@ -31,9 +38,27 @@ export function legHint(a: ItineraryItem, b: ItineraryItem): LegHint {
 }
 
 /** 하루 이동 안내 (관광·식사 사이만, 항공·호텔 줄은 건너뜀) */
-export function dayLegs(day: DayPlan): { from: ItineraryItem; to: ItineraryItem; hint: LegHint }[] {
+export function dayLegs(day: DayPlan, guided = false): { from: ItineraryItem; to: ItineraryItem; hint: LegHint }[] {
   const stops = day.items.filter((i) => !["flight", "hotel"].includes(i.type ?? ""));
-  return stops.slice(1).map((to, k) => ({ from: stops[k], to, hint: legHint(stops[k], to) }));
+  return stops.slice(1).map((to, k) => ({ from: stops[k], to, hint: legHint(stops[k], to, guided) }));
+}
+
+/**
+ * 꼭 가볼 곳 "가는 방법" — 도심에서 얼마나 걸리는지 (대중교통·택시, 가이드 방식이면 전용차량).
+ * 좌표가 없으면 길찾기 링크만.
+ */
+export function accessHint(center: { lat: number; lng: number } | null, spot: { name: string; lat?: number; lng?: number }, city: string, guided: boolean): { text: string; link: string; airportLink: string } {
+  const to = hasXY(spot) ? `${spot.lat},${spot.lng}` : `${spot.name} ${city}`;
+  const from = center ? `${center.lat},${center.lng}` : city;
+  const link = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}&travelmode=${guided ? "driving" : "transit"}`;
+  const airportLink = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(`${city} 공항`)}&destination=${encodeURIComponent(to)}&travelmode=${guided ? "driving" : "transit"}`;
+  if (!center || !hasXY(spot)) return { text: "도심에서 가는 길은 [길찾기]로 확인하세요", link, airportLink };
+  const d = km(center, { lat: spot.lat!, lng: spot.lng! }) * 1.3;
+  if (d < 1.2) return { text: `도심에서 도보 약 ${Math.max(3, Math.round((d / 4.5) * 60))}분`, link, airportLink };
+  const car = Math.round((d / 30) * 60 + 5);
+  if (guided) return { text: `도심에서 전용차량 약 ${car}분`, link, airportLink };
+  const transit = Math.round((d / (d > 25 ? 40 : 18)) * 60 + 10);
+  return { text: `도심에서 대중교통 약 ${transit}분 · 택시 약 ${car}분${d > 25 ? " (근교 — 기차·버스 또는 1일 투어 추천)" : ""}`, link, airportLink };
 }
 
 /** 여행지별 교통패스·교통카드 추천 (대표적인 것만 — 일정에 따라 다르니 확인 필요) */

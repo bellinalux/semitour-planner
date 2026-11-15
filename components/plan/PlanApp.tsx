@@ -5,9 +5,11 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { PlaybackMap, type PlaybackPoint } from "@/components/plan/PlaybackMap";
 import { parseClock } from "@/lib/dayLoad";
 import { dayTimes, isTourItem, lightenDay, moveItem, planSummary, removeItem, swapItem, transitLink, transportOptions } from "@/lib/planEdit";
-import { COMPANION_LABEL, DEFAULT_STYLE, isSelfGuided, PACE_LABEL, priceNoteFor, SERVICE_IDS, SERVICE_LABEL, STYLE_IDS, STYLES, THEME_IDS, THEME_LABEL, type PublicPlanRequest, type PublicPlanResult, type ServiceId, type TravelStyle } from "@/lib/publicPlan";
+import { COMPANION_LABEL, DEFAULT_STYLE, isSelfGuided, PACE_LABEL, priceNoteFor, SERVICE_IDS, SERVICE_LABEL, STYLE_IDS, STYLES, THEME_IDS, THEME_LABEL, type MustSpot, type PublicPlanRequest, type PublicPlanResult, type ServiceId, type TravelStyle } from "@/lib/publicPlan";
 import { dayLegs, hotelAreas, passAdvice } from "@/lib/selfGuide";
-import type { DayPlan } from "@/types";
+import { AskUs } from "./AskUs";
+import { MustSee } from "./MustSee";
+import type { DayPlan, ItineraryItem } from "@/types";
 
 interface Config {
   enabled: boolean;
@@ -232,6 +234,47 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
     }
   };
 
+  /** 우리에게 요청하기 — 항목별 견적/예약 요청 (코스는 선택해서 함께) */
+  const sendAsk: Parameters<typeof AskUs>[0]["send"] = async (b) => {
+    const id = b.withPlan ? shareId || (await save().catch(() => "")) : "";
+    await post("/api/inquiry", {
+      name: b.name,
+      contact: b.contact,
+      destination,
+      departure: date,
+      nights: totalNights,
+      travelers,
+      budget: 0,
+      style: style === "package" ? "package" : style === "semi" ? "semi" : "free",
+      requests: [b.requests, `여행 방식: ${STYLES[style].label}`].filter(Boolean).join(" / ").slice(0, 500),
+      website: "",
+      consent: b.consent,
+      asks: b.asks,
+      ...(b.withPlan && days.length ? { plan: { title: `${destination} ${totalNights}박${totalNights + 1}일 · ${STYLES[style].label}`, ...(id ? { planId: id } : {}), days, cities: multi ? cities.map((c) => ({ name: c.name, nights: c.nights })) : [], style, services, tourDays } } : {}),
+    });
+  };
+
+  /** 꼭 가볼 곳 [코스에 넣기] — 코스 전이면 "꼭 갈 곳"에, 코스가 있으면 가장 한가한 날(호텔·항공 앞)에 */
+  const addSpot = (sp: MustSpot) => {
+    if (days.length === 0) {
+      if (!mustSee.includes(sp.name) && mustSee.length < 10) setMustSee((cur) => [...cur, sp.name]);
+      return;
+    }
+    setDays((cur) => {
+      const load = (d: DayPlan) => d.items.filter((i) => !["flight", "hotel", "transfer"].includes(i.type ?? "")).reduce((n, i) => n + i.stayMinutes, 0);
+      const target = cur.slice().sort((a, b) => load(a) - load(b))[0];
+      return cur.map((d) => {
+        if (d.day !== target.day) return d;
+        let at = d.items.length;
+        while (at > 0 && ["hotel", "flight", "transfer"].includes(d.items[at - 1].type ?? "")) at--;
+        const items = d.items.slice();
+        const type: ItineraryItem["type"] = sp.kind === "shopping" ? "shopping" : sp.kind === "activity" || sp.kind === "night" ? "experience" : "sightseeing";
+        items.splice(at, 0, { id: `spot-${Date.now()}`, type, name: sp.name, description: sp.why, stayMinutes: sp.stayMin, travelMinutesToNext: 20, entryFee: 0, mealCost: 0, isEstimated: true, ...(sp.lat != null && sp.lng != null ? { lat: sp.lat, lng: sp.lng } : {}) });
+        return { ...d, items };
+      });
+    });
+  };
+
   const summary = useMemo(() => planSummary(days), [days]);
   const price = config ? priceNoteFor(config, destination, style) : "";
   const selfGuided = isSelfGuided(style);
@@ -270,6 +313,11 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
         </header>
       )}
       {config?.notice && <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-900">{config.notice}</p>}
+      <nav aria-label="바로가기" className="flex flex-wrap gap-1.5 text-xs print:hidden">
+        <a href="#plan-ask" className="rounded-full px-3 py-1.5 font-semibold text-white" style={{ background: color }}>
+          🧾 우리에게 요청하기 (항공권·호텔·유심 등)
+        </a>
+      </nav>
 
       <section aria-label="코스 조건" className="space-y-3 rounded-xl border border-slate-200 p-3 print:hidden">
         <fieldset aria-label="여행 방식" className="space-y-1">
@@ -439,6 +487,8 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
         </section>
       )}
 
+      <MustSee city={multi ? (cities[0]?.name ?? "") : dest} guided={!selfGuided} isIn={(n) => mustSee.includes(n) || days.some((d) => d.items.some((i) => i.name === n))} onAdd={addSpot} />
+
       {result && (
         <section id="plan-result" aria-label="내 코스" className="scroll-mt-4 space-y-3">
           <div aria-label="조건 바꿔 다시 만들기" className="flex flex-wrap items-center gap-1 text-[11px]">
@@ -564,7 +614,9 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
                 </header>
                 <ul className="space-y-1">
                   {d.items.map((i) => {
-                    const leg = selfGuided && !tourDays.includes(d.day) ? dayLegs(d).find((l) => l.from.id === i.id) : undefined;
+                    // 모든 방식에서 다음 장소까지 이동 — 셀프는 도보·대중교통 + 길찾기, 가이드(패키지·세미·투어 날)는 전용차량
+                    const dayGuided = !selfGuided || tourDays.includes(d.day);
+                    const leg = dayLegs(d, dayGuided).find((l) => l.from.id === i.id);
                     return (
                     <Fragment key={i.id}>
                     <li className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-1 py-1 hover:bg-slate-50">
@@ -603,10 +655,15 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
                     </li>
                     {leg && (
                       <li className="pl-12 text-[11px] text-sky-800">
-                        ↓ {leg.hint.text}{" "}
-                        <a href={leg.hint.link} target="_blank" rel="noopener noreferrer" className="underline">
-                          길찾기
-                        </a>
+                        ↓ {leg.hint.text}
+                        {!dayGuided && (
+                          <>
+                            {" "}
+                            <a href={leg.hint.link} target="_blank" rel="noopener noreferrer" className="underline">
+                              길찾기
+                            </a>
+                          </>
+                        )}
                       </li>
                     )}
                     </Fragment>
@@ -688,6 +745,14 @@ export function PlanApp({ embed = false, initial, saved }: { embed?: boolean; in
           )}
         </section>
       )}
+
+      <AskUs
+        ctx={{ destination, date, nights: totalNights, travelers, hotelArea: hotelAreas(days)[0]?.near ? `${hotelAreas(days)[0].near} 주변` : "", suggested: STYLES[style].services }}
+        hasPlan={days.length > 0}
+        initial={{ name: initial?.name ?? "", phone: initial?.phone ?? "" }}
+        color={color}
+        send={sendAsk}
+      />
     </div>
   );
 }
