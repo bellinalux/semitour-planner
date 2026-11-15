@@ -10,7 +10,7 @@ import { postJson } from "@/lib/api";
 import { WON } from "@/lib/salesStats";
 import { InquiryInbox } from "./InquiryInbox";
 import { inquiryDate, STYLE_LABEL, type Inquiry } from "@/lib/inquiry";
-import type { TripInput } from "@/types";
+import type { DayPlan, TripInput } from "@/types";
 import { CancelCalculator } from "./CancelCalculator";
 import { STANDARD_POLICY, type CancelPolicy } from "@/lib/cancelPolicy";
 
@@ -27,6 +27,8 @@ interface Props {
   airCancelFee?: number;
   /** 웹 견적 요청으로 입력 채우기 */
   onFillInput?: (patch: Partial<TripInput>) => void;
+  /** 고객이 만든 코스(웹 견적 요청)로 일정까지 채워 견적 시작 */
+  onUseCourse?: (days: DayPlan[], patch: Partial<TripInput>) => void;
   buttonClassName?: string;
 }
 
@@ -80,7 +82,7 @@ function Field({ label, children, wide }: { label: string; children: React.React
 }
 
 /** 상단 [예약 관리] — 견적 이후 예약 진행 상태·입금 기한·미수금을 관리한다 */
-export function BookingsMenu({ draftFromQuote, author, companyName = "", cancelPolicy = STANDARD_POLICY, airCancelFee = 0, onFillInput, buttonClassName }: Props) {
+export function BookingsMenu({ draftFromQuote, author, companyName = "", cancelPolicy = STANDARD_POLICY, airCancelFee = 0, onFillInput, onUseCourse, buttonClassName }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const bookings = useBookings(author);
   const [filter, setFilter] = useState<Filter>("active");
@@ -243,6 +245,14 @@ export function BookingsMenu({ draftFromQuote, author, companyName = "", cancelP
                   onFillInput(patch);
                   dialogRef.current?.close();
                 }}
+                onUseCourse={
+                  onUseCourse
+                    ? (days, patch) => {
+                        onUseCourse(days, patch);
+                        dialogRef.current?.close();
+                      }
+                    : undefined
+                }
               />
             )}
             <div className="flex flex-wrap items-center gap-2">

@@ -16,6 +16,7 @@ import { Dashboard } from "@/components/dashboard/Dashboard";
 import { TripInputForm } from "@/components/form/TripInputForm";
 import { Header } from "@/components/layout/Header";
 import { CompanySettings } from "@/components/layout/CompanySettings";
+import { PublicPlanSettings } from "@/components/layout/PublicPlanSettings";
 import { AiKeySettings } from "@/components/layout/AiKeySettings";
 import { PrintDocuments } from "@/components/print/PrintDocuments";
 import { SavedPlansMenu } from "@/components/layout/SavedPlansMenu";
@@ -621,6 +622,12 @@ export function PlannerApp() {
                 update(patch);
                 setTab("input");
               }}
+              onUseCourse={(next, patch) => {
+                update(patch);
+                if (itinerary.days.length > 0) history.labeled("고객 코스 불러오기")(next);
+                else itinerary.restore({ days: next, pmChoice: {}, meta: null, generatedCurrency: input.currency });
+                setTab("result");
+              }}
               draftFromQuote={() =>
                 quote?.ok ? { ...bookingFromQuote(input, documentQuote(quote, input)), planName: suggestPlanName(input, meta), city: citiesOf(input.destination)[0] ?? "", places: coursePlaces(days, pmChoice) } : null
               }
@@ -647,6 +654,7 @@ export function PlannerApp() {
               <InstallApp />
               <CompanySettings {...companyProfile} />
               <AiKeySettings />
+              <PublicPlanSettings />
               <HistoryMenu log={quoteLog} teamSync={teamSync} />
               <KnowledgeMenu defaultCity={citiesOf(input.destination)[0] ?? ""} travelType={input.travelType} tripScope={input.tripScope} />
               <RateBookMenu defaultCity={citiesOf(input.destination)[0] ?? ""} />

@@ -1,3 +1,6 @@
+import { compactDays } from "@/lib/publicPlan";
+import { getPublicSettings, notifyInquiry, recordStats } from "@/lib/server/publicPlan";
+import type { DayPlan } from "@/types";
 import { z } from "zod";
 import { inquirySchema, type Inquiry } from "@/lib/inquiry";
 import { isAuthed } from "@/lib/server/access";
@@ -23,10 +26,28 @@ export async function POST(request: Request) {
   }
   const parsed = inquirySchema.safeParse(body);
   if (!parsed.success) return errorResponse("BAD_REQUEST", parsed.error.issues[0]?.message ?? "입력을 확인해 주세요.", 400);
-  const { website: _honeypot, ...data } = parsed.data;
+  const { website: _honeypot, plan, ...data } = parsed.data;
   void _honeypot;
-  const item: Inquiry = { ...data, id: newShareId(), at: new Date().toISOString(), done: false };
+  if (plan && data.consent !== true) return errorResponse("BAD_REQUEST", "개인정보 수집·이용에 동의해 주세요.", 400);
+  const item: Inquiry = {
+    ...data,
+    id: newShareId(),
+    at: new Date().toISOString(),
+    done: false,
+    ...(plan ? { source: { kind: "plan" as const, title: plan.title, ...(plan.planId ? { planId: plan.planId } : {}) }, planDays: compactDays(plan.days as DayPlan[]), planCities: plan.cities } : {}),
+  };
   if (!(await addInquiry(item))) return errorResponse("NO_STORE", "지금은 접수할 수 없습니다. 전화로 문의해 주세요.", 503);
+  // 고객 코스 통계·새 요청 알림 (실패해도 접수는 그대로)
+  if (plan) await recordStats(item.destination, item.planDays ?? [], "requested").catch(() => undefined);
+  const settings = await getPublicSettings().catch(() => null);
+  if (settings?.notifyEmail) {
+    const course = (item.planDays ?? []).map((d) => `DAY ${d.day} ${d.items.filter((i) => !["flight", "hotel", "transfer"].includes(i.type ?? "")).map((i) => i.name).join(" → ")}`).join("\n");
+    await notifyInquiry(
+      settings.notifyEmail,
+      `[견적 요청] ${item.name} · ${item.destination} ${item.travelers}명${plan ? " (고객 코스)" : ""}`,
+      [`이름: ${item.name}`, `연락처: ${item.contact}`, `여행지: ${item.destination}`, `출발: ${item.departure || "미정"} · ${item.nights}박 · ${item.travelers}명`, item.requests ? `요청: ${item.requests}` : "", course ? `\n고객이 만든 코스:\n${course}` : "", "\n예약 관리 → 웹 견적 요청에서 확인하세요."].filter(Boolean).join("\n"),
+    ).catch(() => false);
+  }
   return Response.json({ ok: true });
 }
 

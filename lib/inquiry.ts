@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { DayPlan } from "@/types";
 
 /**
  * 견적 요청 접수 — 고객이 웹 폼(/q)으로 남기는 여행 문의. 직원은 예약 관리에서 보고 "예약(문의)으로 만들기"·"입력에 채우기"로 이어 간다.
@@ -16,15 +17,29 @@ export const inquirySchema = z.object({
   requests: z.string().trim().max(500).default(""),
   /** 자동 입력 막기 (화면에 안 보이는 칸) */
   website: z.string().max(0).default(""),
+  /** 고객이 "내 여행 코스 만들기"(/plan)로 만든 코스 — 직원이 [이 코스로 견적 시작]으로 연다 */
+  plan: z
+    .object({
+      title: z.string().trim().max(80),
+      planId: z.string().max(40).optional(),
+      days: z.array(z.any()).min(1).max(15),
+      cities: z.array(z.object({ name: z.string().max(40), nights: z.number().int().min(0).max(14) })).max(8).default([]),
+    })
+    .optional(),
+  /** 개인정보 수집·이용 동의 (코스 만들기 화면에서 받음) */
+  consent: z.boolean().optional(),
 });
 export type InquiryInput = z.infer<typeof inquirySchema>;
 
-export interface Inquiry extends Omit<InquiryInput, "website"> {
+export interface Inquiry extends Omit<InquiryInput, "website" | "plan"> {
+  /** 고객이 만든 코스 (날짜별 일정) */
+  planDays?: DayPlan[];
+  planCities?: { name: string; nights: number }[];
   id: string;
   at: string;
   done: boolean;
-  /** 고객 웹 일정표에서 [이 일정으로 예약 요청]으로 온 것 */
-  source?: { kind: "share"; shareId: string; title: string; period: string; options: string[] };
+  /** 고객 웹 일정표에서 [이 일정으로 예약 요청]으로 온 것 / 고객 코스 만들기에서 온 것 */
+  source?: { kind: "share"; shareId: string; title: string; period: string; options: string[] } | { kind: "plan"; title: string; planId?: string };
 }
 
 /** 웹 일정표 예약 요청 (공개 — 링크를 받은 고객) */

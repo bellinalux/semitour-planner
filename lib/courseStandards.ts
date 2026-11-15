@@ -159,6 +159,38 @@ export function dutyMinutes(day: DayPlan, pmChoice: PmChoice): number | null {
   return slots[slots.length - 1].end - start;
 }
 
+// ── 다음 날 출발 전 기사 휴식 ─────────────────────────────
+
+/** 전날 종료 → 다음 날 미팅 사이 기사 휴식 기준 (분) — 일본: 2024 개선기준 고시 휴식 11시간 기본·9시간 하한, 유럽: 561/2006 11시간(주 3회 9시간) */
+export const REST_RULES: Partial<Record<string, { min: number; normal: number; basis: string }>> = {
+  japan: { min: 9 * 60, normal: 11 * 60, basis: "일본 전세버스 기사 휴식 11시간 기본·9시간 하한 (2024 개선기준, 실제 적용은 업체 확인)" },
+  europe: { min: 9 * 60, normal: 11 * 60, basis: "EU 규정 561/2006 하루 휴식 11시간 (주 3회까지 9시간)" },
+};
+
+/** 그날 차량 일정이 끝나는 시각(분, 자정 넘으면 1440+) — 숙박·항공은 빼고 마지막 관광·식사·이동 끝 */
+function vehicleEnd(day: DayPlan, pmChoice: PmChoice): number | null {
+  if (day.kind !== "linear") return null;
+  const slots = walkTimeline(dayItems(day, pmChoice), dayTourStart(day)).filter((s) => !["hotel", "flight"].includes(s.item.type ?? ""));
+  return slots.length ? slots[slots.length - 1].end + Math.max(0, slots[slots.length - 1].item.travelMinutesToNext ?? 0) : null;
+}
+
+/** 전날 종료와 다음 날 미팅 사이가 휴식 기준보다 짧은 날 */
+export function restGaps(days: DayPlan[], pmChoice: PmChoice, region: string): { day: number; rest: number; rule: NonNullable<(typeof REST_RULES)[string]> }[] {
+  const rule = REST_RULES[region];
+  if (!rule) return [];
+  const out: { day: number; rest: number; rule: typeof rule }[] = [];
+  for (let i = 0; i < days.length - 1; i++) {
+    const end = vehicleEnd(days[i], pmChoice);
+    const next = days[i + 1];
+    if (end === null || next.kind !== "linear" || next.items.some((x, k) => k === 0 && x.type === "flight")) continue;
+    const start = parseClock(dayMeetingTime(next));
+    if (start === null) continue;
+    const rest = 1440 - end + start;
+    if (rest < rule.normal) out.push({ day: next.day, rest, rule });
+  }
+  return out;
+}
+
 // ── ⑧ 하루 여유 ─────────────────────────────
 
 export function daySlack(day: DayPlan, pmChoice: PmChoice): { span: number; free: number } | null {
@@ -398,6 +430,17 @@ export function courseChecks(input: Pick<TripInput, "travelers" | "selectedFligh
         detail: "일본 전세버스 기사는 미팅부터 해산까지 하루 13시간(연장 시 최대 15시간, 주 2회)이 기준입니다. 일정을 줄이거나 기사 교대·추가 요금을 업체에 확인하세요",
       });
   }
+
+  // 다음 날 출발 전 기사 휴식 (일본·유럽)
+  if (opts.region)
+    for (const g of restGaps(days, pmChoice, opts.region))
+      out.push({
+        id: `rest-${g.day}`,
+        tone: g.rest < g.rule.min ? "warn" : "info",
+        title: `DAY ${g.day} 출발 전 기사 휴식 ${formatDuration(g.rest)}`,
+        detail: `${g.rule.basis}. 전날 일정을 줄이거나 다음 날 미팅을 늦추세요`,
+        fix: { fix: { kind: "meeting", days: [g.day], time: formatClock(Math.min(11 * 60, (parseClock(dayMeetingTime(days.find((d) => d.day === g.day)!)) ?? 540) + (g.rule.normal - g.rest))) }, label: `DAY ${g.day} 미팅 늦추기` },
+      });
 
   // ⑧ 하루 여유
   const tight = days.map((d) => ({ d, s: daySlack(d, pmChoice) })).filter((x) => x.s && x.s.span >= 8 * 60 && x.s.free < x.s.span * 0.1);
